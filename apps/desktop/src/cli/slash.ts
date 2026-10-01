@@ -26,6 +26,8 @@ export type SlashCommand =
   | { kind: 'members'; names: string[] }
   | { kind: 'rename'; title: string }
   | { kind: 'archive' }
+  | { kind: 'schedules' }
+  | { kind: 'schedule'; action: 'on' | 'off' | 'run'; name: string }
   | { kind: 'new'; entity?: 'worker' | 'team' }
   | { kind: 'edit' | 'delete'; name?: string }
   | { kind: 'help' }
@@ -37,7 +39,7 @@ export type SlashCommand =
 /** In the order `/help` lists them. */
 export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
   '/history', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
-  '/chats', '/side', '/bring', '/group', '/members', '/rename', '/archive',
+  '/chats', '/side', '/bring', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
   '/new', '/edit', '/delete', '/help', '/exit'] as const;
 
 const CONTROLS: Record<string, ChatControl> = { '/stop': 'stop', '/pause': 'pause', '/resume': 'resume', '/retry': 'retry', '/continue': 'continue' };
@@ -72,6 +74,8 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/members <name, …>', t("Đổi các Tí của chat nhóm này")],
   ['/rename <title>', t("Đổi tên chat này")],
   ['/archive', t("Lưu trữ chat này")],
+  ['/schedules', t("Liệt kê lịch")],
+  ['/schedule on|off|run <name>', t("Bật, tắt hoặc chạy ngay một lịch")],
   ['/new [orglet|crew]', t("Tạo Tí hoặc hội trong terminal này")],
   ['/edit [name]', t("Sửa cấu hình; bỏ tên để chọn trong danh sách")],
   ['/delete [name]', t("Xóa Tí hoặc hội sau khi gõ tên đầy đủ")],
@@ -113,6 +117,8 @@ export function parseSlash(line: string): SlashCommand {
     case '/members': return parseMembers(rest);
     case '/rename': return rest ? { kind: 'rename', title: rest } : { kind: 'usage', message: t("Gõ /rename rồi tên mới.") };
     case '/archive': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'archive' };
+    case '/schedules': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'schedules' };
+    case '/schedule': return parseSchedule(rest);
     case '/new': return rest === 'orglet' ? { kind: 'new', entity: 'worker' } : rest === 'crew' || rest === 'team' ? { kind: 'new', entity: 'team' } : rest ? { kind: 'unknown', command: trimmed } : { kind: 'new' };
     case '/edit': return { kind: 'edit', ...(rest ? { name: rest } : {}) };
     case '/delete': return { kind: 'delete', ...(rest ? { name: rest } : {}) };
@@ -176,6 +182,15 @@ function parseMembers(rest: string): SlashCommand {
   const names = nameList(rest);
   if (names.length < 2) return { kind: 'usage', message: t("Gõ /members rồi ít nhất hai tên Tí, cách nhau bằng dấu phẩy.") };
   return { kind: 'members', names };
+}
+
+/** `/schedule on Morning review`: on, off or run, then the schedule's name. */
+function parseSchedule(rest: string): SlashCommand {
+  const space = rest.search(/\s/);
+  const action = (space === -1 ? rest : rest.slice(0, space)).toLowerCase();
+  const name = space === -1 ? '' : rest.slice(space).trim();
+  if ((action !== 'on' && action !== 'off' && action !== 'run') || !name) return { kind: 'usage', message: t("Gõ /schedule on, off hoặc run rồi tên lịch. Tạo và sửa lịch bằng orglet schedule.") };
+  return { kind: 'schedule', action, name };
 }
 
 function startsWithIgnoringCase(text: string, start: string): boolean {

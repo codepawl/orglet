@@ -6,10 +6,10 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns } from './output';
+import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatScheduleChange } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
-import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue } from './protocol';
+import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type ScheduleValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
@@ -103,6 +103,10 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     };
     case 'archive-entity': return { op: 'archive-entity', kind: command.entity, name: command.name, archived: command.archived };
     case 'template': return { op: 'template', templateId: command.templateId, provider: command.provider };
+    case 'schedules': return { op: 'schedules' };
+    case 'schedule-enable': return { op: 'schedule-enable', schedule: command.schedule, enabled: command.enabled };
+    case 'schedule-delete': return { op: 'schedule-delete', schedule: command.schedule, confirmName: command.confirmName };
+    case 'schedule-save': return { op: 'schedule-save', ...(command.schedule ? { schedule: command.schedule } : {}), ...command.fields };
     case 'run': return {
       op: 'run',
       schedule: command.schedule,
@@ -226,6 +230,14 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       return EXIT_CODES.ok;
     case 'template':
       if (!command.json) output.stdout(formatTemplate(value as TemplateValue));
+      return EXIT_CODES.ok;
+    case 'schedules':
+      if (!command.json) output.stdout(formatSchedules(value as SchedulesValue));
+      return EXIT_CODES.ok;
+    case 'schedule-enable':
+    case 'schedule-delete':
+    case 'schedule-save':
+      if (!command.json) output.stdout(formatScheduleChange(command.kind, value as ScheduleValue));
       return EXIT_CODES.ok;
   }
 }

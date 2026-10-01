@@ -1,5 +1,6 @@
 import { t } from './text';
-import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl } from './protocol';
+import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody } from './protocol';
+import { ClockTime, EVERY_HOURS_CHOICES, MAX_DAILY_CAP_MICROS } from '../shared/schedule';
 import { MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
 
@@ -7,7 +8,10 @@ import { Reaction } from '../shared/message-interactions';
 
 export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open' | 'run' | 'config' | 'create' | 'edit' | 'delete'
   | 'react' | 'forward' | 'answer' | ChatControl
-  | 'chats' | 'side' | 'bring' | 'group' | 'members' | 'rename' | 'archive' | 'restore' | 'template';
+  | 'chats' | 'side' | 'bring' | 'group' | 'members' | 'rename' | 'archive' | 'restore' | 'template'
+  | 'schedules' | 'schedule';
+/** The fields `orglet schedule add` and `edit` may set (COD-354), as the protocol carries them. */
+export type ScheduleFields = Omit<Extract<CliRequestBody, { op: 'schedule-save' }>, 'op' | 'schedule'>;
 export type ManagementCommand = { entity: 'worker' | 'team'; name?: string; config?: string; confirm?: string; json: boolean } & ({ kind: 'create' } | { kind: 'edit' } | { kind: 'delete' });
 /** A chat named by its orglet or crew, or by the start of its id as `orglet chats` prints it (COD-354). */
 export type ChatTarget = { to: string } | { chat: string };
@@ -35,6 +39,10 @@ export type ParsedCommand =
   | ({ kind: 'chat-change'; change: ChatChange; title?: string; confirmName?: string; json: boolean } & ChatTarget)
   | { kind: 'archive-entity'; entity: 'worker' | 'team'; name: string; archived: boolean; json: boolean }
   | { kind: 'template'; templateId: TemplateId; provider: 'demo' | 'openai'; json: boolean }
+  | { kind: 'schedules'; json: boolean }
+  | { kind: 'schedule-enable'; schedule: string; enabled: boolean; json: boolean }
+  | { kind: 'schedule-delete'; schedule: string; confirmName: string; json: boolean }
+  | { kind: 'schedule-save'; schedule?: string; fields: ScheduleFields; json: boolean }
   | { kind: 'open'; to?: string; json: boolean }
   | { kind: 'run'; schedule: string; files: string[]; json: boolean };
 
@@ -43,9 +51,10 @@ export class UsageError extends Error {}
 
 const CONTROL_COMMANDS: readonly ChatControl[] = ['stop', 'pause', 'resume', 'retry', 'continue'];
 const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run', 'config', 'create', 'edit', 'delete',
-  'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'group', 'members', 'rename', 'archive', 'restore', 'template'];
-/** Commands that name a chat with --to. */
-const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'side', 'rename', 'archive'];
+  'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'group', 'members', 'rename', 'archive', 'restore', 'template',
+  'schedules', 'schedule'];
+/** Commands that name a chat with --to; `schedule` names the orglet or crew it runs for. */
+const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule'];
 /** Commands that name a chat with --chat, by the start of its id. */
 const CHAT_ID_COMMANDS: readonly CommandName[] = ['send', 'read', 'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'side', 'bring', 'members', 'rename', 'archive', 'restore', 'delete'];
 /** Commands that start a turn and wait for it, so --no-wait and --timeout apply. */
@@ -83,6 +92,8 @@ Commands:
   archive   Archive a chat, an orglet or a crew
   restore   Restore an archived chat, orglet or crew
   template  Create a crew from one of the app's templates
+  schedules List schedules with their timing and limits
+  schedule  Create, edit, switch on or off, or delete a schedule
   open      Bring the Orglet window forward, optionally on one chat
   run       Start a schedule now, optionally with files
   config    Show editable configurations, skill IDs and existing connections
@@ -174,6 +185,8 @@ Example:
   rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --title \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc hội không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc hội\n  --chat <mã>        Chat theo mã của orglet chats\n  --title <tên>      Tên mới (bắt buộc)\n  --json             In JSON cho máy đọc"),
   archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|crew> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay hội. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay hội đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc hội\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
   restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|crew> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay hội đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
+  schedules: t("Cách dùng: orglet schedules [--json]\n\nLiệt kê lịch: bật hay tắt, Tí hoặc hội chạy nó, khi nào chạy, lần tới, giới hạn mỗi\nlần và mỗi ngày. Số tiền trong --json là số nguyên phần triệu USD."),
+  schedule: t("Cách dùng: orglet schedule add \"<tên>\" --to <tên> --brief \"<việc>\" --every <khi> --at <HH:MM> --budget <USD> [tùy chọn]\n       orglet schedule edit \"<tên>\" [tùy chọn]\n       orglet schedule on|off \"<tên>\"\n       orglet schedule delete \"<tên>\" --confirm \"<tên>\"\n\nTạo, sửa, bật, tắt hoặc xóa một lịch. Lịch tạo ở đây không có quyền công cụ,\ntrình duyệt hay thư mục; các provider của Tí hoặc hội phải được cho phép sẵn\ntrong Cài đặt của app. Chọn những thứ đó trong app. Chạy ngay: orglet run.\n\nTùy chọn:\n  --to <tên>            Tí hoặc hội chạy lịch\n  --brief <việc>        Brief gửi mỗi lần chạy\n  --every <khi>         daily, weekdays, weekly, hoặc số giờ như 2h\n  --at <HH:MM>          Giờ chạy; với số giờ là giờ đầu tiên trong ngày\n  --day <ngày>          Ngày trong tuần cho weekly: mon, tue, …, sun\n  --timezone <vùng>     Múi giờ, như Asia/Ho_Chi_Minh; mặc định là của máy\n  --budget <USD>        Giới hạn mỗi lần chạy\n  --daily-cap <USD>     Giới hạn mỗi ngày (không bắt buộc)\n  --called              Chỉ chạy khi gọi bằng orglet run\n  --off                 Tạo lịch ở trạng thái tắt (add)\n  --rename <tên>        Tên mới (edit)\n  --json                In JSON cho máy đọc"),
   template: t("Cách dùng: orglet template <{0}> --provider <demo|openai> [--json]\n\nTạo một hội từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: demo cho câu trả lời mẫu, openai cho kết nối OpenAI đã\nthiết lập trong app.\n\nTùy chọn:\n  --provider <tên>   demo hoặc openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
   open: `Usage: orglet open [--to <name>]
 
@@ -190,7 +203,7 @@ case-insensitively; a unique start of a name is enough. Files given with
 --file are attached to this run, next to the schedule's own sources.
 
 The schedule must exist, be switched on and be saved as it is now. This
-command cannot create or change one. Any schedule can be started this way,
+command cannot create or change one; "orglet schedule" does. Any schedule can be started this way,
 and one set to "Only when called" runs only like this. Nothing runs while
 the app is closed; the command starts the app first.
 
@@ -215,7 +228,16 @@ type Options = {
   wait: boolean;
   off: boolean;
   archived: boolean;
+  called: boolean;
   to?: string;
+  brief?: string;
+  every?: string;
+  at?: string;
+  day?: string;
+  timezone?: string;
+  budget?: string;
+  dailyCap?: string;
+  rename?: string;
   chat?: string;
   timeout?: string;
   config?: string;
@@ -232,10 +254,14 @@ type Options = {
   positionals: string[];
 };
 
-type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' | 'message' | 'replyTo' | 'note' | 'title' | 'provider';
+type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' | 'message' | 'replyTo' | 'note' | 'title' | 'provider'
+  | 'brief' | 'every' | 'at' | 'day' | 'timezone' | 'budget' | 'dailyCap' | 'rename';
 
 /** Options that take a value, written as `--to Researcher` or `--to=Researcher`. */
-const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider']);
+const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider',
+  '--brief', '--every', '--at', '--day', '--timezone', '--budget', '--daily-cap', '--rename']);
+/** The options only `orglet schedule add` and `edit` take. */
+const SCHEDULE_OPTIONS: readonly [string, SingleOption][] = [['--brief', 'brief'], ['--every', 'every'], ['--at', 'at'], ['--day', 'day'], ['--timezone', 'timezone'], ['--budget', 'budget'], ['--daily-cap', 'dailyCap'], ['--rename', 'rename']];
 /** Options given at most once, and the field each one fills. */
 const SINGLE_OPTIONS: Record<string, SingleOption> = {
   '--to': 'to',
@@ -249,6 +275,7 @@ const SINGLE_OPTIONS: Record<string, SingleOption> = {
   '--note': 'note',
   '--title': 'title',
   '--provider': 'provider',
+  ...Object.fromEntries(SCHEDULE_OPTIONS),
 };
 /** The chat options added for COD-354 and the only commands that take each. */
 const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) => boolean; commands: readonly CommandName[] }[] = [
@@ -258,7 +285,9 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
   { option: '--reply-to', given: options => options.replyTo !== undefined, commands: ['send'] },
   { option: '--note', given: options => options.note !== undefined, commands: ['forward'] },
   { option: '--target', given: options => options.targets.length > 0, commands: ['forward'] },
-  { option: '--off', given: options => options.off, commands: ['react'] },
+  { option: '--off', given: options => options.off, commands: ['react', 'schedule'] },
+  { option: '--called', given: options => options.called, commands: ['schedule'] },
+  ...SCHEDULE_OPTIONS.map(([option, key]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: ['schedule'] as const })),
   { option: '--with', given: options => options.members.length > 0, commands: ['group', 'members'] },
   { option: '--title', given: options => options.title !== undefined, commands: ['rename'] },
   { option: '--provider', given: options => options.provider !== undefined, commands: ['template'] },
@@ -270,7 +299,7 @@ const VALUE_COMMANDS: readonly CommandName[] = ['send', 'run', 'react', 'answer'
 const ENTITY_COMMANDS: readonly CommandName[] = ['create', 'edit', 'delete', 'archive', 'restore'];
 
 function readOptions(argumentList: readonly string[]): Options {
-  const options: Options = { help: false, version: false, json: false, wait: true, off: false, archived: false, files: [], targets: [], members: [], positionals: [] };
+  const options: Options = { help: false, version: false, json: false, wait: true, off: false, archived: false, called: false, files: [], targets: [], members: [], positionals: [] };
   let index = 0;
   while (index < argumentList.length) {
     const argument = argumentList[index];
@@ -328,6 +357,7 @@ function assignFlag(options: Options, name: string): void {
   else if (name === '--no-wait') options.wait = false;
   else if (name === '--off') options.off = true;
   else if (name === '--archived') options.archived = true;
+  else if (name === '--called') options.called = true;
   else throw new UsageError(`Unknown option ${name}.`);
 }
 
@@ -350,6 +380,7 @@ function namesEntity(command: CommandName, options: Options): boolean {
 /** Positionals after the command that nothing reads, which usually means a message with spaces lost its quotes. */
 function extraPositionals(command: CommandName, options: Options): string[] {
   if (namesEntity(command, options)) return options.positionals.slice(command === 'create' ? 2 : 3);
+  if (command === 'schedule') return options.positionals.slice(3);
   if (VALUE_COMMANDS.includes(command)) return options.positionals.slice(2);
   return options.positionals.slice(1);
 }
@@ -357,7 +388,7 @@ function extraPositionals(command: CommandName, options: Options): string[] {
 /** Options that only one command understands, so `orglet list --file x` is a mistake rather than ignored. */
 function rejectForeignOptions(command: CommandName, options: Options): void {
   if (!['create', 'edit'].includes(command) && options.config !== undefined) throw new UsageError('--config belongs to "orglet create" and "orglet edit".');
-  if (command !== 'delete' && options.confirm !== undefined) throw new UsageError('--confirm belongs to "orglet delete".');
+  if (command !== 'delete' && command !== 'schedule' && options.confirm !== undefined) throw new UsageError('--confirm belongs to "orglet delete" and "orglet schedule delete".');
   const waitOptions = !options.wait || options.timeout !== undefined;
   if (!WAITING_COMMANDS.includes(command) && waitOptions) throw new UsageError('--no-wait and --timeout belong to commands that wait for an answer, such as "orglet send".');
   const takesFiles = command === 'send' || command === 'run';
@@ -440,6 +471,8 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'archive':
     case 'restore': return parseArchive(command, options);
     case 'template': return parseTemplate(options);
+    case 'schedules': return { kind: 'schedules', json };
+    case 'schedule': return parseSchedule(options);
   }
 }
 
@@ -577,4 +610,80 @@ function parseTemplate(options: Options): ParsedCommand {
   if (!templateId) throw new UsageError(t("Chọn một mẫu: {0}.", TEMPLATE_IDS.join(', ')));
   if (options.provider !== 'demo' && options.provider !== 'openai') throw new UsageError(t("Mẫu cần --provider demo hoặc --provider openai."));
   return { kind: 'template', templateId, provider: options.provider, json: options.json };
+}
+
+const SCHEDULE_VERBS = ['add', 'edit', 'on', 'off', 'delete'] as const;
+/** Weekday names `--day` takes, in the schedule's numbering: 0 is Sunday. */
+const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const MICROS_PER_USD = 1_000_000;
+const MAX_RUN_BUDGET_MICROS = 100_000_000;
+
+/** `orglet schedule <add|edit|on|off|delete> "<name>" [options]`. */
+function parseSchedule(options: Options): ParsedCommand {
+  const verb = SCHEDULE_VERBS.find(item => item === options.positionals[1]);
+  if (!verb) throw new UsageError(t("Gõ add, edit, on, off hoặc delete sau orglet schedule."));
+  const schedule = options.positionals[2]?.trim();
+  if (!schedule) throw new UsageError(t("Gõ tên lịch, ví dụ: orglet schedule {0} \"Review sáng\"", verb));
+  const changes = SCHEDULE_OPTIONS.some(([, key]) => options[key] !== undefined) || options.to !== undefined || options.called || options.off;
+  if ((verb === 'on' || verb === 'off' || verb === 'delete') && changes) throw new UsageError(t("orglet schedule {0} chỉ nhận tên lịch.", verb));
+  if (verb !== 'delete' && options.confirm !== undefined) throw new UsageError('--confirm belongs to "orglet schedule delete".');
+  if (verb === 'on' || verb === 'off') return { kind: 'schedule-enable', schedule, enabled: verb === 'on', json: options.json };
+  if (verb === 'delete') {
+    const confirmName = options.confirm?.trim();
+    if (!confirmName) throw new UsageError(t("Xóa lịch cần --confirm \"<tên lịch>\"."));
+    return { kind: 'schedule-delete', schedule, confirmName, json: options.json };
+  }
+  if (verb === 'add' && options.rename !== undefined) throw new UsageError(t("--rename chỉ dùng với orglet schedule edit."));
+  const fields = scheduleFields(options);
+  if (verb === 'add') return { kind: 'schedule-save', fields: { ...fields, name: schedule }, json: options.json };
+  if (options.off) throw new UsageError(t("Dùng orglet schedule off để tắt một lịch."));
+  return { kind: 'schedule-save', schedule, fields, json: options.json };
+}
+
+function scheduleFields(options: Options): ScheduleFields {
+  const every = options.every === undefined ? {} : parseEvery(options.every);
+  return {
+    ...(options.rename?.trim() ? { name: options.rename.trim() } : {}),
+    ...(options.to?.trim() ? { target: options.to.trim() } : {}),
+    ...(options.brief?.trim() ? { brief: options.brief.trim() } : {}),
+    ...every,
+    ...(options.at !== undefined ? { time: parseClock(options.at) } : {}),
+    ...(options.day !== undefined ? { weekday: parseWeekday(options.day) } : {}),
+    ...(options.timezone?.trim() ? { timeZone: options.timezone.trim() } : {}),
+    ...(options.budget !== undefined ? { budgetMicros: parseUsd('--budget', options.budget, MAX_RUN_BUDGET_MICROS) } : {}),
+    ...(options.dailyCap !== undefined ? { dailyCapMicros: parseUsd('--daily-cap', options.dailyCap, MAX_DAILY_CAP_MICROS) } : {}),
+    ...(options.called ? { trigger: 'called' as const } : {}),
+    ...(options.off ? { enabled: false } : {}),
+  };
+}
+
+/** `daily`, `weekdays`, `weekly`, or every few hours as `2h`. */
+function parseEvery(value: string): Pick<ScheduleFields, 'frequency' | 'everyHours'> {
+  const wanted = value.trim().toLowerCase();
+  if (wanted === 'daily' || wanted === 'weekdays' || wanted === 'weekly') return { frequency: wanted };
+  const hours = Number(wanted.match(/^(\d{1,2})h$/)?.[1]);
+  const choice = EVERY_HOURS_CHOICES.find(item => item === hours);
+  if (choice === undefined) throw new UsageError(t("--every cần daily, weekdays, weekly hoặc số giờ: {0}.", EVERY_HOURS_CHOICES.map(item => `${item}h`).join(', ')));
+  return { frequency: 'hours', everyHours: choice };
+}
+
+function parseClock(value: string): string {
+  const time = value.trim().padStart(5, '0');
+  if (!ClockTime.safeParse(time).success) throw new UsageError(t("--at cần giờ dạng HH:MM, ví dụ 08:30."));
+  return time;
+}
+
+function parseWeekday(value: string): number {
+  const index = WEEKDAY_NAMES.indexOf(value.trim().toLowerCase().slice(0, 3));
+  if (index === -1) throw new UsageError(t("--day cần một ngày: {0}.", WEEKDAY_NAMES.join(', ')));
+  return index;
+}
+
+/** A USD amount with up to six decimals, kept as integer micros the way the app stores money. */
+function parseUsd(option: string, value: string, maximumMicros: number): number {
+  const trimmed = value.trim().replace(/^\$/, '');
+  if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) throw new UsageError(t("{0} cần số tiền USD như 0.50.", option));
+  const micros = Math.round(Number(trimmed) * MICROS_PER_USD);
+  if (micros < 1000 || micros > maximumMicros) throw new UsageError(t("{0} cần từ 0.001 đến {1} USD.", option, maximumMicros / MICROS_PER_USD));
+  return micros;
 }

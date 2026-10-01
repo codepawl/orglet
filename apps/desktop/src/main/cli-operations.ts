@@ -13,6 +13,7 @@ import { assertOneTarget, chatOfTask, chatsOf, CliFailure, crewRoster, liveChatT
 import { chatTurns, isTurnRunning, latestAnsweredRevision, pendingQuestion, resolveMessage, turnAnswers, waitsForDesktop } from './cli-chat-history';
 import { CliChatActions } from './cli-chat-actions';
 import { CliChatAdmin } from './cli-chat-admin';
+import { CliSchedules } from './cli-schedules';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from './cli-chats';
@@ -30,10 +31,12 @@ const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 export class CliOperations {
   private readonly chatActions: CliChatActions;
   private readonly chatAdmin: CliChatAdmin;
+  private readonly schedules: CliSchedules;
 
   constructor(private readonly dependencies: CliDependencies) {
     this.chatActions = new CliChatActions(dependencies);
     this.chatAdmin = new CliChatAdmin(dependencies);
+    this.schedules = new CliSchedules(dependencies);
   }
 
   async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
@@ -56,6 +59,10 @@ export class CliOperations {
       case 'chat-change': return this.chatAdmin.change(request);
       case 'archive-entity': return this.chatAdmin.archiveEntity(request);
       case 'template': return this.chatAdmin.template(request);
+      case 'schedules': return this.schedules.list();
+      case 'schedule-enable': return this.schedules.enable(request);
+      case 'schedule-delete': return this.schedules.remove(request);
+      case 'schedule-save': return this.schedules.save(request);
       case 'config':
       case 'save-orglet':
       case 'save-crew':

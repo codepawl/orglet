@@ -14,7 +14,7 @@ import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
 import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
-import { formatChats } from './output';
+import { formatChats, formatRun, formatScheduleChange, formatSchedules } from './output';
 import { ERROR_COLOR, muted, MUTED_COLOR, NEUTRAL_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
 import type { ManagementResult } from './management';
@@ -48,7 +48,7 @@ const PICKER_MAX_ROWS = 8;
 const WELCOME_FACE_LIMIT = 12;
 const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
 /** These controls do not change the chat or submit a turn, so they need not wait behind one. */
-const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage', 'chats']);
+const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage', 'chats', 'schedules']);
 
 /** What requests name a chat by: its id for a chat opened with `/to #id`, else the orglet's or crew's name. */
 function targetOf(entry: ChatEntry): string {
@@ -599,6 +599,8 @@ class Session {
       case 'members': return this.chatChange(actions => actions.members(this.chatId(), command.names), value => t('Từ tin nhắn sau, chat nhóm gửi tới: {0}.', value.names.join(', ')));
       case 'rename': return this.chatChange(actions => actions.rename(targetOf(this.chat!), command.title), value => t('Đã đổi tên chat thành {0}.', value.title ?? value.name));
       case 'archive': return this.chatChange(actions => actions.archive(targetOf(this.chat!)), value => t('Đã lưu trữ chat {0}.', value.name));
+      case 'schedules': return this.listSchedules();
+      case 'schedule': return this.scheduleAction(command.action, command.name);
       case 'new': return this.manage('new', command.entity);
       case 'edit': return this.manage('edit', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
@@ -950,10 +952,28 @@ class Session {
     const actions = this.actions();
     if (!actions) return;
     try {
-      this.printMuted(describe(await change(actions)));
+      const description = describe(await change(actions));
+      for (const line of description.split('\n')) this.printMuted(line);
     } catch (error) {
       this.printFailure(error);
     }
+  }
+
+  /** Lists schedules as `orglet schedules` does, one aligned row each. */
+  private async listSchedules(): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    try {
+      this.printLines(formatSchedules(await actions.schedules()).split('\n'));
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  /** Switches a schedule on or off, or starts it now the way `orglet run` does. */
+  private scheduleAction(action: 'on' | 'off' | 'run', name: string): Promise<void> {
+    if (action === 'run') return this.chatChange(actions => actions.runSchedule(name), value => formatRun(value));
+    return this.chatChange(actions => actions.enableSchedule(name, action === 'on'), value => formatScheduleChange('schedule-enable', value));
   }
 
   /** Waits for a side thread or group chat's first answer, then says how to open that chat here. */

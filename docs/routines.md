@@ -74,6 +74,8 @@ Every run a routine starts, on the clock, on a new file or from `orglet run`, is
 
 The routine runs only when `orglet run` names it, while the app is open. The editor shows the command to copy. `run` can start a routine but never create or change one, and it passes the same checks as a scheduled run: switched on, approved as it is now, previous run finished.
 
+`orglet schedules` and `orglet schedule add|edit|on|off|delete` list, create, change, switch and delete routines from a terminal ([cli.md](cli.md#schedules)), through the same `saveRoutine` and `deleteRoutine`. They set only the name, the orglet or crew, the brief, the timing (a clock or **Only when called**) and the limits. A routine made there has no permissions, browser, desktop programs, sources or working folder, and its orglet's or crew's providers must already be allowed in **Settings**; the terminal refuses otherwise and points to the app. An edit keeps whatever the app set, and moving a routine that has any of those to another orglet or crew is refused.
+
 ## How often
 
 The editor's **Frequency** (COD-288) is one of four:

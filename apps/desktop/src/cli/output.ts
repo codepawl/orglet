@@ -1,3 +1,4 @@
+import type { CliScheduleRow, SchedulesValue, ScheduleValue } from './protocol';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
 
@@ -105,6 +106,42 @@ export function formatChatChange(value: ChatChangeValue): string {
 export function formatArchiveEntity(value: ArchiveEntityValue): string {
   const kind = value.kind === 'worker' ? 'orglet' : 'crew';
   return value.archived ? t('Đã lưu trữ {0} {1}.', kind, value.name) : t('Đã khôi phục {0} {1}.', kind, value.name);
+}
+
+const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+/** Integer micros as dollars, the way the terminal writes limits: `$0.50`. */
+export function formatUsd(micros: number): string {
+  const dollars = micros / 1_000_000;
+  return `$${dollars.toFixed(dollars < 0.01 ? 3 : 2)}`;
+}
+
+/** When a schedule runs, in the words its options take: `daily at 08:00`, `every 2h from 09:00`, `when called`. */
+export function scheduleTiming(row: CliScheduleRow): string {
+  if (row.trigger === 'called') return t('khi được gọi');
+  if (row.trigger === 'folder') return t('khi có tệp mới');
+  if (row.frequency === 'hours') return t('mỗi {0}h từ {1}', row.everyHours, row.time);
+  if (row.frequency === 'weekly') return t('weekly vào {0} lúc {1}', WEEKDAY_NAMES[row.weekday], row.time);
+  return t('{0} lúc {1}', row.frequency, row.time);
+}
+
+/** Schedules one per line: name, on or off, who runs it, when, and its limits. */
+export function formatSchedules(value: SchedulesValue): string {
+  if (value.schedules.length === 0) return t('Chưa có lịch nào.');
+  return padded(value.schedules.map(row => [
+    row.name,
+    row.enabled ? 'on' : 'off',
+    row.target,
+    `${scheduleTiming(row)} (${row.timeZone})`,
+    row.dailyCapMicros ? t('{0} mỗi lần, {1} mỗi ngày', formatUsd(row.budgetMicros), formatUsd(row.dailyCapMicros)) : t('{0} mỗi lần', formatUsd(row.budgetMicros)),
+  ])).join('\n');
+}
+
+export function formatScheduleChange(kind: 'schedule-enable' | 'schedule-delete' | 'schedule-save', value: ScheduleValue): string {
+  const row = value.schedule;
+  if (kind === 'schedule-delete') return t('Đã xóa lịch {0}. Các lần chạy cũ vẫn là chat.', row.name);
+  if (kind === 'schedule-enable') return row.enabled ? t('Đã bật lịch {0}.', row.name) : t('Đã tắt lịch {0}.', row.name);
+  return t('Đã lưu lịch {0}: {1}, {2} chạy, {3} mỗi lần.', row.name, scheduleTiming(row), row.target, formatUsd(row.budgetMicros));
 }
 
 export function formatTemplate(value: TemplateValue): string {
