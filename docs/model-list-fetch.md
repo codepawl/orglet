@@ -28,12 +28,12 @@ A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/cont
 | Provider | Pinned ID | Price snapshot |
 |---|---|---|
 | OpenAI | `gpt-4.1-mini-2025-04-14` | $0.40 / $1.60 per MTok |
-| Anthropic | `claude-haiku-4-5-20251001` | $1.00 / $5.00 per MTok |
+| Anthropic | `claude-sonnet-5-5` | $2.00 / $10.00 per MTok; cache writes $2.50, cache reads $0.20 (COD-358) |
 | xAI | `grok-3-mini` | $0.30 / $0.50 per MTok |
 | OpenRouter | `openai/gpt-4.1-mini` | $0.40 / $1.60 per MTok (catalog hint; native list tenths when cached) |
 | Demo / Claude Code / Codex / Cursor / Gemini CLI / Ollama / OpenCode Zen / OpenCode Go | (none) | No Orglet reservation (OpenCode Zen is billed to the Zen balance, OpenCode Go by the Go plan; neither has a default model) |
 
-The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates (unknown reservation until a later COD stores a verified price). xAI and OpenRouter native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set. Ollama runs make no Orglet reservation.
+The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at the default's rates (unknown reservation until a later COD stores a verified price). The Anthropic default was Claude Haiku 4.5 until COD-358 moved it to Claude Sonnet 5.5. An orglet that left the field empty follows the default; one that saved `claude-haiku-4-5-20251001` keeps that model and is still billed at its verified Haiku price ($1 / $5, cache writes $1.25, reads $0.10), from `formerAnthropicDefaults` in `core/adapters/catalog.ts`. A run that started on the old default and is resumed after the update stops with "model or pricing changed" instead of switching mid-run. xAI and OpenRouter native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set. Ollama runs make no Orglet reservation.
 
 ## Per-provider source
 
@@ -205,7 +205,7 @@ COD-31 fetch is not the picker and not the chip. It must still leave the door op
 
 - **Worker field (COD-28):** add optional `modelId` (trimmed string, max ~200 chars) on `Worker`. Absence means “catalog-hint for this provider.” Custom ID always saves even when the list is empty or failed.
 - **Run snapshot:** freeze the *selected* `modelId` + a `pricingVersion`. Stop comparing every run to `modelCatalog[provider].model` once a worker has its own ID (`runner.ts` today throws if the catalog moved).
-- **Prices:** OpenAI and Anthropic lists have **no** prices. Keep `modelCatalog` as the settlement table for those two pinned IDs only. For any other OpenAI/Anthropic ID, do **not** silently bill at mini/Haiku rates. Use the existing **unknown reservation** path (or refuse hard-cap) until a later COD stores a verified price. xAI list **does** include tenths — COD-31 may fill `inputTenths` / `outputTenths` for that ID and derive `pricingVersion` from them.
+- **Prices:** OpenAI and Anthropic lists have **no** prices. Keep `modelCatalog` as the settlement table for those two pinned IDs only. For any other OpenAI/Anthropic ID, do **not** silently bill at the default's rates. Use the existing **unknown reservation** path (or refuse hard-cap) until a later COD stores a verified price. xAI list **does** include tenths — COD-31 may fill `inputTenths` / `outputTenths` for that ID and derive `pricingVersion` from them.
 - **Harness exec:** today's `harnessArgs` does not pass `--model`. COD-28/31 should pass `--model <id>` for Claude Code, Codex (`-m`), and Cursor when `modelId` is set. Empty `modelId` keeps the CLI default.
 - **Routines:** approval fingerprint already includes model/pricing (`routines.ts`). Persist `modelId` into that fingerprint so a silent catalog bump does not look like the user changed models.
 

@@ -8,7 +8,7 @@ import { customConnectionName } from '../customConnections';
 
 const suggestions: Partial<Record<Worker['provider'], string>> = {
   openai: 'GPT-4.1 mini',
-  anthropic: 'Claude Haiku 4.5',
+  anthropic: 'Claude Sonnet 5.5',
   xai: 'grok-3-mini',
   openrouter: 'openai/gpt-4.1-mini',
   ollama: 'llama3.2',

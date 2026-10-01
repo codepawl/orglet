@@ -68,15 +68,18 @@ describe('durable task runtime', () => {
     const { task, run } = fixtureRun(); task.providerScopes = ['openai']; run.snapshot.worker.provider = 'anthropic';
     await core.runner.run(task, run);
     expect(dispatches).toBe(0);
-    expect(store.detail(task.id).runs[0].snapshot.model).toBe('claude-haiku-4-5-20251001');
+    expect(store.detail(task.id).runs[0].snapshot.model).toBe('claude-sonnet-5-5');
     expect(store.detail(task.id).runs[0].error).toContain('provider');
   });
   it('settles Anthropic usage at its own price after explicit consent', async () => {
     const { task, run } = fixtureRun(); task.providerScopes = ['anthropic']; run.snapshot.worker.provider = 'anthropic';
+    // A step on Claude Sonnet 5.5 holds its prompt at the cache-write rate plus at least 4,096 output tokens, more than
+    // the fixture's $0.10 (COD-358).
+    task.budgetMicros = 1_000_000; store.put('tasks', task);
     replies.push(call('submit_report', report([]), { input: 100, output: 20 }));
     await core.runner.run(task, run);
     expect(store.detail(task.id).task.status).toBe('completed');
-    expect(store.detail(task.id).usage.chargedMicros).toBe(200);
+    expect(store.detail(task.id).usage.chargedMicros).toBe(400);
   });
   it('rejects fabricated citations and does not claim completion', async () => {
     const { task, run } = fixtureRun(); replies.push(call('submit_report', report([id()])));

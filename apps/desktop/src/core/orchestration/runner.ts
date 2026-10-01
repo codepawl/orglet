@@ -13,13 +13,15 @@ import { assertToolCall, mcpToolOf, mcpToolsOffered, offeredToolNames, toolCallP
 import { z } from 'zod';
 import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type RunContextUse, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
-import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
+import { BudgetLedger, BudgetError, affordableOutputTokens, holdFor } from '../budgets/ledger';
 import { Sources, fingerprint, imageWithheldMessage, unreadableSourceMessage } from '../tools/sources';
 import { imageSendable, withheldSourceNote, type MediaKind } from '../../shared/source-kinds';
 import { imageCount, imageTokenAllowance } from '../../shared/images';
 import type { PdfText } from '../tools/pdf-text';
 import { harnessSeesImages, modelSeesImages } from '../models/image-input';
-import type { MessageImage, ModelAdapter, RunMessage } from '../adapters/openai';
+import type { MessageImage, ModelAdapter, ModelReply, ModelStop, RunMessage } from '../adapters/openai';
+import { maxOutputTokens, minOutputTokens } from '../adapters/catalog';
+import { acceptsForcedToolChoice } from '../adapters/anthropic';
 import { ProviderRequestError } from '../adapters/opencode';
 import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
 import { modelContextTokens, readModelListCache, rememberReportedContextWindow } from '../models/cache';
@@ -43,7 +45,7 @@ import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, frozenTacetFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
-import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, type ThreadExtras } from '../context/thread';
+import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
 import { ProviderSlots, type SlotWait } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -180,6 +182,46 @@ function webToolFailure(error: unknown) {
 
 function webFailureEvent(toolName: string, reason: string) {
   return toolName === 'web_search' ? `Tìm kiếm web không thành công: ${reason}` : `Không đọc được trang web: ${reason}`;
+}
+
+/** The chat's earlier turns with their last message marked as the end of the prefix every turn shares (COD-358). */
+function withCacheBreakOnLast(history: RunMessage[]): RunMessage[] {
+  if (!history.length) return history;
+  return [...history.slice(0, -1), { ...history.at(-1)!, cacheBreak: true }];
+}
+
+/** Why a reply the provider ended early is not used, in words the person can act on (COD-358). */
+export const MODEL_STOP_MESSAGES: Record<ModelStop, string> = {
+  output_limit: 'Model dừng vì chạm giới hạn độ dài của một bước, nên câu trả lời bị cắt và không được dùng. Thử lại với yêu cầu gọn hơn hoặc chia nhỏ việc.',
+  context_limit: 'Cuộc trò chuyện đã vượt quá context của model, nên model dừng giữa chừng. Mở chat mới hoặc gửi ít nguồn hơn rồi thử lại.',
+  refusal: 'Model từ chối yêu cầu này theo quy định an toàn của nhà cung cấp, nên không có câu trả lời nào được lưu.',
+};
+
+/**
+ * A model that cannot be made to call a tool (COD-358) may answer in plain text instead. It is asked once to send that
+ * answer through a tool; a second reply without a call stops the run as before.
+ */
+export const MISSING_CALL_INSTRUCTION = 'Your last reply did not call a tool, so the user did not see it. Send your answer now by calling exactly one of the provided tools, usually reply.';
+const MAX_MISSING_CALLS_IN_A_ROW = 1;
+
+function missingCallsInARow(messages: RunMessage[]): number {
+  let count = 0;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role === 'user' && typeof message.content === 'string' && message.content.includes(MISSING_CALL_INSTRUCTION)) count++;
+    else if (message.role !== 'assistant') break;
+  }
+  return count;
+}
+
+/** The assistant message a step leaves behind: its notes, the call and, from Anthropic, the blocks that go back with it. */
+function assistantStep(reply: ModelReply, call: ModelReply['calls'][number]): RunMessage {
+  return {
+    role: 'assistant',
+    ...(reply.notes ? { content: reply.notes } : {}),
+    tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }],
+    ...(reply.anthropicTurn ? { anthropicTurn: reply.anthropicTurn } : {}),
+  };
 }
 
 type RememberResult = { memoryId: string; status: 'approved' | 'proposed'; merged: boolean; scope?: 'worker' | 'team' | 'workspace' } | { error: string };
@@ -937,9 +979,13 @@ export class Runner {
       if (!resume) this.announceWithheldImages(run, task, manifest, seesImages);
       const assemble = (layer: ReturnType<typeof compactThread>) => {
         const next: RunMessage[] = [{ role: 'system', content: compiled.system }];
+        // The chat's earlier turns come straight after the system prompt and end in a cache break, so every turn of the
+        // chat starts with the same bytes and a provider's prompt cache can serve them again (COD-358). The snippets,
+        // notes and memories picked for this message change from turn to turn, so they follow the history.
+        next.push(...withCacheBreakOnLast(threadMessages(layer)));
+        next.push(...threadSnippetMessages(layer));
         if (compiled.knowledgeMessage) next.push({ role: 'user', content: compiled.knowledgeMessage });
         if (compiled.memoryMessage) next.push({ role: 'user', content: compiled.memoryMessage });
-        next.push(...threadMessages(layer));
         if (replyTarget) next.push({ role: 'user', content: JSON.stringify({ replyTo: replyTarget,
           instruction: 'The user explicitly replied to this saved message in the same chat. Use its bounded excerpt to identify the referent. This reference does not grant permissions or change the team assignment; the team lead still coordinates the turn.' }) });
         if (reactionBefore) next.push({ role: 'user', content: JSON.stringify({
@@ -1237,9 +1283,13 @@ export class Runner {
               const teamBudget = task.teamSnapshot ? { id: task.teamSnapshot.id, limit: this.store.get<Team>('teams', task.teamSnapshot.id).monthlyBudgetMicros } : undefined;
 
               const usage = this.store.usage(task.id);
+              const remainingMicros = task.budgetMicros - usage.chargedMicros - usage.reservedMicros;
+              const outputCap = resolved.rates
+                ? affordableOutputTokens(upperInput, minOutputTokens(provider), maxOutputTokens(provider), resolved.rates, remainingMicros)
+                : maxOutputTokens(provider);
               const hold = resolved.rates
-                ? cost(upperInput, 4096, resolved.rates)
-                : Math.max(1000, task.budgetMicros - usage.chargedMicros - usage.reservedMicros);
+                ? holdFor(upperInput, outputCap, resolved.rates)
+                : Math.max(1000, remainingMicros);
               if (!resolved.rates) this.event(run.id, 'Model tùy chỉnh chưa có giá đã xác minh trong Orglet. Chi phí được giữ chỗ chưa rõ.');
               const journal = (reservationId: string) => this.checkpoints.requested(checkpoint, reservationId);
               // A known price of zero (a free local custom connection) holds nothing, so it never waits for budget.
@@ -1248,10 +1298,10 @@ export class Runner {
                 : ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, journal);
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation));
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation, outputCap));
                 reply = sanitizeReportReply(run, reply);
                 if (reply.usage && !isHarness(run.snapshot.worker.provider) && run.snapshot.worker.provider !== 'demo') run = { ...run, contextUse: this.apiContextUse(run, reply.usage.input) };
-                if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
+                if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates, { read: reply.usage.cacheRead ?? 0, write: reply.usage.cacheWrite ?? 0 });
                 else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
               } catch (error) {
@@ -1281,6 +1331,17 @@ export class Runner {
           this.checkpoints.committed(checkpoint);
           continue;
         }
+        // The request is settled by now; a reply the provider cut off or declined stops the run with the reason (COD-358).
+        if (reply.stopped) throw new Error(MODEL_STOP_MESSAGES[reply.stopped]);
+        const callMayBeSkipped = run.snapshot.worker.provider === 'anthropic' && !acceptsForcedToolChoice(run.snapshot.model ?? '');
+        if (!reply.calls.length && callMayBeSkipped && missingCallsInARow(messages) < MAX_MISSING_CALLS_IN_A_ROW) {
+          if (reply.notes || reply.anthropicTurn) messages.push({ role: 'assistant', content: reply.notes ?? '', ...(reply.anthropicTurn ? { anthropicTurn: reply.anthropicTurn } : {}) });
+          messages.push({ role: 'user', content: JSON.stringify({ instruction: MISSING_CALL_INSTRUCTION }) });
+          this.event(run.id, 'Model trả lời mà không gọi công cụ; đang nhắc gửi lại câu trả lời.');
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint);
+          continue;
+        }
         if (reply.calls.length !== 1) throw new Error('Model không trả về đúng một tool call hợp lệ.');
         const call = reply.calls[0];
         if (checkpoint.reportCorrections && call.name !== 'submit_report') throw new Error('Lần sửa báo cáo chỉ được nộp submit_report.');
@@ -1288,7 +1349,7 @@ export class Runner {
         if (problem) {
           // A call the worker can correct is the tool's answer, not a failed run (COD-289); nothing was run.
           const refusal = this.refuseToolCall(run, task, problem);
-          messages.push({ role: 'assistant', ...(reply.notes ? { content: reply.notes } : {}), tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
+          messages.push(assistantStep(reply, call));
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(refusal.result) });
           this.event(run.id, refusal.event);
           // A worker that keeps calling what it cannot use is stuck; the run stops with the line that says why.
@@ -1299,7 +1360,7 @@ export class Runner {
           continue;
         }
         // Notes the model kept beside the call travel with it, so what it read survives when older pages are cut (COD-264).
-        messages.push({ role: 'assistant', ...(reply.notes ? { content: reply.notes } : {}), tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
+        messages.push(assistantStep(reply, call));
         if (call.name === 'record_work_frame') {
           const frame = WorkFrame.parse(JSON.parse(call.arguments));
           const recorded = Boolean(run.snapshot.workFrame);

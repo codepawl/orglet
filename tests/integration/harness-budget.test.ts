@@ -93,7 +93,7 @@ describe('orglet chat on Claude Code', () => {
     expect(detail.runs.at(-1)?.error).toBe('Claude Code dừng vì chạm giới hạn mỗi task của chat này ($0.50). Nâng Giới hạn mỗi task trong Thiết lập Tí, rồi thử lại.');
     const messages = detail.events.map(event => event.message);
     expect(messages).toContain('Claude Code dừng ở giới hạn; harness ước tính $0.5000 theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.');
-    expect(detail.usage).toEqual({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 });
+    expect(detail.usage).toEqual({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 });
 
     // Retrying with the same settings hits the same cap: the limit lives on the orglet, not on the renderer's copy.
     await core.command('retry', { id: taskId });
