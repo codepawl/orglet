@@ -31,7 +31,7 @@ Run these locally before every pull request:
 | Command | What it does |
 |---|---|
 | `pnpm typecheck` | `tsc --noEmit` over the whole repo |
-| `pnpm test` | The vitest integration suite in `tests/integration`, and the UI kit's own tests in `packages/orglet-ui/test` |
+| `pnpm test` | The vitest integration suite in `tests/integration`, and the UI kit's own tests in `packages/orglet-ui/test`; the files that start a real Chrome run one at a time (`vitest.config.ts`) |
 | `pnpm --filter @codepawl/orglet-ui build`, then `pnpm --filter @codepawl/orglet-ui check:package` | Builds the UI kit and checks the package someone would install: publint for its `package.json`, Are the Types Wrong for its types. Run it when you touch `packages/orglet-ui`. |
 | `pnpm i18n:keys` | Lists English translations that are missing or unused. Run it whenever you touch UI text. |
 
