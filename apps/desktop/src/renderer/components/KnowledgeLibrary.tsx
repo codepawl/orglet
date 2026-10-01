@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Brain, Check, Clock3, Globe, UserRound, Users, FileText, Pin, Search, Tag, Target, Type, type LucideIcon } from 'lucide-react';
+import { Globe, UserRound, Users, FileText, Pin, Search, Tag, Target, Type } from 'lucide-react';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { isMemory, type ContextManifest, type Knowledge, type KnowledgeScope, type RunContext } from '../../shared/knowledge';
 import { MemoryList } from './Memories';
 import { Button, FieldLabel } from './ui';
+import { StatusMark, type StatusMarkState } from './StatusMark';
 import { Avatar } from './Avatar';
 import { Select } from './Select';
 import { t } from '../i18n';
@@ -67,9 +68,9 @@ export function KnowledgeLibrary({ workspace, onOpen, onOpenChat }: { workspace:
   </Button>;
   return <div className="form">
     <label><FieldLabel icon={Search}>{t('Tìm knowledge')}</FieldLabel><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Từ khóa hoặc tag')} maxLength={200} /></label>
-    {proposed.length > 0 && <section aria-label={t('Chờ duyệt')}><LibraryHeading tone="pending" icon={Clock3}>{t('Chờ duyệt ({0})', [proposed.length])}</LibraryHeading>{proposed.map(row)}</section>}
-    <section aria-label={t('Đã duyệt')}><LibraryHeading tone="approved" icon={Check}>{t('Đã duyệt ({0})', [approved.length])}</LibraryHeading>{approved.map(row)}{!approved.length && <p className="muted">{query ? t('Không có mục khớp.') : t('Chưa có knowledge đã duyệt.')}</p>}</section>
-    {(memories.length > 0 || !query) && <section aria-label={t('Ghi nhớ')}><LibraryHeading tone="memory" icon={Brain}>{t('Ghi nhớ ({0})', [memories.length])}</LibraryHeading><MemoryList memories={memories} workspace={workspace} showScope onOpenChat={onOpenChat} /></section>}
+    {proposed.length > 0 && <section aria-label={t('Chờ duyệt')}><LibraryHeading tone="pending">{t('Chờ duyệt ({0})', [proposed.length])}</LibraryHeading>{proposed.map(row)}</section>}
+    <section aria-label={t('Đã duyệt')}><LibraryHeading tone="approved">{t('Đã duyệt ({0})', [approved.length])}</LibraryHeading>{approved.map(row)}{!approved.length && <p className="muted">{query ? t('Không có mục khớp.') : t('Chưa có knowledge đã duyệt.')}</p>}</section>
+    {(memories.length > 0 || !query) && <section aria-label={t('Ghi nhớ')}><LibraryHeading tone="memory">{t('Ghi nhớ ({0})', [memories.length])}</LibraryHeading><MemoryList memories={memories} workspace={workspace} showScope onOpenChat={onOpenChat} /></section>}
     {error && <p role="alert" className="error">{error}</p>}
   </div>;
 }
@@ -134,13 +135,13 @@ export function ContextManifestView({ run, workspace }: { run: { snapshot: { con
 }
 
 /**
- * A Library section title with a small round mark before it, the way the sidebar puts a face before each orglet
- * (owner, 2026-09-25): amber for what waits for review, green for what is approved, a brain for memory. The mark
- * repeats what the words say, so it is hidden from assistive technology.
+ * A Library section title with the same circle an orglet or a crew wears in the sidebar. Pending is the waiting
+ * ring, approved is the done tick, memory is the idle ring. The words already name the section, so the mark is decorative.
  */
-function LibraryHeading({ tone, icon: Icon, children }: { tone: 'pending' | 'approved' | 'memory'; icon: LucideIcon; children: string }) {
+function LibraryHeading({ tone, children }: { tone: 'pending' | 'approved' | 'memory'; children: string }) {
+  const mark: StatusMarkState = tone === 'pending' ? { variant: 'dashed', tone: 'working' } : tone === 'approved' ? { variant: 'filled', tone: 'success' } : { variant: 'empty', tone: 'muted' };
   return <h3 className="library-heading">
-    <span className={`library-mark ${tone}`} aria-hidden="true"><Icon size={11} strokeWidth={2.5} /></span>
+    <StatusMark variant={mark.variant} tone={mark.tone} label={children} decorative />
     {children}
   </h3>;
 }

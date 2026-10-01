@@ -137,6 +137,27 @@ export class KnowledgeBase {
   deleteRows(itemId: string) {
     for (const table of ['knowledge_search', 'knowledge_revisions', 'knowledge']) this.store.db.prepare(`DELETE FROM ${table} WHERE id=?`).run(itemId);
   }
+  /**
+   * A deleted orglet or crew takes its own notes and memories with it. Waiting items and memories are removed: they
+   * were never reviewed work, or they only applied to that owner. An approved note is archived, so the review is kept
+   * and the library no longer offers it. Workspace notes are not passed here.
+   */
+  releaseOwner(scope: Extract<KnowledgeScope, { type: 'team' | 'worker' }>) {
+    const owned = this.list().filter(item => item.status !== 'archived' && sameScope(item.scope, scope));
+    if (!owned.length) return;
+    this.store.transaction(() => {
+      for (const item of owned) {
+        if (item.status === 'proposed' || isMemory(item)) this.deleteRows(item.id);
+        else this.write({ ...item, revision: item.revision + 1, status: 'archived', createdAt: now() });
+      }
+    });
+  }
+  /** Owners already deleted before this build still have rows; drop those the same way. */
+  releaseDeletedOwners() {
+    const state = this.store.entityState();
+    for (const [id, row] of Object.entries(state.teams)) if (row.deletedAt) this.releaseOwner({ type: 'team', id });
+    for (const [id, row] of Object.entries(state.workers)) if (row.deletedAt) this.releaseOwner({ type: 'worker', id });
+  }
   /** Stores model suggestions for review. Caller owns the transaction. */
   propose(run: Run, artifactId: string, proposals: z.infer<typeof KnowledgeProposal>[]) {
     const scope: KnowledgeScope = run.snapshot.team ? { type: 'team', id: run.snapshot.team.id } : { type: 'worker', id: run.snapshot.worker.id };

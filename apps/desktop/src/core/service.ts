@@ -203,6 +203,7 @@ export class CoreService {
   constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}, browserHost?: BrowserHost, desktopHost?: DesktopHost, private ownPrograms: readonly string[] = []) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
+    this.knowledge.releaseDeletedOwners();
     this.chatSearch = new ChatSearch(store);
     this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
     this.harnessSignIns = new HarnessSignIns((harnessId, end) => void this.signInEnded(harnessId, end));
@@ -1458,7 +1459,6 @@ export class CoreService {
     if (!found) throw new Error('Không tìm thấy mục này.');
     const workspace = this.store.workspace();
     const name = found.row.name;
-    if (kind === 'worker' && !found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
     const blocker = removalBlocker(workspace, kind, entityId);
     if (blocker?.kind === 'crews') throw new Error(leaveCrewsMessage(name, blocker.crews.map(crew => crew.name)));
     if (blocker?.kind === 'schedule') throw new Error(stopScheduleMessage(blocker.schedule.name));
@@ -1476,6 +1476,7 @@ export class CoreService {
   private deleteEntity(kind: 'worker' | 'team', entityId: string) {
     this.assertRemovable(kind, entityId);
     this.setEntityState(kind, entityId, { deletedAt: this.clock().toISOString() });
+    this.knowledge.releaseOwner(kind === 'team' ? { type: 'team', id: entityId } : { type: 'worker', id: entityId });
     this.takeNewChatCapabilities(kind === 'team' ? { teamId: entityId } : { workerId: entityId });
     this.workspaceGrants.takePending(kind === 'team' ? { teamId: entityId } : { workerId: entityId });
     if (kind === 'worker') {

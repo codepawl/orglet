@@ -111,6 +111,40 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
 }
 
 describe('terminal composer', () => {
+  it.each([80, 120])('spreads picker shortcuts across %s columns', async columns => {
+    const session = await terminal({ picker: true, columns });
+    try {
+      const lines = session.screen.text().split('\n');
+      const navigation = lines.find(line => line.includes('↑↓ move'))!;
+      const management = lines.find(line => line.includes('Ctrl+N create'))!;
+      expect(navigation).toMatch(/move\s{3,}type to filter/);
+      expect(navigation.trimEnd()).toMatch(/Ctrl\+C exit$/);
+      expect(displayWidth(navigation)).toBe(columns - 1);
+      expect(management).toMatch(/create\s{3,}← selected item menu/);
+      expect(displayWidth(management)).toBe(columns - 1);
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('wraps shortcut groups in a narrow terminal without hiding the selection', async () => {
+    const session = await terminal({ picker: true, columns: 32, rows: 24 });
+    try {
+      const screen = session.screen.text();
+      for (const hint of ['↑↓ move', 'type to filter', 'Enter opens', 'Ctrl+C exit', 'Ctrl+N create', '← selected item menu']) {
+        expect(screen).toContain(hint);
+      }
+      expect(screen).toContain('› ▐••▌ Researcher');
+      expect(session.screen.lines.length).toBeLessThan(24);
+      for (const line of screen.split('\n')) {
+        expect(displayWidth(line)).toBeLessThan(32);
+      }
+    } finally {
+      await session.stop();
+    }
+  });
+
   function managementFixture() {
     const workerId = '11111111-1111-4111-8111-111111111111';
     const otherId = '22222222-2222-4222-8222-222222222222';
