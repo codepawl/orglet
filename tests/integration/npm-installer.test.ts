@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 // @ts-expect-error The installer is plain JavaScript published on its own (installer/npm); it has no type declarations.
-import { installerAssetFor, releaseErrorMessage, sha256Of, versionOfTag } from '../../installer/npm/lib/release.js';
+import { installerAssetFor, isReleaseDownload, releaseErrorMessage, sha256Of, versionOfTag } from '../../installer/npm/lib/release.js';
+// @ts-expect-error Same package.
+import { installConsent } from '../../installer/npm/lib/consent.js';
 // @ts-expect-error Same package.
 import { signatureAccepted, sha256OfFile } from '../../installer/npm/lib/verify.js';
 // @ts-expect-error Same package.
@@ -32,6 +34,24 @@ it('installs from the Windows Setup and nothing on other platforms', () => {
   expect(installerAssetFor(releaseAssets, 'darwin')).toBeUndefined();
   expect(installerAssetFor(releaseAssets, 'linux')).toBeUndefined();
   expect(installerAssetFor([{ name: 'Orglet-evil.Setup.exe.zip' }], 'win32')).toBeUndefined();
+});
+
+it('downloads only assets of an Orglet GitHub Release (COD-357)', () => {
+  expect(isReleaseDownload('https://github.com/codepawl/orglet/releases/download/v0.9.0/Orglet-0.9.0.Setup.exe')).toBe(true);
+  expect(isReleaseDownload('http://github.com/codepawl/orglet/releases/download/v0.9.0/Orglet-0.9.0.Setup.exe')).toBe(false);
+  expect(isReleaseDownload('https://github.com/someone/orglet/releases/download/v0.9.0/Orglet-0.9.0.Setup.exe')).toBe(false);
+  expect(isReleaseDownload('https://github.com.example.com/codepawl/orglet/releases/download/v0.9.0/Orglet-0.9.0.Setup.exe')).toBe(false);
+  expect(isReleaseDownload('https://example.com/codepawl/orglet/releases/download/v0.9.0/Orglet-0.9.0.Setup.exe')).toBe(false);
+  expect(isReleaseDownload('not a url')).toBe(false);
+  expect(isReleaseDownload(undefined)).toBe(false);
+});
+
+it('installs without asking only when told to, and never on silence without a terminal (COD-357)', () => {
+  expect(installConsent(['node', 'orglet', 'install', '--yes'], false)).toBe('yes');
+  expect(installConsent(['node', 'orglet', '-y'], true)).toBe('yes');
+  expect(installConsent(['node', 'orglet', 'install'], true)).toBe('ask');
+  expect(installConsent(['node', 'orglet', 'install'], false)).toBe('refuse');
+  expect(installConsent(['node', 'orglet'], false)).toBe('refuse');
 });
 
 it('reads the SHA-256 GitHub reports, and nothing from a missing or malformed digest', () => {
