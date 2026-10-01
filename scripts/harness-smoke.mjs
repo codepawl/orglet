@@ -30,6 +30,8 @@ try {
   const claude = detected.find(item => item.id === 'claude-code');
   const codex = detected.find(item => item.id === 'codex');
   const gemini = detected.find(item => item.id === 'gemini');
+  // A real CLI on this machine, Cursor Agent under the real %LOCALAPPDATA% among them, still reads as signed out.
+  for (const item of detected) assert.notEqual(item.auth, 'logged_in', `${item.id} read this machine's sign-in`);
   // Found on PATH with no sign-in in its folder: detected, never ready.
   assert.equal(gemini.auth, 'logged_out');
   assert.equal(gemini.status, 'detected');
