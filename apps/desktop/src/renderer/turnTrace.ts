@@ -17,11 +17,16 @@ export type TraceKind =
   | 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked' | 'desktop_borrow'
   | 'handoff' | 'remembered' | 'proposal' | 'withheld' | 'failed' | 'other';
 
+/** The orglet a handoff names, so the row can show that orglet's face rather than a generic person. */
+export type TraceFace = { name: string; seed: string; mascot?: string; color?: string; hint?: string };
+
 export type TraceEntry = {
   id: string;
   kind: TraceKind;
   /** What the step touched: a file name, a search pattern, a memory's text, a note's title, a member's name. */
   target?: string;
+  /** Set on a crew handoff that names one orglet. */
+  face?: TraceFace;
   /** The core's own sentence for a row that is a note rather than a verb and a target (a refusal, a stored memory). Kept in Vietnamese as saved; the row translates it. */
   note?: string;
   /** Why the row happened when it is not obvious: a note Tacet loaded (COD-306). */
@@ -165,7 +170,10 @@ function crewEntries(runs: readonly Run[], events: readonly Activity[]): TraceEn
   for (const run of runs) {
     if (run.stage === 'member' && !members.has(run.snapshot.worker.id)) members.set(run.snapshot.worker.id, run);
   }
-  for (const run of members.values()) entries.push({ id: `handoff-${run.id}`, kind: 'handoff', target: run.snapshot.worker.name });
+  for (const run of members.values()) {
+    const worker = run.snapshot.worker;
+    entries.push({ id: `handoff-${run.id}`, kind: 'handoff', target: worker.name, face: { name: worker.name, seed: worker.id, mascot: worker.avatar?.mascot, color: worker.avatar?.color, hint: worker.description } });
+  }
   return entries;
 }
 
