@@ -259,7 +259,7 @@ describe('orglet chat picker', () => {
         const lines = renderPickerLines({ ...createPicker(entries), selected }, { width: 80, mode: 'none', maxRows: 8, maxLines, grouped: true, showFaces: true });
         expect(lines.length).toBeLessThanOrEqual(maxLines);
         expect(lines.find(line => line.startsWith('› '))).toContain(entries[selected].name);
-        if (maxLines >= 2) expect(lines).toContain(entries[selected].kind === 'worker' ? '  [ Orglets · 3 ]' : '  [ Crews · 1 ]');
+        if (maxLines >= 2) expect(lines).toContain(entries[selected].kind === 'worker' ? '  [ Orglets · 3 ]' : '  [ Channels · 1 ]');
       }
     }
   });
@@ -274,12 +274,12 @@ describe('orglet one-shot commands in colour', () => {
       '  ▐••▌ Writer      openai/gpt-5',
       '  ▐••▌ Kế toán     anthropic',
       '',
-      'Crews',
+      'Channels',
       '  ▦    Review crew  lead Writer  Researcher, Kế toán',
     ]);
     expect(colored).toContain('\x1b[38;2;167;100;201m▐');
     const status = styledStatus({ version: '1.0.0', orglets: 2, crews: 0, running: 1, colors: [BLUE, PURPLE] }, 'truecolor');
-    expect(stripAnsi(status)).toBe('▐••▌▐••▌  Orglet 1.0.0 is running.\n2 orglets, 0 crews, 1 chat working.');
+    expect(stripAnsi(status)).toBe('▐••▌▐••▌  Orglet 1.0.0 is running.\n2 orglets, 0 channels, 1 chat working.');
   });
 
   it('keeps pipes plain and needs a terminal for chat', async () => {
@@ -363,7 +363,7 @@ describe('orglet chat session', () => {
     expect(transcript).toContain('› /read\nResearcher\n  Two sources.\n\nWriter\n  Crew says: earlier');
     expect(transcript).toContain('Chưa có cuộc trò chuyện với Kế toán.');
     expect(transcript).toContain('Opened the chat with Kế toán in the app.');
-    expect(transcript).toContain('Crews\n  Review crew  lead Writer  Researcher, Kế toán');
+    expect(transcript).toContain('Channels\n  Review crew  lead Writer  Researcher, Kế toán');
     expect(transcript).toContain('/to <name>');
     expect(transcript).toContain('Unknown command /bogus.');
   });

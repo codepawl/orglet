@@ -22,8 +22,9 @@ describe('archived chats in the sidebar (COD-286)', () => {
     expect(archivedChatsIn(tasks, 'workers').map(item => [item.task.id, item.kind])).toEqual([
       ['new-thread', 'side'], ['main', 'main'], ['scout-run', 'schedule'], ['old-thread', 'side'],
     ]);
-    expect(archivedChatsIn(tasks, 'teams').map(item => [item.task.id, item.kind])).toEqual([['crew-run', 'schedule'], ['crew-chat', 'main']]);
-    expect(archivedChatsIn(tasks, 'channels').map(item => [item.task.id, item.kind])).toEqual([['group', 'channel'], ['everyone', 'channel']]);
+    // A crew is a channel since COD-369, so its chats and runs wait with the channels.
+    expect(archivedChatsIn(tasks, 'teams')).toEqual([]);
+    expect(archivedChatsIn(tasks, 'channels').map(item => [item.task.id, item.kind])).toEqual([['crew-run', 'schedule'], ['crew-chat', 'channel'], ['group', 'channel'], ['everyone', 'channel']]);
   });
 
   it('never lists an open or a deleted chat', () => {

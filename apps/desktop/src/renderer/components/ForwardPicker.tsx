@@ -13,7 +13,7 @@ import { t } from '../i18n';
 const GROUP_TITLES: Record<SendToOption['group'], () => string> = {
   recent: () => t('Gần đây'),
   orglets: () => t('Tí'),
-  crews: () => t('Hội'),
+  crews: () => t('Kênh'),
 };
 
 function OptionFaces({ option }: { option: SendToOption }) {
@@ -82,7 +82,7 @@ export function ForwardPicker({ request, options, sending, onSend, onClose }: {
         </div>
         <div className="send-to-search">
           <Search size={16} aria-hidden="true" />
-          <Input autoFocus aria-label={t('Tìm Tí, hội hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, hội hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+          <Input autoFocus aria-label={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               list.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus();
@@ -115,7 +115,7 @@ export function ForwardPicker({ request, options, sending, onSend, onClose }: {
             </li>;
           })}
         </ul>
-        {!shown.length && <p className="send-to-empty">{options.length ? t('Không tìm thấy Tí hay hội nào.') : t('Chưa có Tí nào.')}</p>}
+        {!shown.length && <p className="send-to-empty">{options.length ? t('Không tìm thấy Tí hay kênh nào.') : t('Chưa có Tí nào.')}</p>}
         <div className="forward-foot">
           {request && request.files.length > 0 && <div className="forward-files" role="group" aria-label={t('Tệp trong tin này')}>
             {request.files.map(file => <Checkbox key={file.id} checked={!toSideThread && carried.includes(file.id)} disabled={toSideThread} onChange={() => toggleFile(file.id)}

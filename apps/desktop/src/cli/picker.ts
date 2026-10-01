@@ -188,7 +188,7 @@ export function renderPickerLines(state: PickerState, layout: PickerLayout): str
       const count = visible.filter(candidate => candidate.kind === entry.kind).length;
       const total = state.entries.filter(candidate => candidate.kind === entry.kind).length;
       const countLabel = count === total ? `${count}` : `${count}/${total}`;
-      const title = entry.kind === 'worker' ? 'Orglets' : 'Crews';
+      const title = entry.kind === 'worker' ? 'Orglets' : 'Channels';
       lines.push(paint(`  [ ${title} · ${countLabel} ]`, { bold: true }, layout.mode));
     }
     lines.push(entryLine(entry, start + index === state.selected, layout, facesWidth, nameWidth));

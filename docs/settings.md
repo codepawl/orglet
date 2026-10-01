@@ -14,7 +14,7 @@ Language (English (US), English (UK), Tiếng Việt), **Appearance** (light or 
 - **Tacet on this computer**: a small model that tells you when an hourly schedule's answer has something new instead of every run finishing quietly, offers a permission a message seems to need under the message box, picks who answers a group-chat message that tags nobody, loads a note worded differently from your message when the message is about it ([memory.md](memory.md#which-notes-load-and-why)), and asks you before a step in Orglet's browser or a desktop app that the rules let through but it reads as sending, paying, deleting or publishing ([browser.md](browser.md#a-second-opinion-from-tacet)). It is not installed with Orglet. **Download** fetches about 305 MB once, with a bar and **Cancel**; if the connection drops, **Retry** picks up where it stopped. It runs on this computer and sends nothing out. **Remove** deletes it, and so does **Erase everything**. How it decides: [decisions.md](decisions.md).
 - **Copy format** and **Download format**: plain text or Markdown for answers and reports.
 - **Ask before opening a task**.
-- **Delete archived items**: archived chats, orglets and crews can clear themselves after a while.
+- **Delete archived items**: archived chats, orglets and channels can clear themselves after a while.
 
 ## API connections
 
@@ -55,12 +55,12 @@ These numbers cover requests Orglet makes through an API key. Harness runs use t
 
 ### Backup and restore
 
-**Save backup** writes one JSON file with orglets, crews, revisions, schedules, chat history, answers and reports, checker results, memories and knowledge, reactions and costs. It does **not** include API keys, source file contents, the working-folder grants, checkpoint context, or the proposal cards in chats; reports can contain excerpts of your sources, so keep the file private. The limit is 50 MB.
+**Save backup** writes one JSON file with orglets, channels, revisions, schedules, chat history, answers and reports, checker results, memories and knowledge, reactions and costs. It does **not** include API keys, source file contents, the working-folder grants, checkpoint context, or the proposal cards in chats; reports can contain excerpts of your sources, so keep the file private. The limit is 50 MB.
 
 **Restore from file** validates the backup and adds the records that are missing; what is already there stays. Restored schedules come back disabled, and a restored backup grants no folder or web access. Interrupted requests are not resent.
 
 - **After Delete chat history.** Restoring brings the deleted chats back with their answers. A chat you kept talking in after the backup was saved comes back with those later turns shown as deleted. Costs are counted once: the cost records the deletion kept are the same ones the backup holds.
-- **On a new computer.** If you have not used the Researcher that a new install starts with, the backup's orglets take its place instead of sitting beside it. Orglets and crews that were archived or deleted when you saved the backup stay that way. Schedule runs from the backup do not show up as new notifications.
+- **On a new computer.** If you have not used the Researcher that a new install starts with, the backup's orglets take its place instead of sitting beside it. Orglets and channels that were archived or deleted when you saved the backup stay that way. Schedule runs from the backup do not show up as new notifications.
 - **Attached files.** A backup holds no file contents, so a restored file opens with **Choose file**. Pick the same file on this computer and Orglet reads it again; a different file, even with the same name, is refused.
 - **Files an orglet changed.** The line under a turn, such as "Changed 3 files · +42 −7 · Applied", comes back with its counts and whether the changes were applied, discarded or never reached your folder. The backup keeps only those counts, not file names or contents, so where the orglet's private copy is no longer on this computer the line says it came from a backup and cannot be opened.
 - **If restoring fails**, a dialog says why, and nothing in Orglet has changed.
@@ -71,7 +71,7 @@ Each row refuses while a run, schedule or check is in progress, and reports what
 
 | Row | Removes |
 |---|---|
-| **Delete chat history** | Every chat, answer and report. Orglets, crews, skills and knowledge stay; a chat that cost money keeps its cost figures. |
+| **Delete chat history** | Every chat, answer and report. Orglets, channels, skills and knowledge stay; a chat that cost money keeps its cost figures. |
 | **Delete knowledge** | Every note, including ones waiting for review. Memory stays. |
 | **Delete memory** | Every memory in every scope, including ones waiting for review. Notes stay. |
 | **Delete imported sources** | Orglet's record of the files you attached. Your files are untouched; a source a chat still refers to is revoked instead so that chat still opens. |

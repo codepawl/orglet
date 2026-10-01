@@ -153,7 +153,7 @@ class Session {
         detail: () => this.confirmingExit ? 'Runs already sent keep working in the app.' : !this.editor && this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
         shortcut: action => this.shortcut(action),
         prompt: () => this.currentPrompt(),
-        placeholder: () => this.editor?.placeholder ?? (this.view === 'picker' ? 'Search orglets or crews…' : ''),
+        placeholder: () => this.editor?.placeholder ?? (this.view === 'picker' ? 'Search orglets or channels…' : ''),
         rows: maxLines => this.editor ? this.editor.rows(this.textWidth(), maxLines, this.mode) : renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: PICKER_MAX_ROWS, maxLines, grouped: true, showFaces: true }),
         status: () => this.composerStatus(),
         hint: () => {
@@ -621,7 +621,7 @@ class Session {
     if (this.editor || this.managementOpening) return;
     const management = this.options.client.management;
     if (!management) {
-      this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và hội ở đây."));
+      this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và kênh ở đây."));
       return;
     }
     const opening = { action };
@@ -636,7 +636,7 @@ class Session {
       if (!this.terminal) this.printLines(this.editor.context(this.textWidth(), this.mode));
     } catch (error) {
       if (this.managementOpening !== opening || this.finished) return;
-      if (error instanceof AppRefusal && error.code === 'invalid') this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và hội ở đây."));
+      if (error instanceof AppRefusal && error.code === 'invalid') this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và kênh ở đây."));
       else this.printFailure(error);
     } finally {
       if (this.managementOpening === opening) {
@@ -679,7 +679,7 @@ class Session {
       this.entries = entriesFromList(value);
       this.closeEditor();
       this.restoreManagedChat(saved, editor.originalName, editor.action);
-      this.printMuted(t(saved.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', saved.kind === 'worker' ? 'orglet' : 'crew', saved.name));
+      this.printMuted(t(saved.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', saved.kind === 'worker' ? 'orglet' : 'channel', saved.name));
     } catch (error) {
       if (saved) {
         this.closeEditor();
@@ -764,7 +764,7 @@ class Session {
       this.enterChat(match.entry);
       return;
     }
-    if (match.candidates.length === 0) this.printMuted(`No orglet or crew is called "${name}".`);
+    if (match.candidates.length === 0) this.printMuted(`No orglet or channel is called "${name}".`);
     this.showPicker(match.candidates.length ? name : '', this.chat);
   }
 

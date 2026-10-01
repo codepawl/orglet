@@ -280,14 +280,18 @@ const SCREENS = [
   { name: 'chat', open: async () => {} },
   { name: 'chat-options-menu', open: async page => { await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'composer-add-menu', open: async page => { await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
-  { name: 'crew-chat', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: context.crew.name, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); } },
+  { name: 'crew-chat', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); } },
   // A crew turn at work: the island on the prompt bar, with the member on the held model still working (COD-167).
   { name: 'crew-chat-island', needs: 'islandCrew', open: async (page, context) => {
     context.islandTaskId = await callCore(page, 'createTask', { workerId: context.researcher.id, teamId: context.islandCrew.id, brief: 'Check the last three run logs and say what failed.', sourceIds: [], consent: true, providerScopes: ['ollama'], budgetMicros: 100_000 });
     await openSidebar(page);
-    await page.getByRole('button', { name: context.islandCrew.name, exact: true }).first().click();
+    await page.getByRole('button', { name: `#${context.islandCrew.name}`, exact: true }).first().click();
     await page.locator('.live-island:not(.leaving)').waitFor();
-  }, close: async (page, context) => { await callCore(page, 'cancel', { id: context.islandTaskId }); } },
+  }, close: async (page, context) => {
+    await callCore(page, 'cancel', { id: context.islandTaskId });
+    // The crew is a channel now: a second turn started the same way would add a second row for it, and the first one would be opened. Archiving the stopped chat leaves the crew its empty channel, which the next first message takes.
+    await callCore(page, 'archiveTask', { id: context.islandTaskId, archived: true });
+  } },
   { name: 'sidebar-row-menu', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },

@@ -29,13 +29,14 @@ try {
   });
   assert.equal(result.profile.datasets[0].rows, 3); assert.equal(result.profile.datasets[0].id.duplicateNonNull, 1);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
+  await page.getByRole('button', { name: 'Tùy chọn kênh #Eris Review', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn kênh #Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
+  await page.getByRole('tab', { name: 'Cách làm việc', exact: true }).click();
   // The team editor no longer edits a checklist or a dataset check (COD-143). A template team keeps both and says so.
-  await page.getByText('Báo cáo của hội phải trả lời 5 mục kiểm tra.', { exact: true }).waitFor();
-  await page.getByText('Tệp CSV/JSON được kiểm tra trên máy trước khi hội review.', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Lưu hội', exact: true }).click();
-  await page.getByText('Đã lưu hội', { exact: true }).first().waitFor();
+  await page.getByText('Câu trả lời của kênh phải trả lời 5 mục kiểm tra.', { exact: true }).waitFor();
+  await page.getByText('Tệp CSV/JSON được kiểm tra trên máy trước khi kênh review.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Lưu kênh', exact: true }).click();
+  await page.getByText('Đã lưu kênh', { exact: true }).first().waitFor();
   const keptOnSave = await page.evaluate(async () => {
     const workspace = await window.orglet.call('workspace', {});
     const team = workspace.teams.find(item => item.name === 'Eris Review');
@@ -71,8 +72,8 @@ try {
   await page.locator('.org-viewer').waitFor({ state: 'detached' });
   const templatePath = join(directory, 'team-template.json');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, templatePath);
-  await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
-  await page.getByRole('button', { name: 'Xuất template đã lưu', exact: true }).click();
+  await page.getByRole('button', { name: 'Tùy chọn kênh #Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
+  await page.getByRole('button', { name: 'Xuất template', exact: true }).click();
   await page.getByText('Đã xuất template', { exact: true }).waitFor();
   const template = JSON.parse(await readFile(templatePath, 'utf8'));
   assert.equal(template.team.reviewPolicy.requiredChecks.length, 5);
@@ -81,9 +82,9 @@ try {
   template.team.name = 'Imported review'; await writeFile(templatePath, JSON.stringify(template));
   await page.keyboard.press('Escape');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
-  await page.getByRole('button', { name: 'Tạo hội', exact: true }).click();
+  await page.getByRole('button', { name: 'Tạo kênh', exact: true }).click();
   await page.getByRole('button', { name: 'Nhập template', exact: true }).click();
-  await page.getByRole('button', { name: 'Tùy chọn hội Imported review', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn kênh #Imported review', exact: true }).waitFor();
   const importedWorkspace = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(importedWorkspace.teams.length, 2); assert.equal(importedWorkspace.tasks.length, 2);
   assert.notDeepEqual(importedWorkspace.teams[0].memberIds, importedWorkspace.teams[1].memberIds);

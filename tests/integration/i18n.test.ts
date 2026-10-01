@@ -23,10 +23,10 @@ it('translates finished core messages, including ones with values already filled
   expect(translateMessage(null, 'Không tìm thấy công việc.')).toBe('Không tìm thấy công việc.');
   expect(translateMessage(en, 'Không tìm thấy công việc.')).toBe('Task not found.');
   expect(translateMessage(en, 'Run-log dòng 12: completed cần score hợp lệ.')).toBe('Run log row 12: completed rows need a valid score.');
-  expect(translateMessage(en, 'Bản sao lưu không hợp lệ: Hội thiếu Tí.')).toBe('Invalid backup: The crew is missing orglets.');
+  expect(translateMessage(en, 'Bản sao lưu không hợp lệ: Kênh thiếu Tí.')).toBe('Invalid backup: The channel is missing orglets.');
   expect(translateMessage(en, 'Something the core never says.')).toBe('Something the core never says.');
   // A message with its own key is not answered by the general "{0}: {1}" one (COD-246).
-  expect(translateMessage(en, 'Không có Tí hay hội nào tên "Nobody". Có: Researcher.')).toBe('No orglet or crew is named "Nobody". Available: Researcher.');
+  expect(translateMessage(en, 'Không có Tí hay kênh nào tên "Nobody". Có: Researcher.')).toBe('No orglet or channel is named "Nobody". Available: Researcher.');
   // The error that stopped a crew role is a message of its own inside the limitation, translated like one (COD-252).
   expect(translateMessage(en, 'Role chưa hoàn tất: Researcher: Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.'))
     .toBe('Unfinished roles: Researcher: Cannot recommend ready while checks are missing or failed, disagreements remain, or critical findings exist.');

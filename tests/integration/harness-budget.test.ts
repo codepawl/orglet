@@ -167,7 +167,7 @@ describe('crew on Claude Code', () => {
     expect(detail.task.status).toBe('waiting_budget');
     const member = detail.runs.find(run => run.stage === 'member')!;
     expect(member.status).toBe('waiting_budget');
-    expect(member.error).toBe('Claude Code dừng vì chạm giới hạn mỗi task của chat này ($0.50). Nâng Giới hạn mỗi task trong Thiết lập hội → Giới hạn & ca, rồi thử lại.');
+    expect(member.error).toBe('Claude Code dừng vì chạm giới hạn mỗi task của chat này ($0.50). Nâng Giới hạn mỗi task trong Thiết lập kênh → Giới hạn & ca, rồi thử lại.');
     // The lead never started; the crew marks its queued run the way it does for any stop before synthesis.
     expect(detail.runs.find(run => run.stage === 'synthesis')?.status).toBe('interrupted');
     expect(detail.artifacts).toHaveLength(0);

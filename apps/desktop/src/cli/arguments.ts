@@ -77,17 +77,17 @@ The app must be installed; it is started if it is not running. Keys, chats and
 files stay in the app. This command only sends requests to it.
 
 Usage:
-  orglet                     Chat in this terminal: pick an orglet or crew
+  orglet                     Chat in this terminal: pick an orglet or channel
   orglet <command> [options]
 
 Commands:
-  chat      Talk to an orglet or crew in this terminal
-  status    Whether the app is running, its version, how many orglets and crews
-  list      Orglets and crews by name, with their provider and model
-  send      Send a message to an orglet or crew and print the answer
+  chat      Talk to an orglet or channel in this terminal
+  status    Whether the app is running, its version, how many orglets and channels
+  list      Orglets and channels by name, with their provider and model
+  send      Send a message to an orglet or channel and print the answer
   read      Print the latest answer in a chat, or its past turns with --turns
   react     React to a message in a chat
-  forward   Forward a message to other orglets or crews
+  forward   Forward a message to other orglets or channels
   answer    Answer the question an orglet is waiting on
   stop      Stop the turn that is running in a chat
   pause     Pause the running turn after its current step
@@ -97,18 +97,18 @@ Commands:
   chats     List chats, side threads and channels with their ids
   side      Start a side thread from an orglet's chat
   bring     Bring a side thread's answer into its main chat
-  channel   Start a channel of orglets and crews with its first message
+  channel   Start a channel of orglets with its first message
   group     The older name of channel
   members   Change who is in a channel
   rename    Rename a chat
-  archive   Archive a chat, an orglet or a crew
-  restore   Restore an archived chat, orglet or crew
-  template  Create a crew from one of the app's templates
+  archive   Archive a chat, an orglet or a channel
+  restore   Restore an archived chat, orglet or channel
+  template  Create a channel from one of the app's templates
   schedules List schedules with their timing and limits
   schedule  Create, edit, switch on or off, or delete a schedule
   search    Search every chat, message and name
   running   Every run working or waiting across chats
-  library   Memories or notes, optionally of one orglet or crew
+  library   Memories or notes, optionally of one orglet or channel
   memory    Edit, pin or delete an approved memory
   usage     Plan usage of signed-in CLI accounts
   models    The models a connection offers
@@ -116,9 +116,9 @@ Commands:
   open      Bring the Orglet window forward, optionally on one chat
   run       Start a schedule now, optionally with files
   config    Show editable configurations, skill IDs and existing connections
-  create    Create an orglet or crew from a JSON configuration
-  edit      Apply a JSON patch to an orglet or crew
-  delete    Remove an orglet or crew, or a chat, with an exact-name confirmation
+  create    Create an orglet or channel from a JSON configuration
+  edit      Apply a JSON patch to an orglet or channel
+  delete    Remove an orglet or channel, or a chat, with an exact-name confirmation
 
 Commands that name a chat with --to also take --chat <id>, the start of a chat's
 id as "orglet chats" prints it, for side threads, channels and older chats.
@@ -131,25 +131,25 @@ Exit codes: 0 ok, 1 failure, 2 usage error, 3 app not reachable.`;
 
 /** The help of `orglet channel` and of `orglet group`, its older name (COD-361). */
 function channelHelp(command: 'channel' | 'group'): string {
-  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí và hội này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt; một hội trả lời bằng các Tí của nó. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc hội; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
+  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
 }
 
 export const COMMAND_HELP: Record<CommandName, string> = {
   config: t("Cách dùng: orglet config [--json]\n\nHiện cấu hình có thể sửa, ID, phiên bản, skill và tên kết nối.\nKhông bao gồm khóa hay quyền truy cập."),
-  create: t("Cách dùng: orglet create <orglet|crew> --config <file.json> [--json]\n\nTạo Tí hoặc hội. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nHội cần name, instructions, memberIds, synthesizerId, workflow và monthlyBudgetMicros.\nGiới hạn là số nguyên phần triệu USD."),
-  edit: t("Cách dùng: orglet edit <orglet|crew> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nTrong TUI, /edit mở thiết lập của chat đang chọn."),
-  delete: `${t("Cách dùng: orglet delete <orglet|crew> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nHội, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`,
+  create: t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nHội cần name, instructions, memberIds, synthesizerId, workflow và monthlyBudgetMicros.\nGiới hạn là số nguyên phần triệu USD."),
+  edit: t("Cách dùng: orglet edit <orglet|channel> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nTrong TUI, /edit mở thiết lập của chat đang chọn."),
+  delete: `${t("Cách dùng: orglet delete <orglet|channel> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nKênh, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`,
   chat: `Usage: orglet chat [--to <name>]
 
-Opens a chat in this terminal. Pick an orglet or crew with the arrow keys or by
+Opens a chat in this terminal. Pick an orglet or channel with the arrow keys or by
 typing part of its name, then write messages; each answer prints as it lands.
 Running orglet with no command in a terminal does the same.
 
-In the chat, /to <name> switches chat, /list lists orglets and crews, /read
+In the chat, /to <name> switches chat, /list lists orglets and channels, /read
 shows the latest answer again, /open brings the app to this chat, /clear
 clears the screen, /queue shows pending messages and commands, /undo takes the
 last queued item back into the draft, /help lists these and /exit leaves.
-/new [orglet|crew], /edit [name] and /delete [name] manage configurations here.
+/new [orglet|channel], /edit [name] and /delete [name] manage configurations here.
 /history, /reply, /react, /forward, /answer, /stop, /pause, /resume, /retry and
 /continue act on this chat; /chats, /side, /bring, /channel, /members, /rename
 and /archive handle the chats themselves, and /to #id opens one by its id.
@@ -167,27 +167,27 @@ Options:
   --to <name>    Open this chat straight away`,
   status: `Usage: orglet status [--json]
 
-Shows whether the app is reachable, its version, and how many orglets and crews
+Shows whether the app is reachable, its version, and how many orglets and channels
 it has.
 
 Options:
   --json    Print machine-readable JSON`,
   list: `Usage: orglet list [--json]
 
-Lists orglets and crews by name, with each orglet's provider and model and each
-crew's lead and members.
+Lists orglets and channels by name, with each orglet's provider and model and each
+channel's lead and members.
 
 Options:
   --json    Print machine-readable JSON`,
   send: `Usage: orglet send "<message>" --to <name> [options]
 
-Sends a message into the chat with an orglet or crew, the same way the app's
-message box does, and prints the answer. A crew prints each member's reply
+Sends a message into the chat with an orglet or channel, the same way the app's
+message box does, and prints the answer. A channel prints each orglet's reply
 with its name. The name matches case-insensitively; a unique start of a name
 is enough.
 
 Options:
-  --to <name>          The orglet or crew (required)
+  --to <name>          The orglet or channel (required)
   --file <path>        Attach a file; repeat for more (up to ${MAX_FILES})
   --reply-to <number>  Reply to a message, numbered as "orglet read --turns" prints it
   --no-wait            Return right after sending
@@ -196,41 +196,41 @@ Options:
 
 Example:
   orglet send "Summarise this file" --to Researcher --file notes.txt`,
-  read: t("Cách dùng: orglet read --to <tên> [--turns <số>] [--json]\n\nIn câu trả lời mới nhất trong chat với Tí hoặc hội.\nVới --turns, in các lượt gần nhất, mỗi tin nhắn có số: #3 là tin thứ ba\ncủa bạn, #3.1 là câu trả lời đầu tiên cho tin đó. Dùng số này với\nreact, forward và send --reply-to.\n\nTùy chọn:\n  --to <tên>       Tí hoặc hội (bắt buộc)\n  --turns <số>     In bấy nhiêu lượt gần nhất, từ 1 đến {0}\n  --json           In JSON cho máy đọc", MAX_READ_TURNS),
-  react: t("Cách dùng: orglet react <cảm xúc> --to <tên> [--message <số>] [--off] [--json]\n\nThả cảm xúc lên một tin nhắn, như nút cảm xúc trong app. Mỗi tin có một cảm\nxúc của bạn; cảm xúc mới thay cái cũ. Tí đọc cảm xúc ở lượt sau.\nCảm xúc: {0}.\n\nTùy chọn:\n  --to <tên>         Tí hoặc hội (bắt buộc)\n  --message <số>     Tin nhắn theo số của read --turns, như 3 hoặc 3.1;\n                     mặc định là câu trả lời mới nhất\n  --off              Gỡ cảm xúc này\n  --json             In JSON cho máy đọc", Reaction.options.join(', ')),
-  forward: t("Cách dùng: orglet forward --to <tên> --target <tên> [--target <tên>] [tùy chọn]\n\nChuyển tiếp một tin nhắn sang chat của Tí hoặc hội khác, như tin của chính\nbạn, tối đa {0} nơi. Mỗi nơi nhận nó như một lượt mới và trả lời. Tệp chỉ\nđi kèm tên; đính tệp thật trong app.\n\nTùy chọn:\n  --to <tên>         Chat có tin nhắn (bắt buộc)\n  --target <tên>     Nơi nhận; lặp lại để gửi nhiều nơi\n  --message <số>     Tin nhắn theo số của read --turns; mặc định là câu trả\n                     lời mới nhất\n  --note <chữ>       Lời nhắn kèm theo\n  --json             In JSON cho máy đọc", MAX_FORWARD_TARGETS),
-  answer: t("Cách dùng: orglet answer \"<câu trả lời>\" --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nTrả lời câu hỏi Tí đang chờ, rồi đợi lượt chạy tiếp như send. Gõ số của một\nlựa chọn (1, 2, 3) hoặc câu của bạn. read và send in câu hỏi cùng các lựa\nchọn. Câu hỏi xin quyền dùng công cụ MCP chỉ trả lời được trong app.\n\nTùy chọn:\n  --to <tên>           Tí hoặc hội (bắt buộc)\n  --no-wait            Trả về ngay sau khi trả lời\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
+  read: t("Cách dùng: orglet read --to <tên> [--turns <số>] [--json]\n\nIn câu trả lời mới nhất trong chat với Tí hoặc kênh.\nVới --turns, in các lượt gần nhất, mỗi tin nhắn có số: #3 là tin thứ ba\ncủa bạn, #3.1 là câu trả lời đầu tiên cho tin đó. Dùng số này với\nreact, forward và send --reply-to.\n\nTùy chọn:\n  --to <tên>       Tí hoặc kênh (bắt buộc)\n  --turns <số>     In bấy nhiêu lượt gần nhất, từ 1 đến {0}\n  --json           In JSON cho máy đọc", MAX_READ_TURNS),
+  react: t("Cách dùng: orglet react <cảm xúc> --to <tên> [--message <số>] [--off] [--json]\n\nThả cảm xúc lên một tin nhắn, như nút cảm xúc trong app. Mỗi tin có một cảm\nxúc của bạn; cảm xúc mới thay cái cũ. Tí đọc cảm xúc ở lượt sau.\nCảm xúc: {0}.\n\nTùy chọn:\n  --to <tên>         Tí hoặc kênh (bắt buộc)\n  --message <số>     Tin nhắn theo số của read --turns, như 3 hoặc 3.1;\n                     mặc định là câu trả lời mới nhất\n  --off              Gỡ cảm xúc này\n  --json             In JSON cho máy đọc", Reaction.options.join(', ')),
+  forward: t("Cách dùng: orglet forward --to <tên> --target <tên> [--target <tên>] [tùy chọn]\n\nChuyển tiếp một tin nhắn sang chat của Tí hoặc kênh khác, như tin của chính\nbạn, tối đa {0} nơi. Mỗi nơi nhận nó như một lượt mới và trả lời. Tệp chỉ\nđi kèm tên; đính tệp thật trong app.\n\nTùy chọn:\n  --to <tên>         Chat có tin nhắn (bắt buộc)\n  --target <tên>     Nơi nhận; lặp lại để gửi nhiều nơi\n  --message <số>     Tin nhắn theo số của read --turns; mặc định là câu trả\n                     lời mới nhất\n  --note <chữ>       Lời nhắn kèm theo\n  --json             In JSON cho máy đọc", MAX_FORWARD_TARGETS),
+  answer: t("Cách dùng: orglet answer \"<câu trả lời>\" --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nTrả lời câu hỏi Tí đang chờ, rồi đợi lượt chạy tiếp như send. Gõ số của một\nlựa chọn (1, 2, 3) hoặc câu của bạn. read và send in câu hỏi cùng các lựa\nchọn. Câu hỏi xin quyền dùng công cụ MCP chỉ trả lời được trong app.\n\nTùy chọn:\n  --to <tên>           Tí hoặc kênh (bắt buộc)\n  --no-wait            Trả về ngay sau khi trả lời\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
   ...controlHelp(),
-  chats: t("Cách dùng: orglet chats [--archived] [--json]\n\nLiệt kê chat, mới nhất trước: chat chính của Tí và hội, chat phụ, kênh và lần\nchạy của lịch, mỗi chat có mã ngắn. Dùng mã với --chat trong các lệnh khác.\n\nTùy chọn:\n  --archived     Chỉ liệt kê chat đã lưu trữ\n  --json         In JSON cho máy đọc"),
+  chats: t("Cách dùng: orglet chats [--archived] [--json]\n\nLiệt kê chat, mới nhất trước: chat chính của Tí và kênh, chat phụ, kênh và lần\nchạy của lịch, mỗi chat có mã ngắn. Dùng mã với --chat trong các lệnh khác.\n\nTùy chọn:\n  --archived     Chỉ liệt kê chat đã lưu trữ\n  --json         In JSON cho máy đọc"),
   side: t("Cách dùng: orglet side \"<tin nhắn>\" --to <tên Tí> [--no-wait] [--timeout <giây>] [--json]\n\nGửi tin trong một chat phụ mới của Tí, như \"Gửi trong luồng mới\" trong app.\nChat phụ mang quyền, thư mục và MCP của chat chính, không bao giờ rộng hơn.\nChat chính giữ nguyên. Lệnh in mã của chat phụ để nhắn tiếp bằng --chat.\n\nTùy chọn:\n  --to <tên>           Tí có chat chính (hoặc --chat <mã> của chat đó)\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
   bring: t("Cách dùng: orglet bring --chat <mã chat phụ> [--message <số>] [--json]\n\nĐưa một câu trả lời của chat phụ vào chat chính dưới dạng trích dẫn. Không\nchạy lượt mới nào. Mặc định là câu trả lời mới nhất.\n\nTùy chọn:\n  --chat <mã>        Chat phụ (bắt buộc)\n  --message <số>     Câu trả lời theo số của read --turns, như 2.1\n  --json             In JSON cho máy đọc"),
   channel: channelHelp('channel'),
   group: channelHelp('group'),
-  members: t("Cách dùng: orglet members --chat <mã> --with <tên> [--with <tên>] [--json]\n\nĐổi thành viên của một kênh, từ tin nhắn sau. Thay cả danh sách. Thành viên là\nTí hoặc hội; một hội trả lời bằng các Tí của nó.\n\nTùy chọn:\n  --chat <mã>      Kênh (bắt buộc)\n  --with <tên>     Một Tí hoặc hội; lặp lại cho nhiều thành viên\n  --json           In JSON cho máy đọc"),
-  rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --title \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc hội không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc hội\n  --chat <mã>        Chat theo mã của orglet chats\n  --title <tên>      Tên mới (bắt buộc)\n  --json             In JSON cho máy đọc"),
-  archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|crew> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay hội. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay hội đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc hội\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
-  restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|crew> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay hội đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
-  schedules: t("Cách dùng: orglet schedules [--json]\n\nLiệt kê lịch: bật hay tắt, Tí hoặc hội chạy nó, khi nào chạy, lần tới, giới hạn mỗi\nlần và mỗi ngày. Số tiền trong --json là số nguyên phần triệu USD."),
-  schedule: t("Cách dùng: orglet schedule add \"<tên>\" --to <tên> --brief \"<việc>\" --every <khi> --at <HH:MM> --budget <USD> [tùy chọn]\n       orglet schedule edit \"<tên>\" [tùy chọn]\n       orglet schedule on|off \"<tên>\"\n       orglet schedule delete \"<tên>\" --confirm \"<tên>\"\n\nTạo, sửa, bật, tắt hoặc xóa một lịch. Lịch tạo ở đây không có quyền công cụ,\ntrình duyệt hay thư mục; các provider của Tí hoặc hội phải được cho phép sẵn\ntrong Cài đặt của app. Chọn những thứ đó trong app. Chạy ngay: orglet run.\n\nTùy chọn:\n  --to <tên>            Tí hoặc hội chạy lịch\n  --brief <việc>        Brief gửi mỗi lần chạy\n  --every <khi>         daily, weekdays, weekly, hoặc số giờ như 2h\n  --at <HH:MM>          Giờ chạy; với số giờ là giờ đầu tiên trong ngày\n  --day <ngày>          Ngày trong tuần cho weekly: mon, tue, …, sun\n  --timezone <vùng>     Múi giờ, như Asia/Ho_Chi_Minh; mặc định là của máy\n  --budget <USD>        Giới hạn mỗi lần chạy\n  --daily-cap <USD>     Giới hạn mỗi ngày (không bắt buộc)\n  --called              Chỉ chạy khi gọi bằng orglet run\n  --off                 Tạo lịch ở trạng thái tắt (add)\n  --rename <tên>        Tên mới (edit)\n  --json                In JSON cho máy đọc"),
-  search: t("Cách dùng: orglet search \"<từ cần tìm>\" [--json]\n\nTìm trong mọi tin nhắn, câu trả lời, tên chat, Tí và hội, như ô tìm kiếm của app.\nKhông phân biệt hoa thường hay dấu. In mã chat để đọc bằng orglet read --chat.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
+  members: t("Cách dùng: orglet members --chat <mã> --with <tên> [--with <tên>] [--json]\n\nĐổi thành viên của một kênh, từ tin nhắn sau. Thay cả danh sách. Thành viên là\nTí hoặc kênh; một kênh trả lời bằng các Tí của nó.\n\nTùy chọn:\n  --chat <mã>      Kênh (bắt buộc)\n  --with <tên>     Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --json           In JSON cho máy đọc"),
+  rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --title \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc kênh không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc kênh\n  --chat <mã>        Chat theo mã của orglet chats\n  --title <tên>      Tên mới (bắt buộc)\n  --json             In JSON cho máy đọc"),
+  archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay kênh. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay kênh đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc kênh\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
+  restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay kênh đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
+  schedules: t("Cách dùng: orglet schedules [--json]\n\nLiệt kê lịch: bật hay tắt, Tí hoặc kênh chạy nó, khi nào chạy, lần tới, giới hạn mỗi\nlần và mỗi ngày. Số tiền trong --json là số nguyên phần triệu USD."),
+  schedule: t("Cách dùng: orglet schedule add \"<tên>\" --to <tên> --brief \"<việc>\" --every <khi> --at <HH:MM> --budget <USD> [tùy chọn]\n       orglet schedule edit \"<tên>\" [tùy chọn]\n       orglet schedule on|off \"<tên>\"\n       orglet schedule delete \"<tên>\" --confirm \"<tên>\"\n\nTạo, sửa, bật, tắt hoặc xóa một lịch. Lịch tạo ở đây không có quyền công cụ,\ntrình duyệt hay thư mục; các provider của Tí hoặc kênh phải được cho phép sẵn\ntrong Cài đặt của app. Chọn những thứ đó trong app. Chạy ngay: orglet run.\n\nTùy chọn:\n  --to <tên>            Tí hoặc kênh chạy lịch\n  --brief <việc>        Brief gửi mỗi lần chạy\n  --every <khi>         daily, weekdays, weekly, hoặc số giờ như 2h\n  --at <HH:MM>          Giờ chạy; với số giờ là giờ đầu tiên trong ngày\n  --day <ngày>          Ngày trong tuần cho weekly: mon, tue, …, sun\n  --timezone <vùng>     Múi giờ, như Asia/Ho_Chi_Minh; mặc định là của máy\n  --budget <USD>        Giới hạn mỗi lần chạy\n  --daily-cap <USD>     Giới hạn mỗi ngày (không bắt buộc)\n  --called              Chỉ chạy khi gọi bằng orglet run\n  --off                 Tạo lịch ở trạng thái tắt (add)\n  --rename <tên>        Tên mới (edit)\n  --json                In JSON cho máy đọc"),
+  search: t("Cách dùng: orglet search \"<từ cần tìm>\" [--json]\n\nTìm trong mọi tin nhắn, câu trả lời, tên chat, Tí và kênh, như ô tìm kiếm của app.\nKhông phân biệt hoa thường hay dấu. In mã chat để đọc bằng orglet read --chat.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
   running: t("Cách dùng: orglet running [--json]\n\nMọi lượt đang chạy, đang chờ đến lượt hoặc dừng ở checkpoint, trên mọi chat,\nnhư mục Đang chạy của app, kèm điều mỗi lượt đang chờ.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
-  library: t("Cách dùng: orglet library [memory|notes] [--to <tên>] [--query <từ>] [--json]\n\nGhi nhớ (mặc định) hoặc ghi chú trong Thư viện, kể cả mục đang chờ duyệt.\nDuyệt hay bỏ mục đang chờ trong app.\n\nTùy chọn:\n  --to <tên>       Chỉ của Tí hoặc hội này\n  --query <từ>     Tìm như ô tìm kiếm của Thư viện\n  --json           In JSON cho máy đọc"),
+  library: t("Cách dùng: orglet library [memory|notes] [--to <tên>] [--query <từ>] [--json]\n\nGhi nhớ (mặc định) hoặc ghi chú trong Thư viện, kể cả mục đang chờ duyệt.\nDuyệt hay bỏ mục đang chờ trong app.\n\nTùy chọn:\n  --to <tên>       Chỉ của Tí hoặc kênh này\n  --query <từ>     Tìm như ô tìm kiếm của Thư viện\n  --json           In JSON cho máy đọc"),
   memory: t("Cách dùng: orglet memory edit <mã> [--text \"<nội dung>\"] [--pin|--unpin] [--json]\n       orglet memory delete <mã> --yes [--json]\n\nSửa, ghim hoặc xóa một ghi nhớ đã duyệt, như tab Ghi nhớ của Tí. Sửa tạo bản\nmới; xóa là vĩnh viễn. Ghi nhớ đang chờ duyệt chỉ duyệt được trong app.\n\nTùy chọn:\n  --text <nội dung>  Nội dung mới, tối đa {0} ký tự\n  --pin, --unpin     Ghim hoặc bỏ ghim\n  --yes              Xác nhận xóa\n  --json             In JSON cho máy đọc", MEMORY_TEXT_LIMIT),
   usage: t("Cách dùng: orglet usage [--refresh] [--json]\n\nMức dùng gói của các tài khoản CLI đã đăng nhập (Claude Code, Codex, Cursor\nAgent, Gemini CLI), như Cài đặt. Email chỉ hiện một phần.\n\nTùy chọn:\n  --refresh    Đọc lại ngay thay vì dùng số vừa đọc\n  --json       In JSON cho máy đọc"),
   models: t("Cách dùng: orglet models <provider> | --to <tên Tí> [--refresh] [--json]\n\nCác model một kết nối cung cấp, như danh sách model khi sửa Tí.\n\nTùy chọn:\n  --to <tên>     Dùng kết nối của Tí này\n  --refresh      Tải lại danh sách\n  --json         In JSON cho máy đọc"),
   preferences: t("Cách dùng: orglet preferences [--language vi|en|en-GB] [--theme system|light|dark] [--json]\n\nHiện hoặc đổi ngôn ngữ và giao diện của app. Các cài đặt khác ở trong app.\n\nTùy chọn:\n  --language <mã>    Ngôn ngữ của app\n  --theme <kiểu>     Giao diện sáng, tối hoặc theo hệ thống\n  --json             In JSON cho máy đọc"),
-  template: t("Cách dùng: orglet template <{0}> --provider <demo|openai> [--json]\n\nTạo một hội từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: demo cho câu trả lời mẫu, openai cho kết nối OpenAI đã\nthiết lập trong app.\n\nTùy chọn:\n  --provider <tên>   demo hoặc openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
+  template: t("Cách dùng: orglet template <{0}> --provider <demo|openai> [--json]\n\nTạo một kênh từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: demo cho câu trả lời mẫu, openai cho kết nối OpenAI đã\nthiết lập trong app.\n\nTùy chọn:\n  --provider <tên>   demo hoặc openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
   open: `Usage: orglet open [--to <name>]
 
 Brings the Orglet window forward. With --to, opens that chat.
 
 Options:
-  --to <name>    The orglet or crew to open
+  --to <name>    The orglet or channel to open
   --json         Print machine-readable JSON`,
   run: `Usage: orglet run "<schedule>" [--file <path>] [--json]
 
 Starts a schedule from the app's Schedules now, with its brief, its orglet or
-crew and its limit, and returns once the run has started. The name matches
+channel and its limit, and returns once the run has started. The name matches
 case-insensitively; a unique start of a name is enough. Files given with
 --file are attached to this run, next to the schedule's own sources.
 
@@ -249,7 +249,7 @@ Example:
 
 /** One help text for the five controls of a chat's latest turn; they take the same options. */
 function controlHelp(): Record<ChatControl, string> {
-  const text = t("Cách dùng: orglet <stop|pause|resume|retry|continue> --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nCác nút dưới lượt mới nhất của chat, như trong app:\n  stop       Dừng lượt đang chạy\n  pause      Tạm dừng sau bước đang làm\n  resume     Tiếp tục lượt đã tạm dừng hoặc bị ngắt từ checkpoint\n  retry      Chạy lại tin nhắn mới nhất với thiết lập hiện tại\n  continue   Tiếp tục câu trả lời bị dừng vì hết bước\n\nresume, retry và continue đợi câu trả lời như send.\n\nTùy chọn:\n  --to <tên>           Tí hoặc hội (bắt buộc)\n  --no-wait            Trả về ngay, không đợi câu trả lời\n  --timeout <giây>     Thời gian chờ (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS);
+  const text = t("Cách dùng: orglet <stop|pause|resume|retry|continue> --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nCác nút dưới lượt mới nhất của chat, như trong app:\n  stop       Dừng lượt đang chạy\n  pause      Tạm dừng sau bước đang làm\n  resume     Tiếp tục lượt đã tạm dừng hoặc bị ngắt từ checkpoint\n  retry      Chạy lại tin nhắn mới nhất với thiết lập hiện tại\n  continue   Tiếp tục câu trả lời bị dừng vì hết bước\n\nresume, retry và continue đợi câu trả lời như send.\n\nTùy chọn:\n  --to <tên>           Tí hoặc kênh (bắt buộc)\n  --no-wait            Trả về ngay, không đợi câu trả lời\n  --timeout <giây>     Thời gian chờ (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS);
   return { stop: text, pause: text, resume: text, retry: text, continue: text };
 }
 
@@ -350,7 +350,7 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
 ];
 /** Commands that take one positional value after their name: a message, a schedule, an emoji, an answer or a template. */
 const VALUE_COMMANDS: readonly CommandName[] = ['send', 'run', 'react', 'answer', 'side', 'channel', 'group', 'template', 'search', 'library', 'models'];
-/** Commands whose positionals may name an orglet or crew: `<orglet|crew> "<name>"`. */
+/** Commands whose positionals may name an orglet or crew: `<orglet|channel> "<name>"`. */
 const ENTITY_COMMANDS: readonly CommandName[] = ['create', 'edit', 'delete', 'archive', 'restore'];
 
 function readOptions(argumentList: readonly string[]): Options {
@@ -429,7 +429,7 @@ function parseTimeout(value: string | undefined): number {
   return seconds;
 }
 
-/** Whether the command names an orglet or crew with `<orglet|crew> "<name>"` rather than a chat. */
+/** Whether the command names an orglet or crew with `<orglet|channel> "<name>"` rather than a chat. */
 function namesEntity(command: CommandName, options: Options): boolean {
   if (!ENTITY_COMMANDS.includes(command)) return false;
   if (command === 'delete') return options.chat === undefined;
@@ -543,14 +543,24 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
   }
 }
 
+/**
+ * What `<orglet|channel> "<name>"` names. Crews are channels where the lead splits the work since COD-369, so `channel`
+ * names the same record, and `crew` and `team` stay as the older names.
+ */
+function entityKind(entityName: string | undefined): 'worker' | 'team' {
+  if (entityName === 'orglet') return 'worker';
+  if (entityName === 'channel' || entityName === 'crew' || entityName === 'team') return 'team';
+  throw new UsageError(t("Gõ orglet hoặc channel sau lệnh."));
+}
+
 function parseManagement(kind: 'create' | 'edit' | 'delete', options: Options): ManagementCommand {
   const entityName = options.positionals[1];
-  if (entityName !== 'orglet' && entityName !== 'crew' && entityName !== 'team') throw new UsageError(t("Gõ orglet hoặc crew sau lệnh."));
+  const entity = entityKind(entityName);
   const name = options.positionals[2]?.trim();
-  if (kind !== 'create' && !name) throw new UsageError(t("Gõ tên đầy đủ của Tí hoặc hội."));
+  if (kind !== 'create' && !name) throw new UsageError(t("Gõ tên đầy đủ của Tí hoặc kênh."));
   if (kind === 'delete' && !options.confirm) throw new UsageError(t("Xóa cần --confirm \"<tên đầy đủ>\"."));
   if (kind !== 'delete' && !options.config) throw new UsageError(t("Gõ --config <file.json>, hoặc dùng /new và /edit trong TUI."));
-  return { kind, entity: entityName === 'orglet' ? 'worker' : 'team', ...(name ? { name } : {}), ...(options.config ? { config: options.config } : {}), ...(options.confirm ? { confirm: options.confirm } : {}), json: options.json };
+  return { kind, entity, ...(name ? { name } : {}), ...(options.config ? { config: options.config } : {}), ...(options.confirm ? { confirm: options.confirm } : {}), json: options.json };
 }
 
 function parseRun(options: Options): ParsedCommand {
@@ -631,7 +641,7 @@ function parseBring(options: Options): ParsedCommand {
 /** The orglets and crews given with --with, at least one (COD-361). */
 function memberNames(options: Options): string[] {
   const names = options.members.map(name => name.trim()).filter(Boolean);
-  if (!names.length) throw new UsageError(t("Kênh cần ít nhất một --with <tên Tí hoặc hội>."));
+  if (!names.length) throw new UsageError(t("Kênh cần ít nhất một --with <tên Tí>."));
   return names;
 }
 
@@ -663,7 +673,7 @@ function parseChatDelete(options: Options): ParsedCommand {
   return { kind: 'chat-change', change: 'delete', chat: parseChatId(options.chat!), confirmName, json: options.json };
 }
 
-/** `archive --to X`, `restore --chat <id>`, or `archive|restore <orglet|crew> "<name>"`. */
+/** `archive --to X`, `restore --chat <id>`, or `archive|restore <orglet|channel> "<name>"`. */
 function parseArchive(command: 'archive' | 'restore', options: Options): ParsedCommand {
   const archived = command === 'archive';
   const entityName = options.positionals[1];
@@ -671,11 +681,11 @@ function parseArchive(command: 'archive' | 'restore', options: Options): ParsedC
     if (archived) return { kind: 'chat-change', change: 'archive', ...requireTarget(command, options), json: options.json };
     return { kind: 'chat-change', change: 'restore', chat: requireChatId(command, options.chat), json: options.json };
   }
-  if (entityName !== 'orglet' && entityName !== 'crew' && entityName !== 'team') throw new UsageError(t("Gõ orglet hoặc crew sau lệnh."));
+  const entity = entityKind(entityName);
   if (options.to !== undefined || options.chat !== undefined) throw new UsageError(`"orglet ${command} ${entityName}" takes a name, not --to or --chat.`);
   const name = options.positionals[2]?.trim();
-  if (!name) throw new UsageError(t("Gõ tên đầy đủ của Tí hoặc hội."));
-  return { kind: 'archive-entity', entity: entityName === 'orglet' ? 'worker' : 'team', name, archived, json: options.json };
+  if (!name) throw new UsageError(t("Gõ tên đầy đủ của Tí hoặc kênh."));
+  return { kind: 'archive-entity', entity, name, archived, json: options.json };
 }
 
 function parseTemplate(options: Options): ParsedCommand {

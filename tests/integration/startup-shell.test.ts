@@ -16,7 +16,7 @@ it('draws the whole shell before any workspace exists: sidebar, sections, footer
   expect(html).toContain('<aside class="sidebar"');
   expect(html).toContain('<main class="main-pane"');
   // The two sections are there with the shape of their rows, and their names, not an empty list.
-  expect(html).toContain('Crews');
+  expect(html).toContain('Channels');
   expect(html).toContain('Orglets');
   expect(html.match(/class="row-shape"/g)).toHaveLength(4);
   expect(html).toContain('Opening the orglet list…');

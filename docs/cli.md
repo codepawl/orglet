@@ -5,7 +5,7 @@
   <img src="images/orglets/cli-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-`orglet` lets you talk to your orglets and crews from a terminal. It uses the same local backend as the desktop. Keys, chats, files and the sandbox stay in the app. The command only sends requests to it.
+`orglet` lets you talk to your orglets and channels from a terminal. It uses the same local backend as the desktop. Keys, chats, files and the sandbox stay in the app. The command only sends requests to it.
 
 If Orglet is not running, a terminal command starts its backend in the background without opening a desktop window. Use `/open` in the terminal chat, `orglet open`, or the normal Orglet shortcut to open the desktop. If the desktop is already open, terminal commands use it as it is.
 
@@ -15,14 +15,14 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 
 | Command | What it does |
 |---|---|
-| `orglet` | In a terminal, opens a chat: pick an orglet or crew, then write to it. See [Chat in the terminal](#chat-in-the-terminal). |
+| `orglet` | In a terminal, opens a chat: pick an orglet or channel, then write to it. See [Chat in the terminal](#chat-in-the-terminal). |
 | `orglet chat [--to <name>]` | The same, and with `--to` it opens that chat straight away |
-| `orglet status` | Says whether the app is running, its version, and how many orglets and crews it has |
-| `orglet list` | Lists orglets with their provider and model, and crews with their lead and members |
+| `orglet status` | Says whether the app is running, its version, and how many orglets and channels it has |
+| `orglet list` | Lists orglets with their provider and model, and channels with their lead and members |
 | `orglet config [--json]` | Shows editable configurations and the IDs needed for JSON input |
-| `orglet create <orglet\|crew> --config <file.json>` | Creates an orglet or crew |
-| `orglet edit <orglet\|crew> "<name>" --config <patch.json>` | Changes the supplied configuration fields |
-| `orglet delete <orglet\|crew> "<name>" --confirm "<full name>"` | Removes a confirmed entity while retaining past chats |
+| `orglet create <orglet\|channel> --config <file.json>` | Creates an orglet or channel |
+| `orglet edit <orglet\|channel> "<name>" --config <patch.json>` | Changes the supplied configuration fields |
+| `orglet delete <orglet\|channel> "<name>" --confirm "<full name>"` | Removes a confirmed entity while retaining past chats |
 | `orglet send "message" --to <name> [--reply-to <number>]` | Sends a message into that chat and prints the answer, optionally as a reply |
 | `orglet read --to <name> [--turns <n>]` | Prints the latest answer in that chat, or its last turns, numbered |
 | `orglet react <reaction> --to <name>` | Reacts to the latest answer or a numbered message. See [react](#react). |
@@ -32,17 +32,17 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet chats [--archived]` | Lists chats, side threads and channels with the short id `--chat` takes. See [Chats by id](#chats-by-id). |
 | `orglet side "message" --to <orglet>` | Sends a message in a new side thread of that orglet |
 | `orglet bring --chat <id>` | Brings a side thread's answer into its main chat |
-| `orglet channel "message" --with <name> [--name <name>] [--topic <topic>]` | Creates a channel of those orglets and crews and sends its first message (`group` is the older name) |
+| `orglet channel "message" --with <name> [--name <name>] [--topic <topic>]` | Creates a channel of those orglets and sends its first message (`group` is the older name) |
 | `orglet members --chat <id> --with <name> …` | Changes who is in a channel |
 | `orglet rename\|archive --to <name> \| --chat <id>` | Renames or archives a chat; `restore --chat <id>` brings it back |
 | `orglet delete --chat <id> --confirm "<chat name>"` | Deletes a chat after its exact name |
-| `orglet archive\|restore <orglet\|crew> "<name>"` | Archives or restores an orglet or crew |
-| `orglet template <id> --provider <demo\|openai>` | Creates a crew from one of the app's templates |
+| `orglet archive\|restore <orglet\|channel> "<name>"` | Archives or restores an orglet or channel |
+| `orglet template <id> --provider <demo\|openai>` | Creates a channel from one of the app's templates |
 | `orglet open [--to <name>]` | Brings the Orglet window forward, and with `--to` opens that chat |
 | `orglet run "<schedule>" [--file <path>]` | Starts a schedule now, with the files you attach. See [run](#run). |
 | `orglet search "<words>"` | Searches every chat, message and name. See [Search, Running and the Library](#search-running-and-the-library). |
 | `orglet running` | Every run working or waiting across chats, as the Running view shows them |
-| `orglet library [memory\|notes]` | Memories or notes, optionally one orglet's or crew's, or what `--query` finds |
+| `orglet library [memory\|notes]` | Memories or notes, optionally one orglet's or channel's, or what `--query` finds |
 | `orglet memory edit\|delete <id>` | Edits, pins or deletes an approved memory |
 | `orglet usage` | Plan usage of the signed-in CLI accounts |
 | `orglet models <provider>` | The models a connection offers; `--to <orglet>` uses that orglet's |
@@ -50,7 +50,7 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet schedule add\|edit\|on\|off\|delete "<name>"` | Creates, changes, switches or deletes a schedule. See [Schedules](#schedules). |
 
-It can create, edit and remove orglets and crews, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
+It can create, edit and remove orglets and channels, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
 
 ### What stays in the desktop
 
@@ -112,17 +112,17 @@ This uses the script `pnpm dev` builds into `.vite/build/orglet-cli.cjs`. It can
 
 Run `orglet` with no command, or `orglet chat`:
 
-1. One mascot sits beside the product name and version. Orglet rows have small mascots; crew rows have a ▦ group icon in the lead's colour. Both remain visible when colour is off.
-2. The input shows **Search orglets or crews…** until you type. Orglets and Crews have separate bracketed headings with counts. While filtering, the count shows matches out of the total, such as **Orglets · 1/5**. Move through them with the Up and Down keys, or type part of a name to narrow the list. Matches stay grouped, with the closest name matches first in each section. Case and Vietnamese accents do not matter: `ke` finds "Kế toán". Press Enter to open the highlighted chat, or Tab to fill in its name. In a short terminal, the list scrolls to keep the selected chat and its section heading visible.
+1. One mascot sits beside the product name and version. Orglet rows have small mascots; channel rows have a ▦ group icon in the lead's colour. Both remain visible when colour is off. A channel in this list is one where a lead splits the work (older versions called it a crew); channels where the orglets take turns are listed by `orglet chats`.
+2. The input shows **Search orglets or channels…** until you type. Orglets and Channels have separate bracketed headings with counts. While filtering, the count shows matches out of the total, such as **Orglets · 1/5**. Move through them with the Up and Down keys, or type part of a name to narrow the list. Matches stay grouped, with the closest name matches first in each section. Case and Vietnamese accents do not matter: `ke` finds "Kế toán". Press Enter to open the highlighted chat, or Tab to fill in its name. In a short terminal, the list scrolls to keep the selected chat and its section heading visible.
 3. The header shows the chat name, connection, selected model, billing category and your terminal's current directory. This directory does not grant folder access. The app still controls which folder the chat can use. The connection's exact plan tier and thinking effort are not reported; the terminal says so instead of guessing.
 4. The conversation sits above an input between two horizontal rules. Your turns start with **You**; answers start with the orglet's name. Type a message and press Enter. Ctrl+J adds a line; Shift+Enter also works in terminals that report it separately. Paste stays in the draft, including its newlines, until you press Enter to send it.
 5. While the orglet works, the status changes from **message** to **queue** and shows elapsed seconds. You can keep editing a visible draft. Enter adds it to this terminal's queue; each item goes to the app after the previous wait ends. The unsent draft stays in place when an answer arrives.
 
-Model requests and observed tool calls appear as timestamped rows in the conversation, in the order they started. The current step has a light moving across its words; a finished step folds to one line. Ctrl+O opens or closes completed step details, including a tool target or an explicitly shared Codex reasoning summary, along with long answers and crew member replies. API connections show model request status without invented reasoning. A tool that returned an error says failed; an interrupted tool whose effect is uncertain stays marked outcome unknown. A returned tool call does not mean its requested work succeeded. Native harness steps are shown only when that harness reports them. Short steps are still retained even if they finish between chat polls. This live history belongs to the terminal session; `/read` retrieves saved answers, not transient reasoning. Page Up and Page Down scroll the conversation or an open details panel. Ctrl+G opens agent names, small mascots and connection details; Esc closes the panel. Left on an empty draft returns to the orglet and crew picker with the current chat highlighted. Esc returns to the chat, preserving its draft and transcript. While waiting, switching waits behind earlier queued work. Small terminals use a compact header and keep the input visible.
+Model requests and observed tool calls appear as timestamped rows in the conversation, in the order they started. The current step has a light moving across its words; a finished step folds to one line. Ctrl+O opens or closes completed step details, including a tool target or an explicitly shared Codex reasoning summary, along with long answers and channel member replies. API connections show model request status without invented reasoning. A tool that returned an error says failed; an interrupted tool whose effect is uncertain stays marked outcome unknown. A returned tool call does not mean its requested work succeeded. Native harness steps are shown only when that harness reports them. Short steps are still retained even if they finish between chat polls. This live history belongs to the terminal session; `/read` retrieves saved answers, not transient reasoning. Page Up and Page Down scroll the conversation or an open details panel. Ctrl+G opens agent names, small mascots and connection details; Esc closes the panel. Left on an empty draft returns to the orglet and channel picker with the current chat highlighted. Esc returns to the chat, preserving its draft and transcript. While waiting, switching waits behind earlier queued work. Small terminals use a compact header and keep the input visible.
 
-Interactive chat requires a real connection. If an orglet or any member of its crew still uses Demo, a message is refused before sending. Use `/open` to choose a signed-in CLI or an API/local connection in the app, then `/list` to refresh and choose the chat again. One-shot commands retain their existing Demo support.
+Interactive chat requires a real connection. If an orglet or any member of its channel still uses Demo, a message is refused before sending. Use `/open` to choose a signed-in CLI or an API/local connection in the app, then `/list` to refresh and choose the chat again. One-shot commands retain their existing Demo support.
 
-Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to `, `/edit ` and `/delete ` offer entity names with orglet mascots or crew icons and connection/model or lead details, instead of repeating the command description on every row. A pasted message with several lines is sent as a message even when its first line starts with `/`.
+Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to `, `/edit ` and `/delete ` offer entity names with orglet mascots or channel icons and connection/model or lead details, instead of repeating the command description on every row. A pasted message with several lines is sent as a message even when its first line starts with `/`.
 
 While an answer is on its way, `/queue` shows previews of the messages and commands waiting in this terminal. `/undo` takes the last one out of that queue and puts its full text back into the draft, including its newlines. Edit it and press Enter to queue it again, or clear the draft to leave it unsent. It cannot take back a message already sent to the app, and it does not stop the current run. This queue belongs to the terminal session and is not saved between sessions.
 
@@ -140,25 +140,25 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 
 Page Up at the top of the conversation loads the ten turns before what is shown, and `/history [n]` loads `n` of them. They appear above, numbered the way `orglet read --turns` numbers them: `#3` is your third message and `#3.1` the first answer to it. The first load starts before the first message this terminal sent, so nothing shows twice. A line at the top says how many earlier turns are left, or that the chat starts there.
 
-`/reply #3.1 <message>` sends a message as a reply to that one. `/react <reaction> [#n]` puts your reaction on the latest answer or on message `#n`, and `/unreact` takes it off; Tab completes the reaction names. `/forward Writer, Review crew [#n]` forwards the latest answer, or message `#n`, to those chats, and each one answers it as a new turn.
+`/reply #3.1 <message>` sends a message as a reply to that one. `/react <reaction> [#n]` puts your reaction on the latest answer or on message `#n`, and `/unreact` takes it off; Tab completes the reaction names. `/forward Writer, Review channel [#n]` forwards the latest answer, or message `#n`, to those chats, and each one answers it as a new turn.
 
 When an orglet asks a question, the chat prints it with numbered choices. `/answer 2` picks the second; `/answer <words>` answers in your own words, as the desktop's message box does. The terminal then waits for the turn to go on. A question asking to use an MCP tool is not shown this way: it is an approval, so the chat says to open it in the app.
 
-`/chats` lists the chats with their short ids, and `/to #bbbb0000` opens one of them here: a side thread, a channel or an older chat. Everything after that, messages included, goes to that chat. `/side <message>` starts a side thread from the current orglet's main chat and prints the `/to #id` that opens it; in a side thread, `/bring [#n]` brings its latest answer, or answer `#n`, into the main chat. `/channel Researcher, Launch crew -- <message>` creates a channel (`/group` still works), and in one, `/members <names>` changes who is in it. `/rename <title>` and `/archive` act on the open chat.
+`/chats` lists the chats with their short ids, and `/to #bbbb0000` opens one of them here: a side thread, a channel or an older chat. Everything after that, messages included, goes to that chat. `/side <message>` starts a side thread from the current orglet's main chat and prints the `/to #id` that opens it; in a side thread, `/bring [#n]` brings its latest answer, or answer `#n`, into the main chat. `/channel Researcher, Launch channel -- <message>` creates a channel (`/group` still works), and in one, `/members <names>` changes who is in it. `/rename <title>` and `/archive` act on the open chat.
 
 `/stop` and `/pause` act at once, even while a message is waiting for its answer. `/resume`, `/retry` and `/continue` wait for the turn they start, like a message. `/continue` is only there for an answer that stopped because its steps ran out, the same as the desktop's Continue.
 
-## Create, edit and remove orglets and crews
+## Create, edit and remove orglets and channels
 
-Press **Ctrl+N** from the picker or a chat to create an **Orglet** or **Crew**. It keeps the current draft. `/new` opens the same choice; `/new orglet` and `/new crew` skip it. Up and Down move between settings; Enter edits one. Text values reuse the input, with Ctrl+J for instructions on several lines. Connection, skill, member and lead choices use arrows and a search filter. A crew can have up to eight members and a separate lead; select members with Enter, then **Done choosing members**. Choose **Save** to apply the configuration or **Cancel** to discard it. Esc goes back from a field and cancels from the settings list. Ctrl+N does not replace an unsaved form.
+Press **Ctrl+N** from the picker or a chat to create an **Orglet** or **Channel**. It keeps the current draft. `/new` opens the same choice; `/new orglet` and `/new channel` skip it. Up and Down move between settings; Enter edits one. Text values reuse the input, with Ctrl+J for instructions on several lines. Connection, skill, member and lead choices use arrows and a search filter. A channel can have up to eight members and a separate lead; select members with Enter, then **Done choosing members**. Choose **Save** to apply the configuration or **Cancel** to discard it. Esc goes back from a field and cancels from the settings list. Ctrl+N does not replace an unsaved form.
 
-In the orglet/crew list, press **Left** on the highlighted entry to open its **Edit configuration / Delete / Back to list** menu. A typed search filter is kept, along with the selected row, when Esc returns to the list. The menu and editor show the entity's icon and current connection/model or crew members, lead and workflow. Left on an empty chat draft still opens the list; press Left again for the highlighted entry's menu. Left in an ordinary text draft still moves the cursor.
+In the orglet/channel list, press **Left** on the highlighted entry to open its **Edit configuration / Delete / Back to list** menu. A typed search filter is kept, along with the selected row, when Esc returns to the list. The menu and editor show the entity's icon and current connection/model or channel members, lead and workflow. Left on an empty chat draft still opens the list; press Left again for the highlighted entry's menu. Left in an ordinary text draft still moves the cursor.
 
 Orglets need a name, instructions, an existing skill and a real connection. A blank model uses that connection’s default; custom connections require an explicit model ID. Creating an orglet does not sign in or set up credentials. A packaged skill still needs its review in the desktop library. Task and monthly limits in the form are USD amounts; Orglet stores integer micros.
 
-`/edit` opens the current chat’s configuration. `/edit <full name>` selects a matching entry; when names repeat, choose the intended orglet or crew with the arrows. The editor preserves settings it does not expose, including MCP selections, automatic proposal settings and crew review, preflight and work hours. Saves create revisions, and a running turn keeps its starting snapshot. If the desktop changed the configuration after you opened the form, save is refused; Esc and `/edit` load a fresh copy.
+`/edit` opens the current chat’s configuration. `/edit <full name>` selects a matching entry; when names repeat, choose the intended orglet or channel with the arrows. The editor preserves settings it does not expose, including MCP selections, automatic proposal settings and channel review, preflight and work hours. Saves create revisions, and a running turn keeps its starting snapshot. If the desktop changed the configuration after you opened the form, save is refused; Esc and `/edit` load a fresh copy.
 
-`/delete` opens a confirmation for the current chat’s owner, or a picker when no chat is open. Type the displayed full name exactly and press Enter. Page Up/Down reveals confirmation details in a short terminal. Empty input and Esc never delete. An orglet used by a crew, an owner of an enabled schedule, or an entity with queued/running work cannot be removed; the error says what to resolve. The last orglet can be removed, which leaves the list empty. Removal hides the entity from the active list and keeps past chats readable. It does not erase the database. A deleted current chat returns to the picker.
+`/delete` opens a confirmation for the current chat’s owner, or a picker when no chat is open. Type the displayed full name exactly and press Enter. Page Up/Down reveals confirmation details in a short terminal. Empty input and Esc never delete. An orglet used by a channel, an owner of an enabled schedule, or an entity with queued/running work cannot be removed; the error says what to resolve. The last orglet can be removed, which leaves the list empty. Removal hides the entity from the active list and keeps past chats readable. It does not erase the database. A deleted current chat returns to the picker.
 
 Forms do not send chat messages or dispatch queued messages while open. Leaving a form resumes the local queue after applying any chat rename. Deleting the current chat also requires this terminal’s queue to be empty; Esc, `/queue` and `/undo` let you review the held messages first. Editing or deleting another entry keeps the current chat open. A newly created entry opens its chat when no messages are queued. Ctrl+C retains the normal two-press exit reminder; unsaved configuration is discarded on exit.
 
@@ -169,9 +169,9 @@ Use `orglet config --json` for editable configurations, IDs, revisions, skills a
 ```sh
 orglet config --json
 orglet create orglet --config orglet.json
-orglet create crew --config crew.json
+orglet create channel --config channel.json
 orglet edit orglet "Researcher" --config patch.json
-orglet delete crew "Review crew" --confirm "Review crew"
+orglet delete channel "Review channel" --confirm "Review channel"
 ```
 
 An orglet configuration requires `name`, `instructions`, `provider` and `skillId`. Optional fields are `modelId`, `description`, `taskBudgetMicros` and `avatar`. For example, replace `skillId` below with an ID from `orglet config`:
@@ -185,7 +185,7 @@ An orglet configuration requires `name`, `instructions`, `provider` and `skillId
 }
 ```
 
-A crew requires `name`, `instructions`, `memberIds` (one to eight unique orglet IDs), `synthesizerId` (lead ID), `workflow` (`parallel` or `sequential`) and `monthlyBudgetMicros`. Optional fields are `taskBudgetMicros` and `maxConcurrentTasks` (one to eight). The lead may be outside the members. Budget fields are integer millionths of a USD: `100000` is $0.10.
+`create channel` makes a channel where a lead splits the work, which older versions called a crew; `crew` and `team` still work as names for it, and a channel made in the app shows up here too. A channel configuration requires `name`, `instructions`, `memberIds` (one to eight unique orglet IDs), `synthesizerId` (lead ID), `workflow` (`parallel` or `sequential`) and `monthlyBudgetMicros`. Optional fields are `taskBudgetMicros` and `maxConcurrentTasks` (one to eight). The lead may be outside the members. Budget fields are integer millionths of a USD: `100000` is $0.10.
 
 An edit file is a patch: `{"description":"Reviews code"}` changes only that field. Omitted fields keep their value; `null` clears an optional model, description, task limit, avatar or concurrency setting. Avatar properties merge; changing just its color preserves its emoji, and `{"avatar":{"color":null}}` restores the automatic color without removing that emoji. Changing the connection without supplying a model clears the old connection’s model. Permission fields, connection creation and proposal auto-apply fields are refused. Edits and deletes require a unique full name within the chosen kind; use the TUI arrow picker for duplicate names. Scripts also refuse a configuration that changed between reading and writing. All four commands accept `--json`.
 
@@ -199,7 +199,7 @@ An edit file is a patch: `{"description":"Reviews code"}` changes only that fiel
 | Ctrl+G | Opens or closes agent details |
 | Ctrl+Q | Opens or closes the local queue |
 | Ctrl+Z | Takes the last queued item into an empty draft |
-| Ctrl+P, Left with an empty draft | Returns to the orglet and crew picker after any earlier queued work |
+| Ctrl+P, Left with an empty draft | Returns to the orglet and channel picker after any earlier queued work |
 | Page Up, Page Down | Scrolls the conversation or details panel. Page Up at the top loads earlier turns. |
 | Up, Down | Move the highlight in a menu or list. In a multiline draft, move between lines; at its first or last line, go through sent messages and return to the unsent draft. |
 | Left, Right, Home, End | Move within the draft; Home and End go to the start and end of the current line |
@@ -214,8 +214,8 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 
 | Command | What it does |
 |---|---|
-| `/to <name>` | Switches to another orglet or crew. Without a name, it opens the list. |
-| `/list` | Refreshes connections and opens the orglet and crew picker |
+| `/to <name>` | Switches to another orglet or channel. Without a name, it opens the list. |
+| `/list` | Refreshes connections and opens the orglet and channel picker |
 | `/read` | Shows the latest answer in this chat again, including one you stopped waiting for |
 | `/open` | Brings the app forward on this chat |
 | `/clear` | Clears the screen |
@@ -233,20 +233,20 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/chats [archived]` | Lists chats with their short ids; `/to #id` opens one |
 | `/side <message>` | Sends the message in a new side thread of this orglet |
 | `/bring [#n]` | In a side thread, brings its latest answer or answer `#n` into the main chat |
-| `/channel <name, …> -- <message>` | Creates a channel of those orglets and crews; `/group` is the older name |
+| `/channel <name, …> -- <message>` | Creates a channel of those orglets and channels; `/group` is the older name |
 | `/members <name, …>` | In a channel, changes who is in it |
 | `/rename <title>`, `/archive` | Renames or archives the open chat |
 | `/schedules` | Lists schedules |
 | `/schedule on\|off\|run <name>` | Switches a schedule on or off, or starts it now |
 | `/search <words>` | Searches every chat |
 | `/running` | Lists every run working or waiting |
-| `/memory` | Lists this orglet's or crew's memories |
+| `/memory` | Lists this orglet's or channel's memories |
 | `/usage` | Shows plan usage of the CLI accounts |
 | `/models` | Lists the models of this orglet's connection |
 | `/language vi\|en\|en-GB`, `/theme system\|light\|dark` | Changes the app's language or theme |
-| `/new [orglet|crew]` | Creates an orglet or crew in a keyboard form |
-| `/edit [name]` | Edits the current chat’s orglet or crew; without a current chat, choose an entry |
-| `/delete [name]` | Removes an orglet or crew after exact-name confirmation |
+| `/new [orglet|channel]` | Creates an orglet or channel in a keyboard form |
+| `/edit [name]` | Edits the current chat’s orglet or channel; without a current chat, choose an entry |
+| `/delete [name]` | Removes an orglet or channel after exact-name confirmation |
 | `/help` | Lists these commands |
 | `/exit` | Leaves |
 
@@ -275,19 +275,19 @@ Windows Terminal, PowerShell and cmd on Windows 10 and later show the faces in f
 orglet send "Summarise these notes" --to Researcher --file notes.txt
 ```
 
-The message goes into the orglet's or crew's chat exactly as if you had typed it in the message box. If the chat already has a conversation, the message is the next turn in it; if not, it starts one. A crew's chat is led by its lead, as in the app. If the app window is showing that orglet's or crew's empty chat when the command starts one, the window switches to the new chat, so a question the chat asks, such as approving an MCP tool, is in view.
+The message goes into the orglet's or channel's chat exactly as if you had typed it in the message box. If the chat already has a conversation, the message is the next turn in it; if not, it starts one. A channel's chat is led by its lead, as in the app. If the app window is showing that orglet's or channel's empty chat when the command starts one, the window switches to the new chat, so a question the chat asks, such as approving an MCP tool, is in view.
 
-By default the command waits for the turn to finish and prints the answer. A crew prints each member's reply and then the lead's, each under its name. In a terminal, the orglet's face waits beside you on standard error while it works. Ctrl+C stops waiting; the turn keeps running in the app, and `orglet read` shows the answer later.
+By default the command waits for the turn to finish and prints the answer. A channel prints each member's reply and then the lead's, each under its name. In a terminal, the orglet's face waits beside you on standard error while it works. Ctrl+C stops waiting; the turn keeps running in the app, and `orglet read` shows the answer later.
 
 | Option | Meaning |
 |---|---|
-| `--to <name>` | The orglet or crew. Required. |
+| `--to <name>` | The orglet or channel. Required. |
 | `--file <path>` | Attach a file. Repeat it for more, up to 20. The same size and type limits as the file picker apply. |
 | `--no-wait` | Return right after sending. Read the answer later with `orglet read`. |
 | `--timeout <seconds>` | How long to wait. The default is 600. When it runs out, the turn keeps running in the app. |
 | `--json` | Print the result as JSON |
 
-Sending gives the same consent the message box gives: the message and attached files go to the providers of the orglets that run. The cost limit is the chat's own, or the orglet's or crew's default for a new chat.
+Sending gives the same consent the message box gives: the message and attached files go to the providers of the orglets that run. The cost limit is the chat's own, or the orglet's or channel's default for a new chat.
 
 ### read
 
@@ -301,7 +301,7 @@ Prints the answers of the latest message in that chat that has any. If the orgle
 orglet read --to Researcher --turns 5
 ```
 
-With `--turns`, it prints that many of the latest turns instead, up to 50, oldest first. Every message has a number: `#3` is your third message and `#3.1`, `#3.2` the answers to it, in the order they came (a crew's members, then its lead). A line above says how many earlier turns there are. A reply says what it answered, a forwarded message where it came from, and your reaction shows after the message it is on. `react`, `forward` and `send --reply-to` take these numbers; `last` means the newest answer.
+With `--turns`, it prints that many of the latest turns instead, up to 50, oldest first. Every message has a number: `#3` is your third message and `#3.1`, `#3.2` the answers to it, in the order they came (a channel's members, then its lead). A line above says how many earlier turns there are. A reply says what it answered, a forwarded message where it came from, and your reaction shows after the message it is on. `react`, `forward` and `send --reply-to` take these numbers; `last` means the newest answer.
 
 If the chat waits on a question, `read` prints it with its choices on standard error. If it waits on an approval only the app gives, it says so.
 
@@ -318,10 +318,10 @@ Puts your reaction on a message: `agree`, `delighted`, `funny`, `unsure`, `watch
 ### forward
 
 ```sh
-orglet forward --to Researcher --message 2.1 --target Writer --target "Review crew" --note "Can you check this?"
+orglet forward --to Researcher --message 2.1 --target Writer --target "Review channel" --note "Can you check this?"
 ```
 
-Forwards one message, the newest answer by default, to up to five orglets' or crews' chats. It arrives there as your own message with your note, and each chat answers it as a new turn with its own cost limit and permissions. Files the message had go by name only; attach the real files in the app. The command prints where it went and why any place refused it, and exits 1 if one did.
+Forwards one message, the newest answer by default, to up to five orglets' or channels' chats. It arrives there as your own message with your note, and each chat answers it as a new turn with its own cost limit and permissions. Files the message had go by name only; attach the real files in the app. The command prints where it went and why any place refused it, and exits 1 if one did.
 
 ### answer
 
@@ -353,7 +353,7 @@ orglet chats
 orglet read --chat bbbb0000 --turns 3
 ```
 
-`orglet chats` lists the open chats, newest first: each orglet's and crew's main chat, side threads, channels (`#name`) and schedule runs, with the first eight characters of the chat's id, what kind of chat it is, its name, who answers in it and how it stands. `--archived` lists archived chats instead. Every command that takes `--to` also takes `--chat <id>` with that id, or any unique start of it of four characters or more, and a leading `#` is fine. A side thread has no other name, and a channel is reached by its id too.
+`orglet chats` lists the open chats, newest first: each orglet's and channel's main chat, side threads, channels (`#name`) and schedule runs, with the first eight characters of the chat's id, what kind of chat it is, its name, who answers in it and how it stands. `--archived` lists archived chats instead. Every command that takes `--to` also takes `--chat <id>` with that id, or any unique start of it of four characters or more, and a leading `#` is fine. A side thread has no other name, and a channel is reached by its id too.
 
 ### Side threads
 
@@ -362,19 +362,19 @@ orglet side "Try it with the 2025 numbers instead" --to Researcher
 orglet bring --chat 7f3a91c2
 ```
 
-`side` sends a message "in a new thread" from an orglet's main chat, as the app's composer does. The side thread starts with a copy of the main chat's permissions, folder and MCP grants, never more, and the main chat stays as it was. Crews and channels have no side threads. The command waits for the answer like `send`, prints it, and says how to reach the side thread again with `--chat`.
+`side` sends a message "in a new thread" from an orglet's main chat, as the app's composer does. The side thread starts with a copy of the main chat's permissions, folder and MCP grants, never more, and the main chat stays as it was. Channels have no side threads. The command waits for the answer like `send`, prints it, and says how to reach the side thread again with `--chat`.
 
 `bring` copies one answer of a side thread into its main chat as a quote, the latest by default or `--message 2.1`. It never starts a run there.
 
 ### Channels
 
 ```sh
-orglet channel "Compare your takes on this plan" --with Researcher --with "Launch crew" --name launch --topic "Friday's release"
+orglet channel "Compare your takes on this plan" --with Researcher --with "Launch channel" --name launch --topic "Friday's release"
 orglet send "And the budget?" --chat c41d0e88
 orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 ```
 
-`channel` creates a channel of these orglets and crews and sends its first message, the way **New channel** in the app does ([COD-361](https://linear.app/codepawl/issue/COD-361)): each orglet answers in turn, and a crew answers as its orglets. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and crews alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
+`channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does ([COD-361](https://linear.app/codepawl/issue/COD-361)): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
 
 ### Rename, archive, restore and delete chats
 
@@ -388,14 +388,14 @@ orglet delete --chat 7f3a91c2 --confirm "Try it with the 2025 numbers instead"
 
 The same as the chat's menu in the app. An archived chat takes no new message until it is restored; archiving is refused while the chat is working. `restore` takes `--chat`, because an archived chat is no longer an orglet's main chat. `delete` needs the chat's name exactly as `orglet chats` prints it and cannot be undone.
 
-### Archive and restore orglets and crews
+### Archive and restore orglets and channels
 
 ```sh
-orglet archive crew "Review crew"
+orglet archive channel "Review channel"
 orglet restore orglet "Old helper"
 ```
 
-Archiving takes an orglet or crew off the active list, keeping its chats and history; restoring brings it back. The name must match a full name, ignoring case. The app refuses what it refuses in the desktop: an orglet a crew uses, an owner of an enabled schedule, or one with work running.
+Archiving takes an orglet or channel off the active list, keeping its chats and history; restoring brings it back. The name must match a full name, ignoring case. The app refuses what it refuses in the desktop: an orglet a channel uses, an owner of an enabled schedule, or one with work running.
 
 ### template
 
@@ -403,12 +403,12 @@ Archiving takes an orglet or crew off the active list, keeping its chats and his
 orglet template research-review --provider openai
 ```
 
-Creates a crew from one of the app's templates (`research-review` or `eris-review`) with its orglets and evidence skill. `--provider demo` gives the new orglets sample replies; `--provider openai` puts them on the OpenAI connection, which must already be set up in the app.
+Creates a channel from one of the app's templates (`research-review` or `eris-review`) with its orglets and evidence skill. `--provider demo` gives the new orglets sample replies; `--provider openai` puts them on the OpenAI connection, which must already be set up in the app.
 
 ### open
 
 ```sh
-orglet open --to "Review crew"
+orglet open --to "Review channel"
 ```
 
 Brings the window forward and opens that chat. On Windows the taskbar button may flash instead, because Windows does not always let another program take the front.
@@ -419,13 +419,13 @@ Brings the window forward and opens that chat. On Windows the taskbar button may
 orglet run "Invoice check" --file invoice.pdf
 ```
 
-Starts one of the app's schedules now: its brief goes to its orglet or crew, within its cost limit, with the files you attach added to the schedule's own sources. The command returns once the run has started, and the run appears in the app's sidebar under the orglet or crew it runs for, named after the schedule. It does not wait for the answer; the app says when the run is done, with a system notification if Orglet is in the background ([chat guide](chat-guide.md#while-orglet-is-in-the-background)).
+Starts one of the app's schedules now: its brief goes to its orglet or channel, within its cost limit, with the files you attach added to the schedule's own sources. The command returns once the run has started, and the run appears in the app's sidebar under the orglet or channel it runs for, named after the schedule. It does not wait for the answer; the app says when the run is done, with a system notification if Orglet is in the background ([chat guide](chat-guide.md#while-orglet-is-in-the-background)).
 
 Any schedule can be started this way. A schedule set to **Only when called** runs in no other way. The schedule must:
 
 - exist. `run` cannot create one (`orglet schedule add` does), and names match the way chat names do.
 - be switched on. A schedule that is off is refused with a message saying so.
-- be approved as it is now. If its orglet, crew, skill, model or trigger changed since it was saved, the app refuses and asks you to save it again, the same as for a scheduled run.
+- be approved as it is now. If its orglet, channel, skill, model or trigger changed since it was saved, the app refuses and asks you to save it again, the same as for a scheduled run.
 - have finished its previous run. A run still going or waiting for you is refused.
 
 | Option | Meaning |
@@ -449,7 +449,7 @@ orglet schedule delete "Morning review" --confirm "Morning review"
 
 | Option | Meaning |
 |---|---|
-| `--to <name>` | The orglet or crew that runs it. Required for `add`. |
+| `--to <name>` | The orglet or channel that runs it. Required for `add`. |
 | `--brief "<text>"` | What each run is asked. Required for `add`. |
 | `--every <when>` | `daily`, `weekdays`, `weekly`, or every few hours as `1h`, `2h`, `3h`, `4h`, `6h`, `8h` or `12h`. Required for `add`. |
 | `--at <HH:MM>` | When it runs; for hours, the first run of the day. Required for `add`. |
@@ -461,7 +461,7 @@ orglet schedule delete "Morning review" --confirm "Morning review"
 | `--off` | With `add`, creates it switched off. |
 | `--rename "<name>"` | With `edit`, a new name. |
 
-A schedule made in the terminal has the name, orglet or crew, brief, timing and limits, and nothing else: no tool permissions, browser, desktop programs, sources, watched folder or working folder. Those are trust decisions, so they are set in the app. Its runs send the brief to the providers of the orglet or crew while you are away, so those providers must already be in the app's **Settings → Allowed providers**; otherwise the command refuses and says which ones. Demo orglets need nothing. An edit keeps everything the app set, and moving a schedule that has any of those settings to another orglet or crew is refused. The app saves the schedule as approved, as the desktop's Save does.
+A schedule made in the terminal has the name, orglet or channel, brief, timing and limits, and nothing else: no tool permissions, browser, desktop programs, sources, watched folder or working folder. Those are trust decisions, so they are set in the app. Its runs send the brief to the providers of the orglet or channel while you are away, so those providers must already be in the app's **Settings → Allowed providers**; otherwise the command refuses and says which ones. Demo orglets need nothing. An edit keeps everything the app set, and moving a schedule that has any of those settings to another orglet or channel is refused. The app saves the schedule as approved, as the desktop's Save does.
 
 ### Search, Running and the Library
 
@@ -473,11 +473,11 @@ orglet memory edit a1b2c3d4 --text "Prefers bullet points" --pin
 orglet memory delete a1b2c3d4 --yes
 ```
 
-`search` finds what the app's search finds: every message you wrote, every answer, chat names, and orglet and crew names, ignoring case and accents. It prints the matching names, then one line per chat with its id (for `read --chat`), who wrote the message and the words around the match.
+`search` finds what the app's search finds: every message you wrote, every answer, chat names, and orglet and channel names, ignoring case and accents. It prints the matching names, then one line per chat with its id (for `read --chat`), who wrote the message and the words around the match.
 
 `running` lists every run working, waiting its turn or stopped at a checkpoint, across chats, as the Running view does: the chat's id and name, the orglet, its state, what it waits for (a provider slot, a teammate, an answer, an approval) and its connection. Stop or pause one with `orglet stop --chat <id>`.
 
-`library` lists memories (the default) or `notes`, approved and waiting for review, with `--to` for one orglet's or crew's and `--query` to search them as the Library does. `memory edit <id>` gives an approved memory new text, a pin or no pin, and `memory delete <id> --yes` deletes it for good, as an orglet's Memory tab does. A memory waiting for review is a proposal: approving or dismissing it stays in the desktop, so both commands refuse it.
+`library` lists memories (the default) or `notes`, approved and waiting for review, with `--to` for one orglet's or channel's and `--query` to search them as the Library does. `memory edit <id>` gives an approved memory new text, a pin or no pin, and `memory delete <id> --yes` deletes it for good, as an orglet's Memory tab does. A memory waiting for review is a proposal: approving or dismissing it stays in the desktop, so both commands refuse it.
 
 ### usage and models
 
@@ -500,7 +500,7 @@ Shows the app's language and theme, and changes either. Every other setting, pro
 
 ### Names
 
-Names match without regard to case. A unique start of a name is enough: `--to res` finds Researcher. If the start fits several names, or nothing fits, the command lists the names you can use. If an orglet and a crew share a name, rename one in the app.
+Names match without regard to case. A unique start of a name is enough: `--to res` finds Researcher. If the start fits several names, or nothing fits, the command lists the names you can use. If an orglet and a channel share a name, rename one in the app.
 
 ### JSON and exit codes
 
@@ -522,14 +522,14 @@ Messages that come from the app are in the app's language.
 - A request is one line of JSON and the final answer is one line back. Interactive sends opt into intermediate progress lines on that same authenticated connection; other commands keep their single response. The app checks each request against a fixed list of allowed operations and refuses everything else, lines over 1 MB, and more than eight commands at once.
 - If an older app refuses the progress option before dispatch, chat retries once without it. The message is sent once, with the older app's usual waiting status.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
-- `react`, `forward`, `control` and `answer` name a chat by its orglet or crew and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
+- `react`, `forward`, `control` and `answer` name a chat by its orglet or channel and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
 - `chats`, `side-thread`, `bring`, `group`, `members`, `chat-change`, `archive-entity` and `template` call `startSideThread`, `bringIntoMainChat`, `createTask` with several orglets, `updateTask`, `renameTask`, `archiveTask`, `deleteTask`, `archiveEntity` and `createTemplate`. None of them carries a permission, folder, browser or MCP field; the protocol refuses a request that adds one.
 - `schedules`, `schedule-enable`, `schedule-delete` and `schedule-save` read the workspace's routines and call `saveRoutine` and `deleteRoutine`. `schedule-save` has fields for the name, target, brief, timing, limits and a clock or called trigger only; the app fills consent and provider scopes from the target's providers, and refuses providers not in **Settings → Allowed providers** (`providerConsent`). An edit sends the routine's own task back with only the given fields changed.
 - `search`, `running`, `library`, `usage` and `models` read through `searchChats`, the workspace's `running`, `knowledge` and `searchKnowledge`, `harnessUsage` and `modelList`. `memory-edit` and `memory-delete` call `updateMemory` and `deleteMemory`, only for an approved memory, because `updateMemory` approves what it saves. `preferences` sends `settings` with the current theme and connection limit and only the language or theme changed; main then updates its own language as for a save in the window.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
 - Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.
-- Native harness step times are when Orglet first observes the start and completion. They are not exact internal harness timings. A step received before its crew member's run metadata keeps those observed times when the author is joined later.
+- Native harness step times are when Orglet first observes the start and completion. They are not exact internal harness timings. A step received before its channel member's run metadata keeps those observed times when the author is joined later.
 - The answers to `list`, `status`, `send` and `read` carry each orglet's colour as `#rrggbb`: the one picked in the app, or the colour of the face the app chose for it by name. The command draws the faces from these fields and falls back to grey when they are missing.
 - If nothing answers, the command starts Orglet's backend on the same data folder without creating a desktop window and tries again for up to 30 seconds. `open` creates the window and waits for its page to load before confirming. A normal app launch also opens the window of an existing background instance.
 - The command finds the data folder from `ORGLET_USER_DATA`, then `ORGLET_DATA_DIR` (what a source run uses), then the usual place for the app. The Windows shim sets `ORGLET_USER_DATA` for you.

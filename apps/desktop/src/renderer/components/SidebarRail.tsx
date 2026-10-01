@@ -10,7 +10,7 @@ import { statusMarkLabel } from './SidebarTree';
 import { dwellHandlers } from '../prefetch';
 import { middleClickCloses } from './OpenChats';
 
-/** A crew or an orglet on the rail: its face opens its main chat. */
+/** An orglet or a channel on the rail: its face opens its chat. */
 export type RailEntry = {
   key: string;
   name: string;
@@ -32,16 +32,15 @@ export type RailAction = { key: string; icon: ReactNode; label: string; ariaLabe
 
 /**
  * The left column folded to a narrow rail (COD-340): the roster as faces. Top: the way to the full sidebar, search and
- * the create menu. Then one face per crew and per orglet, in the sidebar's order, each with the sidebar row's mark
+ * the create menu. Then one face per orglet, in the sidebar's order, each with the sidebar row's mark
  * when it has news; the channels behind one button that opens their list (COD-361); then the chats on the Open list
  * (COD-355), each with a × that shows on hover. The foot keeps the sidebar's footer as icons with their counts. Names
  * live in tooltips and accessible names, since there is no room for them.
  */
-export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, channels, channelsMark, openChats, actions, trailing, covered = false }: {
+export function SidebarRail({ onExpand, onSearch, createItems, orglets, channels, channelsMark, openChats, actions, trailing, covered = false }: {
   onExpand: () => void;
   onSearch: () => void;
   createItems: RowMenuItem[];
-  crews: readonly RailEntry[];
   orglets: readonly RailEntry[];
   channels: readonly RailEntry[];
   /** The strongest mark among the channels, for their one button. */
@@ -55,7 +54,7 @@ export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, c
   covered?: boolean;
 }) {
   const roster = useRef<HTMLDivElement>(null);
-  const scrollEnds = useScrollEnds(roster, `${crews.length}:${orglets.length}:${channels.length}:${openChats.length}`);
+  const scrollEnds = useScrollEnds(roster, `${orglets.length}:${channels.length}:${openChats.length}`);
   return <nav className="rail" aria-label={t('Điều hướng')} inert={covered || undefined} aria-hidden={covered || undefined}>
     <div className="rail-top">
       <Button size="icon" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={onExpand}><PanelLeft size={18} /></Button>
@@ -63,7 +62,6 @@ export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, c
       <RowMenu label={t('Tạo mới')} icon={Plus} className="rail-create" align="start" items={createItems} />
     </div>
     <div ref={roster} className="rail-roster" {...scrollEnds}>
-      {crews.length > 0 && <ul className="rail-group" aria-label={t('Hội')}>{crews.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
       {orglets.length > 0 && <ul className="rail-group" aria-label={t('Tí')}>{orglets.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
       {channels.length > 0 && <RailChannels chats={channels} mark={channelsMark} />}
       {openChats.length > 0 && <ul className="rail-group rail-open" aria-label={t('Đang mở')}>{openChats.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}

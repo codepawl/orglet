@@ -22,7 +22,7 @@ function plural(count: number, one: string, many: string): string {
 export function styledStatus(value: StatusValue, mode: ColorMode): string {
   const colors = value.colors?.length ? value.colors.slice(0, STATUS_FACE_LIMIT) : [NEUTRAL_COLOR];
   const faces = renderMiniFaces(colors, mode);
-  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.crews, 'crew', 'crews')}`;
+  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.crews, 'channel', 'channels')}`;
   const running = value.running > 0 ? `, ${plural(value.running, 'chat', 'chats')} working` : '';
   const title = `${paint(`Orglet ${value.version}`, { bold: true }, mode)} is running.`;
   return `${faces}  ${title}\n${muted(`${counts}${running}.`, mode)}`;
@@ -46,7 +46,7 @@ export function styledList(value: ListValue, layout: Layout): string {
   lines.push(orglets.length ? paint('Orglets', { bold: true }, layout.mode) : 'No orglets yet.');
   lines.push(...listLines(orglets, layout));
   if (crews.length) {
-    lines.push('', paint('Crews', { bold: true }, layout.mode));
+    lines.push('', paint('Channels', { bold: true }, layout.mode));
     lines.push(...listLines(crews, layout));
   }
   return lines.join('\n');
