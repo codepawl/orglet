@@ -50,6 +50,8 @@ All four of these matter. When two conflict, the order below breaks the tie.
 | Proposal (Đề xuất) | An app change a worker suggests when you ask for one (a new orglet, a crew, a template, a skill, a schedule, a setting): a card in the chat you apply or dismiss. Setup help on request, not an agent running the workspace; see [agent-tools.md](agent-tools.md#proposing-app-changes). |
 | Connection | The API or signed-in local CLI that runs the model. A skill, imported package, or note never grants a capability. |
 
+**Marketplace ([COD-373](https://linear.app/codepawl/issue/COD-373)).** By the owner's decision on 2026-10-01, Orglet gets a marketplace of ready-made orglets and crews now that the CodePawl account exists. Adding one makes it a friend: a local orglet you own and can edit, never a live link. Browsing and adding need no account; publishing does. Listings are instructions, skills and avatars, never scripts that run, permissions, folders or keys. Design: [marketplace-design.md](marketplace-design.md).
+
 Channels ([COD-361](https://linear.app/codepawl/issue/COD-361)) are how several orglets and crews share one conversation, by the owner's decision on 2026-10-01: they revisit the "projects that group several tasks" this page used to postpone, as named chats rather than folders of tasks. A channel is still one chat; shared files and shared context across separate chats stay postponed until real use shows a need. Channels are local. Their members can later include people (COD-362, after account sync), and nothing is built for people yet.
 
 A worker's **Permissions** tab and the chat Details show its abilities as controls you set: a switch for anything with exactly two values, a dropdown for the working folder's levels (owner's rule, COD-168). A blocker such as Demo or a missing connection disables the control with one reason beside it, never a third position. File and web access belongs to the chat; the worker's tab acts on that worker's own chat, a team chat on its own, and both can be set before the first message. Changes apply to every run that has not started yet, while revocation blocks active access. With an editable folder, an orglet's changes wait for the person to review and apply them unless the chat's review switch is off; crews, group chats and schedules apply as each run finishes (COD-279). Technical tool names stay in the tool guide. Routines decide when a turn starts; they do not grant access.
@@ -66,6 +68,6 @@ A worker's **Permissions** tab and the chat Details show its abilities as contro
 - Company simulation, org charts or agents that run a business
 - Running work while every computer is off (a cloud runner)
 - Building the Orglet account before its design in COD-329 is settled: what syncs, encryption, conflicts, offline use
-- A skill marketplace or running downloaded scripts
+- Running downloaded scripts, from the marketplace or anywhere else
 - Promising that every provider or subscription works the same way
 - Scraping provider docs or using a third-party model aggregator as the source of truth for lists or sunset dates ([model-list-fetch.md](model-list-fetch.md))
