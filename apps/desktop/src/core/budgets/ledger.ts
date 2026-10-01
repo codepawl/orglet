@@ -87,7 +87,7 @@ export class BudgetLedger {
       if (used('r.task_id=?', [taskId]) + amount > taskLimit || used('r.provider=? AND (r.month=? OR r.state!=\'settled\')', [provider, month]) + amount > connectionLimit) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
       const scheduleCap = dailyCapOfTask(this.store, taskId);
       if (scheduleCap && spentOnDay(this.store, scheduleCap.routineId, scheduleCap.day) + amount > scheduleCap.capMicros) throw new DailyCapReached(DAILY_CAP_REACHED_IN_RUN);
-      if (team && used("r.task_id IN (SELECT id FROM tasks WHERE json_extract(data,'$.teamId')=?) AND (r.month=? OR r.state!='settled')", [team.id, month]) + amount > team.limit) throw new BudgetError('Hội đã chạm giới hạn ngân sách tháng.');
+      if (team && used("r.task_id IN (SELECT id FROM tasks WHERE json_extract(data,'$.teamId')=?) AND (r.month=? OR r.state!='settled')", [team.id, month]) + amount > team.limit) throw new BudgetError('Kênh đã chạm giới hạn ngân sách tháng.');
       const reservation = id();
       this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?)').run(reservation, runId, taskId, provider, month, amount, 'held');
       journal?.(reservation);

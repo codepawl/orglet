@@ -254,7 +254,7 @@ describe('terminal composer', () => {
     try {
       await session.key('\x1b[A');
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('▦ Manage crew · Review crew');
+      expect(session.screen.text()).toContain('▦ Manage channel · Review crew');
       expect(session.screen.text()).toContain('Lead: Researcher');
       await session.key('\x1b[B');
       await session.key('\r');
@@ -263,7 +263,7 @@ describe('terminal composer', () => {
       expect(session.screen.text()).toContain('› ▦    Review crew');
       await session.key('\x1b[D');
       await session.key('\r');
-      expect(session.screen.text()).toContain('▦ Edit crew · Review crew');
+      expect(session.screen.text()).toContain('▦ Edit channel · Review crew');
       expect(fixture.deleted).toEqual([]);
       expect(session.sent).toEqual([]);
     } finally {
@@ -277,10 +277,10 @@ describe('terminal composer', () => {
     try {
       await session.key('valuable draft');
       await session.key('\x0e');
-      expect(session.screen.text()).toContain('Create orglet or crew');
+      expect(session.screen.text()).toContain('Create orglet or channel');
       await session.key('\x1b[B');
       await session.key('\r');
-      expect(session.screen.text()).toContain('Create crew');
+      expect(session.screen.text()).toContain('Create channel');
       await session.key('Name');
       await session.key('\r');
       await session.key('Unsaved crew');
@@ -305,7 +305,7 @@ describe('terminal composer', () => {
       await session.key('\r');
       await session.key('draft after queue');
       await session.key('\x0e');
-      expect(session.screen.text()).toContain('Create orglet or crew');
+      expect(session.screen.text()).toContain('Create orglet or channel');
       await session.resolve();
       expect(session.sent).toEqual(['first']);
       await session.key('\x1b');
@@ -339,11 +339,11 @@ describe('terminal composer', () => {
       await session.key('\x1b');
       resolveCatalog?.();
       await pause();
-      expect(session.screen.text()).not.toContain('Create orglet or crew');
+      expect(session.screen.text()).not.toContain('Create orglet or channel');
       expect(session.screen.text()).toContain('keep this draft');
       await session.key('\x0e');
       expect(reads).toBe(2);
-      expect(session.screen.text()).toContain('Create orglet or crew');
+      expect(session.screen.text()).toContain('Create orglet or channel');
     } finally {
       resolveCatalog?.();
       await session.stop();
@@ -467,7 +467,7 @@ describe('terminal composer', () => {
       await session.key('Save'); await session.key('\r');
       expect(saved).toEqual([{ name: 'Review crew', instructions: 'Review together', memberIds: [workerId], synthesizerId: workerId, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 }]);
       expect(session.sent).toEqual([]);
-      expect(session.screen.text()).toContain('Saved crew Review crew.');
+      expect(session.screen.text()).toContain('Saved channel Review crew.');
     } finally { await session.stop(); }
   });
 
@@ -498,7 +498,7 @@ describe('terminal composer', () => {
     } });
     try {
       await session.key('/new orglet');
-      expect(session.screen.text()).toContain('Create an orglet or crew in this terminal');
+      expect(session.screen.text()).toContain('Create an orglet or channel in this terminal');
       await session.key('\r');
       expect(session.screen.text()).toContain('Create orglet');
       await session.key('Name');
@@ -585,24 +585,24 @@ describe('terminal composer', () => {
     }
   });
 
-  it('puts search guidance inside the empty input and separates orglets from crews', async () => {
+  it('puts search guidance inside the empty input and separates orglets from channels', async () => {
     const session = await terminal({ picker: true, list: {
       orglets: [{ name: 'Researcher', provider: 'codex' }, { name: 'Writer', provider: 'codex' }],
       crews: [{ name: 'Review crew', lead: 'Writer', members: ['Researcher'] }],
     } });
     try {
       const screen = session.screen.text();
-      expect(screen).toContain('› Search orglets or crews…');
+      expect(screen).toContain('› Search orglets or channels…');
       expect(screen).not.toContain('Open ›');
       expect(session.screen.column).toBe(2);
-      expect(screen).toMatch(/  \[ Orglets · 2 \]\n› ▐••▌ Researcher[^\n]*\n  ▐••▌ Writer[^\n]*\n\n  \[ Crews · 1 \]\n  ▦\s+Review crew/);
+      expect(screen).toMatch(/  \[ Orglets · 2 \]\n› ▐••▌ Researcher[^\n]*\n  ▐••▌ Writer[^\n]*\n\n  \[ Channels · 1 ]\n  ▦\s+Review crew/);
       await session.key('review');
       expect(session.screen.text()).toContain('› review');
-      expect(session.screen.text()).not.toContain('Search orglets or crews');
+      expect(session.screen.text()).not.toContain('Search orglets or channels');
       expect(session.screen.text()).not.toContain('[ Orglets');
-      expect(session.screen.text()).toContain('[ Crews · 1 ]');
+      expect(session.screen.text()).toContain('[ Channels · 1 ]');
       await session.key('\x15');
-      expect(session.screen.text()).toContain('› Search orglets or crews…');
+      expect(session.screen.text()).toContain('› Search orglets or channels…');
       await session.key('review');
       await session.key('\r');
       expect(session.screen.text()).toContain('Orglet test · Review crew');
@@ -619,7 +619,7 @@ describe('terminal composer', () => {
     } });
     try {
       await session.key('\x1b[A');
-      expect(session.screen.text()).toContain('[ Crews · 1 ]');
+      expect(session.screen.text()).toContain('[ Channels · 1 ]');
       expect(session.screen.text()).toContain('› ▦    Review crew');
       expect(session.screen.lines.length).toBeLessThanOrEqual(9);
       await session.key('\r');
@@ -685,7 +685,7 @@ describe('terminal composer', () => {
     const session = await terminal();
     try {
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('› Search orglets or crews…');
+      expect(session.screen.text()).toContain('› Search orglets or channels…');
       expect(session.screen.text()).not.toContain('Agents · Researcher');
       await session.key('\x1b');
       await session.key('hello');
@@ -696,7 +696,7 @@ describe('terminal composer', () => {
       await session.key('\r');
       expect(session.screen.text()).toContain('Answer: hellXo');
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('› Search orglets or crews…');
+      expect(session.screen.text()).toContain('› Search orglets or channels…');
       expect(session.screen.text()).not.toContain('Answer: hellXo');
       await session.key('\x1b');
       expect(session.screen.text()).toContain('Answer: hellXo');
@@ -740,7 +740,7 @@ describe('terminal composer', () => {
     try {
       await session.key('keep my draft');
       await session.key('\x10');
-      expect(session.screen.text()).toContain('› Search orglets or crews…');
+      expect(session.screen.text()).toContain('› Search orglets or channels…');
       await session.key('\x1b');
       expect(session.screen.text()).toContain('› keep my draft');
       await session.key('\x10');
@@ -992,13 +992,13 @@ describe('terminal composer', () => {
     const session = await terminal();
     try {
       await session.key('/');
-      expect(session.screen.text()).toContain('/list  List orglets and crews');
+      expect(session.screen.text()).toContain('/list  List orglets and channels');
       await session.key('\x1b[B');
       await session.key('\t');
       expect(session.screen.text()).toContain('› /list');
       expect(session.screen.text()).not.toContain('Tab/Enter fill');
       await session.key('\r');
-      expect(session.screen.text()).toContain('› Search orglets or crews…');
+      expect(session.screen.text()).toContain('› Search orglets or channels…');
       expect(session.screen.text()).toContain('Researcher');
       await session.key('\r');
       await session.key('/op');
@@ -1181,7 +1181,7 @@ describe('terminal composer', () => {
       expect(session.screen.text()).toContain('▐••▌ Researcher');
       expect(session.screen.text()).toContain('▐••▌ Writer');
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('› Search orglets or crews…');
+      expect(session.screen.text()).toContain('› Search orglets or channels…');
       expect(session.screen.text()).not.toContain('Agents · Review crew');
       expect(session.sent).toEqual([]);
     } finally { await session.stop(); }

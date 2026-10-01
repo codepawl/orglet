@@ -33,12 +33,12 @@ describe('what stops an orglet or crew from going (COD-286)', () => {
     const one = leaveCrewsMessage('Scout', ['Launch crew']);
     const two = leaveCrewsMessage('Scout', ['Launch crew', 'Quick crew']);
     const three = leaveCrewsMessage('Scout', ['Launch crew', 'Quick crew', 'Review']);
-    expect(one).toBe('Bỏ Scout khỏi hội Launch crew trước.');
-    expect(two).toBe('Bỏ Scout khỏi hội Launch crew và Quick crew trước.');
-    expect(three).toBe('Bỏ Scout khỏi 3 hội trước: Launch crew, Quick crew, Review.');
-    expect(translateMessage(en, one)).toBe('Remove Scout from the crew Launch crew first.');
-    expect(translateMessage(en, two)).toBe('Remove Scout from the crews Launch crew and Quick crew first.');
-    expect(translateMessage(en, three)).toBe('Remove Scout from 3 crews first: Launch crew, Quick crew, Review.');
+    expect(one).toBe('Bỏ Scout khỏi kênh Launch crew trước.');
+    expect(two).toBe('Bỏ Scout khỏi kênh Launch crew và Quick crew trước.');
+    expect(three).toBe('Bỏ Scout khỏi 3 kênh trước: Launch crew, Quick crew, Review.');
+    expect(translateMessage(en, one)).toBe('Remove Scout from the channel Launch crew first.');
+    expect(translateMessage(en, two)).toBe('Remove Scout from the channels Launch crew and Quick crew first.');
+    expect(translateMessage(en, three)).toBe('Remove Scout from 3 channels first: Launch crew, Quick crew, Review.');
   });
 });
 
@@ -57,10 +57,10 @@ describe('the core refusal', () => {
     const crewOf = (name: string) => ({ name, instructions: 'Work together.', memberIds: [scout.id, researcher.id], synthesizerId: researcher.id, workflow: 'sequential', monthlyBudgetMicros: 1_000_000 });
     const launch = await core.command('saveTeam', crewOf('Launch crew')) as { id: string };
     const quick = await core.command('saveTeam', crewOf('Quick crew')) as { id: string };
-    await expect(core.command('archiveEntity', { kind: 'worker', id: scout.id, archived: true })).rejects.toThrow('Bỏ Scout khỏi hội Launch crew và Quick crew trước.');
-    await expect(core.command('deleteEntity', { kind: 'worker', id: scout.id })).rejects.toThrow('Bỏ Scout khỏi hội Launch crew và Quick crew trước.');
+    await expect(core.command('archiveEntity', { kind: 'worker', id: scout.id, archived: true })).rejects.toThrow('Bỏ Scout khỏi kênh Launch crew và Quick crew trước.');
+    await expect(core.command('deleteEntity', { kind: 'worker', id: scout.id })).rejects.toThrow('Bỏ Scout khỏi kênh Launch crew và Quick crew trước.');
     await core.command('deleteEntity', { kind: 'team', id: launch.id });
-    await expect(core.command('archiveEntity', { kind: 'worker', id: scout.id, archived: true })).rejects.toThrow('Bỏ Scout khỏi hội Quick crew trước.');
+    await expect(core.command('archiveEntity', { kind: 'worker', id: scout.id, archived: true })).rejects.toThrow('Bỏ Scout khỏi kênh Quick crew trước.');
     await core.command('deleteEntity', { kind: 'team', id: quick.id });
     await core.command('archiveEntity', { kind: 'worker', id: scout.id, archived: true });
   });

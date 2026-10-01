@@ -714,7 +714,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Định dạng khi tải xuống')} description={t('Bấm là tải, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi tải xuống')} className="setting-select" value={workspace.downloadFormat} disabled={busy} onChange={value => void save({ downloadFormat: value as Workspace['downloadFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản (.txt)') }, { value: 'markdown', label: 'Markdown (.md)' }]} />
               </Row>
-              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, hội; giữ số liệu chi phí.')}>
+              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, kênh; giữ số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
               <Row title={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
@@ -909,7 +909,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'data' && <>
-              <Row title={t('Sao lưu')} description={t('Lưu Tí, hội và cuộc trò chuyện vào một tệp.')}>
+              <Row title={t('Sao lưu')} description={t('Lưu Tí, kênh và cuộc trò chuyện vào một tệp.')}>
                 <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.backup()) ? t('Đã lưu bản sao lưu') : undefined, t('Sao lưu'))}><Download size={14} />{t('Lưu bản sao lưu')}</Button>
               </Row>
               <Row title={t('Khôi phục')} description={t('Thêm các mục còn thiếu từ một bản sao lưu.')}>
@@ -918,7 +918,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <EraseRow busy={busy} scope="chats" onErase={erase}
                 title={t('Xóa lịch sử trò chuyện')}
                 description={t('Xóa mọi cuộc trò chuyện và báo cáo.')}
-                caveat={t('Tí, hội, skill và kiến thức được giữ lại. Số liệu chi phí được giữ.')}
+                caveat={t('Tí, kênh, skill và kiến thức được giữ lại. Số liệu chi phí được giữ.')}
                 question={t('Xóa mọi cuộc trò chuyện và báo cáo?')} />
               <EraseRow busy={busy} scope="knowledge" onErase={erase}
                 title={t('Xóa kiến thức')}
@@ -938,7 +938,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <EraseRow busy={busy} scope="everything" onErase={erase}
                 title={t('Xóa toàn bộ dữ liệu')}
                 description={t('Đưa Orglet về như mới cài.')}
-                caveat={t('Mọi trò chuyện, Tí, hội, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key, kết nối tùy chỉnh và máy chủ MCP được giữ lại.')}
+                caveat={t('Mọi trò chuyện, Tí, kênh, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key, kết nối tùy chỉnh và máy chủ MCP được giữ lại.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Tài khoản CodePawl là tùy chọn và chưa đồng bộ gì.')} />
             </>}

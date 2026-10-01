@@ -1,6 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { constants, setPriority } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { z } from 'zod';
@@ -13,12 +12,11 @@ import type { DesktopHost, DesktopHostRequest } from '../../shared/desktop-host'
  * command reads the script from the first line of standard input, and requests and answers follow as JSON lines.
  *
  * It starts the first time a step needs it, with only the system variables PowerShell needs (no keys, no tokens), and
- * stops after a minute with nothing to do. Once it is ready it runs at below-normal priority so its work never
- * competes with the person's own. It starts at normal priority: starting is a second or two of CPU (PowerShell, then
- * csc.exe compiling the C# part, which inherits the priority), and at below-normal Windows gives it almost none of
- * that while normal-priority work keeps every core busy. Measured on 2026-10-01 with one busy thread per core, it was
- * not ready after 150 seconds at below-normal and was ready in 6 to 10 seconds at normal; CI hit this as a 30 second
- * start timeout.
+ * stops after a minute with nothing to do. It runs at normal priority. It uses the CPU only while it starts and while
+ * it does a step the person's orglet asked for, and Windows already favours the window the person is using. At
+ * below-normal, Windows gives it almost no CPU while normal-priority work keeps every core busy (COD-364, measured on
+ * 2026-10-01 with one busy thread per core): it was not ready after 150 seconds, against 6 to 10 seconds at normal,
+ * and a request took 2.5 to 12 seconds, against under 0.1 seconds at normal. CI hit this as a 30 second start timeout.
  */
 
 /** How long the helper stays up after its last answer. */
@@ -48,15 +46,6 @@ const HELPER_ERRORS: Record<string, string> = {
 
 export function powershellPath(): string {
   return join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-}
-
-function lowerPriority(child: ChildProcessWithoutNullStreams) {
-  if (!child.pid) return;
-  try {
-    setPriority(child.pid, constants.priority.PRIORITY_BELOW_NORMAL);
-  } catch {
-    // Priority is a courtesy to the person's own work; the helper still works at normal priority.
-  }
 }
 
 export class DesktopHelperProcess implements DesktopHost {
@@ -104,7 +93,6 @@ export class DesktopHelperProcess implements DesktopHost {
         }
         if ((message as { ready?: boolean }).ready) {
           clearTimeout(timer);
-          lowerPriority(child);
           this.child = child;
           resolve(child);
           return;

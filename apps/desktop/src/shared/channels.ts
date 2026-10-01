@@ -7,8 +7,10 @@ import { z } from 'zod';
  * routing and the permissions read a channel exactly as they read a group chat. A channel with no message yet has no
  * row; it waits in the workspace's `emptyChannels` until its first message moves it onto the row it creates.
  *
- * Members carry a `kind` so a person can join later (COD-362) without changing what is stored now; this build knows
- * only orglets and crews.
+ * Members carry a `kind` so a person can join later (COD-362) without changing what is stored now. Since COD-369 a
+ * crew is a channel itself: what made it a crew (its lead, workflow, budget and hours) is how its channel works, kept
+ * in the crew record its `crewId` names, and its chat row keeps its `teamId` so the crew engine runs it. A `crew`
+ * member is still read, from records written before then, as that crew's orglets.
  */
 
 export const CHANNEL_NAME_LIMIT = 80;
@@ -27,23 +29,45 @@ export const ChannelName = z.string().transform(name => name.trim().replace(/^#+
 export const ChannelMembers = z.array(ChannelMember).min(1, 'Kênh cần ít nhất một thành viên.').max(MAX_CHANNEL_MEMBERS)
   .refine(members => new Set(members.map(memberKey)).size === members.length, 'Thành viên bị trùng.');
 
+/**
+ * How a channel answers a message (COD-369). `turns`: each orglet answers in turn and reads the answers before it, the
+ * way a channel worked when it was a group chat. `lead`: the lead plans the message, splits it among the orglets and
+ * combines their parts, the way a crew's chat worked before crews became channels.
+ */
+export const ChannelMode = z.enum(['turns', 'lead']);
+export type ChannelMode = z.infer<typeof ChannelMode>;
+
 export const Channel = z.object({
   id: z.uuid(),
   name: ChannelName,
   topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(),
   members: ChannelMembers,
+  /**
+   * Set when the lead splits the work (COD-369): the crew record that holds the lead, the workflow, the budget and the
+   * hours. The crew engine reads that record as it always did, so a channel made from a crew keeps working the same.
+   */
+  crewId: z.uuid().optional(),
 }).strict();
 export type Channel = z.infer<typeof Channel>;
+
+/** How this channel answers: a channel with a crew record behind it is one where the lead splits the work. */
+export function channelMode(channel: Pick<Channel, 'crewId'>): ChannelMode {
+  return channel.crewId ? 'lead' : 'turns';
+}
 
 /** A channel created and not written in yet: it has no `tasks` row, only this record and when it was made. */
 export const EmptyChannel = Channel.extend({ createdAt: z.iso.datetime() }).strict();
 export type EmptyChannel = z.infer<typeof EmptyChannel>;
 
-/** What the create and edit dialogs send; an empty topic clears it. */
+/**
+ * What the create and edit dialogs send; an empty topic clears it. `mode` left out keeps how an existing channel works
+ * (a new one takes turns), so a caller that only renames or changes members never switches it by accident.
+ */
 export const ChannelFields = z.object({
   name: ChannelName,
   topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT),
   members: ChannelMembers,
+  mode: ChannelMode.optional(),
 }).strict();
 export type ChannelFields = z.infer<typeof ChannelFields>;
 
@@ -70,6 +94,14 @@ export function channelOrgletIds(members: readonly ChannelMember[], roster: Rost
     }
   }
   return ids;
+}
+
+/**
+ * The members as orglets only (COD-369): crews are channels now, so a crew a channel had as a member, or one the
+ * terminal still names with `--with`, joins as its orglets. Order and the cap follow `channelOrgletIds`.
+ */
+export function orgletMembers(members: readonly ChannelMember[], roster: Roster): ChannelMember[] {
+  return channelOrgletIds(members, roster).slice(0, MAX_CHANNEL_MEMBERS).map(orgletId => ({ kind: 'orglet', id: orgletId }));
 }
 
 function orgletsOfMember(member: ChannelMember, roster: Roster): readonly string[] {

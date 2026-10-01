@@ -9,7 +9,7 @@ function plural(count: number, one: string, many: string): string {
 }
 
 export function formatStatus(value: StatusValue): string {
-  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.crews, 'crew', 'crews')}`;
+  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.crews, 'channel', 'channels')}`;
   const running = value.running > 0 ? `, ${plural(value.running, 'chat', 'chats')} working` : '';
   return `Orglet ${value.version} is running.\n${counts}${running}.`;
 }
@@ -24,7 +24,7 @@ export function formatList(value: ListValue): string {
   lines.push(value.orglets.length ? 'Orglets' : 'No orglets yet.');
   lines.push(...padded(value.orglets.map(orglet => [orglet.name, orglet.model ? `${orglet.provider}/${orglet.model}` : orglet.provider])));
   if (value.crews.length) {
-    lines.push('', 'Crews');
+    lines.push('', 'Channels');
     lines.push(...padded(value.crews.map(crew => [crew.name, `lead ${crew.lead}`, crew.members.join(', ')])));
   }
   return lines.join('\n');
@@ -50,7 +50,7 @@ export function formatOpen(value: OpenValue): string {
 }
 
 export function formatRun(value: RunValue): string {
-  return `Started ${value.schedule.name}. Its run is in the app's sidebar, under the orglet or crew it runs for.`;
+  return `Started ${value.schedule.name}. Its run is in the app's sidebar, under the orglet or channel it runs for.`;
 }
 
 /** Past turns in plain text: each numbered message the person sent, then every numbered answer to it (COD-354). */
@@ -104,7 +104,7 @@ export function formatChatChange(value: ChatChangeValue): string {
 }
 
 export function formatArchiveEntity(value: ArchiveEntityValue): string {
-  const kind = value.kind === 'worker' ? 'orglet' : 'crew';
+  const kind = value.kind === 'worker' ? 'orglet' : 'channel';
   return value.archived ? t('Đã lưu trữ {0} {1}.', kind, value.name) : t('Đã khôi phục {0} {1}.', kind, value.name);
 }
 
@@ -148,7 +148,7 @@ export function formatScheduleChange(kind: 'schedule-enable' | 'schedule-delete'
 export function formatSearch(value: SearchValue): string {
   const lines: string[] = [];
   if (value.orglets.length) lines.push(t('Tí: {0}', value.orglets.join(', ')));
-  if (value.crews.length) lines.push(t('Hội: {0}', value.crews.join(', ')));
+  if (value.crews.length) lines.push(t('Kênh: {0}', value.crews.join(', ')));
   lines.push(...padded(value.chats.map(hit => [hit.chat, hit.name, hit.sender ? `${hit.sender}:` : '', hit.snippet])));
   if (lines.length === 0) lines.push(t('Không tìm thấy gì.'));
   if (value.indexing) lines.push(t('Vẫn đang thêm các chat cũ vào chỉ mục, nên có thể thiếu vài kết quả.'));
@@ -198,7 +198,7 @@ export function formatPreferences(value: PreferencesValue): string {
 }
 
 export function formatTemplate(value: TemplateValue): string {
-  return t('Đã tạo hội {0} với {1}.', value.name, value.members.join(', '));
+  return t('Đã tạo kênh {0} với {1}.', value.name, value.members.join(', '));
 }
 
 export function formatReact(value: ReactValue): string {

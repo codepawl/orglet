@@ -34,7 +34,7 @@ Type the model ID by hand; the orglet runs with it. The list comes from the prov
 
 ## The chat says it is waiting for budget
 
-A Claude Code run reached the chat's **Limit per task**. Raise it in the orglet's settings, or in the crew's **Limits & shifts**, and send the next message; the new limit applies to it. For API orglets, check **Settings → Costs & limits** for the monthly limit per connection.
+A Claude Code run reached the chat's **Limit per task**. Raise it in the orglet's settings, or in the channel's settings under **Giới hạn mỗi task**, and send the next message; the new limit applies to it. For API orglets, check **Settings → Costs & limits** for the monthly limit per connection.
 
 ## The chat is blocked by an earlier attempt
 

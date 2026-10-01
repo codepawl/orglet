@@ -142,7 +142,7 @@ function editedRoutine(workspace: Workspace, existing: Routine, request: SaveReq
 /** The task of a schedule moved to another orglet or crew; one with desktop-only settings stays where it is. */
 function movedTask(workspace: Workspace, existing: Routine, owner: Owner): TaskInput {
   const desktopOnly = existing.task.toolCapabilities?.length || existing.task.browser || existing.task.desktop || existing.workspace || existing.trigger?.kind === 'folder';
-  if (desktopOnly) throw new CliFailure('failed', 'Lịch này có quyền, thư mục hoặc trình duyệt được chọn trong app cho Tí hay hội hiện tại. Đổi người làm trong app.');
+  if (desktopOnly) throw new CliFailure('failed', 'Lịch này có quyền, thư mục hoặc trình duyệt được chọn trong app cho Tí hay kênh hiện tại. Đổi người làm trong app.');
   const providerScopes = allowedProviders(workspace, owner);
   const { teamId: _teamId, ...rest } = existing.task;
   return { ...rest, ...owner, consent: providerScopes.length > 0, providerScopes };

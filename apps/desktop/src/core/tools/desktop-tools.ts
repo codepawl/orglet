@@ -58,10 +58,10 @@ const TITLE_CHARACTERS = 60;
 export const NO_DESKTOP_CAPABILITY = 'Ứng dụng trên máy chưa được bật cho chat này.';
 export const DESKTOP_NOT_AVAILABLE = 'Dùng ứng dụng trên máy chỉ có trên Windows.';
 export const TOO_MANY_DESKTOP_SCREENSHOTS = `Lần chạy này đã chụp đủ ${MAX_DESKTOP_SCREENSHOTS} ảnh cửa sổ.`;
-export const DESKTOP_NOT_ASKED_HERE = 'Bước này cần người dùng cho phép, mà chat nhóm, hội và lịch không hỏi được. Nhờ người dùng tự làm, hoặc làm trong chat riêng với Tí này.';
+export const DESKTOP_NOT_ASKED_HERE = 'Bước này cần người dùng cho phép, mà kênh và lịch không hỏi được. Nhờ người dùng tự làm, hoặc làm trong chat riêng với Tí này.';
 export const DESKTOP_PERSON_DECLINED = 'Người dùng không cho phép bước này. Đừng thử lại bước này trong lượt này.';
 export const DESKTOP_PERSON_DID_NOT_ANSWER = 'Người dùng chưa trả lời nên bước này không chạy.';
-export const DESKTOP_BORROW_NOT_ASKED_HERE = 'Mượn chuột và bàn phím thật luôn cần người dùng cho phép, mà chat nhóm, hội và lịch không hỏi được. Nhờ người dùng tự làm bước này.';
+export const DESKTOP_BORROW_NOT_ASKED_HERE = 'Mượn chuột và bàn phím thật luôn cần người dùng cho phép, mà kênh và lịch không hỏi được. Nhờ người dùng tự làm bước này.';
 export const DESKTOP_BORROW_NOT_NEEDED = 'Bước này làm được trong nền, nên Orglet không mượn chuột và bàn phím thật cho nó.';
 // Written out, not built from DESKTOP_BORROW_LIMIT_MS, so the English dictionary can match it; a test keeps the two equal.
 export const DESKTOP_BORROW_TOO_LONG = 'Kế hoạch này cần hơn 10 giây chuột và bàn phím thật. Chia nó thành các lần mượn ngắn hơn.';

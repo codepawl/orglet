@@ -2,8 +2,8 @@ import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
-import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, CornerDownRight, History, Trash2, Hash, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus, Users } from 'lucide-react';
+import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
+import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, CornerDownRight, History, Trash2, Hash, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
@@ -14,7 +14,6 @@ import { TaskThread } from './components/TaskThread';
 import { focusMessage } from './components/messageMarks';
 import { SourcePanel, type SourceTarget } from './components/SourcePanel';
 import { SourceDialog } from './components/SourceViewer';
-import { TeamDialog } from './components/TeamEditor';
 import { TaskDialog } from './components/TaskDialog';
 import { FormatPreferences } from './components/FormatAction';
 import { assigneeLabel, taskWorkers, teamRoster } from './assignees';
@@ -24,7 +23,7 @@ import { ArchivedList, ArchivedRow, type ArchiveState } from './components/Sideb
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, planFirstInput, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -52,7 +51,9 @@ import { ForwardPicker, type ForwardChoice } from './components/ForwardPicker';
 import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
 import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
-import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
+import { dropDraft, emptyChatDraftKey, keepDraft, readDraft, taskDraftKey } from './drafts';
+import { movePlanFirst } from './planFirst';
+import { ChatModePicker, type ModeChange } from './components/ApprovalModePicker';
 import { chatToReopen, rememberedChat, rememberOpenChat } from './lastChat';
 import { openChatMark, tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
@@ -177,10 +178,8 @@ function useArrivals(ids: readonly string[], ready: boolean): (id: string) => bo
 /** Up to this many faces greet an empty crew or channel at full size; more take a size down so eight fit on one line. */
 const BIG_FRESH_FACES = 4;
 
-/** The toast after archiving or deleting several ticked rows, with its own words for one (COD-292). */
-function bulkDoneMessage(kind: 'teams' | 'workers', verb: 'archive' | 'delete', done: number): string {
-  if (kind === 'teams' && verb === 'archive') return done === 1 ? t('Đã lưu trữ 1 hội') : t('Đã lưu trữ {0} hội', [done]);
-  if (kind === 'teams') return done === 1 ? t('Đã xóa 1 hội') : t('Đã xóa {0} hội', [done]);
+/** The toast after archiving or deleting several ticked orglets, with its own words for one (COD-292). */
+function bulkDoneMessage(verb: 'archive' | 'delete', done: number): string {
   if (verb === 'archive') return done === 1 ? t('Đã lưu trữ 1 Tí') : t('Đã lưu trữ {0} Tí', [done]);
   return done === 1 ? t('Đã xóa 1 Tí') : t('Đã xóa {0} Tí', [done]);
 }
@@ -199,7 +198,7 @@ function ThreadSkeleton() {
   </SkeletonGroup>;
 }
 
-type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | null;
+type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'library' | 'skill' | 'knowledge' | 'activity' | null;
 export function App() {
   useLanguage();
   const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>(emptyConnections());
@@ -227,7 +226,9 @@ export function App() {
   const [followUpPrefill, setFollowUpPrefill] = useState<ComposerPrefill & { taskId: string }>();
   const pendingIncoming = useRef<Incoming[]>([]);
   const [incomingCount, setIncomingCount] = useState(0);
-  const [teamId, setTeamId] = useState(''); const [editingTeam, setEditingTeam] = useState<Team>();
+  // The crew behind the channel on screen when its lead splits the work and nobody has written in it yet (COD-369):
+  // its empty chat is the crew's, so its first message starts the crew's chat with the channel on it.
+  const [teamId, setTeamId] = useState('');
   const [routineDraft, setRoutineDraft] = useState<TaskInput>();
   const [routineView, setRoutineView] = useState<RoutineView>({ editing: false });
   const routineDirty = useRef(false);
@@ -303,7 +304,7 @@ export function App() {
   const [channelDraft, setChannelDraft] = useState<ChannelDraft>();
   useEffect(() => {
     if (!workspace) return;
-    const listed = (section: SidebarSelectionSection) => (section === 'teams' ? workspace.teams : workspace.workers).map(item => item.id);
+    const listed = (section: SidebarSelectionSection) => section === 'workers' ? workspace.workers.map(item => item.id) : [];
     setSelection(current => current.section ? pruneSelection(current, listed(current.section)) : current);
     setEmptyChannelId(current => current && workspace.emptyChannels.some(channel => channel.id === current) ? current : undefined);
   }, [workspace]);
@@ -634,13 +635,16 @@ export function App() {
   };
   /** A channel nobody has written in yet (COD-361): its empty chat, where the first message creates its row. */
   const showEmptyChannel = (channelId: string) => {
+    // One where the lead splits the work is the crew's empty chat (COD-369); the workspace may be newer than this render.
+    const crewId = workspaceRef.current?.emptyChannels.find(channel => channel.id === channelId)?.crewId;
+    if (crewId) { openTeam(crewId); return; }
     setTeamId('');
     leaveThread();
     setEmptyChannelId(channelId);
     if (matchMedia('(max-width: 780px)').matches) setSidebar(false);
     setTimeout(() => composer.current?.focus(), 0);
   };
-  /** Several orglets, or crews, picked in the sidebar start a new channel with them in it. */
+  /** Several orglets picked in the sidebar start a new channel with them in it. */
   const newChannelFromSelection = () => {
     const members = channelMembersFromSelection(selection);
     if (!members) return;
@@ -856,13 +860,13 @@ export function App() {
     const applied = await orglet.call('applyAppProposal', { id: proposal.id, avatar });
     if (applied.target?.kind === 'template') {
       const saved = await orglet.exportTemplate(applied.target.id);
-      toast(saved ? t('Đã lưu template') : t('Chưa lưu template. Xuất lại từ menu của hội khi cần.'), saved ? 'success' : 'error', proposal.title);
+      toast(saved ? t('Đã lưu template') : t('Chưa lưu template. Xuất lại từ Thiết lập kênh khi cần.'), saved ? 'success' : 'error', proposal.title);
     }
   };
   const openProposalTarget = (target: ProposalTarget) => {
     if (!workspace) return;
     if (target.kind === 'worker') { const found = workspace.workers.find(item => item.id === target.id); if (found) { setEditingWorker(found); setPanel('worker'); } return; }
-    if (target.kind === 'team' || target.kind === 'template') { const found = workspace.teams.find(item => item.id === target.id); if (found) { setEditingTeam(found); setPanel('team'); } return; }
+    if (target.kind === 'team' || target.kind === 'template') { editCrewChannel(target.id); return; }
     if (target.kind === 'skill') { const found = workspace.skills.find(item => item.id === target.id); if (found) { setFromLibrary(false); setEditingSkill(found); setPanel('skill'); } return; }
     if (target.kind === 'routine') { const found = workspace.routines.find(item => item.id === target.id); openRoutines(found ? { editing: true, routine: found } : { editing: false }); return; }
     openSettings('general');
@@ -881,6 +885,8 @@ export function App() {
   rememberCustomConnections(workspace?.customConnections);
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
+  // The channel the crew on screen stands for while it is empty (COD-369); once written in, its row carries the record.
+  const crewChannel = team ? workspace?.emptyChannels.find(channel => channel.crewId === team.id) : undefined;
   // The empty channel stands while it is listed and someone in it can answer; its orglets are its members expanded.
   const emptyChannel = workspace ? openEmptyChannel(emptyChannelId, workspace.emptyChannels, workspace) : undefined;
   const channelWorkers = emptyChannel ? emptyChannel.workerIds.map(id => workspace?.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item)) : [];
@@ -973,6 +979,15 @@ export function App() {
   const unavailable = t('Chưa sẵn sàng');
   const recipientReady = (providers: Worker['provider'][]) => providers.every(provider => provider === 'demo' || ready[provider as keyof typeof ready]);
   const recipientValue = teamId ? `team:${teamId}` : emptyChannel ? channelRecipient(emptyChannel.channelId) : workerId;
+  /**
+   * The settings of the channel a crew stands for (COD-369), where its lead, workflow, budget and hours are edited
+   * now: from a proposal card, a refused archive or anything else that names the crew.
+   */
+  const editCrewChannel = (crewId: string) => {
+    const row = workspace?.tasks.find(task => task.channel?.crewId === crewId && !task.deletedAt);
+    const channel = row?.channel ?? workspace?.emptyChannels.find(item => item.crewId === crewId);
+    if (channel) setChannelDraft({ id: channel.id, name: channel.name, topic: channel.topic, members: channel.members, crewId });
+  };
   const pickRecipient = (value: string) => {
     if (value.startsWith('team:')) { openTeam(value.slice(5)); return; }
     openWorker(value);
@@ -1000,11 +1015,13 @@ export function App() {
       const thread = team ? liveTeamTask(workspace!.tasks, team.id) : emptyChannel ? undefined : liveWorkerTask(workspace!.tasks, workerId);
       let chatId: string;
       if (thread) {
-        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros });
+        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros, ...planFirstInput(emptyDraftKey) });
         chatId = thread.id;
       } else {
-        chatId = await orglet.call('createTask', firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }));
+        chatId = await orglet.call('createTask', { ...firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }), ...planFirstInput(emptyDraftKey) });
       }
+      // Plan first stays chosen on the chat the message went to, until the person picks another mode or follows the plan.
+      movePlanFirst(emptyDraftKey, taskDraftKey(chatId));
       // The chat's bar exists only once its detail is on screen. Loading it before switching keeps this box, and the
       // keys typed into it, until the bar takes over. The switch is one synchronous commit, so no key lands between
       // reading what was typed and the bar that carries it on.
@@ -1022,7 +1039,7 @@ export function App() {
       });
     } catch (err) {
       setBrief(current => restoreUnsent(sentBrief, current));
-      errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? emptyChannelName ?? worker?.name ?? '']);
+      errorAbout.current = t('Gửi tin cho {0}', [(team ? channelLabel(team.name) : undefined) ?? emptyChannelName ?? worker?.name ?? '']);
       setError((err as Error).message);
     } finally { setBusy(false); }
   };
@@ -1078,7 +1095,7 @@ export function App() {
   const openRoutines = (view: RoutineView = { editing: false }) => { setRoutineDraft(undefined); setRoutineView(view); setPanel('routines'); };
   // Back and forward through what was opened (COD-202). The view is read off the state each render, so whatever
   // changed it is the step; a data refresh changes none of these fields and records nothing.
-  const view = appView({ chat: selected, recipient: recipientValue, panel, settingsTab, libraryTab, fromLibrary, skillId: editingSkill?.id, knowledgeId: editingKnowledge?.id, workerId: editingWorker?.id, teamId: editingTeam?.id, taskId: editingTask, routineEditing: routineView.editing, routineId: routineView.editing ? routineView.routine?.id : undefined, noticesOpen, runningOpen, sourceId: viewingSource?.id });
+  const view = appView({ chat: selected, recipient: recipientValue, panel, settingsTab, libraryTab, fromLibrary, skillId: editingSkill?.id, knowledgeId: editingKnowledge?.id, workerId: editingWorker?.id, taskId: editingTask, routineEditing: routineView.editing, routineId: routineView.editing ? routineView.routine?.id : undefined, noticesOpen, runningOpen, sourceId: viewingSource?.id });
   const viewId = viewKey(view);
   useEffect(() => {
     if (!workspace) return;
@@ -1102,7 +1119,6 @@ export function App() {
       case 'skill': return workspace.skills.some(item => item.id === target.item);
       case 'knowledge': return workspace.knowledge.some(item => item.id === target.item);
       case 'worker': return [...workspace.workers, ...workspace.archivedWorkers].some(item => item.id === target.item);
-      case 'team': return [...workspace.teams, ...workspace.archivedTeams].some(item => item.id === target.item);
       case 'task': return workspace.tasks.some(item => item.id === target.item);
       case 'routines': return workspace.routines.some(item => item.id === target.item);
       default: return true;
@@ -1127,7 +1143,6 @@ export function App() {
       case 'skill': setFromLibrary(Boolean(target.fromLibrary)); setEditingSkill(workspace.skills.find(item => item.id === target.item)); break;
       case 'knowledge': setFromLibrary(Boolean(target.fromLibrary)); setEditingKnowledge(workspace.knowledge.find(item => item.id === target.item)); break;
       case 'worker': setEditingWorker([...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === target.item)); break;
-      case 'team': setEditingTeam([...workspace.teams, ...workspace.archivedTeams].find(item => item.id === target.item)); break;
       case 'task': setEditingTask(target.item); break;
       case 'routines': setRoutineDraft(undefined); setRoutineView(target.editing ? { editing: true, routine: workspace.routines.find(item => item.id === target.item) } : { editing: false }); break;
       default: break;
@@ -1278,10 +1293,10 @@ export function App() {
       setForwardSending(false);
     }
   };
-  const teamOrder = useReorder(workspace?.teams.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'teams', ids })));
   const workerOrder = useReorder(workspace?.workers.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'workers', ids })));
-  const sectionOrder = (section: SidebarSelectionSection) => section === 'teams' ? teamOrder.order : workerOrder.order;
-  const sectionKind = (section: SidebarSelectionSection) => section === 'teams' ? 'team' as const : 'worker' as const;
+  // Only orglets are picked together: crews are channels now (COD-369), and channels have no select mode.
+  const sectionOrder = (_section: SidebarSelectionSection) => workerOrder.order;
+  const sectionKind = (_section: SidebarSelectionSection) => 'worker' as const;
   /** The edit button of a section: on, that section is in select mode; off again, or on for the other section, drops the selection. */
   const toggleSelecting = (section: SidebarSelectionSection) => {
     if (selecting === section) { clearSelection(); return; }
@@ -1326,7 +1341,7 @@ export function App() {
     const done = ids.length;
     // Archiving is the step back from deleting, so it can be taken back at once, like a single row's archive.
     const undo = verb === 'archive' ? { action: { label: t('Hoàn tác'), onSelect: () => restoreEntities(kind, ids) } } : {};
-    toast(bulkDoneMessage(section === 'teams' ? 'teams' : 'workers', verb, done), 'success', undefined, undo);
+    toast(bulkDoneMessage(verb, done), 'success', undefined, undo);
   };
   const restoreEntities = (kind: 'worker' | 'team', ids: readonly string[]) => rowAction(async () => {
     for (const id of ids) await orglet.call('archiveEntity', { kind, id, archived: false });
@@ -1344,13 +1359,13 @@ export function App() {
       void refresh();
     });
   };
-  /** What to open when an orglet or crew cannot be archived or deleted yet: the crew it is in, or the schedule that runs it. */
+  /** What to open when an orglet cannot be archived or deleted yet: the channel whose lead gives it work, or the schedule that runs it. */
   const removalWayOut = (kind: 'worker' | 'team', entityId: string): ToastAction | undefined => {
     if (!workspace) return undefined;
     const blocker = removalBlocker(workspace, kind, entityId);
     if (blocker?.kind === 'crews') {
       const crew = blocker.crews[0];
-      return { label: t('Mở hội {0}', [crew.name]), onSelect: () => { setEditingTeam(crew); setPanel('team'); } };
+      return { label: t('Mở kênh {0}', [channelLabel(crew.name)]), onSelect: () => editCrewChannel(crew.id) };
     }
     // Normally caught before the core is asked (`heldBySchedule`); this covers a schedule switched on since.
     if (blocker?.kind === 'schedule') return { label: t('Xem lịch chạy'), onSelect: () => openRoutines() };
@@ -1405,7 +1420,7 @@ export function App() {
   setDisplayCurrency(workspace?.currency);
   // Phase 5 of the avatar animations: a row that was just created rises into the list once. This sits above the
   // loading return, because a hook must run on every render and the workspace arrives after the first one.
-  const isArriving = useArrivals(workspace ? [...workspace.teams.map(item => `team-${item.id}`), ...workspace.workers.map(item => `worker-${item.id}`)] : [], Boolean(workspace));
+  const isArriving = useArrivals(workspace ? workspace.workers.map(item => `worker-${item.id}`) : [], Boolean(workspace));
   // The shell is drawn before the workspace arrives (COD-218): the same frame, the same sidebar width, the lists
   // and the chat filled in as skeletons, so the window never opens on a blank page or a centred wait.
   if (!workspace) return <Startup error={error} onRetry={window.orglet ? () => void refresh() : undefined} sidebar={sidebar} sidebarWidth={sidebarWidth} />;
@@ -1425,10 +1440,6 @@ export function App() {
     if (live) dwellChat(live.id, resting);
     dwellModels(item.provider, resting);
   };
-  const dwellTeam = (item: Team) => (resting: boolean) => {
-    const live = liveTeamTask(workspace.tasks, item.id);
-    if (live) dwellChat(live.id, resting);
-  };
   const recipientOptions = [
     ...workspace.workers.map(item => {
       const available = recipientReady([item.provider]);
@@ -1438,18 +1449,6 @@ export function App() {
         detail: workerModelLabel(item),
         group: t('Tí'),
         icon: <Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />,
-        ...(available ? {} : { dimmed: true, badge: unavailable }),
-      };
-    }),
-    ...workspace.teams.map(item => {
-      const members = teamRoster(item, workspace.workers);
-      const available = recipientReady(members.map(member => member.provider));
-      return {
-        value: `team:${item.id}`,
-        label: item.name,
-        detail: members.length === 1 ? t('1 Tí') : t('{0} Tí', [members.length]),
-        group: t('Hội'),
-        icon: <RosterAvatars workers={members} max={2} />,
         ...(available ? {} : { dimmed: true, badge: unavailable }),
       };
     }),
@@ -1534,6 +1533,8 @@ export function App() {
     }} />;
     return { children, childrenLabel };
   };
+  /** A channel where the lead splits the work lists its schedules' newest runs under it, as its crew did (COD-369). */
+  const channelRowsUnder = (crewId: string | undefined, channelName: string) => crewId ? rowsUnder({ teamId: crewId }, channelLabel(channelName)) : {};
   /**
    * The "Archived chats (N)" list at the end of a sidebar section (COD-286), beside the section's archived orglets or
    * crews: each chat with the face of whose it was, its days left, Restore and Delete permanently.
@@ -1559,12 +1560,13 @@ export function App() {
   };
   /** Whose an archived chat was, named and drawn the way that orglet, crew or channel is in its own row. */
   const archivedChatOwner = (task: Task, chatName: string): { ownerName: string; mark: ReactNode } => {
-    if (task.teamId) {
+    // A crew's chat from before crews became channels reads as that channel (COD-369).
+    if (task.teamId && !task.channel) {
       const crew = [...workspace.teams, ...workspace.archivedTeams].find(item => item.id === task.teamId);
-      const ownerName = crew?.name ?? t('Hội đã xóa');
-      return { ownerName, mark: <Avatar name={ownerName} seed={task.teamId} size="xs" /> };
+      const ownerName = channelLabel(crew?.name ?? task.teamSnapshot?.name ?? t('Kênh đã xóa'));
+      return { ownerName, mark: <span className="archived-channel-mark" aria-hidden="true"><Hash size={14} /></span> };
     }
-    if (task.assignees) {
+    if (task.assignees || task.channel) {
       const members = taskWorkers(task, workspace);
       const ownerName = channelLabel(channelNameOf(task, members.map(member => member.name)));
       return { ownerName, mark: <span className="archived-channel-mark" aria-hidden="true"><Hash size={14} /></span> };
@@ -1579,13 +1581,6 @@ export function App() {
     return live
       ? tasksStatusMark([{ status: live.status, seen: taskSeen(live) }])
       : tasksStatusMark(activeTasks.filter(task => taskWorkers(task, workspace).some(item => item.id === id)).map(task => ({ status: task.status, seen: taskSeen(task) })));
-  };
-  // A crew row marks the crew's own chat. It used to roll up its members' marks too, from when the row listed its
-  // members; now a member waiting in its own solo chat flagged the whole crew (COD-263). A member's work for the crew
-  // runs inside the crew's chat, so it still shows here.
-  const teamStatus = (team: Team): StatusMarkState => {
-    const live = liveTeamTask(activeTasks, team.id);
-    return live ? tasksStatusMark([{ status: live.status, seen: taskSeen(live) }]) : rollupStatusMarks([]);
   };
   const openTaskWorkers = detail ? taskWorkers(detail.task, workspace) : [];
   const openTaskPaid = openTaskWorkers.some(item => isPaidApi(item.provider));
@@ -1611,15 +1606,15 @@ export function App() {
   };
   // The right-hand control of the toolbar under the prompt bar. A one-to-one chat names its worker in the header already, so the spot
   // carries the model the worker will answer with instead of a list holding that one name (user, 2026-09-19).
-  // A team keeps the recipient list, and so does a chat with nobody chosen yet, where it is how you choose.
-  // A channel is named in the header and is not in the recipient list, so its prompt bar carries neither control.
-  const composerTrailing = emptyChannel ? undefined
+  // A chat with nobody chosen yet keeps the recipient list, where it is how you choose. A channel, including one
+  // where the lead splits the work (COD-369), is named in the header, so its prompt bar carries neither control.
+  const composerTrailing = emptyChannel || team ? undefined
     : worker && !team && worker.provider !== 'demo'
       // An empty choice means whatever the provider defaults to, and a stored id may not be empty, so it is dropped.
       ? <ComposerModel worker={{ ...worker, provider: worker.provider }}
         onChange={modelId => action(() => orglet.call('saveWorker', { ...worker, modelId: modelId || undefined }))} />
       : recipientOptions.length > 0
-        ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? t('Tí')])} value={recipientValue} onChange={pickRecipient} showDetail={false} showIcon={false} menuMinWidth={320} options={recipientOptions} />
+        ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [worker?.name ?? t('Tí')])} value={recipientValue} onChange={pickRecipient} showDetail={false} showIcon={false} menuMinWidth={320} options={recipientOptions} />
         : undefined;
   // One provider behind this chat, or none to name: a team split across providers says nothing in the header and
   // lets the details panel list them. It is who answers the next message, read from the orglets as saved, so a switch
@@ -1636,16 +1631,14 @@ export function App() {
     : chatSettingsTarget({ worker, team, group: Boolean(emptyChannel) }, workspace);
   const headerSettingsItems = headerSettings?.kind === 'worker'
     ? [{ label: t('Thiết lập Tí'), icon: UserRoundCog, onSelect: () => { setEditingWorker(headerSettings.worker); setPanel('worker'); } }]
-    : headerSettings?.kind === 'team'
-      ? [{ label: t('Thiết lập hội'), icon: Users, onSelect: () => { setEditingTeam(headerSettings.team); setPanel('team'); } }]
-      : [];
+    : [];
   // A schedule's run is named after its schedule, so it does not read as the orglet's main chat (COD-258).
   const openScheduleRun = selected && detail?.task.routineId ? detail.task : undefined;
   const openSchedule = openScheduleRun ? workspace.routines.find(item => item.id === openScheduleRun.routineId) : undefined;
   // The open chat takes no new message while it, or the orglet or crew it belongs to, is archived or deleted (COD-282).
   const openChatClosure = selected && detail ? chatClosure(detail, workspace) : undefined;
   const closedOwner = openChatClosure?.owner;
-  const closedOwnerName = closedOwner ? closedOwner.name || (closedOwner.kind === 'team' ? t('Hội này') : t('Tí này')) : undefined;
+  const closedOwnerName = closedOwner ? closedOwner.name || (closedOwner.kind === 'team' ? t('Kênh này') : t('Tí này')) : undefined;
   const readOnlyChat: ReadOnlyChat | undefined = !selected || !openChatClosure ? undefined
     : openChatClosure.archived ? { note: t('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.'), action: { label: t('Khôi phục'), onSelect: () => archiveTask(selected, false) } }
     : closedOwner?.state === 'archived' ? { note: t('{0} đã được lưu trữ. Khôi phục để nhắn tiếp.', [closedOwnerName]), action: { label: t('Khôi phục'), onSelect: () => archiveEntity(closedOwner.kind, closedOwner.id, false) } }
@@ -1654,12 +1647,13 @@ export function App() {
   const openScheduleName = openSchedule?.name ?? openScheduleRun?.routineName;
   // The channel on screen, written in or still empty (COD-361): its header is `#name`, its topic and its members' faces.
   const openChannelRow = openRow && isChannelChat(openRow) ? openRow : undefined;
-  const headerChannel = openChannelRow?.channel ? { id: openChannelRow.channel.id, name: openChannelRow.channel.name, topic: openChannelRow.channel.topic, members: openChannelRow.channel.members, workers: taskWorkers(openChannelRow, workspace), taskId: openChannelRow.id }
-    : !selected && emptyChannel ? { id: emptyChannel.channelId, name: emptyChannel.name, topic: emptyChannel.topic, members: emptyChannel.members, workers: channelWorkers, taskId: undefined }
+  const headerChannel = openChannelRow?.channel ? { id: openChannelRow.channel.id, name: openChannelRow.channel.name, topic: openChannelRow.channel.topic, members: openChannelRow.channel.members, crewId: openChannelRow.channel.crewId, workers: taskWorkers(openChannelRow, workspace), taskId: openChannelRow.id }
+    : !selected && emptyChannel ? { id: emptyChannel.channelId, name: emptyChannel.name, topic: emptyChannel.topic, members: emptyChannel.members, crewId: undefined, workers: channelWorkers, taskId: undefined }
+    : !selected && crewChannel ? { id: crewChannel.id, name: crewChannel.name, topic: crewChannel.topic, members: crewChannel.members, crewId: crewChannel.crewId, workers: executionWorkers, taskId: undefined }
     : undefined;
   const editChannel = (initialTab?: 'members') => {
     if (!headerChannel) return;
-    setChannelDraft({ id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic, members: headerChannel.members, initialTab });
+    setChannelDraft({ id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic, members: headerChannel.members, crewId: headerChannel.crewId, initialTab });
   };
   const headerName = headerChannel ? headerChannel.name
     : openSideThread ? taskName(openSideThread.id) ?? openSideThread.brief
@@ -1694,6 +1688,7 @@ export function App() {
       const owners = taskWorkers(task, workspace);
       return owners.length === 1 ? { kind: 'worker', worker: owners[0] } : undefined;
     }
+    if (crewChannel) return { kind: 'emptyChannel', channelId: crewChannel.id };
     if (team) return { kind: 'team', team };
     if (emptyChannel) return { kind: 'emptyChannel', channelId: emptyChannel.channelId };
     if (!worker) return undefined;
@@ -1707,15 +1702,42 @@ export function App() {
       if (headerRename?.kind === 'team') await orglet.call('saveTeam', { ...headerRename.team, name });
       if (headerRename?.kind === 'worker') await orglet.call('saveWorker', { ...headerRename.worker, name });
       if (headerRename?.kind === 'thread') await orglet.call('renameTask', { id: headerRename.taskId, title: name });
-      if (headerRename?.kind === 'emptyChannel' && emptyChannel) await orglet.call('updateChannel', { id: emptyChannel.channelId, name, topic: emptyChannel.topic ?? '', members: emptyChannel.members });
+      const renamedChannel = headerRename?.kind === 'emptyChannel' ? workspace?.emptyChannels.find(channel => channel.id === headerRename.channelId) : undefined;
+      if (renamedChannel) await orglet.call('updateChannel', { id: renamedChannel.id, name, topic: renamedChannel.topic ?? '', members: renamedChannel.members });
       await refresh();
     } catch (err) {
       setError((err as Error).message);
       throw err;
     }
   };
-  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [emptyChannelName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : emptyChannel ? { people: channelWorkers } : undefined}
-    leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
+  /**
+   * Carries out a mode chosen under the prompt bar (COD-367): the chat's permissions first, then the folder that mode
+   * needs, at the level that lets the orglets edit it. `target` is the open chat or the empty chat's waiting entry.
+   */
+  const applyModeChange = (target: { taskId: string } | NewChatTarget, change: ModeChange) => toolAction(async () => {
+    if (change.capabilities) await orglet.call('setToolCapabilities', { ...target, capabilities: change.capabilities });
+    const editable = permissionsForLevel('write');
+    if (change.folder === 'edit') await orglet.call('setWorkspaceLevel', { ...target, permissions: editable });
+    if (change.folder !== 'pick') return;
+    if ('taskId' in target) await orglet.pickWorkspace(target.taskId, editable);
+    else await orglet.pickNewChatWorkspace(target, editable);
+  });
+  const emptyChatModePicker = newChatTarget ? <ChatModePicker planKey={emptyDraftKey}
+    capabilities={newChatCapabilities ?? snapshotCapabilities(executionWorkers[0]?.provider ?? 'demo')}
+    level={permissionState({ provider: executionWorkers[0]?.provider ?? 'demo', capabilities: newChatCapabilities, grant: null, pending: newChatWorkspace }).workspace} appliesAtOnce={Boolean(team || emptyChannel)} sideThread={false}
+    disabled={toolPolicyBusy} onChange={change => applyModeChange(newChatTarget, change)} /> : undefined;
+  /** The same picker on an open chat's bar; it reads the chat's permissions and folder the way Details does. */
+  const chatModePicker = (taskDetail: TaskDetail) => {
+    const grant = workspaceAccess?.taskId === taskDetail.task.id ? workspaceAccess.grant : undefined;
+    const provider = taskWorkers(taskDetail.task, workspace!)[0]?.provider ?? 'demo';
+    const level = permissionState({ provider, capabilities: taskDetail.task.toolCapabilities, grant, taskId: taskDetail.task.id }).workspace;
+    return <ChatModePicker planKey={taskDraftKey(taskDetail.task.id)}
+      capabilities={taskDetail.task.toolCapabilities ?? snapshotCapabilities(provider)} level={level}
+      appliesAtOnce={Boolean(taskDetail.task.teamId || taskDetail.task.assignees)} sideThread={Boolean(taskDetail.task.sideOf)}
+      disabled={toolPolicyBusy || grant === undefined || Boolean(readOnlyChat)} onChange={change => applyModeChange({ taskId: taskDetail.task.id }, change)} />;
+  };
+  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={t('Nhắn với {0}…', [(team ? channelLabel(crewChannel?.name ?? team.name) : undefined) ?? emptyChannelName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : emptyChannel ? { people: channelWorkers } : undefined}
+    leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />} mode={emptyChatModePicker}
     trailing={composerTrailing} usage={emptyChatUsage.ring}
     attachments={sources} onRemoveAttachment={id => setSources(sources.filter(source => source.id !== id))} />;
   /** A section's header buttons: the edit button that turns select mode on (a check while it is), then create. */
@@ -1727,10 +1749,8 @@ export function App() {
     </>;
   };
   const selectionCount = selection.ids.length;
-  const deleteSelectionQuestion = selection.section === 'teams'
-    ? t('Xóa {0} hội đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount])
-    : t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
-  // Two or more orglets, or any crews, picked together start a channel (COD-215, COD-361); one orglet is its own DM.
+  const deleteSelectionQuestion = t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
+  // Two or more orglets picked together start a channel (COD-215, COD-361); one orglet is its own DM.
   const canStartChannel = channelMembersFromSelection(selection) !== undefined;
   const selectionBar = selection.section && <div className="selection-bar" role="toolbar" aria-label={t('Mục đã chọn')}>
     <span className="selection-count">{t('{0} đã chọn', [selectionCount])}</span>
@@ -1790,12 +1810,11 @@ export function App() {
       ? <DemoNote someOnDemo={isDemo ? undefined : emptyChatDemoWorker.name} preflight={isDemo && Boolean(team?.preflight)} onConnect={() => connectModel(emptyChatDemoWorker)} />
       : emptyChatUsage.out ? emptyChatUsage.note
       : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} fallback={emptyChatUsage.note} /> : emptyChatUsage.note ?? null;
-  /** A crew's or an orglet's face at a given size, the same drawing the sidebar row uses. */
+  /** An orglet's face at a given size, the same drawing the sidebar row uses. */
   const workerFace = (item: Worker, size: 'xs' | 'sm') => <Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size={size} />;
-  const crewFace = (item: Team) => <RosterAvatars workers={teamRoster(item, workspace.workers)} size="xs" max={2} countRest={false} />;
-  const orderedTeams = teamOrder.order.map(id => workspace.teams.find(item => item.id === id)).filter((item): item is Team => Boolean(item));
   const orderedWorkers = workerOrder.order.map(id => workspace.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item));
-  const teamRowActive = (item: Team) => teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id);
+  /** An empty channel is the one on screen: its own empty chat, or, when the lead splits the work, its crew's (COD-369). */
+  const emptyChannelActive = (channel: { id: string; crewId?: string }) => !selected && (channel.crewId ? teamId === channel.crewId : emptyChannel?.channelId === channel.id);
   const workerRowActive = (item: Worker) => !teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id);
   const channelName = (chat: Task) => channelLabel(channelNameOf(chat, taskWorkers(chat, workspace).map(member => member.name)));
   const channelMark = <Hash size={16} aria-hidden="true" />;
@@ -1825,20 +1844,17 @@ export function App() {
     const live = liveWorkerTask(activeTasks, id);
     return live ? [live] : activeTasks.filter(task => taskWorkers(task, workspace).some(item => item.id === id));
   };
-  const crewChats = (id: string) => [liveTeamTask(activeTasks, id)].filter((task): task is Task => Boolean(task));
-  const railCrews: RailEntry[] = orderedTeams.map(item => ({ key: item.id, name: item.name, face: crewFace(item), status: railMarkOf(crewChats(item.id)), active: teamRowActive(item),
-    onOpen: () => { clearSelection(); openTeam(item.id); }, onDwell: dwellTeam(item) }));
   const railOrglets: RailEntry[] = orderedWorkers.map(item => ({ key: item.id, name: item.name, face: workerFace(item, 'sm'), status: railMarkOf(orgletChats(item.id)), active: workerRowActive(item),
     onOpen: () => { clearSelection(); openWorker(item.id); }, onDwell: dwellWorker(item) }));
   const railChannels: RailEntry[] = channelEntries.map(entry => entry.kind === 'chat'
     ? { key: entry.task.id, name: channelName(entry.task), face: channelMark, status: railMarkOf([entry.task]), active: selected === entry.task.id,
       onOpen: () => { clearSelection(); openTask(entry.task.id); }, onDwell: (resting: boolean) => dwellChat(entry.task.id, resting) }
-    : { key: entry.channel.id, name: channelLabel(entry.channel.name), face: channelMark, status: rollupStatusMarks([]), active: !selected && emptyChannel?.channelId === entry.channel.id,
+    : { key: entry.channel.id, name: channelLabel(entry.channel.name), face: channelMark, status: rollupStatusMarks([]), active: emptyChannelActive(entry.channel),
       onOpen: () => { clearSelection(); showEmptyChannel(entry.channel.id); } });
   const railChannelsMark = railMarkOf(channelChats);
   const railCreateItems = [
     { label: t('Tạo Tí'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setPanel('worker'); } },
-    { label: t('Tạo hội'), icon: Users, onSelect: () => { setEditingTeam(undefined); setPanel('team'); } },
+    { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({}) },
   ];
   // The sidebar footer as icons. Running counts what waits for the person in the accent, otherwise what is under way.
   const railActions: RailAction[] = [
@@ -1931,15 +1947,6 @@ export function App() {
       {openChatItems.length > 0 && <SidebarSection id="open" title={t('Đang mở')}>
         {openChatItems.map(item => <OpenChatRow key={item.key} item={item} onClose={() => closeChat(item.key)} />)}
       </SidebarSection>}
-      <SidebarSection id="teams" title={t('Hội')} action={sectionActions('teams', t('Chọn nhiều hội'), t('Tạo hội'), () => { setEditingTeam(undefined); setPanel('team'); })}>
-        {selection.section === 'teams' && selectionBar}
-        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} arriving={isArriving(`team-${item.id}`)} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={2} countRest={false} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => { clearSelection(); openTeam(item.id); }} onDwell={dwellTeam(item)} reorder={teamOrder.bind(item.id)} selection={rowSelection('teams', item.id)}
-          menu={<RowMenu label={t('Tùy chọn hội {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
-          {...rowsUnder({ teamId: item.id }, item.name)} />
-        )}{!workspace.teams.length && <p className="empty-history">{t('Chưa có hội nào.')}</p>}
-        <ArchivedList count={workspace.archivedTeams.length}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
-        {archivedChatList('teams')}
-      </SidebarSection>
       <SidebarSection id="workers" title={t('Tí')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
         {selection.section === 'workers' && selectionBar}
         {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
@@ -1948,25 +1955,28 @@ export function App() {
         <ArchivedList count={workspace.archivedWorkers.length}>{workspace.archivedWorkers.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('worker', item.id, false)} onDelete={() => deleteEntity('worker', item.id)} />)}</ArchivedList>
         {archivedChatList('workers')}
       </SidebarSection>
-      {/* Channels: named chats of orglets and crews, like Slack's (COD-361). Orglets above are the one-to-one DMs. */}
+      {/* Channels: named chats of orglets, like Slack's and Discord's (COD-361); crews are channels where the lead
+          splits the work (COD-369). Orglets above are the one-to-one DMs. */}
       <SidebarSection id="channels" title={t('Kênh')} action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={16} /></Button>}>
-        <ShowMore items={channelEntries} limit={8} empty={t('Chưa có kênh nào.')} isActive={entry => entry.kind === 'chat' ? selected === entry.task.id : !selected && emptyChannel?.channelId === entry.channel.id} render={entry => {
+        <ShowMore items={channelEntries} limit={8} empty={t('Chưa có kênh nào.')} isActive={entry => entry.kind === 'chat' ? selected === entry.task.id : emptyChannelActive(entry.channel)} render={entry => {
           if (entry.kind === 'empty') {
             const channel = entry.channel;
-            return <ChannelRow key={channel.id} name={channel.name} active={!selected && emptyChannel?.channelId === channel.id} status={rollupStatusMarks([])}
+            return <ChannelRow key={channel.id} name={channel.name} active={emptyChannelActive(channel)} status={rollupStatusMarks([])}
               onOpen={() => { clearSelection(); showEmptyChannel(channel.id); }}
-              onEdit={() => setChannelDraft({ id: channel.id, name: channel.name, topic: channel.topic, members: channel.members })}
+              onEdit={() => setChannelDraft({ id: channel.id, name: channel.name, topic: channel.topic, members: channel.members, crewId: channel.crewId })}
               onRename={name => renameEmptyChannel(channel.id, name)} onDelete={() => deleteEmptyChannel(channel.id, channel.name)}
-              deleteQuestion={t('Xóa kênh này? Kênh chưa có tin nhắn nào.')} />;
+              deleteQuestion={t('Xóa kênh này? Kênh chưa có tin nhắn nào.')} {...channelRowsUnder(channel.crewId, channel.name)} />;
           }
           const chat = entry.task;
           const name = channelNameOf(chat, taskWorkers(chat, workspace).map(member => member.name));
           return <ChannelRow key={chat.id} name={name} active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
             onOpen={() => { clearSelection(); openTask(chat.id); }} onDwell={resting => dwellChat(chat.id, resting)}
-            onEdit={() => chat.channel && setChannelDraft({ id: chat.channel.id, name: chat.channel.name, topic: chat.channel.topic, members: chat.channel.members })}
+            onEdit={() => chat.channel && setChannelDraft({ id: chat.channel.id, name: chat.channel.name, topic: chat.channel.topic, members: chat.channel.members, crewId: chat.channel.crewId })}
             onRename={title => renameTask(chat.id, title)} onArchive={() => archiveTask(chat.id, true)} onDelete={() => deleteTask(chat.id)}
-            deleteQuestion={t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.')} />;
+            deleteQuestion={t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.')} {...channelRowsUnder(chat.channel?.crewId, name)} />;
         }} />
+        {/* A crew archived before crews became channels comes back as its channel when restored (COD-369). */}
+        <ArchivedList count={workspace.archivedTeams.length} label={t('Kênh đã lưu trữ ({0})', [workspace.archivedTeams.length])}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={channelLabel(item.name)} mark={<span className="archived-channel-mark" aria-hidden="true"><Hash size={14} /></span>} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
         {archivedChatList('channels')}
       </SidebarSection>
       </div>
@@ -1974,7 +1984,7 @@ export function App() {
     </aside>
     {/* Folded, the left column is the rail: the roster as faces, then the Open list as faces (COD-340, COD-355). */}
     {railShown && <SidebarRail onExpand={openFullSidebar} onSearch={() => setSearchOpen(true)} createItems={railCreateItems}
-      crews={railCrews} orglets={railOrglets} channels={railChannels} channelsMark={railChannelsMark} openChats={railOpenChats} actions={railActions}
+      orglets={railOrglets} channels={railChannels} channelsMark={railChannelsMark} openChats={railOpenChats} actions={railActions}
       trailing={updateMark && <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}
       covered={sidebar} />}
     <main className="main-pane" id="main-content" tabIndex={-1}>
@@ -2003,7 +2013,7 @@ export function App() {
             title={headerChannel.workers.map(item => item.name).join(', ')} onClick={() => editChannel('members')}><RosterAvatars workers={headerChannel.workers} size="sm" max={4} /></button>}
           {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
 
-          {(selected || team || worker || emptyChannel) && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[...(headerChannel ? [{ label: t('Thiết lập kênh'), icon: Settings2, onSelect: () => editChannel() }] : []), ...headerSettingsItems, ...(selected && !openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => { setEditingTask(selected); setPanel('task'); } }] : []), { label: t('Chi tiết'), icon: SlidersHorizontal, onSelect: () => setPanel('activity') }, ...(!selected && emptyChannel ? [{ label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEmptyChannel(emptyChannel.channelId, emptyChannel.name), confirm: { question: t('Xóa kênh này? Kênh chưa có tin nhắn nào.'), label: t('Xóa') } }] : []), ...(selected ? [detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: LucideArchive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: headerChannel ? t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.') : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }] : [])]} />}
+          {(selected || team || worker || emptyChannel) && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[...(headerChannel ? [{ label: t('Thiết lập kênh'), icon: Settings2, onSelect: () => editChannel() }] : []), ...headerSettingsItems, ...(selected && !openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => { setEditingTask(selected); setPanel('task'); } }] : []), { label: t('Chi tiết'), icon: SlidersHorizontal, onSelect: () => setPanel('activity') }, ...(!selected && headerChannel && !headerChannel.taskId ? [{ label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEmptyChannel(headerChannel.id, headerChannel.name), confirm: { question: t('Xóa kênh này? Kênh chưa có tin nhắn nào.'), label: t('Xóa') } }] : []), ...(selected ? [detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: LucideArchive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: headerChannel ? t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.') : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }] : [])]} />}
         </>} />
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><LucideCalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã lỡ một lần chạy khi app tắt. Có thể chạy bù một lần.', [singleCatchUp.name]) : t('{0} lịch đã lỡ lần chạy khi app tắt. Mỗi lịch chạy bù được một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}
@@ -2011,7 +2021,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} harnesses={harnesses} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} /></> : <ThreadSkeleton />}</> : (team || emptyChannel || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} harnesses={harnesses} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} modePicker={chatModePicker(detail)} /></> : <ThreadSkeleton />}</> : (team || emptyChannel || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
@@ -2039,7 +2049,6 @@ export function App() {
         // The last orglet can be deleted; the pane then offers to make one instead of standing empty.
         ? <NoOrglets onCreate={() => { setEditingWorker(undefined); setPanel('worker'); }} />
         : null}
-      <footer className="main-footer">{t('Câu trả lời có thể sai. Kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
     {detailsOpen && (detail || detailsTeam || detailsWorker || emptyChannel) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} group={!selected && emptyChannel ? channelWorkers : undefined} groupName={emptyChannelName} detail={detail}
       recovery={workspaceRecovery} recoveryFocus={recoveryFocus}
@@ -2077,7 +2086,7 @@ export function App() {
         onWorkspace: changeNewChatWorkspace,
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
-    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : t('Chi tiết cuộc trò chuyện')}>
+    <Drawer open={panel !== null && !['settings', 'worker', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}
@@ -2098,7 +2107,6 @@ export function App() {
         showChatView('chat');
       }} />}
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses ?? []} initialTab={workerDialogTab} initialField={workerDialogField} connectModel={workerDialogConnect} onClose={close} onOpenChat={taskId => { close(); openTask(taskId); }} onCreated={id => setJustCreated({ kind: 'worker', id })} />
-    <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} onCreated={id => setJustCreated({ kind: 'team', id })} />
     {channelDraft && <ChannelDialog key={`channel:${channelDraft.id ?? 'new'}`} open draft={channelDraft} workspace={workspace} onClose={() => setChannelDraft(undefined)} onCreated={channelCreated} />}
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
     <NoticeCentre open={noticesOpen} onClose={() => setNoticesOpen(false)} onOpenChat={taskId => { setNoticesOpen(false); setPanel(null); openTask(taskId); }} chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />

@@ -3,6 +3,7 @@ import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/c
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
 import { AppWindow, BellRing, Briefcase, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
+import { channelLabel } from '../../shared/channels';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { DAILY_CAP_REACHED, EVERY_HOURS_CHOICES, SKIPPED_WHILE_INACTIVE, TimeZone, nextOccurrence, runsPerDay, scheduleDay, type Schedule, type ScheduleFrequency } from '../../shared/schedule';
@@ -119,7 +120,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const action = async (fn: () => Promise<unknown>) => { setBusy(true); setError(''); try { await fn(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } };
   if (view.editing) return <RoutineEditor key={view.routine?.id ?? 'new'} routine={view.routine} draft={view.routine ? undefined : draft} workspace={workspace} saved={() => { onDirty(false); onView({ editing: false }); }} back={onBack} onDirty={onDirty} />;
-  const assignee = (item: Routine) => item.task.teamId ? workspace.teams.find(team => team.id === item.task.teamId)?.name ?? t('Hội đã xóa') : workspace.workers.find(worker => worker.id === item.task.workerId)?.name ?? t('Tí đã xóa');
+  const assignee = (item: Routine) => item.task.teamId ? workspace.teams.find(team => team.id === item.task.teamId)?.name ?? t('Kênh đã xóa') : workspace.workers.find(worker => worker.id === item.task.workerId)?.name ?? t('Tí đã xóa');
   /** The face of whoever runs the schedule: the orglet's own, a crew's first members, or the plain icon once it is gone. */
   const assigneeFace = (item: Routine) => {
     if (item.task.teamId) {
@@ -396,7 +397,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-job">{t('Việc cần làm')}</h4>
       <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input ref={nameInput} value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
       <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><Textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
-      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <WorkerFace worker={worker} size="xs" /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <RosterAvatars workers={teamRoster(team, workspace.workers)} max={2} /> }))]} />
+      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <WorkerFace worker={worker} size="xs" /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: channelLabel(team.name), group: t('Kênh'), icon: <RosterAvatars workers={teamRoster(team, workspace.workers)} max={2} /> }))]} />
       <div className="routine-sources">
         <PanelHeading level={3} title={<FieldLabel icon={FileText}>{t('Nguồn ({0}/20)', [sources.length])}</FieldLabel>}>
           <Button type="button" variant="outline" disabled={busy} onClick={async () => {
@@ -488,7 +489,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
             : t('Mỗi lần chạy làm trên bản sao riêng của thư mục.')}</p>
         {editsFolder && <SwitchField checked={team ? false : review} onChange={setReview} disabled={busy || Boolean(team)}
           description={team
-            ? t('Hội áp dụng thay đổi của từng Tí ngay khi Tí đó xong, vì Tí sau làm tiếp trên các tệp đó.')
+            ? t('Kênh áp dụng thay đổi của từng Tí ngay khi Tí đó xong, vì Tí sau làm tiếp trên các tệp đó.')
             : review
               ? t('Thay đổi chờ trong chat của lần chạy đến khi bạn bấm Áp dụng. Lần chạy sau đợi đến lúc đó.')
               : t('Thay đổi vào thư mục ngay khi lần chạy xong.')}>
@@ -515,7 +516,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       {enabled && <p className="muted">{sources.length > 0
         ? sources.length === 1 ? t('Mỗi lần chạy gửi brief và nguồn này {0}, trong giới hạn trên.', [destination]) : t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, destination])
         : t('Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.', [destination])}</p>}
-      <p className="muted">{browserLevel === 'read' ? t('Đổi Tí, skill, hội, model, hồ sơ hay danh sách trang thì cần lưu lịch lại.') : t('Đổi Tí, skill, hội hay model thì cần lưu lịch lại.')}</p>
+      <p className="muted">{browserLevel === 'read' ? t('Đổi Tí, skill, kênh, model, hồ sơ hay danh sách trang thì cần lưu lịch lại.') : t('Đổi Tí, skill, kênh hay model thì cần lưu lịch lại.')}</p>
     </section>
     <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;

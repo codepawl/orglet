@@ -32,7 +32,7 @@ export class TeamRunner {
     for (const run of latest.values()) if (run.status !== 'completed' && !(run.status === 'cancelled' && run.error === UNASSIGNED_PLAN_ERROR)) this.runner.assertResumable(run);
   }
   async run(task: Task, team: Team, resume = false) {
-    if (this.active.has(task.id)) throw new Error('Hội đang chạy task này.');
+    if (this.active.has(task.id)) throw new Error('Kênh đang chạy task này.');
     const control = { cancelled: false, paused: false, controller: new AbortController() }; this.active.set(task.id, control);
     this.store.update('tasks', { ...task, status: 'running', accepted: false }); this.notify();
     task = { ...task, ...(task.currentInput ?? {}) };
@@ -163,7 +163,7 @@ export class TeamRunner {
         assignment: plannedNow.snapshot.plan.synthesisBrief,
         reassign: async (callId, input, signal) => {
           signal.throwIfAborted();
-          if (control.cancelled || control.paused) throw new Error('Hội bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.');
+          if (control.cancelled || control.paused) throw new Error('Kênh bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.');
           const attempt = new TeamRecovery(this.store).prepare(synthesis, callId, input);
           if (attempt.status !== 'completed') this.runner.assertResumable(attempt);
           planned.members.set(assignmentKey(attempt), attempt);
@@ -188,7 +188,7 @@ export class TeamRunner {
       this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : !memberArtifacts.length ? 'failed' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
     } catch (error) {
       const last = this.store.detail(task.id).runs.at(-1);
-      if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Hội bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
+      if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Kênh bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
       this.finish(task, control.cancelled ? 'cancelled' : error instanceof PreflightError ? 'failed' : 'interrupted');
     } finally { this.waits.delete(task.id); this.notify(); this.active.delete(task.id); }
   }
@@ -198,7 +198,7 @@ export class TeamRunner {
    * narrows who answers (Tacet's pick, COD-305); it runs once the turn counts as running, so Stop and Pause reach it.
    */
   async chat(task: Task, workers: Worker[], resume = false, route?: () => Promise<Worker[]>) {
-    if (this.active.has(task.id)) throw new Error('Hội đang chạy task này.');
+    if (this.active.has(task.id)) throw new Error('Kênh đang chạy task này.');
     if (!workers.length) throw new Error('Chưa có Tí nào để giao việc.');
     const control = { cancelled: false, paused: false, controller: new AbortController() }; this.active.set(task.id, control);
     this.store.update('tasks', { ...task, status: 'running', accepted: false }); this.notify();
@@ -220,7 +220,7 @@ export class TeamRunner {
         this.setWaits(task.id, this.groupTurnWaits(detail, revision, workers.slice(index + 1), queuedSince));
         let run = resume ? runs.findLast(item => ['paused', 'interrupted', 'waiting_budget', 'queued'].includes(item.status)) : undefined;
         if (!run) {
-          run = { id: id(), taskId: task.id, stage: 'group', status: 'queued', snapshot: { workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill: this.store.get<Skill>('skills', worker.skillId), inputRevision: revision, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, replyTo: task.currentInput?.replyTo, ...(task.currentInput?.forwarded ? { forwarded: task.currentInput.forwarded } : {}) } }, startedAt: now(), error: null };
+          run = { id: id(), taskId: task.id, stage: 'group', status: 'queued', snapshot: { workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill: this.store.get<Skill>('skills', worker.skillId), inputRevision: revision, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, replyTo: task.currentInput?.replyTo, ...(task.currentInput?.forwarded ? { forwarded: task.currentInput.forwarded } : {}), ...(task.currentInput?.planFirst ? { planFirst: task.currentInput.planFirst } : {}) } }, startedAt: now(), error: null };
           this.store.put('runs', run, { column: 'task_id', value: task.id });
         }
         await this.runner.run(task, run, { keepTaskOpen: true });
@@ -248,7 +248,7 @@ export class TeamRunner {
   private createRun(task: Task, team: Team, workerId: string, stage: 'plan' | 'member' | 'synthesis', upstream: Artifact[]) {
     const worker = this.store.get<Worker>('workers', workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
-    const run: Run = { id: id(), taskId: task.id, stage, status: 'queued', snapshot: { workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, team, inputRevision: task.inputRevision ?? 0, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, replyTo: task.currentInput?.replyTo, ...(task.currentInput?.forwarded ? { forwarded: task.currentInput.forwarded } : {}) }, upstreamArtifactIds: upstream.map(a => a.id) }, startedAt: now(), error: null };
+    const run: Run = { id: id(), taskId: task.id, stage, status: 'queued', snapshot: { workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, team, inputRevision: task.inputRevision ?? 0, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, replyTo: task.currentInput?.replyTo, ...(task.currentInput?.forwarded ? { forwarded: task.currentInput.forwarded } : {}), ...(task.currentInput?.planFirst ? { planFirst: task.currentInput.planFirst } : {}) }, upstreamArtifactIds: upstream.map(a => a.id) }, startedAt: now(), error: null };
     this.store.put('runs', run, { column: 'task_id', value: task.id });
     this.store.event(run.id, stage === 'plan' ? 'Đang phân việc.' : stage === 'synthesis' ? `Đang tổng hợp ${upstream.length} kết quả đã lưu.` : `Bắt đầu role ${worker.name}.`);
     return run;

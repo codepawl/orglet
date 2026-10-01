@@ -83,7 +83,7 @@ export function newChatKey(chat: { teamId?: string; workerId?: string; workerIds
   if (chat.teamId) return `team:${chat.teamId}`;
   if (chat.workerIds) return `${GROUP_KEY_PREFIX}${[...chat.workerIds].sort().join(',')}`;
   if (chat.workerId) return `worker:${chat.workerId}`;
-  throw new Error('Chat cần một Tí hoặc một hội.');
+  throw new Error('Chat cần một Tí hoặc một kênh.');
 }
 
 /** True for the key of a group chat this worker is part of: once the worker is gone, that group cannot start. */

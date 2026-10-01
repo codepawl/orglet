@@ -41,10 +41,10 @@ export function appChangeMessage(change: AppChangeNotice) {
 
 function changeDescription(change: AppChangeNotice) {
   if (change.kind === 'settings') return t('đổi cài đặt');
-  if (change.kind === 'crew_template') return t('xuất template hội');
+  if (change.kind === 'crew_template') return t('xuất template kênh');
   const creating = change.action === 'create';
   if (change.kind === 'orglet') return creating ? t('tạo Tí mới') : t('sửa Tí');
-  if (change.kind === 'crew') return creating ? t('tạo hội mới') : t('sửa hội');
+  if (change.kind === 'crew') return creating ? t('tạo kênh mới') : t('sửa kênh');
   if (change.kind === 'skill') return creating ? t('tạo skill mới') : t('sửa skill');
   return creating ? t('tạo lịch chạy mới') : t('sửa lịch chạy');
 }

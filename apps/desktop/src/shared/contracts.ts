@@ -126,6 +126,17 @@ export const TeamInput = z.object({
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
 });
 export type Team = z.infer<typeof TeamInput> & { id: string; revision: number };
+/**
+ * A channel's settings when the lead splits the work (COD-369): what a crew's editor used to set, minus the name and
+ * members, which are the channel's own. Anything left out keeps the value the channel has, or a new one's default;
+ * `null` turns an optional one off.
+ */
+export const ChannelLeadSettings = TeamInput.pick({ synthesizerId: true, instructions: true, workflow: true, monthlyBudgetMicros: true, maxConcurrentTasks: true, taskBudgetMicros: true }).partial().extend({
+  workHours: WorkHours.nullable().optional(),
+  preflight: PreflightPolicy.nullable().optional(),
+  reviewPolicy: ReviewPolicy.nullable().optional(),
+}).strict();
+export type ChannelLeadSettings = z.infer<typeof ChannelLeadSettings>;
 export const SkillInput = z.object({ id: Id.optional(), name: z.string().trim().min(1).max(80), content: z.string().trim().min(1).max(16000) });
 // Archived tasks are deleted after this many days; 0 keeps them until the user deletes them.
 export const ArchiveRetention = z.union([z.literal(0), z.literal(7), z.literal(30)]);
@@ -157,7 +168,11 @@ export type TaskInput = z.infer<typeof TaskInput>;
 // `forwarded` is set by the core on a forward's turn (COD-257); the window can never send one in a brief of its own.
 // `continueFrom` is the run of the turn before, when the person pressed Continue after it ran out of steps (COD-257):
 // the new run starts with that run's tool calls and results instead of redoing them.
-export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).extend({ replyTo: Id.optional(), forwarded: ForwardedMessage.optional(), continueFrom: Id.optional() }).strict();
+// `planFirst` is the person's Plan first for this one message (COD-367): its runs may read and search but not edit,
+// move, delete, run commands, act in the browser or desktop apps or call MCP tools, and answer with a plan. It lives on
+// the turn's input, so every run of the turn freezes it with the rest of the input and the next message is unaffected.
+export const PlanFirst = z.literal(true);
+export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).extend({ replyTo: Id.optional(), forwarded: ForwardedMessage.optional(), continueFrom: Id.optional(), planFirst: PlanFirst.optional() }).strict();
 export type RunInput = z.infer<typeof RunInput>;
 /** Orchestrator routing for one team-chat turn (COD-25). Stored on the plan run snapshot; not a user-facing artifact. */
 export const PlanAssignment = z.object({
@@ -182,7 +197,7 @@ export type TeamPlan = z.infer<typeof TeamPlan>;
 /** Queued member run skipped because the orchestrator did not assign that worker this turn. */
 export const UNASSIGNED_PLAN_ERROR = 'Không được phân việc cho lượt này.';
 export const MISSING_PLAN_ERROR = 'Phân việc không có kết quả. Không chạy thành viên và không bịa báo cáo.';
-export const INVALID_PLAN_ERROR = 'Phân việc không hợp lệ: Tí không thuộc hội.';
+export const INVALID_PLAN_ERROR = 'Phân việc không hợp lệ: Tí không thuộc kênh.';
 /**
  * `schedule` stays on every routine, so switching the trigger back to the clock keeps the time the person set.
  * `workspace` is the routine's own working folder (COD-294). Like the trigger, a save that leaves it out keeps the one
@@ -290,7 +305,8 @@ export const emptyConnections = (): Connections => ({ openai: false, anthropic: 
 export const commands = {
   workspace: z.object({}),
   task: z.object({ id: Id }),
-  createTask: TaskInput,
+  // The first message of a chat may ask for Plan first too (COD-367); it lands on that turn's input, never the chat row.
+  createTask: TaskInput.extend({ planFirst: PlanFirst.optional() }),
   reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   // A message sent "in a new thread" from an orglet's main chat (COD-247): a side thread of the same orglet, with the
   // main chat's permissions and never more. `taskId` is the main chat; the sources must already belong to it.
@@ -423,8 +439,9 @@ export const commands = {
   deleteTask: z.object({ id: Id }).strict(),
   // Channels (COD-361): a named chat of orglets and crews. Created empty; its first message makes its `tasks` row.
   // `updateChannel` takes the channel's own id, written in or not; `deleteChannel` removes one that has no message yet.
-  createChannel: ChannelFields,
-  updateChannel: ChannelFields.extend({ id: Id }).strict(),
+  // `lead` is how the lead splits the work, read only when the channel works that way (COD-369).
+  createChannel: ChannelFields.extend({ lead: ChannelLeadSettings.optional() }).strict(),
+  updateChannel: ChannelFields.extend({ id: Id, lead: ChannelLeadSettings.optional() }).strict(),
   deleteChannel: z.object({ id: Id }).strict(),
   updateTask: z.object({ id: Id, title: z.string().trim().max(120), assignee: z.discriminatedUnion('kind', [z.object({ kind: z.literal('workers'), workerIds: z.array(Id).min(1).max(50) }).strict(), z.object({ kind: z.literal('team'), teamId: Id }).strict(), z.object({ kind: z.literal('all') }).strict()]), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   reorder: z.object({ kind: z.enum(['teams', 'workers']), ids: z.array(Id).max(1000) }).strict(),

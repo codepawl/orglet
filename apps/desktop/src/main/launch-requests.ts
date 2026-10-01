@@ -40,7 +40,7 @@ export type LaunchRequest =
 export const LINK_NOT_UNDERSTOOD = 'Orglet không hiểu liên kết này.';
 export const LINK_TOO_LONG = 'Liên kết dài quá nên Orglet bỏ qua.';
 export const LINK_TEXT_TOO_LONG = 'Nội dung điền sẵn trong liên kết dài hơn 4.000 ký tự nên Orglet bỏ qua.';
-export const LINK_BAD_NAME = 'Liên kết không ghi rõ Tí hay hội nào.';
+export const LINK_BAD_NAME = 'Liên kết không ghi rõ Tí hay kênh nào.';
 
 type LinkResult = { ok: true; link: OrgletLink } | { ok: false; message: string };
 

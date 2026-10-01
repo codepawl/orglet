@@ -59,7 +59,7 @@ import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../sh
 import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
-import { Channels, channelForGroup } from './storage/channels';
+import { adoptCrews, Channels, channelForGroup } from './storage/channels';
 import { isLegacyGroupChat } from '../shared/channels';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
 import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
@@ -212,11 +212,13 @@ export class CoreService {
     this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
     this.harnessSignIns = new HarnessSignIns((harnessId, end) => void this.signInEnded(harnessId, end));
     this.usageReadings = new UsageReadings(store);
-    this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
+    // Every crew has a channel (COD-369): one made by a template, the terminal or a proposal is adopted before the
+    // window hears of it, whichever path saved it.
+    this.notify = () => { if (!this.store.db.isOpen) return; adoptCrews(this.store, () => this.clock().toISOString()); this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler, pdfText);
     this.workspaceGrants = new WorkspaceGrants(store);
     this.sideThreads = new SideThreads(store, this.workspaceGrants);
-    this.channels = new Channels(store, clock);
+    this.channels = new Channels(store, clock, { save: input => this.saveTeam(input), retire: teamId => this.deleteEntity('team', teamId) });
     this.forwards = new Forwards(store);
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
@@ -424,8 +426,8 @@ export class CoreService {
         this.notify(); return team;
       }
       case 'createTask': {
-        const input = commands.createTask.parse(args);
-        return this.createTask(input, undefined, await this.resolveNewChatWorkspace(input));
+        const { planFirst, ...input } = commands.createTask.parse(args);
+        return this.createTask(input, undefined, await this.resolveNewChatWorkspace(input), undefined, planFirst);
       }
       case 'startSideThread': return this.startSideThread(commands.startSideThread.parse(args));
       case 'forwardMessage': return this.forwardMessage(args);
@@ -1587,7 +1589,8 @@ export class CoreService {
     const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
     if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
     this.policy.assertStart(task.teamId, task.id);
-    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+    const planFirst = input.planFirst ?? this.continuesPlanFirst(task, input.continueFrom);
+    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}), ...(planFirst ? { planFirst } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
       decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
         ? { ...request, interruptedAt: now() } : request) };
     this.store.transaction(() => {
@@ -1615,6 +1618,15 @@ export class CoreService {
    * Continue is offered only under the latest turn's answer, when its run ran out of steps (COD-257); anything else
    * would start the new run from calls and results that are not the chat's latest.
    */
+  /**
+   * Continue after a Plan first turn ran out of steps (COD-367) is still Plan first: the run picks up that run's reads,
+   * and Continue must not be a way to edit the folder the person asked only to be planned for.
+   */
+  private continuesPlanFirst(task: Task, continueFrom: string | undefined): true | undefined {
+    if (!continueFrom) return undefined;
+    const continued = this.store.detail(task.id).runs.find(run => run.id === continueFrom);
+    return continued?.snapshot.input?.planFirst;
+  }
   private assertContinuable(task: Task, runId: string) {
     const run = this.store.detail(task.id).runs.find(candidate => candidate.id === runId);
     if (!run || (run.snapshot.inputRevision ?? 0) !== (task.inputRevision ?? 0) || !canContinueRun(run)) throw new Error('Lượt này không tiếp tục được nữa. Nhắn tiếp để hỏi lại.');
@@ -1720,6 +1732,8 @@ export class CoreService {
       ...(main.desktop ? { desktop: structuredClone(main.desktop) } : {}),
     });
     task.sideOf = { taskId: main.id, throughRevision: main.inputRevision ?? 0 };
+    // Plan first only takes tools away for the one turn (COD-367), so a side thread may start with it.
+    if (input.planFirst) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, planFirst: input.planFirst };
     if (main.mcpGrants?.length) task.mcpGrants = main.mcpGrants.map(grant => ({ ...grant }));
     snapshotCapabilities(this.store.get<Worker>('workers', task.workerId).provider, task.toolCapabilities);
     this.store.transaction(() => {
@@ -1743,7 +1757,7 @@ export class CoreService {
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
     const found = this.entity(kind, entityId);
-    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập chat.`);
+    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Kênh')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập chat.`);
   }
   /**
    * A chat takes no new message while it is archived, or while the one orglet or crew it belongs to is archived or
@@ -1790,6 +1804,8 @@ export class CoreService {
   private deleteTask(taskId: string) {
     const task = this.liveTask(taskId);
     this.assertIdle(task, 'Công việc đang chạy. Dừng trước khi xóa.');
+    // A channel where the lead splits the work takes its crew record with it (COD-369), or a schedule refuses first.
+    this.channels.retireCrewOf(task);
     const db = this.store.db;
     const runs = this.store.detail(task.id).runs;
     const charged = Number(db.prepare('SELECT COUNT(*) AS count FROM reservations WHERE task_id=?').get(task.id)!.count) > 0;
@@ -1924,11 +1940,22 @@ export class CoreService {
       return { pending, failure: error instanceof Error ? error.message : String(error) };
     }
   }
-  private createTask(rawInput: TaskInput, routine?: Routine, folder?: NewChatFolder, forwarded?: ForwardedMessage): string {
+  /**
+   * Who answers the first message of an empty channel, whatever the window sent: its orglets in turn, or, when the
+   * lead splits the work (COD-369), the crew behind it, as the crew's own chat always started.
+   */
+  private firstMessageInput(given: Omit<TaskInput, 'channelId'>, waiting: { channel: { crewId?: string }; orgletIds: string[] } | undefined): TaskInput {
+    if (!waiting) return given;
+    if (!waiting.channel.crewId) return { ...given, workerId: waiting.orgletIds[0], assignees: waiting.orgletIds };
+    const crew = this.store.get<Team>('teams', waiting.channel.crewId);
+    const { assignees: _assignees, ...rest } = given;
+    return { ...rest, workerId: crew.synthesizerId, teamId: crew.id };
+  }
+  private createTask(rawInput: TaskInput, routine?: Routine, folder?: NewChatFolder, forwarded?: ForwardedMessage, planFirst?: true): string {
     // The first message of an empty channel (COD-361): the orglets its members expand to answer, whatever the window sent.
     const { channelId, ...given } = rawInput;
     const waiting = channelId && !routine ? this.channels.waiting(channelId) : undefined;
-    const input: TaskInput = waiting ? { ...given, workerId: waiting.orgletIds[0], assignees: waiting.orgletIds } : given;
+    const input = this.firstMessageInput(given, waiting);
     // The first message of a worker, team or group chat takes the permissions chosen while the chat was still empty.
     const liveChat = this.isLiveChatStart(input, routine) && input.toolCapabilities === undefined;
     const chosen = liveChat ? this.pendingNewChatCapabilities(this.newChatTarget(input)) : undefined;
@@ -1939,11 +1966,15 @@ export class CoreService {
     if (routine && task.toolCapabilities?.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
     if (routine && (task.toolCapabilities?.includes('desktop.read') || task.desktop?.apps.length)) throw new Error(SCHEDULE_NO_DESKTOP);
     if (routine) task.routineId = routine.id;
+    // A crew's chat is a channel where the lead splits the work (COD-369), however its first message came in.
+    const crewChat = !waiting && !routine && task.teamSnapshot ? this.channels.forCrewChat(task.teamSnapshot) : undefined;
     if (waiting) task.channel = waiting.channel;
+    else if (crewChat) task.channel = crewChat.channel;
     // Several orglets started some other way (the terminal, an older window) make a channel all the same (COD-361).
     else if (!routine && isLegacyGroupChat(task)) Object.assign(task, channelForGroup(this.store, task));
     // A forward's first turn keeps its record on the current input, where every later turn keeps its own (COD-257).
-    if (forwarded) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, forwarded };
+    // So does a first message sent in Plan first (COD-367), which the turn's runs freeze with the rest of the input.
+    if (forwarded || planFirst) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, ...(forwarded ? { forwarded } : {}), ...(planFirst ? { planFirst } : {}) };
     this.store.transaction(() => {
       // A schedule's run takes its place under the day's cap in the same transaction that writes it (COD-288).
       if (routine) task.routineDay = this.routines.admitRun(routine, task.budgetMicros);
@@ -1951,6 +1982,7 @@ export class CoreService {
       this.chatSearch.indexTurn(task.id, 0, task.currentInput ?? task, task.createdAt);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
       if (waiting) this.channels.takeWaiting(waiting.channel.id);
+      if (crewChat?.waitingId) this.channels.takeWaiting(crewChat.waitingId);
       if (chosen) this.takeNewChatCapabilities(this.newChatTarget(input));
       if (folder) {
         if (folder.resolved) this.workspaceGrants.applyInsideTransaction(task.id, folder.resolved, folder.pending.permissions);
