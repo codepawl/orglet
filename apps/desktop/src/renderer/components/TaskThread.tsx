@@ -659,7 +659,9 @@ const JOB_LINE = 96;
 
 function TeamJob({ run, waitingFor, hideWho }: { run: Run; waitingFor: string[]; hideWho: boolean }) {
   const brief = run.snapshot.assignment?.brief ?? '';
-  const state = waitingFor.length > 0 ? t('Chờ {0}', [waitingFor.join(', ')]) : statusLabel[run.status];
+  // The run's own state stays even while it waits on others: an interrupted job waiting on its upstream is still interrupted.
+  const waiting = waitingFor.length > 0 ? t('Chờ {0}', [waitingFor.join(', ')]) : undefined;
+  const state = waiting ? `${statusLabel[run.status]} · ${waiting}` : statusLabel[run.status];
   const who = hideWho ? null : <span className="team-job-who"><strong>{run.snapshot.worker.name}</strong><span className="team-job-state">{state}</span></span>;
   const folded = Array.from(brief.trim()).length > JOB_LINE || /[\r\n]/.test(brief);
   if (!folded) return <div className="team-job">{who}{brief.trim() && <p className="team-job-brief">{brief}</p>}</div>;
