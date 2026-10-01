@@ -491,6 +491,7 @@ export const en: Dictionary = {
   'Chưa có mục kiểm tra được ghi nhận.': 'No checks recorded yet.',
   'Chưa xác minh độc lập check: {0}.': 'Check not independently verified: {0}.',
   'Chưa có Tí nào.': 'No orglets yet.',
+  'Tạo một Tí để bắt đầu. Bạn nhắn, Tí làm.': 'Make an orglet to get started. You message it, it does the work.',
   'Chưa có Tí nào. Tạo một Tí trước.': 'No orglets yet. Create an orglet first.',
   'Chưa có hội nào.': 'No crews yet.',
   'Chưa cấu hình cột ID: không đánh giá trùng ID, giao ID hoặc thứ tự ID.': 'No ID column set: duplicate IDs, ID overlap and ID order were not assessed.',
