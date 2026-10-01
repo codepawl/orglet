@@ -202,6 +202,28 @@ export function padEnd(text: string, width: number): string {
   return text + ' '.repeat(Math.max(0, width - displayWidth(text)));
 }
 
+/** Keep each shortcut together; short viewports cap the rows so a selected entry still fits. */
+export function layoutShortcutHint(text: string, width: number, maximumLines = 1): string[] {
+  if (!text || width <= 0 || maximumLines <= 0) return [];
+  const rows: string[][] = [];
+  for (const group of text.split(' · ')) {
+    const current = rows.at(-1);
+    if (!current || (rows.length < maximumLines && displayWidth([...current, group].join('  ')) > width)) {
+      rows.push([group]);
+    } else {
+      current.push(group);
+    }
+  }
+  return rows.map(groups => {
+    if (groups.length === 1 || displayWidth(groups.join('  ')) > width) return truncate(groups.join('  '), width);
+    const remaining = width - groups.reduce((total, group) => total + displayWidth(group), 0);
+    const gaps = groups.length - 1;
+    const gapWidth = Math.floor(remaining / gaps);
+    const extraSpaces = remaining % gaps;
+    return groups.map((group, index) => `${index ? ' '.repeat(gapWidth + (index <= extraSpaces ? 1 : 0)) : ''}${group}`).join('');
+  });
+}
+
 /** A run of text in one style; the unit the Markdown renderer produces and `wrapSegments` lays out. */
 export type Segment = { text: string; style?: Style };
 

@@ -247,8 +247,12 @@ try {
   page = await app.firstWindow();
   await useVietnamese(page);
   await openThreadByBrief(page, 'Packaged native checker fixture');
-  await page.locator('.team-progress').getByText('Fixture reviewer · Bị gián đoạn · Chờ Fixture researcher', { exact: true }).waitFor();
-  await page.locator('.team-progress').getByText('Fixture researcher · Cần xem lại · Inspect the source', { exact: true }).waitFor();
+  // Each unfinished job is a row: the orglet's name and its state on one line, the brief under them (COD-352).
+  const reviewerJob = page.locator('.team-progress .team-job').filter({ has: page.getByText('Fixture reviewer', { exact: true }) });
+  await reviewerJob.locator('.team-job-state').getByText('Bị gián đoạn · Chờ Fixture researcher', { exact: true }).waitFor();
+  const researcherJob = page.locator('.team-progress .team-job').filter({ has: page.getByText('Fixture researcher', { exact: true }) });
+  await researcherJob.locator('.team-job-state').getByText('Cần xem lại', { exact: true }).waitFor();
+  await researcherJob.locator('.team-job-brief').getByText('Inspect the source', { exact: true }).waitFor();
   const assignmentDetails = page.locator('.team-progress details');
   assert.equal(await assignmentDetails.getAttribute('open'), null);
   await assignmentDetails.locator('summary').focus();

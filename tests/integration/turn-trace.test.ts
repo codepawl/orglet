@@ -242,7 +242,12 @@ it('gives a crew answer its handoffs before the synthesis steps, one per member,
   const html = renderThread([lead, member, synthesis], events, answerOf());
   expect(html).toContain('Handed off 2 jobs · Read 1 file');
   expect(html).toContain('Reassigned work to Writer: phần đầu chưa đủ.');
-  expect(html).toContain('Handed off to</span><span class="trace-target">Writer</span>');
+  expect(html).toContain('Handed off to</span><span class="trace-target trace-person">');
+  const list = html.slice(html.indexOf('class="trace-list"'), html.indexOf('</ol>'));
+  const verb = list.indexOf('Handed off to');
+  const row = list.slice(list.lastIndexOf('<li', verb), list.indexOf('</li>', verb));
+  expect(row.indexOf('Handed off to')).toBeLessThan(row.indexOf('class="avatar xxs'));
+  expect(row.indexOf('class="avatar xxs')).toBeLessThan(row.indexOf('Writer'));
 });
 
 it('keeps one trace while the answer streams, the memories first and an open step marked', () => {

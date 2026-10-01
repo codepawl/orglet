@@ -1,7 +1,7 @@
 import { normalizeRoleText } from '../shared/role-words';
 import { renderMiniFace, MINI_FACE_WIDTH } from './faces';
 import type { ChatKind, ListValue } from './protocol';
-import { displayWidth, isHexColor, muted, NEUTRAL_COLOR, padEnd, paint, truncate, type ColorMode } from './terminal';
+import { displayWidth, isHexColor, layoutShortcutHint, muted, NEUTRAL_COLOR, padEnd, paint, truncate, type ColorMode } from './terminal';
 
 /** The list `orglet chat` opens on: every orglet and crew, filtered as the person types (COD-236). */
 
@@ -162,12 +162,14 @@ export function renderPickerLines(state: PickerState, layout: PickerLayout): str
   const visible = visibleEntries(state);
   const maxLines = Math.max(0, layout.maxLines ?? Infinity);
   if (maxLines === 0) return [];
-  if (visible.length === 0) return [muted(`  Nothing matches "${state.filter.trim()}".`, layout.mode), muted(`  ${PICKER_HINT}`, layout.mode)].slice(0, maxLines);
+  const maximumHintLines = maxLines >= 10 ? 2 : 1;
+  const hintLines = layoutShortcutHint(PICKER_HINT, layout.width - 2, maximumHintLines);
+  if (visible.length === 0) return [muted(`  Nothing matches "${state.filter.trim()}".`, layout.mode), ...hintLines.map(line => muted(`  ${line}`, layout.mode))].slice(0, maxLines);
   let start = windowStart(visible.length, state.selected, Math.max(1, layout.maxRows));
   let end = Math.min(visible.length, start + Math.max(1, layout.maxRows));
   const showHeadings = layout.grouped && maxLines >= 2;
   const showHint = maxLines >= 3;
-  const available = maxLines - (showHint ? 1 : 0);
+  const available = maxLines - (showHint ? hintLines.length : 0);
   // Headings and their gap count as real rows. Trim the farthest edge, never the selected entry.
   const lineCount = () => {
     const groups = visible[start].kind === visible[end - 1].kind ? 1 : 2;
@@ -193,6 +195,6 @@ export function renderPickerLines(state: PickerState, layout: PickerLayout): str
   }
   const more = visible.length - shown.length;
   const hint = more > 0 ? `${more} more · ${PICKER_HINT}` : PICKER_HINT;
-  if (showHint) lines.push(muted(`  ${truncate(hint, Math.max(0, layout.width - 2))}`, layout.mode));
+  if (showHint) lines.push(...layoutShortcutHint(hint, layout.width - 2, maximumHintLines).map(line => muted(`  ${line}`, layout.mode)));
   return lines;
 }

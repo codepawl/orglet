@@ -260,7 +260,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const initial = routine?.task ?? draft;
   const [name, setName] = useState(routine?.name ?? '');
   const [brief, setBrief] = useState(initial?.brief ?? '');
-  const [target, setTarget] = useState(initial?.teamId ? `team:${initial.teamId}` : initial?.workerId ?? workspace.workers[0].id);
+  const [target, setTarget] = useState(initial?.teamId ? `team:${initial.teamId}` : initial?.workerId ?? workspace.workers[0]?.id ?? '');
   const [sources, setSources] = useState<{ id: string; name: string; bytes?: number }[]>((initial?.sourceIds ?? []).map(id => ({ id, name: t('Nguồn {0}', [id.slice(0, 8)]) })));
   const [budget, setBudget] = useState(toAmount(initial?.budgetMicros ?? 500_000));
   const [frequency, setFrequency] = useState<ScheduleFrequency>(routine?.schedule.frequency ?? 'daily');
@@ -327,7 +327,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const ceiling = Number.isSafeInteger(budgetMicros) && budgetMicros > 0 && !windowInvalid ? costCeiling(draftSchedule, triggerKind, budgetMicros, draftSchedule.dailyCapMicros) : '';
   // The permissions the saved task carries: what it had, with the web and the browser as chosen here. A schedule
   // that never had either keeps carrying none, so saving it again changes nothing.
-  const leadProvider = (workspace.workers.find(worker => worker.id === (team?.synthesizerId ?? target)) ?? workspace.workers[0]).provider;
+  const leadProvider = (workspace.workers.find(worker => worker.id === (team?.synthesizerId ?? target)) ?? workspace.workers[0])?.provider ?? 'demo';
   const toolCapabilities = scheduleCapabilities(initial?.toolCapabilities, leadProvider, browserLevel === 'read', web);
   const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
     ? folder && { kind: 'folder', folderId: folder.folderId, folderName: folder.name }
