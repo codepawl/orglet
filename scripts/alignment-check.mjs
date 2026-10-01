@@ -175,6 +175,11 @@ async function seedWorkspace(page) {
   await waitForTask(page, crewTaskId);
   const chatTaskId = await callCore(page, 'createTask', { workerId: researcher.id, brief: 'Plan the launch of my weekly newsletter next month. Keep it short.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, chatTaskId);
+  // A side thread of that chat, which opens in the right panel beside it (COD-365).
+  // No closing period: the row is named by the chat's title, which drops one (the button's name is the title, not the brief).
+  const sideThreadBrief = 'Draft three subject lines for it';
+  const sideThreadId = await callCore(page, 'startSideThread', { taskId: chatTaskId, brief: sideThreadBrief, sourceIds: [], consent: false, providerScopes: [], budgetMicros: 1000 });
+  await waitForTask(page, sideThreadId);
   // An earlier chat of an orglet, replaced by a newer one: it has no row anywhere in the sidebar, so opening it puts it on
   // the Open list (COD-355). Group chats, side threads and schedule runs have their own rows and never go there.
   const analyst = (await callCore(page, 'workspace', {})).workers.find(worker => worker.name === 'Data analyst');
@@ -197,7 +202,7 @@ async function seedWorkspace(page) {
   const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
   const channels = await seedChannels(page, crew);
   await seedArchive(page, researcher);
-  return { researcher, crew, islandCrew, earlierChatBrief, channels };
+  return { researcher, crew, islandCrew, earlierChatBrief, sideThreadBrief, channels };
 }
 
 /** A channel of an orglet and a crew with one answered message, and an empty one (COD-361). */
@@ -307,6 +312,14 @@ async function foldSidebar(page) {
 
 const SCREENS = [
   { name: 'chat', open: async () => {} },
+  // An answer pointed at: its toolbar floats at its top right (COD-365).
+  { name: 'chat-message-toolbar', open: async page => { await page.locator('.main-pane .assistant-message').first().hover(); await page.locator('.main-pane .assistant-message .message-actions').first().waitFor(); } },
+  // A side thread opened from its row: in the right panel beside its main chat, or in the main card when the window has no room for the panel.
+  { name: 'side-thread-panel', open: async (page, context) => {
+    await openSidebar(page);
+    await page.getByRole('button', { name: context.sideThreadBrief, exact: true }).click();
+    await page.locator('.thread-pane .chat-reply, .main-pane .side-thread-origin').first().waitFor();
+  } },
   { name: 'chat-options-menu', open: async page => { await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'composer-add-menu', open: async page => { await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'crew-chat', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); } },
