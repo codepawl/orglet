@@ -19,7 +19,9 @@ npx @codepawlhq/orglet status
 orglet status
 ```
 
-`npx @codepawlhq/orglet install` installs or updates to the latest release at any time. `--yes` skips the question.
+`npx @codepawlhq/orglet install` installs or updates to the latest release at any time. `--yes` skips the question. Without a terminal to ask in (a script, CI or a pipe), nothing is downloaded or run unless you pass `--yes`.
+
+The installer only downloads from the `codepawl/orglet` GitHub Releases, has no dependencies and no install scripts, and is published from CI with npm provenance.
 
 What the command can do is in the [terminal guide](https://github.com/codepawl/orglet/blob/main/docs/cli.md).
 

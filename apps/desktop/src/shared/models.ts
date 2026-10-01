@@ -69,7 +69,7 @@ export type ModelListResult = z.infer<typeof ModelListResult>;
 /** Pinned suggestion IDs. The picker may show these; a worker is not locked to them. */
 export const CATALOG_HINT_IDS = {
   openai: 'gpt-4.1-mini-2025-04-14',
-  anthropic: 'claude-haiku-4-5-20251001',
+  anthropic: 'claude-sonnet-5-5',
   xai: 'grok-3-mini',
   openrouter: 'openai/gpt-4.1-mini',
   ollama: 'llama3.2',

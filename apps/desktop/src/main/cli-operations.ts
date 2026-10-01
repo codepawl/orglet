@@ -1,14 +1,24 @@
-import type { Routine, Source, Task, TaskDetail, TaskInput, TaskStatus, Team, Worker, Workspace } from '../shared/contracts';
-import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
+import type { Source, Task, TaskDetail, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
+import type { CliChat } from '../cli/protocol';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
-import type { CliAnswer, CliChat, CliErrorCode, CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from '../cli/protocol';
+import type { CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from '../cli/protocol';
 import { connectionPricing, findCustomConnection } from '../shared/custom-connections';
 import { isHarness } from '../shared/harness';
 import { isLocalApi, isPlanApi } from '../shared/contracts';
 import { resolveWorkerModel } from '../core/models/resolve';
-import { CliActivityFeed, type CliObserver } from './cli-activity';
+import { CliActivityFeed } from './cli-activity';
 import type { CliProgressFrame } from '../cli/protocol';
 import { manageCli } from './cli-management';
+import { assertOneTarget, chatOfTask, chatsOf, CliFailure, crewRoster, liveChatTask, matchChat, matchSchedule, targetChat, taskById, taskRunners, type ChatTargetRequest } from './cli-chats';
+import { chatTurns, isTurnRunning, latestAnsweredRevision, pendingQuestion, resolveMessage, turnAnswers, waitsForDesktop } from './cli-chat-history';
+import { CliChatActions } from './cli-chat-actions';
+import { CliChatAdmin } from './cli-chat-admin';
+import { CliSchedules } from './cli-schedules';
+import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
+
+export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from './cli-chats';
+export { answerText, isTurnRunning, latestAnsweredRevision, turnAnswers, turnErrors } from './cli-chat-history';
+export type { CliDependencies } from './cli-turns';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -16,153 +26,43 @@ import { manageCli } from './cli-management';
  * Electron: main passes the core request, the app version, the window opener and the translator in.
  */
 
-/** A failure the CLI shows as is. The message is a Vietnamese source string that the server translates. */
-export class CliFailure extends Error {
-  constructor(readonly code: CliErrorCode, message: string) {
-    super(message);
-  }
-}
-
-export type CoreRequest = (command: string, args: unknown) => Promise<unknown>;
-
-export type CliDependencies = {
-  request: CoreRequest;
-  version: () => string;
-  /** Brings the window forward and, with a chat, opens it. */
-  open: (chat?: CliChat) => void | Promise<void>;
-  /** Puts a run's Vietnamese error into the app's language. */
-  translate: (message: string) => string;
-  /** How often `send` reads the chat while it waits. */
-  pollMilliseconds?: number;
-  observe?: (observer: CliObserver) => () => void;
-};
-
-/** Statuses of a turn that is still going; anything else means the turn has stopped. */
-const RUNNING_STATUSES: readonly TaskStatus[] = ['queued', 'running', 'pausing'];
 const DEFAULT_TASK_BUDGET_MICROS = 500_000;
-const DEFAULT_POLL_MILLISECONDS = 750;
-
-export function isTurnRunning(task: Pick<Task, 'status' | 'pendingStart'>): boolean {
-  return RUNNING_STATUSES.includes(task.status) || Boolean(task.pendingStart);
-}
-
-/**
- * Finds an orglet or crew by name: a case-insensitive exact name first, then a unique prefix. Two chats with the
- * same exact name, or a prefix several names share, is ambiguous and lists them; no match lists every name.
- */
-export function matchChat(query: string, chats: readonly CliChat[]): CliChat {
-  const wanted = query.trim().toLocaleLowerCase();
-  const exact = chats.filter(chat => chat.name.toLocaleLowerCase() === wanted);
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) throw new CliFailure('ambiguous', `"${exact[0].name}" là tên của nhiều Tí hoặc hội. Đổi tên trong app để phân biệt.`);
-  const prefixed = chats.filter(chat => chat.name.toLocaleLowerCase().startsWith(wanted));
-  if (prefixed.length === 1) return prefixed[0];
-  if (prefixed.length > 1) throw ambiguous(query, prefixed);
-  const names = chats.map(chat => chat.name).join(', ');
-  return notFound(query, names);
-}
-
-function ambiguous(query: string, candidates: readonly CliChat[]): CliFailure {
-  const names = candidates.map(chat => chat.name).join(', ');
-  return new CliFailure('ambiguous', `"${query}" khớp với nhiều tên: ${names}. Gõ tên đầy đủ hơn.`);
-}
-
-function notFound(query: string, names: string): never {
-  if (!names) throw new CliFailure('not_found', 'Chưa có Tí hay hội nào.');
-  throw new CliFailure('not_found', `Không có Tí hay hội nào tên "${query}". Có: ${names}.`);
-}
-
-/**
- * Finds a schedule by name the way `matchChat` finds a chat: a case-insensitive exact name first, then a unique
- * prefix. Only schedules that exist can match; `run` never makes one.
- */
-export function matchSchedule(query: string, routines: readonly Pick<Routine, 'id' | 'name'>[]): Pick<Routine, 'id' | 'name'> {
-  const wanted = query.trim().toLocaleLowerCase();
-  const exact = routines.filter(routine => routine.name.toLocaleLowerCase() === wanted);
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) throw new CliFailure('ambiguous', `"${exact[0].name}" là tên của nhiều lịch. Đổi tên trong app để phân biệt.`);
-  const prefixed = routines.filter(routine => routine.name.toLocaleLowerCase().startsWith(wanted));
-  if (prefixed.length === 1) return prefixed[0];
-  const names = (prefixed.length > 1 ? prefixed : routines).map(routine => routine.name).join(', ');
-  if (prefixed.length > 1) throw new CliFailure('ambiguous', `"${query}" khớp với nhiều tên: ${names}. Gõ tên đầy đủ hơn.`);
-  if (!names) throw new CliFailure('not_found', 'Chưa có lịch nào.');
-  throw new CliFailure('not_found', `Không có lịch nào tên "${query}". Các lịch hiện có là ${names}.`);
-}
-
-export function chatsOf(workspace: Pick<Workspace, 'workers' | 'teams'>): CliChat[] {
-  const orglets = workspace.workers.map(worker => orgletChat(worker));
-  const crews = workspace.teams.map(team => crewChat(team, workspace.workers));
-  return [...orglets, ...crews];
-}
-
-function orgletChat(worker: Worker): CliChat {
-  return { kind: 'worker', id: worker.id, name: worker.name, color: defaultAvatarColor(worker) };
-}
-
-function crewChat(team: Team, workers: readonly Worker[]): CliChat {
-  const lead = workers.find(worker => worker.id === team.synthesizerId);
-  const colors = crewRoster(team, workers).map(worker => defaultAvatarColor(worker));
-  return { kind: 'team', id: team.id, name: team.name, ...(lead ? { color: defaultAvatarColor(lead) } : {}), colors };
-}
-
-/** Members then the lead, without repeats, in crew order: the orglets a crew message runs. */
-function crewRoster(team: Pick<Team, 'memberIds' | 'synthesizerId'>, workers: readonly Worker[]): Worker[] {
-  const ids = [...new Set([...team.memberIds, team.synthesizerId])];
-  return ids.map(id => workers.find(worker => worker.id === id)).filter((worker): worker is Worker => Boolean(worker));
-}
-
-/** The text of one saved answer: a chat reply as written, a report as its title over its summary. */
-export function answerText(report: TaskDetail['artifacts'][number]['report']): string {
-  if (report.format === 'chat') return report.summary;
-  return `${report.title}\n\n${report.summary}`;
-}
-
-/**
- * The answers one message produced: every saved answer of a run started for that message, oldest first, named after
- * the orglet that wrote it. A crew turn gives each member's result and then the lead's combined answer.
- */
-export function turnAnswers(detail: Pick<TaskDetail, 'runs' | 'artifacts'>, revision: number): CliAnswer[] {
-  const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
-  const answers = detail.artifacts.flatMap(artifact => {
-    const run = runs.find(candidate => candidate.id === artifact.runId);
-    if (!run) return [];
-    const author = run.snapshot.worker;
-    return [{ name: author.name, stage: run.stage, text: answerText(artifact.report), createdAt: artifact.createdAt, color: defaultAvatarColor(author) }];
-  });
-  return answers.sort((first, second) => first.createdAt.localeCompare(second.createdAt));
-}
-
-/** Why runs of this message stopped short, for a turn that failed. */
-export function turnErrors(detail: Pick<TaskDetail, 'runs'>, revision: number): string[] {
-  const failed = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision && run.error);
-  return [...new Set(failed.map(run => run.error as string))];
-}
-
-/** The newest message in the chat that has at least one answer, or the current one when none has. */
-export function latestAnsweredRevision(detail: Pick<TaskDetail, 'task' | 'runs' | 'artifacts'>): number {
-  const answered = detail.artifacts.flatMap(artifact => {
-    const run = detail.runs.find(candidate => candidate.id === artifact.runId);
-    return run ? [run.snapshot.inputRevision ?? 0] : [];
-  });
-  if (answered.length === 0) return detail.task.inputRevision ?? 0;
-  return Math.max(...answered);
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
 
 export class CliOperations {
-  constructor(private readonly dependencies: CliDependencies) {}
+  private readonly chatActions: CliChatActions;
+  private readonly chatAdmin: CliChatAdmin;
+  private readonly schedules: CliSchedules;
+
+  constructor(private readonly dependencies: CliDependencies) {
+    this.chatActions = new CliChatActions(dependencies);
+    this.chatAdmin = new CliChatAdmin(dependencies);
+    this.schedules = new CliSchedules(dependencies);
+  }
 
   async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
     switch (request.op) {
       case 'status': return this.status();
       case 'list': return this.list();
       case 'send': return this.send(request, signal, progress);
-      case 'read': return this.read(request.to);
+      case 'read': return this.read(request);
       case 'open': return this.open(request.to);
       case 'run': return this.runSchedule(request);
+      case 'react': return this.chatActions.react(request);
+      case 'forward': return this.chatActions.forward(request);
+      case 'control': return this.chatActions.control(request, signal);
+      case 'answer': return this.chatActions.answer(request, signal);
+      case 'chats': return this.chatAdmin.chats(request);
+      case 'side-thread': return this.chatAdmin.sideThread(request, signal);
+      case 'bring': return this.chatAdmin.bring(request);
+      case 'group': return this.chatAdmin.group(request, signal);
+      case 'members': return this.chatAdmin.members(request);
+      case 'chat-change': return this.chatAdmin.change(request);
+      case 'archive-entity': return this.chatAdmin.archiveEntity(request);
+      case 'template': return this.chatAdmin.template(request);
+      case 'schedules': return this.schedules.list();
+      case 'schedule-enable': return this.schedules.enable(request);
+      case 'schedule-delete': return this.schedules.remove(request);
+      case 'schedule-save': return this.schedules.save(request);
       case 'config':
       case 'save-orglet':
       case 'save-crew':
@@ -175,7 +75,7 @@ export class CliOperations {
   }
 
   private taskDetail(id: string): Promise<TaskDetail> {
-    return this.dependencies.request('task', { id }) as Promise<TaskDetail>;
+    return readTask(this.dependencies.request, id);
   }
 
   async status(): Promise<StatusValue> {
@@ -211,7 +111,8 @@ export class CliOperations {
   /**
    * Sends one message the way the composer does: the chat's live row takes it as a new turn, or the first message
    * creates the row (a crew's row belongs to its lead). Consent and provider scopes are the non-Demo providers of the
-   * orglets that will run, and the cost limit is the chat's own or the orglet's or crew's default.
+   * orglets that will run, and the cost limit is the chat's own or the orglet's or crew's default. `replyTo` names a
+   * message of the live chat the way `read --turns` numbers it (COD-354).
    */
   async send(request: Extract<CliRequest, { op: 'send' }>, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<SendValue> {
     const feed = request.progress && request.wait && progress ? new CliActivityFeed(progress, this.dependencies.translate) : undefined;
@@ -220,21 +121,19 @@ export class CliOperations {
 
   private async sendTurn(request: Extract<CliRequest, { op: 'send' }>, signal: AbortSignal, feed?: CliActivityFeed): Promise<SendValue> {
     const workspace = await this.workspace();
-    const chat = matchChat(request.to, chatsOf(workspace));
+    const { chat, live, team, worker } = this.sendTarget(workspace, request);
+    const replyTo = request.replyTo ? await this.replyTarget(live?.id, request.replyTo) : undefined;
     const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
     const sourceIds = sources.map(source => source.id);
-    const team = chat.kind === 'team' ? workspace.teams.find(item => item.id === chat.id) : undefined;
-    const worker = chat.kind === 'worker' ? workspace.workers.find(item => item.id === chat.id) : undefined;
-    const runners = team ? crewRoster(team, workspace.workers) : worker ? [worker] : [];
+    const runners = live ? taskRunners(workspace, live) : team ? crewRoster(team, workspace.workers) : worker ? [worker] : [];
     const providerScopes = [...new Set(runners.map(item => item.provider).filter(provider => provider !== 'demo'))] as NonNullable<TaskInput['providerScopes']>;
-    const live = team ? liveTeamTask(workspace.tasks, team.id) : liveWorkerTask(workspace.tasks, chat.id);
     const unsubscribe = feed ? this.dependencies.observe?.(observation => feed.observe(observation)) : undefined;
     if (live) feed?.bind(live.id);
     if (unsubscribe) signal.addEventListener('abort', unsubscribe, { once: true });
     try {
       let taskId: string;
       if (live) {
-        await this.dependencies.request('reviseTask', { taskId: live.id, brief: request.message, sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros: live.budgetMicros });
+        await this.dependencies.request('reviseTask', { taskId: live.id, brief: request.message, ...(replyTo ? { replyTo } : {}), sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros: live.budgetMicros });
         taskId = live.id;
       } else {
         const budgetMicros = (team ?? worker)?.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
@@ -245,41 +144,58 @@ export class CliOperations {
       feed?.bind(taskId);
       let detail = await this.taskDetail(taskId);
       const revision = detail.task.inputRevision ?? 0;
-      if (!request.wait) {
-        return { chat, taskId, waited: false, finished: false, status: detail.task.status, answers: [], errors: [] };
-      }
+      if (!request.wait) return turnResult(chat, detail, revision, false, this.dependencies.translate);
       feed?.update(detail, revision);
-      detail = await this.waitForTurn(taskId, detail, request.timeoutSeconds, signal, feed, revision);
-      const finished = !isTurnRunning(detail.task);
-      const errors = finished ? turnErrors(detail, revision).map(error => this.dependencies.translate(error)) : [];
-      return { chat, taskId, waited: true, finished, status: detail.task.status, answers: turnAnswers(detail, revision), errors };
+      detail = await waitForTurn(this.dependencies, detail, request.timeoutSeconds, signal, feed, revision);
+      return turnResult(chat, detail, revision, true, this.dependencies.translate);
     } finally {
       unsubscribe?.();
       if (unsubscribe) signal.removeEventListener('abort', unsubscribe);
     }
   }
 
-  private async waitForTurn(taskId: string, first: TaskDetail, timeoutSeconds: number, signal: AbortSignal, feed?: CliActivityFeed, revision = 0): Promise<TaskDetail> {
-    const deadline = Date.now() + timeoutSeconds * 1000;
-    const interval = this.dependencies.pollMilliseconds ?? DEFAULT_POLL_MILLISECONDS;
-    let detail = first;
-    while (isTurnRunning(detail.task) && Date.now() < deadline && !signal.aborted) {
-      await delay(interval);
-      detail = await this.taskDetail(taskId);
-      feed?.update(detail, revision);
+  /**
+   * The chat a message goes to: an orglet's or crew's main chat, which the first message creates, or any existing
+   * chat by its id, such as a side thread or a group chat (COD-354).
+   */
+  private sendTarget(workspace: Workspace, request: ChatTargetRequest): { chat: CliChat; live?: Task; team?: Team; worker?: Worker } {
+    assertOneTarget(request);
+    if (request.chat !== undefined) {
+      const task = taskById(workspace, request.chat);
+      return { chat: chatOfTask(workspace, task), live: task };
     }
-    return detail;
+    const chat = matchChat(request.to!, chatsOf(workspace));
+    const team = chat.kind === 'team' ? workspace.teams.find(item => item.id === chat.id) : undefined;
+    const worker = chat.kind === 'worker' ? workspace.workers.find(item => item.id === chat.id) : undefined;
+    return { chat, live: liveChatTask(workspace, chat), team, worker };
   }
 
-  /** The answers of the newest message in the chat that has any, with the chat's current status. */
-  async read(to: string): Promise<ReadValue> {
+  /** The message id a reply points at; a chat with no conversation yet has nothing to reply to. */
+  private async replyTarget(taskId: string | undefined, ref: string): Promise<string> {
+    if (!taskId) throw new CliFailure('not_found', 'Chat này chưa có tin nhắn nào để trả lời.');
+    return resolveMessage(await this.taskDetail(taskId), ref).messageId;
+  }
+
+  /**
+   * The answers of the newest message in the chat that has any, with the chat's current status. With `turns`, also
+   * that many numbered turns, the newest ones or those before `before` (COD-354).
+   */
+  async read(request: Extract<CliRequest, { op: 'read' }>): Promise<ReadValue> {
     const workspace = await this.workspace();
-    const chat = matchChat(to, chatsOf(workspace));
-    const live = chat.kind === 'team' ? liveTeamTask(workspace.tasks, chat.id) : liveWorkerTask(workspace.tasks, chat.id);
-    if (!live) throw new CliFailure('not_found', `Chưa có cuộc trò chuyện với ${chat.name}.`);
-    const detail = await this.taskDetail(live.id);
+    const { chat, task } = targetChat(workspace, request);
+    const detail = await this.taskDetail(task.id);
     const answers = turnAnswers(detail, latestAnsweredRevision(detail));
-    return { chat, taskId: live.id, status: detail.task.status, answers };
+    const history = request.turns ? chatTurns(detail, request.turns, request.before) : undefined;
+    const question = pendingQuestion(detail.task);
+    return {
+      chat,
+      taskId: task.id,
+      status: detail.task.status,
+      answers,
+      ...(history ? { turns: history.turns, earlier: history.earlier } : {}),
+      ...(question ? { question } : {}),
+      ...(waitsForDesktop(detail) ? { needsDesktop: true } : {}),
+    };
   }
 
   /**

@@ -14,7 +14,7 @@ import { Button, Drawer } from './ui';
 import { teamRoster } from '../assignees';
 import { orglet } from '../api';
 import { toast } from './toast';
-import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/contracts';
+import type { Run, TaskDetail, Team, Usage, Worker, Workspace } from '../../shared/contracts';
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import type { WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
@@ -80,6 +80,12 @@ export function replyCountLabel(count: number): string {
 function fileCountLabel(count: number): string {
   if (count === 1) return t('1 tệp đính kèm');
   return t('{0} tệp đính kèm', [count]);
+}
+
+/** The whole percent of a chat's input tokens its provider read from the prompt cache (COD-358); 0 when nothing was. */
+export function cachedInputShare(usage: Pick<Usage, 'inputTokens' | 'cacheReadTokens'>): number {
+  if (usage.inputTokens <= 0 || usage.cacheReadTokens <= 0) return 0;
+  return Math.round((usage.cacheReadTokens / usage.inputTokens) * 100);
 }
 
 type TimedEvent = { runId?: string; message: string; createdAt: string };
@@ -390,6 +396,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   const members = team ? teamRoster(team, workspace.workers) : [...group ?? []];
   const spent = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   const tokens = detail ? detail.usage.inputTokens + detail.usage.outputTokens : 0;
+  const cachedShare = detail ? cachedInputShare(detail.usage) : 0;
   const lastRun = detail?.runs.at(-1);
   // What the answers actually ran on, which used to be readable only inside the technical block (user, 2026-09-19).
   const model = lastRun?.snapshot.model;
@@ -438,7 +445,9 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         <div className="details-facts">
           <Fact icon={Wallet} title={t('Đã tiêu cho cuộc trò chuyện này')}>{formatMoney(spent)}</Fact>
           {worked && <Fact icon={Clock} title={t('Thời gian các lượt chạy làm việc, cộng lại; không tính lúc giữa các lượt, và các Tí làm cùng lúc chỉ tính một lần')}>{t('{0} làm việc', [worked])}</Fact>}
-          {tokens > 0 && <Fact icon={Cpu} title={t('Token đã dùng')}>{t('{0} token', [tokens.toLocaleString(currentLocale())])}</Fact>}
+          {tokens > 0 && <Fact icon={Cpu} title={t('Token đã dùng')}>{cachedShare > 0
+            ? t('{0} token · {1}% đầu vào đọc từ cache', [tokens.toLocaleString(currentLocale()), String(cachedShare)])
+            : t('{0} token', [tokens.toLocaleString(currentLocale())])}</Fact>}
           {model && <Fact icon={Sparkles} title={t('Model đã trả lời')}>{model}</Fact>}
           <Fact icon={MessageSquare} title={t('Số lượt trả lời')}>{replyCountLabel(detail.artifacts.length)}</Fact>
           {/* The files themselves are the chat's Files view (COD-355); the count here leads there. */}

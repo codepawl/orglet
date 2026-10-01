@@ -110,7 +110,7 @@ describe('what a turn without an answer says', () => {
 });
 
 function renderThread(detail: Omit<TaskDetail, 'profiles' | 'preflights' | 'sources' | 'workspaceEvidence' | 'appProposals' | 'usage'>) {
-  const full: TaskDetail = { profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [], usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 }, ...detail };
+  const full: TaskDetail = { profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [], usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, ...detail };
   return renderToStaticMarkup(createElement(TaskThread, {
     detail: full, workspace: { workers: [worker], skills: [skill], tasks: [full.task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},

@@ -7,6 +7,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { compactThread, ContextRefuseError, fitThread, promptBytes, threadMessages } from '../../apps/desktop/src/core/context/thread';
 import type { Artifact, Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
+import { earlierTurns } from './earlier-turns';
 
 let directory: string; let store: Store; let core: CoreService;
 let replies: ModelReply[]; let sent: { messages: unknown[] }[]; let dispatches: number;
@@ -58,7 +59,7 @@ it('summarizes the 11th older turn instead of inlining it', () => {
   expect(compacted.summary).toContain('ALPHAUNIQUE');
   expect(compacted.omitted.some(item => item.reason === 'summarized')).toBe(true);
   expect(compacted.snippets.some(item => item.text.includes('ALPHAUNIQUE'))).toBe(true);
-  const earlier = JSON.parse(threadMessages(compacted).find(message => message.content.includes('earlierConversation'))!.content).earlierConversation as { text: string }[];
+  const earlier = earlierTurns(threadMessages(compacted));
   expect(earlier.some(turn => turn.text.includes('ALPHAUNIQUE'))).toBe(false);
 });
 
@@ -123,7 +124,7 @@ it('sends compacted layers on a live follow-up and keeps other threads out of th
   const last = payload(sent.length - 1);
   expect(last).toContain('threadSummary');
   expect(last).toContain('ALPHAUNIQUE');
-  const earlier = JSON.parse((sent.at(-1)!.messages as { content?: string }[]).map(message => String(message.content ?? '')).find(content => content.includes('earlierConversation'))!).earlierConversation as { text: string }[];
+  const earlier = earlierTurns(sent.at(-1)!.messages);
   expect(earlier.some(turn => turn.text.includes('ALPHAUNIQUE'))).toBe(false);
   const run = store.detail(taskId).runs.at(-1)!;
   expect(run.snapshot.context?.manifest.verbatimTurns).toBeGreaterThan(0);

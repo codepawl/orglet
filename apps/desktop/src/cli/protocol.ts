@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 import { join, win32 } from 'node:path';
 import { z } from 'zod';
 import { RunActivity } from '../shared/run-activity';
+import { FORWARD_NOTE_CHARS, MAX_FORWARD_TARGETS } from '../shared/forward';
+import { Reaction } from '../shared/message-interactions';
+import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency } from '../shared/schedule';
 import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
 
 /**
@@ -44,14 +47,41 @@ export function cliEndpoint(userData: string, platform: NodeJS.Platform = proces
 
 export const CliToken = z.string().regex(/^[a-f0-9]{64}$/);
 const ChatName = z.string().trim().min(1).max(80);
+/** A chat by the start of its id, as `orglet chats` prints it (COD-354): side threads and group chats have no name. */
+export const ChatId = z.string().trim().regex(/^#?[0-9a-f-]{4,36}$/i);
+/** A chat named by its orglet or crew (`to`) or by its id (`chat`); the app refuses both or neither. */
+const ChatTarget = { to: ChatName.optional(), chat: ChatId.optional() };
+/** The orglets of a group chat. */
+const GroupNames = z.array(ChatName).min(2).max(50);
+/** The crew templates the core can create, as `createTemplate` names them. */
+export const TEMPLATE_IDS = ['research-review', 'eris-review'] as const;
+/** What a chat can be renamed, archived, restored or deleted as. */
+export const ChatChange = z.enum(['rename', 'archive', 'restore', 'delete']);
+export type ChatChange = z.infer<typeof ChatChange>;
 /** A schedule (routine) is named the way the app names it: up to 80 characters. */
 const ScheduleName = z.string().trim().min(1).max(80);
+/** How many past turns one `read` returns at most (COD-354). */
+export const MAX_READ_TURNS = 50;
+/**
+ * One message of a chat as `read --turns` numbers it (COD-354): `3` is the person's third message, `3.2` the second
+ * answer to it, `last` the newest answer. A leading `#` is allowed, as the terminal prints it.
+ */
+export const MessageRef = z.string().trim().regex(/^#?(last|\d{1,6}(\.\d{1,3})?)$/i);
+const Answer = z.string().trim().min(1).max(2000);
+const Message = z.string().trim().min(1).max(16000);
+const WaitFields = { wait: z.boolean(), timeoutSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS) };
+/** Controls on a chat's latest turn, the buttons under it in the desktop (COD-354). */
+export const ChatControl = z.enum(['stop', 'pause', 'resume', 'retry', 'continue']);
+export type ChatControl = z.infer<typeof ChatControl>;
 
 /**
- * Everything the CLI may ask. Anything else, such as granting a folder, touching keys, connections, settings,
- * permissions or backups, or archiving, has no operation here and is refused. Person-driven configuration changes
- * use a whitelist and revision checks; deletion also requires the displayed full name. `run` starts a schedule
- * that already exists, is switched on and was approved as it is; it cannot create or change one (COD-245).
+ * Everything the CLI may ask. Anything else has no operation here and is refused. Trust decisions stay in the
+ * desktop (COD-354): browser, desktop and MCP approvals, folder grants, tool permissions, keys and connections, harness
+ * sign-in, knowledge and app-change proposals, backups, erase and the account. The pipe token sits in the data folder,
+ * which an orglet running through a harness CLI can read as the same user, so anything the pipe could approve an
+ * orglet could approve for itself. Person-driven configuration changes use a whitelist and revision checks; deletion
+ * also requires the displayed full name. `run` starts a schedule that already exists, is switched on and was approved
+ * as it is (COD-245).
  */
 export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('status'), token: CliToken }).strict(),
@@ -63,14 +93,73 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('send'),
     token: CliToken,
-    to: ChatName,
+    ...ChatTarget,
     message: z.string().trim().min(1).max(16000),
     files: z.array(z.string().min(1).max(32768)).max(MAX_FILES),
     wait: z.boolean(),
     progress: z.boolean().optional(),
     timeoutSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS),
+    replyTo: MessageRef.optional(),
   }).strict(),
-  z.object({ op: z.literal('read'), token: CliToken, to: ChatName }).strict(),
+  z.object({
+    op: z.literal('read'),
+    token: CliToken,
+    ...ChatTarget,
+    turns: z.number().int().min(1).max(MAX_READ_TURNS).optional(),
+    /** With `turns`, the turns before this turn number: the next page back. */
+    before: z.number().int().min(1).optional(),
+  }).strict(),
+  z.object({ op: z.literal('react'), token: CliToken, ...ChatTarget, message: MessageRef.optional(), emoji: Reaction, active: z.boolean() }).strict(),
+  z.object({
+    op: z.literal('forward'),
+    token: CliToken,
+    ...ChatTarget,
+    message: MessageRef.optional(),
+    targets: z.array(ChatName).min(1).max(MAX_FORWARD_TARGETS),
+    note: z.string().trim().min(1).max(FORWARD_NOTE_CHARS).optional(),
+  }).strict(),
+  z.object({ op: z.literal('control'), token: CliToken, ...ChatTarget, action: ChatControl, ...WaitFields }).strict(),
+  z.object({ op: z.literal('answer'), token: CliToken, ...ChatTarget, answer: Answer, ...WaitFields }).strict(),
+  z.object({ op: z.literal('chats'), token: CliToken, archived: z.boolean() }).strict(),
+  z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...WaitFields }).strict(),
+  z.object({ op: z.literal('bring'), token: CliToken, chat: ChatId, message: MessageRef.optional() }).strict(),
+  z.object({ op: z.literal('group'), token: CliToken, names: GroupNames, message: Message, ...WaitFields }).strict(),
+  z.object({ op: z.literal('members'), token: CliToken, chat: ChatId, names: GroupNames }).strict(),
+  z.object({
+    op: z.literal('chat-change'),
+    token: CliToken,
+    ...ChatTarget,
+    change: ChatChange,
+    title: z.string().trim().min(1).max(120).optional(),
+    confirmName: z.string().trim().min(1).max(200).optional(),
+  }).strict(),
+  z.object({ op: z.literal('archive-entity'), token: CliToken, kind: z.enum(['worker', 'team']), name: ChatName, archived: z.boolean() }).strict(),
+  z.object({ op: z.literal('template'), token: CliToken, templateId: z.enum(TEMPLATE_IDS), provider: z.enum(['demo', 'openai']) }).strict(),
+  z.object({ op: z.literal('schedules'), token: CliToken }).strict(),
+  z.object({ op: z.literal('schedule-enable'), token: CliToken, schedule: ScheduleName, enabled: z.boolean() }).strict(),
+  z.object({ op: z.literal('schedule-delete'), token: CliToken, schedule: ScheduleName, confirmName: ScheduleName }).strict(),
+  /**
+   * Creates a schedule, or with `schedule` edits that one; only these fields. No permission, browser, desktop, folder,
+   * folder trigger, source or provider field exists here: the app takes the providers from the orglet or crew and
+   * refuses ones not already allowed in Settings.
+   */
+  z.object({
+    op: z.literal('schedule-save'),
+    token: CliToken,
+    schedule: ScheduleName.optional(),
+    name: ScheduleName.optional(),
+    target: ChatName.optional(),
+    brief: Message.optional(),
+    frequency: ScheduleFrequency.optional(),
+    time: ClockTime.optional(),
+    weekday: z.number().int().min(0).max(6).optional(),
+    everyHours: EveryHours.optional(),
+    timeZone: z.string().trim().min(1).max(100).optional(),
+    budgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
+    dailyCapMicros: z.number().int().min(1000).max(MAX_DAILY_CAP_MICROS).optional(),
+    trigger: z.enum(['schedule', 'called']).optional(),
+    enabled: z.boolean().optional(),
+  }).strict(),
   z.object({ op: z.literal('open'), token: CliToken, to: ChatName.optional() }).strict(),
   z.object({
     op: z.literal('run'),
@@ -114,8 +203,34 @@ export type CliChat = {
   color?: string;
   /** A crew's orglets in crew order (members, then the lead), each in its colour. */
   colors?: string[];
+  /** Set when the chat is not an orglet's or crew's main chat: a side thread or a group chat, by its id (COD-354). */
+  taskId?: string;
 };
-export type CliAnswer = { name: string; stage?: string; text: string; createdAt: string; color?: string };
+export type CliAnswer = {
+  name: string;
+  stage?: string;
+  text: string;
+  createdAt: string;
+  color?: string;
+  /** Where `read --turns` numbers this answer, such as `3.1` (COD-354). */
+  ref?: string;
+  /** The person's reaction on it: one per message, as in the desktop. */
+  reaction?: Reaction;
+};
+/** A question an orglet asked and is waiting on, with its choices (COD-354). */
+export type CliQuestion = { question: string; options: string[] };
+/** One message the person sent and what answered it, numbered from 1 the way the terminal prints it (COD-354). */
+export type CliTurn = {
+  number: number;
+  text: string;
+  sentAt: string;
+  /** The message this one replied to, shortened. */
+  replyTo?: string;
+  /** Where a forwarded message came from. */
+  forwardedFrom?: string;
+  reaction?: Reaction;
+  answers: CliAnswer[];
+};
 
 export type StatusValue = { version: string; orglets: number; crews: number; running: number; colors?: string[] };
 export type ListValue = {
@@ -125,6 +240,8 @@ export type ListValue = {
 export type SendValue = {
   chat: CliChat;
   taskId: string;
+  /** The turn's number as `read --turns` prints it; absent from an app older than COD-354. */
+  turn?: number;
   waited: boolean;
   /** False when `send` stopped waiting at its timeout while the turn was still running. */
   finished: boolean;
@@ -132,8 +249,56 @@ export type SendValue = {
   answers: CliAnswer[];
   /** Why runs of this turn stopped, already in the app's language. */
   errors: string[];
+  /** The question the turn stopped on, when an orglet asks one the terminal can answer (COD-354). */
+  question?: CliQuestion;
+  /** The turn stopped for something only the desktop decides: an MCP, browser or desktop approval (COD-354). */
+  needsDesktop?: boolean;
 };
-export type ReadValue = { chat: CliChat; taskId: string; status: string; answers: CliAnswer[] };
+export type ReadValue = {
+  chat: CliChat;
+  taskId: string;
+  status: string;
+  answers: CliAnswer[];
+  /** With `turns`: the turns asked for, oldest first, and how many come before them (COD-354). */
+  turns?: CliTurn[];
+  earlier?: number;
+  question?: CliQuestion;
+  needsDesktop?: boolean;
+};
+/** What a reaction, a forward or a control changed (COD-354). */
+export type ReactValue = { chat: CliChat; taskId: string; ref: string; emoji: Reaction; active: boolean };
+export type ForwardValue = { sent: { name: string; taskId: string }[]; failed: { name: string; error: string }[] };
+export type ControlValue = SendValue & { action: ChatControl | 'answer' };
+/** Which kind of chat a row is: an orglet's or crew's main chat, a side thread, a group chat or a schedule's run. */
+export type CliChatKind = 'orglet' | 'crew' | 'side' | 'group' | 'schedule';
+/** One chat as `orglet chats` lists it (COD-354); `short` is the start of its id that `--chat` takes. */
+export type CliChatRow = { id: string; short: string; kind: CliChatKind; name: string; with: string[]; status: string; archived: boolean; createdAt: string; color?: string };
+export type ChatsValue = { chats: CliChatRow[] };
+export type BringValue = { mainTaskId: string; chat: CliChat; ref: string };
+export type MembersValue = { taskId: string; names: string[] };
+export type ChatChangeValue = { taskId: string; name: string; change: ChatChange; title?: string };
+export type ArchiveEntityValue = { kind: ChatKind; id: string; name: string; archived: boolean };
+export type TemplateValue = { id: string; name: string; members: string[] };
+/** One schedule as `orglet schedules` lists it (COD-354); money is integer micros, as the app keeps it. */
+export type CliScheduleRow = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  target: string;
+  trigger: 'schedule' | 'folder' | 'called';
+  frequency: 'daily' | 'weekdays' | 'weekly' | 'hours';
+  time: string;
+  weekday: number;
+  everyHours?: number;
+  timeZone: string;
+  nextDueAt: string;
+  budgetMicros: number;
+  dailyCapMicros?: number;
+  runsToday?: number;
+  spentTodayMicros?: number;
+};
+export type SchedulesValue = { schedules: CliScheduleRow[] };
+export type ScheduleValue = { schedule: CliScheduleRow };
 export type OpenValue = { chat?: CliChat };
 /** The schedule `run` started and the chat its run opened. */
 export type RunValue = { schedule: { id: string; name: string }; taskId: string };

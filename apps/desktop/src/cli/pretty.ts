@@ -1,8 +1,9 @@
 import { renderFace, renderMiniFace, renderMiniFaces } from './faces';
 import { renderMarkdown } from './markdown';
 import { columnWidths, entriesFromList, entryLine, type ChatEntry } from './picker';
-import type { CliAnswer, ListValue, StatusValue } from './protocol';
+import type { CliAnswer, CliTurn, ListValue, StatusValue } from './protocol';
 import { isHexColor, muted, NEUTRAL_COLOR, paint, type ColorMode } from './terminal';
+import { t } from './text';
 
 /**
  * The one-shot commands and the chat view in colour (COD-236), for a person at a terminal. Only used when
@@ -74,11 +75,33 @@ export function renderAnswers(answers: readonly CliAnswer[], layout: AnswerLayou
   answers.forEach((answer, index) => {
     if (index > 0) lines.push('');
     const color = answerColor(answer, layout.fallbackColor);
-    const note = index === 0 ? layout.firstNote : undefined;
-    lines.push(answerByline(answer.name, color, layout.mode, note, layout.showFace));
+    lines.push(answerByline(answer.name, color, layout.mode, answerNote(answer, index === 0 ? layout.firstNote : undefined), layout.showFace));
     lines.push(...renderMarkdown(answer.text, { width: layout.width, mode: layout.mode, accent: color, indent: '  ' }));
   });
   return lines;
+}
+
+/** The muted words after an answer's name: its number in the history, the person's reaction and the given note. */
+function answerNote(answer: CliAnswer, note: string | undefined): string | undefined {
+  const parts = [answer.ref ? `#${answer.ref}` : '', answer.reaction ?? '', note ?? ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
+/** What the person wrote in one turn, numbered, with the line saying what it replied to or where it was forwarded from. */
+export function personLines(turn: CliTurn, layout: Layout): string[] {
+  const context = turn.replyTo ? t('trả lời {0}', turn.replyTo) : turn.forwardedFrom ? t('chuyển tiếp từ {0}', turn.forwardedFrom) : '';
+  const notes = [context, turn.reaction ?? ''].filter(Boolean).join(' · ');
+  const byline = `${paint(`#${turn.number} ${t('Bạn')}`, { bold: true }, layout.mode)}${notes ? ` ${muted(`· ${notes}`, layout.mode)}` : ''}`;
+  return [byline, ...renderMarkdown(turn.text, { width: layout.width, mode: layout.mode, indent: '  ' })];
+}
+
+/** Past turns as the chat view prints them: each message the person sent, then every answer to it, numbered. */
+export function renderTurns(turns: readonly CliTurn[], layout: AnswerLayout): string[] {
+  return turns.flatMap((turn, index) => [
+    ...(index > 0 ? [''] : []),
+    ...personLines(turn, layout),
+    ...(turn.answers.length ? ['', ...renderAnswers(turn.answers, { ...layout, firstNote: undefined })] : []),
+  ]);
 }
 
 /** The top of a chat: the big face with the name and the provider and model beside it; a crew adds its members. */

@@ -38,7 +38,7 @@ const recovery: WorkspaceRecoveryView = { taskId, attempts: [], processes: [], u
 function renderTurn(format: 'chat' | 'report') {
   const detail: TaskDetail = { task, runs: [run], events: [{ id: '66666666-6666-4666-8666-666666666661', runId, message: 'Đã đọc invoice.xlsx', createdAt: at }],
     artifacts: [answer(format)], profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [proposal],
-    usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 } };
+    usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } };
   return renderToStaticMarkup(createElement(TaskThread, {
     detail, recovery, workspace: { workers: [worker], skills: [skill], tasks: [task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
@@ -96,7 +96,7 @@ it('keeps the action row under the bubble and states a member failure once', () 
   const detail: TaskDetail = {
     task: { ...task, status: 'failed' }, runs: [member, synthesis], events: [], artifacts: [{ ...limited, runId: synthesis.id }],
     profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [],
-    usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 },
+    usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
   };
   const html = renderToStaticMarkup(createElement(TaskThread, {
     detail, workspace: { workers: [worker, listener], skills: [skill], tasks: [detail.task] }, action: () => {}, showSources: () => {}, openMessage: () => {},

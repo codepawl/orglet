@@ -1,11 +1,14 @@
 import { callStartingApp } from './client';
-import { DEFAULT_WAIT_SECONDS, type CliErrorCode, type CliRequestBody, type ListValue, type OpenValue, type ReadValue, type SendValue } from './protocol';
+import { DEFAULT_WAIT_SECONDS, type BringValue, type ChatChangeValue, type ChatControl, type ChatsValue, type CliErrorCode, type CliRequestBody, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type SendValue } from './protocol';
+import type { Reaction } from '../shared/message-interactions';
+import type { RunValue, SchedulesValue, ScheduleValue } from './protocol';
 import type { CliProgressFrame } from './protocol';
 import { ManagementCatalog, ManagementResult, type ManagementClient } from './management';
 
 /**
  * What `orglet chat` asks the app (COD-236), as one object the interactive session takes, so a test can hand it a fake
- * app. Each call is one request over the pipe, the same requests the one-shot commands make.
+ * app. Each call is one request over the pipe, the same requests the one-shot commands make. A `to` that starts with
+ * `#` is a chat's id from `orglet chats` (COD-354); anything else is an orglet's or crew's name.
  */
 export type ChatClient = {
   list: () => Promise<ListValue>;
@@ -14,6 +17,31 @@ export type ChatClient = {
   read: (to: string) => Promise<ReadValue>;
   open: (to: string) => Promise<OpenValue>;
   management?: ManagementClient;
+  actions?: ChatActionClient;
+};
+
+/**
+ * What the terminal chat does to a chat's messages and its latest turn, and to the chats themselves (COD-354).
+ * Optional so a test can hand the session an app without them; each call is the request the matching one-shot
+ * command makes.
+ */
+export type ChatActionClient = {
+  history: (to: string, turns: number, before?: number) => Promise<ReadValue>;
+  reply: (to: string, message: string, replyTo: string, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void) => Promise<SendValue>;
+  react: (to: string, emoji: Reaction, active: boolean, message?: string) => Promise<ReactValue>;
+  forward: (to: string, targets: string[], message?: string) => Promise<ForwardValue>;
+  control: (to: string, action: ChatControl, signal: AbortSignal) => Promise<ControlValue>;
+  answer: (to: string, answer: string, signal: AbortSignal) => Promise<ControlValue>;
+  chats: (archived: boolean) => Promise<ChatsValue>;
+  side: (to: string, message: string, signal: AbortSignal) => Promise<SendValue>;
+  bring: (chat: string, message?: string) => Promise<BringValue>;
+  group: (names: string[], message: string, signal: AbortSignal) => Promise<SendValue>;
+  members: (chat: string, names: string[]) => Promise<MembersValue>;
+  rename: (to: string, title: string) => Promise<ChatChangeValue>;
+  archive: (to: string) => Promise<ChatChangeValue>;
+  schedules: () => Promise<SchedulesValue>;
+  enableSchedule: (schedule: string, enabled: boolean) => Promise<ScheduleValue>;
+  runSchedule: (schedule: string) => Promise<RunValue>;
 };
 
 /** The app answered but said no: an unknown name, a chat with no conversation yet, a refused request. */
@@ -22,6 +50,13 @@ export class AppRefusal extends Error {
     super(message);
   }
 }
+
+/** The request fields for a chat: `#` and an id names a chat, anything else an orglet or crew. */
+export function chatFields(to: string): { to: string } | { chat: string } {
+  return to.startsWith('#') ? { chat: to.slice(1) } : { to };
+}
+
+const WAIT = { wait: true, timeoutSeconds: DEFAULT_WAIT_SECONDS };
 
 export function appChatClient(userData: string, executable: string | undefined): ChatClient {
   async function request<Value>(body: CliRequestBody, signal?: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<Value> {
@@ -32,7 +67,7 @@ export function appChatClient(userData: string, executable: string | undefined):
   return {
     list: () => request<ListValue>({ op: 'list' }),
     send: async (to, message, signal, progress) => {
-      const body = { op: 'send' as const, to, message, files: [], wait: true, timeoutSeconds: DEFAULT_WAIT_SECONDS };
+      const body = { op: 'send' as const, ...chatFields(to), message, files: [], ...WAIT };
       try {
         return await request<SendValue>({ ...body, ...(progress ? { progress: true } : {}) }, signal, progress);
       } catch (error) {
@@ -41,8 +76,30 @@ export function appChatClient(userData: string, executable: string | undefined):
         return request<SendValue>(body, signal);
       }
     },
-    read: to => request<ReadValue>({ op: 'read', to }),
-    open: to => request<OpenValue>({ op: 'open', to }),
+    read: to => request<ReadValue>({ op: 'read', ...chatFields(to) }),
+    // A chat by id has no orglet or crew to open on; the window comes forward as it is.
+    open: to => request<OpenValue>(to.startsWith('#') ? { op: 'open' } : { op: 'open', to }),
+    actions: {
+      history: (to, turns, before) => request<ReadValue>({ op: 'read', ...chatFields(to), turns, ...(before ? { before } : {}) }),
+      reply: (to, message, replyTo, signal, progress) => {
+        const body = { op: 'send' as const, ...chatFields(to), message, files: [], ...WAIT, replyTo };
+        return request<SendValue>({ ...body, ...(progress ? { progress: true } : {}) }, signal, progress);
+      },
+      react: (to, emoji, active, message) => request<ReactValue>({ op: 'react', ...chatFields(to), emoji, active, ...(message ? { message } : {}) }),
+      forward: (to, targets, message) => request<ForwardValue>({ op: 'forward', ...chatFields(to), targets, ...(message ? { message } : {}) }),
+      control: (to, action, signal) => request<ControlValue>({ op: 'control', ...chatFields(to), action, ...WAIT }, signal),
+      answer: (to, answer, signal) => request<ControlValue>({ op: 'answer', ...chatFields(to), answer, ...WAIT }, signal),
+      chats: archived => request<ChatsValue>({ op: 'chats', archived }),
+      side: (to, message, signal) => request<SendValue>({ op: 'side-thread', ...chatFields(to), message, ...WAIT }, signal),
+      bring: (chat, message) => request<BringValue>({ op: 'bring', chat, ...(message ? { message } : {}) }),
+      group: (names, message, signal) => request<SendValue>({ op: 'group', names, message, ...WAIT }, signal),
+      members: (chat, names) => request<MembersValue>({ op: 'members', chat, names }),
+      rename: (to, title) => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'rename', title }),
+      archive: to => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'archive' }),
+      schedules: () => request<SchedulesValue>({ op: 'schedules' }),
+      enableSchedule: (schedule, enabled) => request<ScheduleValue>({ op: 'schedule-enable', schedule, enabled }),
+      runSchedule: schedule => request<RunValue>({ op: 'run', schedule, files: [] }),
+    },
     management: {
       catalog: async () => ManagementCatalog.parse(await request({ op: 'config' })),
       saveOrglet: async (config, target) => ManagementResult.parse(await request({ op: 'save-orglet', config, ...(target ? { target } : {}) })),

@@ -1,15 +1,15 @@
 import { resolve } from 'node:path';
 import packageJson from '../../../../package.json';
-import { COMMAND_HELP, MAIN_HELP, parseArguments, UsageError, type ManagementCommand, type ParsedCommand } from './arguments';
+import { COMMAND_HELP, MAIN_HELP, parseArguments, UsageError, type ChatTarget, type ManagementCommand, type ParsedCommand } from './arguments';
 import { AppRefusal, appChatClient } from './chat-client';
 import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { formatList, formatOpen, formatRead, formatRun, formatSend, formatStatus } from './output';
+import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatScheduleChange } from './output';
 import { entriesFromList, findChat } from './picker';
-import { renderAnswers, styledList, styledStatus, type Layout } from './pretty';
-import { EXIT_CODES, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ListValue, type OpenValue, type ReadValue, type RunValue, type SendValue, type StatusValue } from './protocol';
+import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
+import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type ScheduleValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
@@ -52,22 +52,61 @@ const DEFAULT_COLUMNS = 80;
 
 type RequestCommand = Exclude<ParsedCommand, { kind: 'help' } | { kind: 'version' } | { kind: 'chat' } | ManagementCommand>;
 
+/** The request fields that name a chat: an orglet or crew by name, or a chat by its id (COD-354). */
+function targetFields(target: ChatTarget): ChatTarget {
+  return 'chat' in target ? { chat: target.chat } : { to: target.to };
+}
+
+/** How messages name a chat the command waited on: its orglet or crew, or `#` and its id. */
+function targetLabel(target: ChatTarget): string {
+  return 'chat' in target ? `#${target.chat}` : target.to;
+}
+
 function toRequest(command: RequestCommand, workingDirectory: string): CliRequestBody {
   switch (command.kind) {
     case 'status': return { op: 'status' };
     case 'list': return { op: 'list' };
     case 'config': return { op: 'config' };
-    case 'read': return { op: 'read', to: command.to };
+    case 'read': return { op: 'read', ...targetFields(command), ...(command.turns ? { turns: command.turns } : {}) };
     case 'open': return { op: 'open', ...(command.to ? { to: command.to } : {}) };
     case 'send': return {
       op: 'send',
-      to: command.to,
+      ...targetFields(command),
       message: command.message,
       // The app runs in another folder, so a relative path would point somewhere else there.
       files: command.files.map(file => resolve(workingDirectory, file)),
       wait: command.wait,
       timeoutSeconds: command.timeoutSeconds,
+      ...(command.replyTo ? { replyTo: command.replyTo } : {}),
     };
+    case 'react': return { op: 'react', ...targetFields(command), emoji: command.emoji, active: command.active, ...(command.message ? { message: command.message } : {}) };
+    case 'forward': return {
+      op: 'forward',
+      ...targetFields(command),
+      targets: command.targets,
+      ...(command.message ? { message: command.message } : {}),
+      ...(command.note ? { note: command.note } : {}),
+    };
+    case 'control': return { op: 'control', ...targetFields(command), action: command.action, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'answer': return { op: 'answer', ...targetFields(command), answer: command.answer, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'chats': return { op: 'chats', archived: command.archived };
+    case 'side': return { op: 'side-thread', ...targetFields(command), message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'bring': return { op: 'bring', chat: command.chat, ...(command.message ? { message: command.message } : {}) };
+    case 'group': return { op: 'group', names: command.names, message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'members': return { op: 'members', chat: command.chat, names: command.names };
+    case 'chat-change': return {
+      op: 'chat-change',
+      ...targetFields(command),
+      change: command.change,
+      ...(command.title ? { title: command.title } : {}),
+      ...(command.confirmName ? { confirmName: command.confirmName } : {}),
+    };
+    case 'archive-entity': return { op: 'archive-entity', kind: command.entity, name: command.name, archived: command.archived };
+    case 'template': return { op: 'template', templateId: command.templateId, provider: command.provider };
+    case 'schedules': return { op: 'schedules' };
+    case 'schedule-enable': return { op: 'schedule-enable', schedule: command.schedule, enabled: command.enabled };
+    case 'schedule-delete': return { op: 'schedule-delete', schedule: command.schedule, confirmName: command.confirmName };
+    case 'schedule-save': return { op: 'schedule-save', ...(command.schedule ? { schedule: command.schedule } : {}), ...command.fields };
     case 'run': return {
       op: 'run',
       schedule: command.schedule,
@@ -80,9 +119,21 @@ function printJson(output: Output, value: unknown): void {
   output.stdout(JSON.stringify(value, null, 2));
 }
 
+/**
+ * Whether a turn the command waited for ended with an answer. A question or a desktop-only approval it stopped on is
+ * said on standard error, with what to run next (COD-354).
+ */
 function sendExitCode(value: SendValue, output: Output, json: boolean): number {
   if (!value.waited) return EXIT_CODES.ok;
-  const readLater = `orglet read --to "${value.chat.name}"`;
+  if (value.needsDesktop) {
+    if (!json) output.stderr(t('{0} đang chờ bạn duyệt một bước trong app. Mở bằng: orglet open --to "{1}"', value.chat.name, value.chat.name));
+    return EXIT_CODES.failure;
+  }
+  if (value.question) {
+    if (!json) output.stderr(formatQuestion(value.question, value.chat));
+    return EXIT_CODES.failure;
+  }
+  const readLater = `orglet read ${chatOption(value.chat)}`;
   if (!value.finished) {
     if (!json) output.stderr(`${value.chat.name} is still working. Read the answer later with: ${readLater}`);
     return EXIT_CODES.failure;
@@ -97,6 +148,9 @@ function sendExitCode(value: SendValue, output: Output, json: boolean): number {
 }
 
 function readExitCode(value: ReadValue, output: Output, json: boolean): number {
+  if (!json && value.question) output.stderr(formatQuestion(value.question, value.chat));
+  if (!json && value.needsDesktop) output.stderr(t('{0} đang chờ bạn duyệt một bước trong app. Mở bằng: orglet open --to "{1}"', value.chat.name, value.chat.name));
+  if (value.turns) return EXIT_CODES.ok;
   if (value.answers.length === 0) {
     if (!json) output.stderr(`No answer in the chat with ${value.chat.name} yet.`);
     return EXIT_CODES.failure;
@@ -137,7 +191,7 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       return EXIT_CODES.ok;
     case 'read': {
       const readValue = value as ReadValue;
-      if (!command.json && readValue.answers.length) output.stdout(styled ? styledAnswers(readValue.answers, readValue.chat, layout) : formatRead(readValue));
+      if (!command.json) printRead(readValue, output, layout);
       return readExitCode(readValue, output, command.json);
     }
     case 'send': {
@@ -147,7 +201,72 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       if (!command.json && printable) output.stdout(styled && answered ? styledAnswers(sendValue.answers, sendValue.chat, layout) : formatSend(sendValue));
       return sendExitCode(sendValue, output, command.json);
     }
+    case 'react':
+      if (!command.json) output.stdout(formatReact(value as ReactValue));
+      return EXIT_CODES.ok;
+    case 'forward': {
+      const forwardValue = value as ForwardValue;
+      if (!command.json) output.stdout(formatForward(forwardValue));
+      return forwardValue.failed.length ? EXIT_CODES.failure : EXIT_CODES.ok;
+    }
+    case 'control':
+    case 'answer': return reportControl(command.json, value as ControlValue, output, layout);
+    case 'side':
+    case 'group': return reportNewChat(command.json, value as SendValue, output, layout);
+    case 'chats':
+      if (!command.json) output.stdout(formatChats(value as ChatsValue));
+      return EXIT_CODES.ok;
+    case 'bring':
+      if (!command.json) output.stdout(formatBring(value as BringValue));
+      return EXIT_CODES.ok;
+    case 'members':
+      if (!command.json) output.stdout(formatMembers(value as MembersValue));
+      return EXIT_CODES.ok;
+    case 'chat-change':
+      if (!command.json) output.stdout(formatChatChange(value as ChatChangeValue));
+      return EXIT_CODES.ok;
+    case 'archive-entity':
+      if (!command.json) output.stdout(formatArchiveEntity(value as ArchiveEntityValue));
+      return EXIT_CODES.ok;
+    case 'template':
+      if (!command.json) output.stdout(formatTemplate(value as TemplateValue));
+      return EXIT_CODES.ok;
+    case 'schedules':
+      if (!command.json) output.stdout(formatSchedules(value as SchedulesValue));
+      return EXIT_CODES.ok;
+    case 'schedule-enable':
+    case 'schedule-delete':
+    case 'schedule-save':
+      if (!command.json) output.stdout(formatScheduleChange(command.kind, value as ScheduleValue));
+      return EXIT_CODES.ok;
   }
+}
+
+/** A side thread or group chat prints its answers like `send`, then the id that reaches it again. */
+function reportNewChat(json: boolean, value: SendValue, output: Output, layout: Layout): number {
+  const answered = value.waited && value.answers.length > 0;
+  if (!json && answered) output.stdout(layout.mode !== 'none' ? styledAnswers(value.answers, value.chat, layout) : formatSend(value));
+  if (!json) output.stderr(formatNewChat(value));
+  return sendExitCode(value, output, json);
+}
+
+function printRead(value: ReadValue, output: Output, layout: Layout): void {
+  const styled = layout.mode !== 'none';
+  if (value.turns) {
+    if (value.earlier) output.stdout(t('… {0} lượt trước đó. Tăng --turns để xem thêm.', value.earlier));
+    if (value.turns.length) output.stdout(styled ? renderTurns(value.turns, { ...layout, fallbackColor: value.chat.color }).join('\n') : formatTurns(value.turns));
+    return;
+  }
+  if (value.answers.length) output.stdout(styled ? styledAnswers(value.answers, value.chat, layout) : formatRead(value));
+}
+
+/** A stop or pause says what it did; resume, retry, continue and answer print the turn they waited for, like `send`. */
+function reportControl(json: boolean, value: ControlValue, output: Output, layout: Layout): number {
+  const stopping = value.action === 'stop' || value.action === 'pause';
+  const answered = value.waited && value.answers.length > 0;
+  if (!json && (stopping || !value.waited || answered)) output.stdout(layout.mode !== 'none' && answered ? styledAnswers(value.answers, value.chat, layout) : formatControl(value));
+  if (stopping) return EXIT_CODES.ok;
+  return sendExitCode(value, output, json);
 }
 
 function reportFailure(response: Extract<CliResponse, { ok: false }>, json: boolean, output: Output): number {
@@ -176,12 +295,22 @@ async function sendWaiting(to: string, terminal: StatusTerminal, userData: strin
   return new WaitingFace({ write: terminal.write, color, mode: terminal.mode, label: `${name} is working`, hint: 'Ctrl+C stops waiting', columns: terminal.columns });
 }
 
+/** The chat a command waits on for an answer, if it does: `send`, `answer`, `side`, `group`, and resume, retry and continue. */
+function waitedChat(command: RequestCommand): string | undefined {
+  if (command.kind === 'send' || command.kind === 'answer' || command.kind === 'side') return command.wait ? targetLabel(command) : undefined;
+  if (command.kind === 'group') return command.wait ? command.names[0] : undefined;
+  if (command.kind !== 'control') return undefined;
+  const startsTurn = command.action === 'resume' || command.action === 'retry' || command.action === 'continue';
+  return startsTurn && command.wait ? targetLabel(command) : undefined;
+}
+
 async function requestWithWaiting(command: RequestCommand, request: CliRequestBody, output: Output, userData: string, executable: string | undefined, signal?: AbortSignal): Promise<CliResponse> {
-  const showsFace = command.kind === 'send' && command.wait && !command.json && output.statusTerminal !== undefined;
+  const chatName = waitedChat(command);
+  const showsFace = chatName !== undefined && !command.json && output.statusTerminal !== undefined;
   const releaseInterrupt = showsFace ? output.statusTerminal!.catchInterrupt?.() : undefined;
   let waiting: Waiting = NO_WAITING;
   try {
-    if (showsFace) waiting = await sendWaiting(command.to, output.statusTerminal!, userData, executable, signal);
+    if (showsFace) waiting = await sendWaiting(chatName, output.statusTerminal!, userData, executable, signal);
     waiting.start();
     return await callStartingApp(userData, request, executable, signal);
   } finally {
@@ -191,8 +320,9 @@ async function requestWithWaiting(command: RequestCommand, request: CliRequestBo
 }
 
 function reportStopped(command: RequestCommand, output: Output): number {
-  if (command.kind === 'send') {
-    output.stderr(`Stopped waiting. ${command.to} keeps working in the app. Read the answer later with: orglet read --to "${command.to}"`);
+  const chatName = waitedChat(command);
+  if (chatName !== undefined) {
+    output.stderr(`Stopped waiting. ${chatName} keeps working in the app. Read the answer later with: orglet read --to "${chatName}"`);
   } else {
     output.stderr('Stopped.');
   }
