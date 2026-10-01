@@ -1,7 +1,7 @@
 import { emitKeypressEvents, type Key } from 'node:readline';
 import { PassThrough } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
-import { ANSI, displayWidth, muted, padEnd, paint, truncate, type ColorMode } from './terminal';
+import { ANSI, displayWidth, layoutShortcutHint, muted, padEnd, paint, truncate, type ColorMode } from './terminal';
 
 type Input = NodeJS.ReadableStream & { isRaw?: boolean; setRawMode?: (raw: boolean) => unknown };
 type Output = NodeJS.WritableStream & { columns?: number; rows?: number };
@@ -351,8 +351,13 @@ export class TerminalComposer {
     const status = this.options.status();
     const hint = confirmingExit ? this.options.hint() : choices.length ? '↑↓ choose · Tab/Enter fill · Esc dismiss' : this.options.picker() ? '' : this.options.hint();
     const height = Math.max(1, (this.options.output.rows ?? 24) - 1);
-    const footer = status && height > 3 ? [muted(truncate(status, width), this.options.mode)] : [];
-    if (hint && height > 4) footer.push(muted(truncate(hint, width), this.options.mode));
+    const maximumHintLines = height >= 14 ? 2 : 1;
+    const statusLines = this.options.picker() && !confirmingExit ? layoutShortcutHint(status, width, maximumHintLines) : [truncate(status, width)];
+    const footer = status && height > 3 ? statusLines.map(line => muted(line, this.options.mode)) : [];
+    if (hint && height > 4) {
+      const hintLines = confirmingExit ? [truncate(hint, width)] : layoutShortcutHint(hint, width, maximumHintLines);
+      footer.push(...hintLines.map(line => muted(line, this.options.mode)));
+    }
     const rules = this.options.frame && !confirmingExit && height >= 3 ? 2 : 0;
     const detail = height >= 14 ? this.options.detail?.() : undefined;
     const detailRows = detail ? 1 : 0;

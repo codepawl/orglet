@@ -95,10 +95,12 @@ it('archives, restores and deletes workers and teams without breaking history, a
   const helper = await core.command('saveWorker', { name: 'Trợ lý', instructions: 'Help.', provider: 'demo', skillId, taskBudgetMicros: 100_000 }) as Worker;
   const taskId = await task('demo');
 
-  // The last active worker stays.
+  // The last orglet can go too. The sidebar then offers to create one.
   await core.command('archiveEntity', { kind: 'worker', id: helper.id, archived: true });
   expect((await workspace()).archivedWorkers.map(worker => worker.id)).toEqual([helper.id]);
-  await expect(core.command('archiveEntity', { kind: 'worker', id: researcher.id, archived: true })).rejects.toThrow('ít nhất một Tí');
+  await core.command('archiveEntity', { kind: 'worker', id: researcher.id, archived: true });
+  expect((await workspace()).workers).toHaveLength(0);
+  await core.command('archiveEntity', { kind: 'worker', id: researcher.id, archived: false });
   await core.command('archiveEntity', { kind: 'worker', id: helper.id, archived: false });
   expect((await workspace()).workers.map(worker => worker.id)).toContain(helper.id);
 

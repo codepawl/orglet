@@ -75,6 +75,7 @@ An edit or a pin creates a new approved revision. Runs already in progress keep 
 ## Deleting
 
 - **Deleting a chat** deletes the memories learned only in that chat. A memory that was also merged from another chat that still exists stays.
+- **Deleting an orglet or a crew** deletes the memories and the unreviewed notes scoped to it, and archives its approved notes. Workspace memories and notes stay, because they are about the person, not about that owner. Archiving the owner keeps both.
 - **Settings → Data → Delete memory** removes every memory, in every scope, including ones waiting for review. **Delete knowledge** removes notes only and leaves memory alone; the two are separate rows on that page. **Delete everything** removes both.
 - Backups carry memories, since they carry every knowledge row with its revision history; a restore brings them back. Team templates do not: a template carries a team's approved notes, and what a team remembered is about you, not about the team.
 
