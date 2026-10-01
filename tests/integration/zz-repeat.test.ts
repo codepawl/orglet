@@ -154,7 +154,7 @@ const finished = (taskId: string) => ['completed', 'failed', 'cancelled'].includ
 const REAL_BROWSER_TIMEOUT_MS = 120_000;
 
 describe.runIf(found !== null)('acting on pages in a real browser', { timeout: REAL_BROWSER_TIMEOUT_MS }, () => {
-  it.for(Array.from({ length: 25 }, (_, index) => index))('REPEAT types into a search box and clicks Search without asking, and refuses a ref the page no longer has %i', async () => {
+  it.for(Array.from({ length: 25 }, (_, index) => index))('REPEAT types into a search box and clicks Search without asking, and refuses a ref the page no longer has %i', { timeout: 120_000 }, async () => {
     const script: Script = [
       () => call('browser_open', { url: `${base}/shop`, tabId: null }),
       () => call('browser_snapshot', { tabId: 't1', offset: 0 }),
@@ -190,7 +190,7 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     expect(events).toContain(`Đã gõ vào “Search” trên ${site}`);
     expect(events).toContain(`Đã bấm “Search” trên ${site}`);
     expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, inChrome: false, using: false, waiting: false });
-  }, 120_000);
+  });
 
   it('asks before Place order: Allow once places it, Don\'t allow sends nothing, and a password is never typed', async () => {
     const script: Script = [
