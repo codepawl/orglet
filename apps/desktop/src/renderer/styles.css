@@ -489,12 +489,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The toolbar under the box (owner's reference, 2026-09-30): add at the left, the model or recipient and then the
    usage ring at the right, every control 28px and centred on one line. Its sides are the box's border plus padding,
    so the controls start and end where the box's own content does, in the pill and in the grown box alike. */
-.composer-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; margin-top:6px; padding:0 6px; }
+.composer-toolbar { display:flex; align-items:center; gap:4px; min-height:28px; margin-top:6px; padding:0 6px; }
 .composer.expanded + .composer-toolbar { padding:0 8px; }
-.composer-leading { display:flex; align-items:center; gap:4px; min-width:0; }
+.composer-leading { display:flex; align-items:center; flex-shrink:0; }
 /* The approval mode beside the add button (COD-367): a quiet chip like the model's at the other end, 28px on the
    row's centre line, its name cut with an ellipsis before the row would wrap. Hover tints, never a border or track. */
-.composer-leading > .source-picker { flex-shrink:0; }
 .composer-toolbar .composer-mode { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:min(210px,38vw); height:28px; min-height:28px; padding:0 10px 0 8px; border:0; border-radius:999px; background:transparent; color:var(--muted); font-size:12px; font-weight:500; }
 .composer-toolbar .composer-mode:hover:not(:disabled),.composer-toolbar .composer-mode[aria-expanded=true] { background:var(--surface); color:var(--text); }
 .composer-toolbar .composer-mode svg { flex-shrink:0; }
@@ -516,7 +515,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .mode-option-check { flex-shrink:0; color:var(--accent); visibility:hidden; }
 .mode-option[aria-checked=true] .mode-option-check { visibility:visible; }
 .mode-option-key { flex-shrink:0; min-width:18px; font:inherit; font-size:12px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
-.composer-toolbar-end { display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
+.composer-toolbar-end { margin-left:auto; padding-left:4px; display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
 .composer-trailing { display:flex; align-items:center; min-width:0; max-width:min(220px,42vw); }
 .composer-toolbar .composer-add { width:28px; height:28px; min-height:28px; padding:0; }
 .composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px 7px 10px; font-size:inherit; line-height:22px; }
