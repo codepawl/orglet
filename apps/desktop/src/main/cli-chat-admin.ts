@@ -83,7 +83,7 @@ export class CliChatAdmin {
     const workspace = await this.workspace();
     const members = uniqueMembers(workspace, request.names);
     const workers = answeringWorkers(workspace, members);
-    if (!workers.length) throw new CliFailure('failed', 'Kênh chưa có Tí nào để trả lời. Thêm một Tí hoặc một hội.');
+    if (!workers.length) throw new CliFailure('failed', 'Kênh chưa có Tí nào để trả lời. Thêm một Tí.');
     const name = request.name ?? channelNameFrom(members.map(member => memberNameOf(workspace, member)));
     const channelId = String(await this.dependencies.request('createChannel', { name, topic: request.topic ?? '', members }));
     const input: TaskInput = {

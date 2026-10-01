@@ -46,7 +46,7 @@ export function CrewPlanFlow({ diagram, live, statusLabel }: { diagram: CrewPlan
         <ChevronRight size={14} aria-hidden="true" className="activity-chevron" />
         <span>{planSummary(diagram)}</span>
       </summary>
-      <ol className="crew-flow" aria-label={t('Các bước của hội')}>{items}</ol>
+      <ol className="crew-flow" aria-label={t('Các bước của kênh')}>{items}</ol>
     </details>
     {/* The plain progress lines this replaces were a status region; the count keeps a screen reader told, folded or not. */}
     {live && <span className="visually-hidden" role="status">{t('{0}/{1} phần việc đã xong', [doneCount, diagram.memberCount])}</span>}
@@ -54,9 +54,9 @@ export function CrewPlanFlow({ diagram, live, statusLabel }: { diagram: CrewPlan
 }
 
 function planSummary(diagram: CrewPlanDiagram): string {
-  if (diagram.shape === 'side_by_side') return t('Kế hoạch của hội: {0} Tí làm cùng lúc', [diagram.memberCount]);
-  if (diagram.shape === 'one_after_another') return t('Kế hoạch của hội: {0} Tí làm lần lượt', [diagram.memberCount]);
-  return t('Kế hoạch của hội: {0} Tí qua {1} bước', [diagram.memberCount, diagram.rows.length]);
+  if (diagram.shape === 'side_by_side') return t('Kế hoạch của Tí trưởng: {0} Tí làm cùng lúc', [diagram.memberCount]);
+  if (diagram.shape === 'one_after_another') return t('Kế hoạch của Tí trưởng: {0} Tí làm lần lượt', [diagram.memberCount]);
+  return t('Kế hoạch của Tí trưởng: {0} Tí qua {1} bước', [diagram.memberCount, diagram.rows.length]);
 }
 
 /**

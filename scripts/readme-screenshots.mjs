@@ -64,7 +64,7 @@ async function main() {
     await page.screenshot({ path: join(outputFolder, 'new-task.png') });
 
     const team = await callCore(page, 'createTemplate', { templateId: 'research-review', provider: 'demo' });
-    await page.getByRole('button', { name: team.name, exact: true }).first().click();
+    await page.getByRole('button', { name: `#${team.name}`, exact: true }).first().click();
     await page.getByRole('textbox', { name: 'Message' }).fill(brief);
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     const taskHandle = await page.waitForFunction(async teamId => {

@@ -33,8 +33,8 @@ it('puts a group of choices\' title above its box, never on the box\'s edge (dog
   expect(css).toContain('.form fieldset { border:0; padding:0; margin:0; min-width:0; }');
   expect(css).toContain('.form legend { display:flex; font-size:13px; font-weight:500; padding:0 0 8px; }');
   expect(css).toContain('.fieldset-options { border:1px solid var(--border); border-radius:10px; padding:12px; }');
-  const crewEditor = readFileSync(join(__dirname, '../../apps/desktop/src/renderer/components/TeamEditor.tsx'), 'utf8');
-  expect(crewEditor.match(/<\/legend><div className="fieldset-options">/g)).toHaveLength(2);
+  const channelEditor = readFileSync(join(__dirname, '../../apps/desktop/src/renderer/components/ChannelDialog.tsx'), 'utf8');
+  expect(channelEditor.match(/<\/legend><div className="fieldset-options">/g)).toHaveLength(2);
 });
 
 it('keeps a select option detail to one line instead of breaking a model id', () => {

@@ -9,12 +9,14 @@ This folder is the map. Start with the [User guide](user-guide.md) if you want t
 
 How to write new pages: [writing.md](writing.md).
 
+Crews became channels in COD-369. A page that still says crew, team or group chat means a channel where a lead splits the work, or one where the orglets take turns; [orglets-and-crews.md](orglets-and-crews.md) and [team-chat.md](team-chat.md#crews-are-channels) have the details.
+
 ## Start here
 
 | Page | What it is |
 |---|---|
 | [user-guide.md](user-guide.md) | What Orglet is, install on Windows, first chat, and the map of the user pages |
-| [getting-started.md](getting-started.md) | The first walk-through with screenshots: Demo chat, a real model, a crew, files |
+| [getting-started.md](getting-started.md) | The first walk-through with screenshots: Demo chat, a real model, a channel, files |
 | [../README.md](../README.md) | What Orglet is, platforms, and how to contribute |
 
 ## Using Orglet
@@ -23,7 +25,7 @@ One short page per part of the app, in the words on screen.
 
 | Page | What it is |
 |---|---|
-| [orglets-and-crews.md](orglets-and-crews.md) | Create an orglet or a crew, how a crew turn runs, group chats, `@` tags, replies, reactions |
+| [orglets-and-crews.md](orglets-and-crews.md) | Create an orglet or a channel, how a lead splits the work in a channel, `@` tags, replies, reactions |
 | [connections.md](connections.md) | Claude Code, Codex, Cursor Agent and Gemini CLI on this computer, API keys, Ollama, Demo, model IDs, cost limits |
 | [chat-guide.md](chat-guide.md) | Attach files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, what is running and queued, notifications |
 | [viewing-and-editing-files.md](viewing-and-editing-files.md) | Open a chat's files, edit text and code with find and replace, mark up images and PDFs, save an edit as a new version, Ask about this |

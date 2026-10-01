@@ -35,7 +35,7 @@ export class SideThreads {
   /** Refuses a chat a side thread cannot start from, saying why. */
   assertCanStart(main: Task) {
     if (main.sideOf) throw new Error('Chat phụ chỉ mở được từ chat chính của Tí.');
-    if (main.teamId) throw new Error('Chat phụ chưa có cho hội. Nhắn trong chat của hội.');
+    if (main.teamId) throw new Error('Kênh chưa có chat phụ. Nhắn trong kênh.');
     if (main.assignees) throw new Error('Chat phụ chưa có cho chat nhóm. Nhắn trong chat nhóm.');
     if (!canStartSideThread(main)) throw new Error('Chat này đã đóng. Mở chat chính của Tí để bắt đầu chat phụ.');
   }

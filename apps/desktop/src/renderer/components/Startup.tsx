@@ -75,8 +75,8 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong></div>
       <div className="sidebar-scroll">
-        <SidebarSection id="teams" title={t('Hội')}><RowShapes count={TEAM_ROW_SHAPES} label={t('Đang mở danh sách hội…')} /></SidebarSection>
         <SidebarSection id="workers" title={t('Tí')}><RowShapes count={WORKER_ROW_SHAPES} label={t('Đang mở danh sách Tí…')} /></SidebarSection>
+        <SidebarSection id="channels" title={t('Kênh')}><RowShapes count={TEAM_ROW_SHAPES} label={t('Đang mở danh sách kênh…')} /></SidebarSection>
       </div>
       <div className="sidebar-footer">{footer.map(item => <Button key={item.label} disabled>{item.icon}{item.label}</Button>)}</div>
     </aside>

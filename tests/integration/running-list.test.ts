@@ -95,7 +95,7 @@ describe('status lines', () => {
   it('says why a run waits and where it stands in line', () => {
     expect(waitLine({ kind: 'provider', provider: 'claude-code', ahead: 2 })).toBe('Waiting for Claude Code · 2 ahead');
     expect(waitLine({ kind: 'provider', provider: 'openai', ahead: 0 })).toBe('Waiting for OpenAI · next in line');
-    expect(waitLine({ kind: 'crew_slot', ahead: 1 })).toBe('Waiting for a crew slot · 1 ahead');
+    expect(waitLine({ kind: 'crew_slot', ahead: 1 })).toBe('Waiting for a channel slot · 1 ahead');
     expect(waitLine({ kind: 'teammates', names: ['Lan', 'Huy'] })).toBe('Waiting for results from Lan, Huy');
     expect(waitLine({ kind: 'budget' })).toBe('Waiting for budget · raise the limit, then resume');
     // A custom connection is named by the person's name for it, and Gemini CLI like any other harness.
@@ -105,7 +105,7 @@ describe('status lines', () => {
     expect(runningMeta(item({ provider: `custom:${connectionId}`, cost: null }), 0)).toEqual({ elapsed: undefined, cost: 'Cost unknown', provider: 'LM Studio' });
     expect(waitLine({ kind: 'provider', provider: 'gemini', ahead: 0 })).toBe('Waiting for Gemini CLI · next in line');
     rememberCustomConnections([]);
-    expect(runningStatusLine(item({ state: 'paused', pauseReason: 'shift' }), undefined)).toBe('Paused at the end of the crew’s work hours');
+    expect(runningStatusLine(item({ state: 'paused', pauseReason: 'shift' }), undefined)).toBe('Paused at the end of the channel’s work hours');
     expect(runningStatusLine(item({ state: 'queued' }), undefined)).toBe('Starting…');
     expect(runningStatusLine(item({ state: 'paused', wait: { kind: 'approval', tool: 'search', server: 'Docs' } }), undefined)).toBe('Waiting for you to allow the MCP tool: search · Docs');
     expect(runningStatusLine(item({ state: 'paused', wait: { kind: 'answer' } }), undefined)).toBe('Waiting for your answer to the orglet’s question');

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Globe, UserRound, Users, FileText, Pin, Search, Tag, Target, Type } from 'lucide-react';
+import { Globe, Hash, UserRound, Users, FileText, Pin, Search, Tag, Target, Type } from 'lucide-react';
+import { channelLabel } from '../../shared/channels';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { isMemory, type ContextManifest, type Knowledge, type KnowledgeScope, type RunContext } from '../../shared/knowledge';
 import { MemoryList } from './Memories';
@@ -14,7 +15,7 @@ import { Input, Textarea } from '@codepawl/orglet-ui';
 
 export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
   if (scope.type === 'workspace') return t('Toàn workspace');
-  if (scope.type === 'team') return t('Hội {0}', [workspace.teams.find(team => team.id === scope.id)?.name ?? scope.id]);
+  if (scope.type === 'team') return t('Kênh {0}', [workspace.teams.find(team => team.id === scope.id)?.name ?? scope.id]);
   return t('Tí {0}', [workspace.workers.find(worker => worker.id === scope.id)?.name ?? scope.id]);
 }
 /** Who wrote a note: the orglet that suggested it (recorded since 2026-09-23), else its chat's orglet or crew lead. */
@@ -35,7 +36,7 @@ function knowledgeAuthor(item: Knowledge, workspace: Workspace): Worker | undefi
 function KnowledgeAuthor({ item, workspace }: { item: Knowledge; workspace: Workspace }) {
   const author = knowledgeAuthor(item, workspace);
   const kind = item.provenance.kind;
-  const name = author?.name ?? (kind === 'user' ? t('Bạn') : kind === 'template' ? t('Template hội') : t('Tí đã xóa'));
+  const name = author?.name ?? (kind === 'user' ? t('Bạn') : kind === 'template' ? t('Template kênh') : t('Tí đã xóa'));
   const origin = kind === 'run' ? t('đề xuất') : kind === 'template' ? t('nhập từ template') : t('tạo');
   return <div className="knowledge-author">
     {author
@@ -97,8 +98,8 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
           scope note showing (COD-250, COD-287: six rows let the bar cover its switch); the box still resizes. */}
       <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={5} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
       <label><FieldLabel icon={Tag}>{t('Thẻ')}</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder={t('ví dụ: khách hàng, giá')} /></label>
-      <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
-      {scope.startsWith('team:') && <p className="muted scope-note">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó.')}</p>}
+      <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: channelLabel(team.name), group: t('Kênh'), icon: <Hash size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
+      {scope.startsWith('team:') && <p className="muted scope-note">{t('Knowledge của kênh chỉ nạp khi chạy trong kênh đó.')}</p>}
       {scope.startsWith('worker:') && <p className="muted scope-note">{t('Knowledge của Tí này chỉ nạp khi Tí đó chạy.')}</p>}
       <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu khớp với nó.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
     </div>
@@ -114,7 +115,7 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
 export function ContextManifestView({ run, workspace }: { run: { snapshot: { context?: RunContext } }; workspace: Workspace }) {
   const context = run.snapshot.context;
   if (!context) return null;
-  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn hội'), worker: t('Hướng dẫn Tí'), skill: t('Kỹ năng'), knowledge: 'Knowledge', summary: t('Tóm tắt hội thoại'), memory: t('Đoạn hội thoại cũ'), remembered: t('Ghi nhớ'), turn: t('Lượt cũ'), main_chat: t('Chat chính') };
+  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn của Tí trưởng'), worker: t('Hướng dẫn Tí'), skill: t('Kỹ năng'), knowledge: 'Knowledge', summary: t('Tóm tắt hội thoại'), memory: t('Đoạn hội thoại cũ'), remembered: t('Ghi nhớ'), turn: t('Lượt cũ'), main_chat: t('Chat chính') };
   const reasons: Record<string, string> = { duplicate: t('trùng nội dung đã nạp'), context_limit: t('vượt giới hạn context'), not_relevant: t('không khớp yêu cầu'), summarized: t('đã tóm tắt'), truncated: t('bị cắt') };
   const knowledgeTitle = (id?: string) => context.knowledge.find(entry => entry.id === id)?.title ?? workspace.knowledge.find(entry => entry.id === id)?.title;
   const memoryText = (id?: string) => { const text = context.memories?.find(entry => entry.id === id)?.text ?? workspace.knowledge.find(entry => entry.id === id)?.content; return text && text.length > 80 ? `${text.slice(0, 80)}…` : text; };

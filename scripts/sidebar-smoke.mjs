@@ -17,9 +17,9 @@ try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
   await useVietnamese(page);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
+  await page.getByRole('button', { name: '#Research Review', exact: true }).waitFor();
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Eris Review', exact: true }).waitFor();
+  await page.getByRole('button', { name: '#Eris Review', exact: true }).waitFor();
 
   // Clicking a worker name opens that worker's chat. There is no task-list disclosure.
   const researcher = page.getByRole('button', { name: 'Researcher', exact: true });
@@ -62,10 +62,10 @@ try {
   await waitFor(async () => (await workspace(page)).workers[0].name === last, 'drag reorder');
   assert.equal(await page.locator('.tree-item.dragging').count(), 0);
 
-  // Keyboard: Alt+ArrowDown moves the first team down.
-  const teams = (await workspace(page)).teams.map(team => team.name);
-  await page.getByRole('button', { name: teams[0], exact: true }).focus(); await page.keyboard.press('Alt+ArrowDown');
-  await waitFor(async () => (await workspace(page)).teams[0].name === teams[1], 'keyboard reorder');
+  // Channels have no reorder (COD-369): a crew is a channel now, and the list is newest first.
+  const channelRows = page.locator('.channel-row > .worker-row > button.worker');
+  assert.equal(await channelRows.count(), 2, 'both template crews are channels');
+  assert.equal(await channelRows.first().getAttribute('aria-label'), '#Eris Review', 'the newest channel is listed first');
 
   // Dragging the handle resizes the sidebar, and the width survives a restart.
   const sidebarWidth = () => page.locator('.sidebar').evaluate(element => Math.round(element.getBoundingClientRect().width));

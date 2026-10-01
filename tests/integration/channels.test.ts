@@ -82,7 +82,8 @@ describe('an empty channel in the window', () => {
   it('can be started from two or more orglets, or any crews, picked in the sidebar', () => {
     expect(channelMembersFromSelection({ section: 'workers', ids: ['b', 'a'], anchor: 'a' })).toEqual([{ kind: 'orglet', id: 'b' }, { kind: 'orglet', id: 'a' }]);
     expect(channelMembersFromSelection({ section: 'workers', ids: ['a'], anchor: 'a' })).toBeUndefined();
-    expect(channelMembersFromSelection({ section: 'teams', ids: ['t'], anchor: 't' })).toEqual([{ kind: 'crew', id: 't' }]);
+    // Crews are channels now (COD-369): they are never picked together to start another one.
+    expect(channelMembersFromSelection({ section: 'teams', ids: ['t'], anchor: 't' })).toBeUndefined();
     expect(channelMembersFromSelection(noSelection)).toBeUndefined();
   });
 
@@ -150,14 +151,17 @@ describe('channels in the core', () => {
   it('creates an empty channel with no row, and its first message makes the row with the channel on it', async () => {
     const crew = await core.command('saveTeam', { name: 'Launch crew', instructions: 'Combine.', memberIds: [writer.id], synthesizerId: editor.id, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 }) as Team;
     const channelId = await core.command('createChannel', { name: '#launch', topic: 'Ship it', members: [{ kind: 'orglet', id: scout.id }, { kind: 'crew', id: crew.id }] }) as string;
-    expect(store.workspace().emptyChannels).toMatchObject([{ id: channelId, name: 'launch', topic: 'Ship it' }]);
+    // The crew has its own channel since COD-369; a crew named as a member joins as its orglets.
+    const launch = store.workspace().emptyChannels.find(channel => channel.id === channelId);
+    expect(launch).toMatchObject({ name: 'launch', topic: 'Ship it', members: [{ kind: 'orglet', id: scout.id }, { kind: 'orglet', id: writer.id }, { kind: 'orglet', id: editor.id }] });
+    expect(store.workspace().emptyChannels.map(channel => channel.crewId)).toEqual(expect.arrayContaining([crew.id]));
     expect(store.workspace().tasks).toHaveLength(0);
     const taskId = await core.command('createTask', { workerId: scout.id, channelId, brief: 'Plan the launch', ...message }) as string;
     await settled(taskId);
     const task = store.get<Task>('tasks', taskId);
     expect(task.channel).toMatchObject({ id: channelId, name: 'launch', topic: 'Ship it' });
     expect(task.assignees).toEqual([scout.id, writer.id, editor.id]);
-    expect(store.workspace().emptyChannels).toEqual([]);
+    expect(store.workspace().emptyChannels.map(channel => channel.id)).not.toContain(channelId);
     expect(store.workspace().tasks.find(row => row.id === taskId)?.title).toBe('launch');
     // A channel is never an orglet's main chat, even with one orglet in it.
     expect(liveWorkerTask(store.workspace().tasks, scout.id)).toBeUndefined();
@@ -202,13 +206,16 @@ describe('channels in the core', () => {
     expect(store.workspace().tasks.find(row => row.id === taskId)).toBeUndefined();
   });
 
-  it('follows a crew whose members change', async () => {
+  it('keeps a crew named as a member as the orglets it had, since the crew is a channel of its own (COD-369)', async () => {
     const crew = await core.command('saveTeam', { name: 'Crew', instructions: 'Combine.', memberIds: [writer.id], synthesizerId: writer.id, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 }) as Team;
     const channelId = await core.command('createChannel', { name: 'crew-room', topic: '', members: [{ kind: 'crew', id: crew.id }] }) as string;
     const taskId = await core.command('createTask', { workerId: writer.id, channelId, brief: 'Hi', ...message }) as string;
     await settled(taskId);
     await core.command('saveTeam', { ...crew, memberIds: [editor.id, scout.id], synthesizerId: writer.id, expectedRevision: crew.revision });
-    expect(store.get<Task>('tasks', taskId)).toMatchObject({ workerId: editor.id, assignees: [editor.id, scout.id, writer.id] });
+    expect(store.get<Task>('tasks', taskId)).toMatchObject({ workerId: writer.id, assignees: [writer.id], channel: { members: [{ kind: 'orglet', id: writer.id }] } });
+    // The crew's own channel follows it instead.
+    const crewChannel = store.workspace().emptyChannels.find(channel => channel.crewId === crew.id);
+    expect(crewChannel?.members).toEqual([{ kind: 'orglet', id: editor.id }, { kind: 'orglet', id: scout.id }, { kind: 'orglet', id: writer.id }]);
   });
 
   it('makes a channel of a chat several orglets were given some other way', async () => {

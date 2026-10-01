@@ -27,7 +27,7 @@ export function matchChat(query: string, chats: readonly CliChat[]): CliChat {
   const wanted = query.trim().toLocaleLowerCase();
   const exact = chats.filter(chat => chat.name.toLocaleLowerCase() === wanted);
   if (exact.length === 1) return exact[0];
-  if (exact.length > 1) throw new CliFailure('ambiguous', `"${exact[0].name}" là tên của nhiều Tí hoặc hội. Đổi tên trong app để phân biệt.`);
+  if (exact.length > 1) throw new CliFailure('ambiguous', `"${exact[0].name}" là tên của nhiều Tí hoặc kênh. Đổi tên trong app để phân biệt.`);
   const prefixed = chats.filter(chat => chat.name.toLocaleLowerCase().startsWith(wanted));
   if (prefixed.length === 1) return prefixed[0];
   if (prefixed.length > 1) throw ambiguous(query, prefixed);
@@ -41,8 +41,8 @@ function ambiguous(query: string, candidates: readonly CliChat[]): CliFailure {
 }
 
 function notFound(query: string, names: string): never {
-  if (!names) throw new CliFailure('not_found', 'Chưa có Tí hay hội nào.');
-  throw new CliFailure('not_found', `Không có Tí hay hội nào tên "${query}". Có: ${names}.`);
+  if (!names) throw new CliFailure('not_found', 'Chưa có Tí hay kênh nào.');
+  throw new CliFailure('not_found', `Không có Tí hay kênh nào tên "${query}". Có: ${names}.`);
 }
 
 /**

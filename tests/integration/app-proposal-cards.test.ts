@@ -40,7 +40,7 @@ it('puts the new orglets on one card of rows, draws a crew as its people, and ke
   expect(html).toMatch(/proposal-orglet-state success[^>]*>Applied</);
   expect(html).toContain('aria-label="Apply Research Scout"');
   expect(html).toContain('aria-label="Dismiss Research Scout"');
-  expect(html).toContain('New crew · Research crew');
+  expect(html).toContain('New channel · Research crew');
   // The crew is its members' faces and names with the lead marked, not a field list.
   expect(html).toContain('proposal-crew-member');
   expect(html).toContain('Sequential');
