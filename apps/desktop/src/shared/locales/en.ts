@@ -2994,7 +2994,7 @@ export const en: Dictionary = {
   'Cần thư mục làm việc · chọn để thêm': 'Needs a working folder · pick one',
   'Cần quyền sửa thư mục · chọn để cho phép': 'Needs edit access to the folder · allow it',
   'Chat phụ dùng quyền của chat chính. Đổi ở chat chính.': "A side thread uses its main chat's permissions. Change them there.",
-  'Hội và kênh áp dụng thay đổi của từng Tí ngay khi Tí đó xong.': "Crews and channels apply each orglet's changes as soon as it finishes.",
+  'Kênh áp dụng thay đổi của từng Tí ngay khi Tí đó xong.': "Channels apply each orglet's changes as soon as it finishes.",
   'Kế hoạch, chưa thay đổi gì.': 'A plan. Nothing changed yet.',
   'Làm theo kế hoạch': 'Follow the plan',
   'Làm theo kế hoạch trên.': 'Follow the plan above.',
