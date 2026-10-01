@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, CornerDownRight, Trash2, MessagesSquare, MessageSquareText, UserRoundCog, UserRoundPlus, Users } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, CornerDownRight, History, Trash2, MessagesSquare, MessageSquareText, UserRoundCog, UserRoundPlus, Users } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
@@ -1817,11 +1817,11 @@ export function App() {
   const openChatItemOf = (key: string): OpenChatItem | undefined => {
     const task = chatOfKey(key);
     if (!task || isRosterChat(key)) return undefined;
-    const kind = task.routineId ? 'schedule' : isGroupChat(task) ? 'group' : 'side';
+    const kind = task.routineId ? 'schedule' : isGroupChat(task) ? 'group' : task.sideOf ? 'side' : 'earlier';
     const owner = ownerNameOf(task);
     const description = kind === 'schedule' ? t('Lần chạy theo lịch của {0}', [owner])
       : kind === 'group' ? t('Nhóm chat')
-        : task.sideOf ? t('Chat phụ của {0}', [owner]) : t('Chat cũ của {0}', [owner]);
+        : kind === 'side' ? t('Chat phụ của {0}', [owner]) : t('Chat cũ của {0}', [owner]);
     return { key, kind, name: openChatName(task), description, face: openChatFace(task, 'sm'), state: openStateOf(task), active: key === activeChatKey,
       onOpen: () => openChatByKey(key), onDwell: resting => dwellChat(task.id, resting) };
   };
@@ -1833,14 +1833,14 @@ export function App() {
   const openChatItems = shownOpenChats(openChats.open, chatHasRow).map(openChatItemOf).filter((item): item is OpenChatItem => Boolean(item));
   shownOpenKeys.current = openChatItems.map(item => item.key);
   /**
-   * On the rail an open chat is a face at the roster's size. A side thread or a schedule's run of an orglet wears a small
-   * thread or calendar badge, so it is not taken for the orglet's own face above it.
+   * On the rail an open chat is a face at the roster's size. An orglet's schedule run, side thread or earlier chat wears a
+   * small calendar, thread or clock badge, so it is not taken for the orglet's own face above it.
    */
   const railOpenFace = (item: OpenChatItem) => {
     const task = chatOfKey(item.key);
     const owner = task && !task.teamId && item.kind !== 'group' ? [...workspace.workers, ...workspace.archivedWorkers].find(worker => worker.id === task.workerId) : undefined;
     if (!owner) return task ? openChatFace(task, 'xs') : item.face;
-    const KindIcon = item.kind === 'schedule' ? LucideCalendarClock : CornerDownRight;
+    const KindIcon = item.kind === 'schedule' ? LucideCalendarClock : item.kind === 'side' ? CornerDownRight : History;
     return <Avatar name={owner.name} seed={owner.id} mascot={owner.avatar?.mascot} defaultMascot hint={owner.description} color={owner.avatar?.color} size="sm"
       badge={<KindIcon size={9} strokeWidth={2.5} className="open-chat-badge" aria-hidden="true" />} />;
   };
