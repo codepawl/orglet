@@ -9,7 +9,11 @@ import { StoppedError, UnreachableError } from './client';
 import { chosenEntry, createPicker, entriesFromList, findChat, moveSelection, renderPickerLines, setFilter, visibleEntries, type ChatEntry, type PickerState } from './picker';
 import { answerColor, chatHeader, renderAnswers, styledList } from './pretty';
 import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
-import { completeSlash, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
+import { completeSlash, HISTORY_PAGE, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
+import { renderTurns } from './pretty';
+import type { ChatActionClient } from './chat-client';
+import type { ChatControl, CliProgressFrame, CliQuestion } from './protocol';
+import type { Reaction } from '../shared/message-interactions';
 import { ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
 import type { ManagementResult } from './management';
@@ -43,9 +47,17 @@ const PICKER_MAX_ROWS = 8;
 const WELCOME_FACE_LIMIT = 12;
 const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
 /** These controls do not change the chat or submit a turn, so they need not wait behind one. */
-const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents']);
+const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage']);
+
+/** Stop and pause act on the turn this terminal is waiting for, so they cannot wait behind it. */
+function isImmediate(command: SlashCommand): boolean {
+  if (command.kind === 'control') return command.action === 'stop' || command.action === 'pause';
+  return IMMEDIATE_COMMANDS.has(command.kind);
+}
 
 type QueuedLine = { text: string };
+/** Starts the request a wait is for: a message, a reply, an answer or a control that starts a turn. */
+type TurnStarter = (signal: AbortSignal, progress?: (frame: CliProgressFrame) => void) => Promise<SendValue>;
 type View = 'picker' | 'chat';
 
 class Session {
@@ -78,6 +90,7 @@ class Session {
   private editor: ManagementEditor | undefined;
   private editorDraft = '';
   private managementOpening: { action: ManagementAction } | undefined;
+  private historyLoading = false;
 
   constructor(private readonly options: InteractiveOptions) {
     this.terminal = options.terminal ?? Boolean(options.input.isTTY && options.output.isTTY);
@@ -228,7 +241,7 @@ class Session {
 
   private suggestions(text: string): Suggestion[] {
     const [candidates] = completeSlash(text, this.entries.map(entry => entry.name));
-    const entityCommand = text.match(/^\s*\/(to|edit|delete)\s+/i)?.[1].toLowerCase();
+    const entityCommand = text.match(/^\s*\/(to|edit|delete|forward)\s+/i)?.[1].toLowerCase();
     if (entityCommand) {
       const matching = new Set(candidates);
       return this.entries.filter(entry => matching.has(`/${entityCommand} ${entry.name}`)).map(entry => ({
@@ -260,7 +273,7 @@ class Session {
     }
     if (action === 'pageUp' || action === 'pageDown') {
       if (this.panel || this.agentsVisible) this.panelOffset += action === 'pageUp' ? -5 : 5;
-      else this.transcript.offset += action === 'pageUp' ? 5 : -5;
+      else this.scrollTranscript(action === 'pageUp' ? 5 : -5);
       return;
     }
     if (this.view !== 'chat') return;
@@ -470,7 +483,7 @@ class Session {
     }
     if (this.terminal && this.view === 'chat' && isSlashCommand(text)) {
       const command = parseSlash(text);
-      if (IMMEDIATE_COMMANDS.has(command.kind)) {
+      if (isImmediate(command)) {
         void this.command(command).finally(() => this.showPrompt());
         return;
       }
@@ -555,6 +568,13 @@ class Session {
       case 'agents':
         this.shortcut('agents');
         return;
+      case 'history': return this.loadHistory(command.count ?? HISTORY_PAGE);
+      case 'reply': return this.send(command.message, command.ref);
+      case 'react': return this.react(command.emoji, command.active, command.ref);
+      case 'forward': return this.forward(command.targets, command.ref);
+      case 'answer': return this.awaitAction(actions => signal => actions.answer(this.chat!.name, command.answer, signal));
+      case 'control': return this.control(command.action);
+      case 'usage': return this.printMuted(command.message);
       case 'new': return this.manage('new', command.entity);
       case 'edit': return this.manage('edit', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
@@ -727,6 +747,8 @@ class Session {
       if (value.answers.length === 0) this.printMuted(`No answer in the chat with ${chat.name} yet.`);
       else this.printAnswers(value.answers);
       if (['queued', 'running', 'pausing'].includes(value.status)) this.printMuted(`${chat.name} is working on a newer message.`);
+      if (value.question) this.printQuestion(value.question);
+      if (value.needsDesktop) this.printMuted(t('{0} đang chờ bạn duyệt một bước. /open mở chat này trong app.', chat.name));
     } catch (error) {
       this.printFailure(error);
     }
@@ -804,13 +826,119 @@ class Session {
     this.composer.replace(item.text);
   }
 
-  private async send(text: string): Promise<void> {
-    this.panel = undefined;
+  private async send(text: string, replyTo?: string): Promise<void> {
     const chat = this.chat!;
     if (this.terminal && this.usesDemo(chat)) {
       this.printError('Nothing was sent: this chat uses Demo. /open lets you choose a real connection.');
       return;
     }
+    if (replyTo) return this.awaitAction(actions => (signal, progress) => actions.reply(chat.name, text, replyTo, signal, progress));
+    return this.awaitTurn((signal, progress) => this.options.client.send(chat.name, text, signal, progress));
+  }
+
+  /** The chat actions of an app new enough to have them (COD-354); an older one gets a hint instead. */
+  private actions(): ChatActionClient | undefined {
+    const actions = this.options.client.actions;
+    if (!actions) this.printError(t('Cập nhật Orglet và CLI để dùng lệnh này.'));
+    return actions;
+  }
+
+  private async awaitAction(start: (actions: ChatActionClient) => TurnStarter): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    return this.awaitTurn(start(actions));
+  }
+
+  /** Stop and pause act at once; resume, retry and continue wait for the turn they start, like a message. */
+  private async control(action: ChatControl): Promise<void> {
+    const chat = this.chat!;
+    if (action !== 'stop' && action !== 'pause') return this.awaitAction(actions => signal => actions.control(chat.name, action, signal));
+    const actions = this.actions();
+    if (!actions) return;
+    try {
+      await actions.control(chat.name, action, new AbortController().signal);
+      this.printMuted(action === 'stop' ? t('Đã dừng lượt đang chạy với {0}.', chat.name) : t('{0} sẽ tạm dừng sau bước đang làm.', chat.name));
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  private async react(emoji: Reaction, active: boolean, ref?: string): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    try {
+      const value = await actions.react(this.chat!.name, emoji, active, ref);
+      this.printMuted(value.active ? t('Đã thả {0} vào #{1}.', value.emoji, value.ref) : t('Đã gỡ {0} khỏi #{1}.', value.emoji, value.ref));
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  private async forward(targets: string[], ref?: string): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    try {
+      const value = await actions.forward(this.chat!.name, targets, ref);
+      for (const item of value.sent) this.printMuted(t('Đã chuyển tiếp tới {0}.', item.name));
+      for (const item of value.failed) this.printError(t('Không chuyển tiếp được tới {0}: {1}', item.name, item.error));
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  private scrollTranscript(lines: number): void {
+    const wasAtTop = this.transcript.atTop;
+    this.transcript.offset += lines;
+    const loadsMore = lines > 0 && wasAtTop && this.view === 'chat' && !this.transcript.historyComplete && this.options.client.actions !== undefined;
+    if (loadsMore) void this.loadHistory(HISTORY_PAGE, true);
+  }
+
+  /**
+   * Puts earlier turns of this chat above the conversation (COD-354), before the first one this terminal sent, so
+   * nothing shows twice. Page Up at the top does the same quietly.
+   */
+  private async loadHistory(count: number, fromScrolling = false): Promise<void> {
+    const chat = this.chat;
+    const transcript = this.transcript;
+    if (!chat || this.historyLoading) return;
+    if (transcript.historyComplete) {
+      if (!fromScrolling) this.printMuted(t('Đã hiện đến đầu cuộc trò chuyện.'));
+      return;
+    }
+    const actions = this.actions();
+    if (!actions) return;
+    this.historyLoading = true;
+    try {
+      const value = await actions.history(chat.name, count, transcript.earliestTurn ?? transcript.firstSentTurn);
+      const turns = value.turns ?? [];
+      transcript.historyComplete = !value.earlier;
+      if (turns.length) transcript.earliestTurn = turns[0].number;
+      const notice = value.earlier ? t('… còn {0} lượt trước đó · PgUp hoặc /history tải thêm', value.earlier) : t('Đầu cuộc trò chuyện');
+      if (this.terminal) transcript.prependTurns(turns, { text: notice, style: { foreground: MUTED_COLOR } });
+      else {
+        this.printMuted(notice);
+        this.printLines(renderTurns(turns, { mode: this.mode, width: this.textWidth(), fallbackColor: chat.color }));
+        this.print();
+      }
+    } catch (error) {
+      if (error instanceof AppRefusal && error.code === 'not_found' && fromScrolling) transcript.historyComplete = true;
+      else this.printFailure(error);
+    } finally {
+      this.historyLoading = false;
+      this.showPrompt();
+    }
+  }
+
+  private printQuestion(question: CliQuestion): void {
+    this.printWrapped(question.question, { bold: true });
+    question.options.forEach((option, index) => this.print(`  ${index + 1}. ${option}`));
+    this.printMuted(t('Gõ /answer <số> hoặc /answer <câu trả lời của bạn>.'));
+  }
+
+  /** Waits for a turn a message, an answer or a control started, showing its steps, then prints what it ended with. */
+  private async awaitTurn(start: TurnStarter): Promise<void> {
+    this.panel = undefined;
+    const chat = this.chat!;
     const controller = new AbortController();
     const startedAt = Date.now();
     this.waitingController = controller;
@@ -819,12 +947,12 @@ class Session {
     this.showPrompt();
     if (this.terminal) this.waitingTimer = setInterval(() => this.showPrompt(), this.options.reducedMotion || this.mode === 'none' ? 1000 : 120);
     try {
-      const progress = activity ? (frame: import('./protocol').CliProgressFrame) => {
+      const progress = activity ? (frame: CliProgressFrame) => {
         if (this.finished || controller.signal.aborted) return;
         activity.frame = frame;
         this.showPrompt();
       } : undefined;
-      const value = await this.options.client.send(chat.name, text, controller.signal, progress);
+      const value = await start(controller.signal, progress);
       if (this.finished) return;
       this.printTurn(value, Math.round((Date.now() - startedAt) / 1000));
     } catch (error) {
@@ -861,7 +989,16 @@ class Session {
 
   private printTurn(value: SendValue, seconds: number): void {
     const chat = this.chat!;
+    if (value.turn !== undefined && this.transcript.firstSentTurn === undefined) this.transcript.firstSentTurn = value.turn;
     if (value.answers.length > 0) this.printAnswers(value.answers, `${seconds}s`);
+    if (value.needsDesktop) {
+      this.printMuted(t('{0} đang chờ bạn duyệt một bước. /open mở chat này trong app.', chat.name));
+      return;
+    }
+    if (value.question) {
+      this.printQuestion(value.question);
+      return;
+    }
     if (!value.finished) {
       this.printMuted(`${chat.name} is still working. /read shows the answer later.`);
       return;

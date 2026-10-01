@@ -23,12 +23,30 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet create <orglet\|crew> --config <file.json>` | Creates an orglet or crew |
 | `orglet edit <orglet\|crew> "<name>" --config <patch.json>` | Changes the supplied configuration fields |
 | `orglet delete <orglet\|crew> "<name>" --confirm "<full name>"` | Removes a confirmed entity while retaining past chats |
-| `orglet send "message" --to <name>` | Sends a message into that chat and prints the answer |
-| `orglet read --to <name>` | Prints the latest answer in that chat |
+| `orglet send "message" --to <name> [--reply-to <number>]` | Sends a message into that chat and prints the answer, optionally as a reply |
+| `orglet read --to <name> [--turns <n>]` | Prints the latest answer in that chat, or its last turns, numbered |
+| `orglet react <reaction> --to <name>` | Reacts to the latest answer or a numbered message. See [react](#react). |
+| `orglet forward --to <name> --target <name>` | Forwards a message to up to five other chats. See [forward](#forward). |
+| `orglet answer "<answer>" --to <name>` | Answers the question an orglet is waiting on. See [answer](#answer). |
+| `orglet stop\|pause\|resume\|retry\|continue --to <name>` | The buttons under a chat's latest turn. See [Stop, pause, resume, retry, continue](#stop-pause-resume-retry-continue). |
 | `orglet open [--to <name>]` | Brings the Orglet window forward, and with `--to` opens that chat |
 | `orglet run "<schedule>" [--file <path>]` | Starts a schedule now, with the files you attach. See [run](#run). |
 
-It can create, edit and remove orglets and crews. Connection setup, API keys, folder grants, permissions, global settings, schedules, backups and archiving stay in the desktop. The app refuses any other request, even one that carries the right token.
+It can create, edit and remove orglets and crews, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
+
+### What stays in the desktop
+
+These are trust decisions, so the terminal has no operation for them:
+
+- browser, desktop and MCP approvals, the cards that ask before an orglet takes a consequential step
+- folder grants and the folder's level
+- a chat's permissions (tools, commands, web)
+- API keys and connections, and signing a harness CLI in
+- approving or archiving knowledge proposals, and applying app-change proposals
+- backups, restore and erase
+- the CodePawl account
+
+The reason is where the pipe's token lives. It is a file in the data folder. An orglet that runs through a harness CLI such as Claude Code or Codex runs as you, the same user, and can read that folder. Anything the pipe could approve, an orglet could approve for itself. When a turn stops on one of these cards, `send`, `answer` and the chat stop waiting and say so; `/open` or `orglet open --to <name>` shows the card in the app.
 
 File Explorer's **Send to** menu and `orglet://` links are other ways in, on [their own page](integrations.md).
 
@@ -90,7 +108,7 @@ Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter
 
 While an answer is on its way, `/queue` shows previews of the messages and commands waiting in this terminal. `/undo` takes the last one out of that queue and puts its full text back into the draft, including its newlines. Edit it and press Enter to queue it again, or clear the draft to leave it unsent. It cannot take back a message already sent to the app, and it does not stop the current run. This queue belongs to the terminal session and is not saved between sessions.
 
-`/open`, `/help`, `/clear`, `/queue` and `/undo` run immediately while waiting. This lets you open the desktop for an approval without waiting for the blocked turn to finish. Other messages and commands, including `/to`, keep their order in the queue.
+`/open`, `/help`, `/clear`, `/queue`, `/undo`, `/history`, `/react`, `/unreact`, `/forward`, `/stop` and `/pause` run immediately while waiting. This lets you open the desktop for an approval without waiting for the blocked turn to finish. Other messages and commands, including `/to`, keep their order in the queue.
 
 The draft wraps with the terminal's width. For a long draft, only the rows around the cursor are shown; moving the cursor reveals the rest. Press Ctrl+C twice to leave: the first press shows a plain reminder without horizontal rules and pauses queue dispatch, the second exits. Esc or Enter dismisses the reminder without sending; typing or pasting dismisses it and continues editing. Pasted control keys never confirm. Ctrl+D or `/exit` leaves immediately. Leaving drops this terminal's unsent draft and local queue. Messages already sent keep running in the app.
 
@@ -99,6 +117,16 @@ The draft wraps with the terminal's width. For a long draft, only the rows aroun
 A message you send is the same turn the app's message box makes, with the same consent and cost limit as [send](#send). The answer is also in the app.
 
 Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, lists and quotes are shown as such, links print as their text followed by the address, and code blocks are kept exactly as written, indented. Switching chats keeps their terminal histories separate. `/read` retrieves the latest saved answer; `/clear` clears only the terminal view. Leaving restores the terminal screen that was there before chat opened.
+
+### Earlier turns, replies, reactions and the latest turn
+
+Page Up at the top of the conversation loads the ten turns before what is shown, and `/history [n]` loads `n` of them. They appear above, numbered the way `orglet read --turns` numbers them: `#3` is your third message and `#3.1` the first answer to it. The first load starts before the first message this terminal sent, so nothing shows twice. A line at the top says how many earlier turns are left, or that the chat starts there.
+
+`/reply #3.1 <message>` sends a message as a reply to that one. `/react <reaction> [#n]` puts your reaction on the latest answer or on message `#n`, and `/unreact` takes it off; Tab completes the reaction names. `/forward Writer, Review crew [#n]` forwards the latest answer, or message `#n`, to those chats, and each one answers it as a new turn.
+
+When an orglet asks a question, the chat prints it with numbered choices. `/answer 2` picks the second; `/answer <words>` answers in your own words, as the desktop's message box does. The terminal then waits for the turn to go on. A question asking to use an MCP tool is not shown this way: it is an approval, so the chat says to open it in the app.
+
+`/stop` and `/pause` act at once, even while a message is waiting for its answer. `/resume`, `/retry` and `/continue` wait for the turn they start, like a message. `/continue` is only there for an answer that stopped because its steps ran out, the same as the desktop's Continue.
 
 ## Create, edit and remove orglets and crews
 
@@ -152,7 +180,7 @@ An edit file is a patch: `{"description":"Reviews code"}` changes only that fiel
 | Ctrl+Q | Opens or closes the local queue |
 | Ctrl+Z | Takes the last queued item into an empty draft |
 | Ctrl+P, Left with an empty draft | Returns to the orglet and crew picker after any earlier queued work |
-| Page Up, Page Down | Scrolls the conversation or details panel |
+| Page Up, Page Down | Scrolls the conversation or details panel. Page Up at the top loads earlier turns. |
 | Up, Down | Move the highlight in a menu or list. In a multiline draft, move between lines; at its first or last line, go through sent messages and return to the unsent draft. |
 | Left, Right, Home, End | Move within the draft; Home and End go to the start and end of the current line |
 | Tab | Fills the highlighted command or name after `/to` |
@@ -175,6 +203,13 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/undo` | Takes the last queued item back into the draft for editing; already sent work keeps running |
 | `/details` | Expands or collapses completed steps and answer details |
 | `/agents` | Opens or closes agent details |
+| `/history [n]` | Loads earlier turns of this chat, numbered |
+| `/reply <#n> <message>` | Replies to message `#n` |
+| `/react <reaction> [#n]`, `/unreact <reaction> [#n]` | Puts a reaction on the latest answer or message `#n`, or takes it off |
+| `/forward <name, …> [#n]` | Forwards the latest answer or message `#n` to other chats |
+| `/answer <n\|text>` | Answers the question the orglet is waiting on |
+| `/stop`, `/pause` | Stops the running turn, or pauses it after its current step; both act at once |
+| `/resume`, `/retry`, `/continue` | Resumes, runs again or continues the latest turn, and waits for the answer |
 | `/new [orglet|crew]` | Creates an orglet or crew in a keyboard form |
 | `/edit [name]` | Edits the current chat’s orglet or crew; without a current chat, choose an entry |
 | `/delete [name]` | Removes an orglet or crew after exact-name confirmation |
@@ -227,6 +262,55 @@ orglet read --to Researcher
 ```
 
 Prints the answers of the latest message in that chat that has any. If the orglet is working on a newer message, the command says so. Reading a chat marks its answer as read, like opening it in the app.
+
+```sh
+orglet read --to Researcher --turns 5
+```
+
+With `--turns`, it prints that many of the latest turns instead, up to 50, oldest first. Every message has a number: `#3` is your third message and `#3.1`, `#3.2` the answers to it, in the order they came (a crew's members, then its lead). A line above says how many earlier turns there are. A reply says what it answered, a forwarded message where it came from, and your reaction shows after the message it is on. `react`, `forward` and `send --reply-to` take these numbers; `last` means the newest answer.
+
+If the chat waits on a question, `read` prints it with its choices on standard error. If it waits on an approval only the app gives, it says so.
+
+`send --reply-to 3.1` sends the message as a reply to that answer, the way **Reply** does in the app.
+
+### react
+
+```sh
+orglet react agree --to Researcher --message 3.1
+```
+
+Puts your reaction on a message: `agree`, `delighted`, `funny`, `unsure`, `watching` or `against`. Without `--message` it goes on the newest answer. A message holds one reaction of yours, so a new one replaces the old; `--off` takes it off. The orglet reads it on its next turn, as it does in the app.
+
+### forward
+
+```sh
+orglet forward --to Researcher --message 2.1 --target Writer --target "Review crew" --note "Can you check this?"
+```
+
+Forwards one message, the newest answer by default, to up to five orglets' or crews' chats. It arrives there as your own message with your note, and each chat answers it as a new turn with its own cost limit and permissions. Files the message had go by name only; attach the real files in the app. The command prints where it went and why any place refused it, and exits 1 if one did.
+
+### answer
+
+```sh
+orglet answer 2 --to Researcher
+```
+
+Answers the question an orglet stopped on. A number picks that choice from the list `send` and `read` printed; anything else is sent as your own words, as the desktop's message box does while a question waits. Then the command waits for the turn to go on and prints the answer, like `send`, with the same `--no-wait`, `--timeout` and `--json`.
+
+A question that asks to use an MCP tool is an approval. `answer` refuses it and says to open the chat in the app.
+
+### Stop, pause, resume, retry, continue
+
+```sh
+orglet pause --to Researcher
+orglet resume --to Researcher
+```
+
+The buttons under a chat's latest turn. `stop` ends the turn that is running and refuses when nothing runs. `pause` stops after the current step and keeps the checkpoint. `resume` goes on from a paused or interrupted checkpoint, `retry` runs the latest message again with the current setup, and `continue` goes on from an answer that stopped because its steps ran out, starting from that run's calls and results. The app checks each one the way it checks the button, so a refusal says why.
+
+`resume`, `retry` and `continue` wait for the answer like `send` and take `--no-wait` and `--timeout`. `stop` and `pause` return at once.
+
+When a turn the command waits for stops on a question, the question is printed on standard error with how to answer it, and the exit code is 1. When it stops on a browser, desktop or MCP approval, the command stops waiting, says so and exits 1.
 
 ### open
 
@@ -282,8 +366,9 @@ Messages that come from the app are in the app's language.
 - A request is one line of JSON and the final answer is one line back. Interactive sends opt into intermediate progress lines on that same authenticated connection; other commands keep their single response. The app checks each request against a fixed list of allowed operations and refuses everything else, lines over 1 MB, and more than eight commands at once.
 - If an older app refuses the progress option before dispatch, chat retries once without it. The message is sent once, with the older app's usual waiting status.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
+- `react`, `forward`, `control` and `answer` name a chat by its orglet or crew and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
-- Chat in the terminal uses `list`, `send`, `read`, `open` and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
+- Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.
 - Native harness step times are when Orglet first observes the start and completion. They are not exact internal harness timings. A step received before its crew member's run metadata keeps those observed times when the author is joined later.
 - The answers to `list`, `status`, `send` and `read` carry each orglet's colour as `#rrggbb`: the one picked in the app, or the colour of the face the app chose for it by name. The command draws the faces from these fields and falls back to grey when they are missing.
