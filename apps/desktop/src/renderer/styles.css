@@ -101,17 +101,25 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .app > .sidebar,.app > .rail { grid-column:1; grid-row:1; }
 .app > .main-pane { grid-column:2; grid-row:1; }
 .app > .details-pane { grid-column:3; grid-row:1; }
-/* Opening or hiding a side panel slides rather than snaps (user, 2026-09-19). The columns carry the movement, the
-   panel itself fades and shifts with them, and a drag turns the transition off so the handle stays under the
-   pointer. A collapsed sidebar stays in the tree, inert, so it can animate out as well as in. */
+/* Opening or hiding a side panel slides rather than snaps (user, 2026-09-19). The columns carry the movement, and a
+   drag turns the transition off so the handle stays under the pointer. A collapsed sidebar stays in the tree, inert,
+   so it can animate out as well as in. */
 .app.panel-moving { transition:grid-template-columns var(--motion-base) var(--ease-out); }
 .app.resizing { transition:none; }
-.sidebar { transition:opacity var(--motion-quick) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s linear 0s; }
-/* Once faded out it is hidden too (COD-340): the rail takes its place, and the sidebar's rows must not stay in the
+/* Folding never fades anything (owner, 2026-10-01, COD-372): the sidebar keeps its width and slides out to the left
+   on the column's own curve, so its right edge stays inside the shrinking column, and the rail lies under it from the
+   start (the shell is its own stacking context so the rail can sit below its siblings), uncovered as the sidebar
+   leaves. Opening runs the same move backwards over the rail, which App keeps mounted, inert, until the move ends.
+   The sidebar takes the window's colour so the rail never shows through it on the way. */
+.app { isolation:isolate; }
+.app > .rail { z-index:-1; }
+.app > .sidebar { background:var(--window); transition:transform var(--motion-base) var(--ease-out), visibility 0s linear 0s; }
+@media(min-width:781px) { .app > .sidebar.collapsed,.app.panel-moving > .sidebar { width:var(--sidebar-width); } }
+/* Once slid out it is hidden too (COD-340): the rail takes its place, and the sidebar's rows must not stay in the
    accessibility tree under the rail's faces of the same names. */
-.sidebar.collapsed { min-width:0; padding-left:0; padding-right:0; opacity:0; transform:translateX(-14px); pointer-events:none; visibility:hidden;
-  transition:opacity var(--motion-quick) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); }
-@media(prefers-reduced-motion:reduce) { .app.panel-moving,.sidebar { transition:none; } .details-pane { animation:none; } }
+.app > .sidebar.collapsed { transform:translateX(-100%); pointer-events:none; visibility:hidden;
+  transition:transform var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); }
+@media(prefers-reduced-motion:reduce) { .app.panel-moving,.app > .sidebar,.app > .sidebar.collapsed { transition:none; } .details-pane { animation:none; } }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr) var(--details-width); }
 .app.sidebar-hidden.with-details { grid-template-columns:var(--rail-width) minmax(0,1fr) var(--details-width); }

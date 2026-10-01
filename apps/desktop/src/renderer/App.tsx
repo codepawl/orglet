@@ -1,5 +1,5 @@
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
@@ -127,6 +127,10 @@ const SIDEBAR_WIDTH = { min: 190, max: 420, default: 228, step: 16 };
 const DETAILS_WIDTH = { min: 280, max: 720, default: 400, step: 16 };
 /** The folded left column, the same as --rail-width in styles.css. */
 const RAIL_WIDTH = 52;
+// How long the shell's panels take to move, read from the stylesheet so a change there carries over.
+function panelMotionMs(): number {
+  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-base')) || 170;
+}
 /** The chat column never gets narrower than this for the right panel's sake; past it the panel stops growing. */
 const CHAT_MIN_WIDTH = 480;
 /** The window padding on both sides and the gaps between three columns, each `--shell-gap` (8px). */
@@ -337,16 +341,31 @@ export function App() {
   const windowWidth = useWindowWidth();
   // The rail stays on screen whenever the full sidebar is not a column of its own: folded, or laid over a narrow window.
   const narrowWindow = windowWidth <= 780;
-  const railShown = !sidebar || narrowWindow;
-  const leftColumnWidth = railShown ? RAIL_WIDTH : sidebarWidth;
+  const railDocked = !sidebar || narrowWindow;
+  const leftColumnWidth = railDocked ? RAIL_WIDTH : sidebarWidth;
   const detailsWidth = detailsPaneWidth(detailsPane.width, windowWidth, leftColumnWidth);
   const [panelMoving, setPanelMoving] = useState(false);
-  useEffect(() => {
+  // Opening the sidebar slides it over the rail (COD-372), so the rail stays mounted under it, inert, until the move
+  // ends instead of vanishing on the first frame.
+  const [railLeaving, setRailLeaving] = useState(false);
+  // The render that folds or opens a panel must already carry the transition (COD-372): the rail mounting reads
+  // layout before an effect could add it, and the column then jumped to its end. So a change not yet settled counts
+  // as moving in the same render, and the effect keeps it moving until the motion ends.
+  const settledPanels = useRef({ sidebar, detailsOpen });
+  const sidebarChanged = settledPanels.current.sidebar !== sidebar;
+  const panelsChanged = sidebarChanged || settledPanels.current.detailsOpen !== detailsOpen;
+  useLayoutEffect(() => {
+    const sidebarOpened = sidebar && !settledPanels.current.sidebar;
+    settledPanels.current = { sidebar, detailsOpen };
     setPanelMoving(true);
-    const motion = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-base')) || 170;
-    const timer = setTimeout(() => setPanelMoving(false), motion + 40);
+    if (sidebarOpened) setRailLeaving(true);
+    const timer = setTimeout(() => {
+      setPanelMoving(false);
+      setRailLeaving(false);
+    }, panelMotionMs() + 40);
     return () => clearTimeout(timer);
   }, [sidebar, detailsOpen]);
+  const railShown = railDocked || railLeaving || (sidebar && sidebarChanged);
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
   const bootedLiveThread = useRef(false);
@@ -1901,7 +1920,7 @@ export function App() {
       : chatView === 'schedules' ? <RoutinesPanel workspace={workspace} routines={ownerSchedules} view={{ editing: false }} onView={openScheduleEditor} onDirty={markRoutineDirty} onBack={() => openRoutines()} openTask={openTask} />
         : chatView === 'memory' ? <MemoryList memories={ownerMemories} workspace={workspace} onOpenChat={openTask} />
           : null;
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving || panelsChanged ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {detailsOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
@@ -1957,7 +1976,7 @@ export function App() {
     {railShown && <SidebarRail onExpand={openFullSidebar} onSearch={() => setSearchOpen(true)} createItems={railCreateItems}
       crews={railCrews} orglets={railOrglets} channels={railChannels} channelsMark={railChannelsMark} openChats={railOpenChats} actions={railActions}
       trailing={updateMark && <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}
-      covered={sidebar && narrowWindow} />}
+      covered={sidebar} />}
     <main className="main-pane" id="main-content" tabIndex={-1}>
       <ChatHeader contentKey={`${activeChatKey}:${chatViewList.map(view => `${view.name}${view.count ?? ''}`).join()}`}
         views={chatViewList.length > 1 ? <ChatViewTabs views={chatViewList} current={chatView} onSelect={showChatView} /> : null}
