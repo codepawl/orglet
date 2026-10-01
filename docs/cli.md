@@ -40,6 +40,13 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet template <id> --provider <demo\|openai>` | Creates a crew from one of the app's templates |
 | `orglet open [--to <name>]` | Brings the Orglet window forward, and with `--to` opens that chat |
 | `orglet run "<schedule>" [--file <path>]` | Starts a schedule now, with the files you attach. See [run](#run). |
+| `orglet search "<words>"` | Searches every chat, message and name. See [Search, Running and the Library](#search-running-and-the-library). |
+| `orglet running` | Every run working or waiting across chats, as the Running view shows them |
+| `orglet library [memory\|notes]` | Memories or notes, optionally one orglet's or crew's, or what `--query` finds |
+| `orglet memory edit\|delete <id>` | Edits, pins or deletes an approved memory |
+| `orglet usage` | Plan usage of the signed-in CLI accounts |
+| `orglet models <provider>` | The models a connection offers; `--to <orglet>` uses that orglet's |
+| `orglet preferences [--language …] [--theme …]` | Shows or changes the app's language and theme |
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet schedule add\|edit\|on\|off\|delete "<name>"` | Creates, changes, switches or deletes a schedule. See [Schedules](#schedules). |
 
@@ -231,6 +238,12 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/rename <title>`, `/archive` | Renames or archives the open chat |
 | `/schedules` | Lists schedules |
 | `/schedule on\|off\|run <name>` | Switches a schedule on or off, or starts it now |
+| `/search <words>` | Searches every chat |
+| `/running` | Lists every run working or waiting |
+| `/memory` | Lists this orglet's or crew's memories |
+| `/usage` | Shows plan usage of the CLI accounts |
+| `/models` | Lists the models of this orglet's connection |
+| `/language vi\|en\|en-GB`, `/theme system\|light\|dark` | Changes the app's language or theme |
 | `/new [orglet|crew]` | Creates an orglet or crew in a keyboard form |
 | `/edit [name]` | Edits the current chat’s orglet or crew; without a current chat, choose an entry |
 | `/delete [name]` | Removes an orglet or crew after exact-name confirmation |
@@ -450,6 +463,41 @@ orglet schedule delete "Morning review" --confirm "Morning review"
 
 A schedule made in the terminal has the name, orglet or crew, brief, timing and limits, and nothing else: no tool permissions, browser, desktop programs, sources, watched folder or working folder. Those are trust decisions, so they are set in the app. Its runs send the brief to the providers of the orglet or crew while you are away, so those providers must already be in the app's **Settings → Allowed providers**; otherwise the command refuses and says which ones. Demo orglets need nothing. An edit keeps everything the app set, and moving a schedule that has any of those settings to another orglet or crew is refused. The app saves the schedule as approved, as the desktop's Save does.
 
+### Search, Running and the Library
+
+```sh
+orglet search "contract terms"
+orglet running
+orglet library memory --to Researcher
+orglet memory edit a1b2c3d4 --text "Prefers bullet points" --pin
+orglet memory delete a1b2c3d4 --yes
+```
+
+`search` finds what the app's search finds: every message you wrote, every answer, chat names, and orglet and crew names, ignoring case and accents. It prints the matching names, then one line per chat with its id (for `read --chat`), who wrote the message and the words around the match.
+
+`running` lists every run working, waiting its turn or stopped at a checkpoint, across chats, as the Running view does: the chat's id and name, the orglet, its state, what it waits for (a provider slot, a teammate, an answer, an approval) and its connection. Stop or pause one with `orglet stop --chat <id>`.
+
+`library` lists memories (the default) or `notes`, approved and waiting for review, with `--to` for one orglet's or crew's and `--query` to search them as the Library does. `memory edit <id>` gives an approved memory new text, a pin or no pin, and `memory delete <id> --yes` deletes it for good, as an orglet's Memory tab does. A memory waiting for review is a proposal: approving or dismissing it stays in the desktop, so both commands refuse it.
+
+### usage and models
+
+```sh
+orglet usage --refresh
+orglet models --to Researcher
+```
+
+`usage` shows the plan usage of each signed-in Claude Code, Codex, Cursor Agent and Gemini CLI account, as Settings does: the plan, how much of each allowance is used and when it resets. Emails show only in part. `--refresh` reads again now. Signing in and spending a banked reset stay in Settings.
+
+`models` lists the models a connection offers, by provider id (`openai`, `claude-code`, `custom:<id>`, …) or with `--to` for the orglet's own connection; `--refresh` fetches the list again.
+
+### preferences
+
+```sh
+orglet preferences --language en-GB --theme dark
+```
+
+Shows the app's language and theme, and changes either. Every other setting, provider permission included, stays in the app's Settings.
+
 ### Names
 
 Names match without regard to case. A unique start of a name is enough: `--to res` finds Researcher. If the start fits several names, or nothing fits, the command lists the names you can use. If an orglet and a crew share a name, rename one in the app.
@@ -477,6 +525,7 @@ Messages that come from the app are in the app's language.
 - `react`, `forward`, `control` and `answer` name a chat by its orglet or crew and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
 - `chats`, `side-thread`, `bring`, `group`, `members`, `chat-change`, `archive-entity` and `template` call `startSideThread`, `bringIntoMainChat`, `createTask` with several orglets, `updateTask`, `renameTask`, `archiveTask`, `deleteTask`, `archiveEntity` and `createTemplate`. None of them carries a permission, folder, browser or MCP field; the protocol refuses a request that adds one.
 - `schedules`, `schedule-enable`, `schedule-delete` and `schedule-save` read the workspace's routines and call `saveRoutine` and `deleteRoutine`. `schedule-save` has fields for the name, target, brief, timing, limits and a clock or called trigger only; the app fills consent and provider scopes from the target's providers, and refuses providers not in **Settings → Allowed providers** (`providerConsent`). An edit sends the routine's own task back with only the given fields changed.
+- `search`, `running`, `library`, `usage` and `models` read through `searchChats`, the workspace's `running`, `knowledge` and `searchKnowledge`, `harnessUsage` and `modelList`. `memory-edit` and `memory-delete` call `updateMemory` and `deleteMemory`, only for an approved memory, because `updateMemory` approves what it saves. `preferences` sends `settings` with the current theme and connection limit and only the language or theme changed; main then updates its own language as for a save in the window.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
 - Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.

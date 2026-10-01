@@ -225,6 +225,12 @@ function adminClient() {
     schedules: notUsed,
     enableSchedule: notUsed,
     runSchedule: notUsed,
+    search: notUsed,
+    running: notUsed,
+    memories: notUsed,
+    usage: notUsed,
+    models: notUsed,
+    preferences: notUsed,
   };
   const client: ChatClient = {
     list: async () => list,

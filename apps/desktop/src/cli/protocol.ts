@@ -5,6 +5,9 @@ import { RunActivity } from '../shared/run-activity';
 import { FORWARD_NOTE_CHARS, MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
 import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency } from '../shared/schedule';
+import { ProviderId } from '../shared/contracts';
+import { Language } from '../shared/i18n';
+import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
 
 /**
@@ -160,6 +163,15 @@ export const CliRequest = z.discriminatedUnion('op', [
     trigger: z.enum(['schedule', 'called']).optional(),
     enabled: z.boolean().optional(),
   }).strict(),
+  z.object({ op: z.literal('search'), token: CliToken, query: z.string().trim().min(1).max(2000) }).strict(),
+  z.object({ op: z.literal('running'), token: CliToken }).strict(),
+  z.object({ op: z.literal('library'), token: CliToken, kind: z.enum(['memory', 'note']), query: z.string().trim().min(1).max(200).optional(), owner: ChatName.optional() }).strict(),
+  z.object({ op: z.literal('memory-edit'), token: CliToken, id: ChatId, text: z.string().trim().min(1).max(MEMORY_TEXT_LIMIT).optional(), pinned: z.boolean().optional() }).strict(),
+  z.object({ op: z.literal('memory-delete'), token: CliToken, id: ChatId, confirmed: z.literal(true) }).strict(),
+  z.object({ op: z.literal('usage'), token: CliToken, refresh: z.boolean() }).strict(),
+  z.object({ op: z.literal('models'), token: CliToken, provider: ProviderId.optional(), to: ChatName.optional(), refresh: z.boolean() }).strict(),
+  /** Language and theme only; every other setting, consent included, stays in the desktop. */
+  z.object({ op: z.literal('preferences'), token: CliToken, language: Language.optional(), theme: z.enum(['system', 'light', 'dark']).optional() }).strict(),
   z.object({ op: z.literal('open'), token: CliToken, to: ChatName.optional() }).strict(),
   z.object({
     op: z.literal('run'),
@@ -298,6 +310,32 @@ export type CliScheduleRow = {
   spentTodayMicros?: number;
 };
 export type SchedulesValue = { schedules: CliScheduleRow[] };
+/** What `orglet search` found (COD-354): names that match, and one message per chat with the words around the match. */
+export type SearchValue = {
+  orglets: string[];
+  crews: string[];
+  chats: { chat: string; name: string; sender?: string; snippet: string; at: string }[];
+  /** Chats from before search covered every message are still being added. */
+  indexing: boolean;
+};
+/** One run of the Running view: the chat it is in, who runs it, and what it waits for. */
+export type CliRunningRow = { chat: string; name: string; orglet: string; state: string; provider: string; waitsFor?: string; since?: string };
+export type RunningValue = { items: CliRunningRow[] };
+/** A note or memory of the Library; `short` is the start of its id that `memory edit` takes. */
+export type CliLibraryRow = { id: string; short: string; kind: 'note' | 'memory'; title: string; content: string; status: string; pinned: boolean; owner?: string; createdAt: string };
+export type LibraryValue = { items: CliLibraryRow[] };
+/** Plan usage of one harness account; the email is shown only in part. */
+export type CliUsageAccount = {
+  harness: string;
+  email?: string;
+  plan?: string;
+  windows: { kind: string; usedPercent: number; model?: string; resetsAt?: string }[];
+  unavailable?: string;
+  asOf?: string;
+};
+export type UsageValue = { accounts: CliUsageAccount[] };
+export type ModelsValue = { provider: string; models: { id: string; name?: string; deprecated?: boolean }[]; fetchedAt: string; stale: boolean; error?: string };
+export type PreferencesValue = { language: string; theme: string };
 export type ScheduleValue = { schedule: CliScheduleRow };
 export type OpenValue = { chat?: CliChat };
 /** The schedule `run` started and the chat its run opened. */

@@ -187,12 +187,15 @@ describe('orglet chat slash commands', () => {
 
   it('completes commands and chat names', () => {
     const names = ['Researcher', 'Review crew', 'Writer'];
-    expect(completeSlash('/l', names)).toEqual([['/list'], '/l']);
+    expect(completeSlash('/l', names)).toEqual([['/list', '/language'], '/l']);
+    expect(completeSlash('/li', names)).toEqual([['/list'], '/li']);
     expect(completeSlash('/', names)[0]).toEqual(['/to ', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
       '/history', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
       '/chats', '/side', '/bring', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
+      '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme',
       '/new', '/edit', '/delete', '/help', '/exit']);
-    expect(completeSlash('/t', names)).toEqual([['/to '], '/t']);
+    expect(completeSlash('/t', names)).toEqual([['/to ', '/theme'], '/t']);
+    expect(completeSlash('/to', names)).toEqual([['/to '], '/to']);
     expect(completeSlash('/to re', names)).toEqual([['/to Researcher', '/to Review crew'], '/to re']);
     expect(completeSlash('/TO wr', names)).toEqual([['/to Writer'], '/TO wr']);
     expect(completeSlash('hello', names)).toEqual([[], 'hello']);

@@ -1,4 +1,5 @@
 import type { TaskDetail } from '../shared/contracts';
+import type { Language } from '../shared/i18n';
 import type { CliChat, SendValue } from '../cli/protocol';
 import type { CliActivityFeed, CliObserver } from './cli-activity';
 import type { CoreRequest } from './cli-chats';
@@ -16,6 +17,8 @@ export type CliDependencies = {
   /** How often `send` reads the chat while it waits. */
   pollMilliseconds?: number;
   observe?: (observer: CliObserver) => () => void;
+  /** Tells main the language or theme changed from a terminal, as a save in the window does (COD-354). */
+  settingsChanged?: (changes: { language?: Language; theme?: 'system' | 'light' | 'dark' }) => void;
 };
 
 const DEFAULT_POLL_MILLISECONDS = 750;

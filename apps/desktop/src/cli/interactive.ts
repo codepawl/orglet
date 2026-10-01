@@ -14,7 +14,7 @@ import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
 import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
-import { formatChats, formatRun, formatScheduleChange, formatSchedules } from './output';
+import { formatChats, formatLibrary, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatUsage } from './output';
 import { ERROR_COLOR, muted, MUTED_COLOR, NEUTRAL_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
 import type { ManagementResult } from './management';
@@ -48,7 +48,7 @@ const PICKER_MAX_ROWS = 8;
 const WELCOME_FACE_LIMIT = 12;
 const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
 /** These controls do not change the chat or submit a turn, so they need not wait behind one. */
-const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage', 'chats', 'schedules']);
+const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage', 'chats', 'schedules', 'search', 'running', 'memory', 'plan-usage', 'models']);
 
 /** What requests name a chat by: its id for a chat opened with `/to #id`, else the orglet's or crew's name. */
 function targetOf(entry: ChatEntry): string {
@@ -601,6 +601,13 @@ class Session {
       case 'archive': return this.chatChange(actions => actions.archive(targetOf(this.chat!)), value => t('Đã lưu trữ chat {0}.', value.name));
       case 'schedules': return this.listSchedules();
       case 'schedule': return this.scheduleAction(command.action, command.name);
+      case 'search': return this.listing(actions => actions.search(command.query), formatSearch);
+      case 'running': return this.listing(actions => actions.running(), formatRunning);
+      case 'memory': return this.listing(actions => actions.memories(this.chat!.name), formatLibrary);
+      case 'plan-usage': return this.listing(actions => actions.usage(), formatUsage);
+      case 'models': return this.listing(actions => actions.models(this.chat!.name), formatModels);
+      case 'language': return this.chatChange(actions => actions.preferences({ language: command.language }), formatPreferences);
+      case 'theme': return this.chatChange(actions => actions.preferences({ theme: command.theme }), formatPreferences);
       case 'new': return this.manage('new', command.entity);
       case 'edit': return this.manage('edit', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
@@ -960,11 +967,16 @@ class Session {
   }
 
   /** Lists schedules as `orglet schedules` does, one aligned row each. */
-  private async listSchedules(): Promise<void> {
+  private listSchedules(): Promise<void> {
+    return this.listing(actions => actions.schedules(), formatSchedules);
+  }
+
+  /** Prints what a one-shot listing prints, line by line so its columns stay aligned. */
+  private async listing<Value>(load: (actions: ChatActionClient) => Promise<Value>, format: (value: Value) => string): Promise<void> {
     const actions = this.actions();
     if (!actions) return;
     try {
-      this.printLines(formatSchedules(await actions.schedules()).split('\n'));
+      this.printLines(format(await load(actions)).split('\n'));
     } catch (error) {
       this.printFailure(error);
     }

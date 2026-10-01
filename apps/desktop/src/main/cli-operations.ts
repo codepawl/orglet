@@ -14,6 +14,7 @@ import { chatTurns, isTurnRunning, latestAnsweredRevision, pendingQuestion, reso
 import { CliChatActions } from './cli-chat-actions';
 import { CliChatAdmin } from './cli-chat-admin';
 import { CliSchedules } from './cli-schedules';
+import { CliLibrary } from './cli-library';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from './cli-chats';
@@ -32,11 +33,13 @@ export class CliOperations {
   private readonly chatActions: CliChatActions;
   private readonly chatAdmin: CliChatAdmin;
   private readonly schedules: CliSchedules;
+  private readonly library: CliLibrary;
 
   constructor(private readonly dependencies: CliDependencies) {
     this.chatActions = new CliChatActions(dependencies);
     this.chatAdmin = new CliChatAdmin(dependencies);
     this.schedules = new CliSchedules(dependencies);
+    this.library = new CliLibrary(dependencies);
   }
 
   async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
@@ -63,6 +66,14 @@ export class CliOperations {
       case 'schedule-enable': return this.schedules.enable(request);
       case 'schedule-delete': return this.schedules.remove(request);
       case 'schedule-save': return this.schedules.save(request);
+      case 'search': return this.library.search(request);
+      case 'running': return this.library.running();
+      case 'library': return this.library.library(request);
+      case 'memory-edit': return this.library.editMemory(request);
+      case 'memory-delete': return this.library.deleteMemory(request);
+      case 'usage': return this.library.usage(request);
+      case 'models': return this.library.models(request);
+      case 'preferences': return this.library.preferences(request);
       case 'config':
       case 'save-orglet':
       case 'save-crew':

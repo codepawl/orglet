@@ -155,6 +155,7 @@ describe('orglet chat session schedules', () => {
         calls.push(`enable ${name} ${enabled}`);
         return { schedule: { ...row, enabled } };
       },
+      search: notUsed, running: notUsed, memories: notUsed, usage: notUsed, models: notUsed, preferences: notUsed,
       runSchedule: async name => {
         calls.push(`run ${name}`);
         return { schedule: { id: routineId, name: 'Morning review' }, taskId: 't' };

@@ -243,6 +243,12 @@ async function startCliServer(directory: string) {
       cliObservers.add(observer);
       return () => cliObservers.delete(observer);
     },
+    // A language set from a terminal reaches main's own dialogs and the spell checker, as one set in the window does.
+    settingsChanged: changes => {
+      if (!changes.language) return;
+      language = changes.language;
+      useSpellCheckerLanguage(language);
+    },
   });
   cliServer = new CliServer({
     endpoint: cliEndpoint(directory),
