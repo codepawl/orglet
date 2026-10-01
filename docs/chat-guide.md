@@ -107,7 +107,7 @@ Each orglet has one main chat. Clicking the orglet always opens it. When you wan
 2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow in the row under the message box and choose **Send in a new thread**.
 3. You stay in the main chat. A short message says the side thread started; click **Open** to go there, or open it later.
 
-Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).
+Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. An archived one leaves the sidebar and waits in **Settings → Archive**. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).
 
 What a side thread knows and can do:
 
@@ -285,13 +285,13 @@ Archived chats are found too; deleted chats are not. A lead channel's chat is fo
 
 ### Archived and deleted chats
 
-An archived chat opens from search like any other, to read. Its message box is turned off, and a line under it says the chat is archived, with **Restore** next to it; restoring puts it back in the sidebar and you can write again. The same happens when the orglet the chat belongs to was archived: the line names it, and **Restore** brings the orglet back. When that orglet was deleted, the chat stays readable with its name in the header, and nothing can be sent there.
+An archived chat opens from search like any other, to read. Its message box is turned off, and a line under it says the chat is archived, with **Restore** next to it; restoring puts it back in the sidebar and you can write again. Archived chats are listed in **Settings → Archive**, not in the sidebar, with **Restore** and **Delete permanently** on each row. The same happens when the orglet the chat belongs to was archived: the line names it, and **Restore** brings the orglet back. When that orglet was deleted, the chat stays readable with its name in the header, and nothing can be sent there.
 
 When the chat you have open is deleted, from its menu or with **Settings → Data → Delete chat history**, Orglet moves to the orglet's main chat, or to the first orglet when that one is gone too. Nothing is reported as a problem.
 
 ## Notifications
 
-Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself. A downloaded update's notice has a **Restart now** button while that update still waits.
+Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself. A downloaded update's notice has a **Restart now** button while that update still waits. The notice of something you archived has **Open archive**, which opens **Settings → Archive**.
 
 A few rules keep the list short:
 

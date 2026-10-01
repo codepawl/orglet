@@ -19,6 +19,8 @@ export type ToastOptions = {
   group?: { key: string; size: number };
   /** The toast announces a downloaded update: its notice restarts into it while the update still waits (COD-304). */
   update?: boolean;
+  /** The toast archived something: its notice in Notifications opens Settings → Lưu trữ, where it can be restored (COD-375). */
+  archive?: boolean;
 };
 
 /**
@@ -29,7 +31,7 @@ export type ToastOptions = {
 export function toast(text: string, tone: ToastTone = 'success', about?: string, options: ToastOptions = {}) {
   const confirmation = tone === 'success' && !options.unread;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, noticeKindOf(tone), about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size, update: options.update });
+  recordNotice(text, noticeKindOf(tone), about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size, update: options.update, archive: options.archive });
   showToast(text, tone, options.action);
 }
 

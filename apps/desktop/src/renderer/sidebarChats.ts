@@ -1,39 +1,17 @@
 /**
- * Which chats the sidebar lists and where (COD-286). Pure: no state, no bridge calls.
- *
- * Archiving a side thread, a schedule's run or a channel took its row away and left no list to find it in again,
- * only search; orglets and crews already had an "Archived (N)" list at the end of their section. Each archived chat
- * now waits at the end of the section its row came from: a crew's chats under Crews, an orglet's main chat, side
- * threads and schedule runs under Orglets, a channel under Channels (COD-361).
+ * Small pure helpers for the sidebar's chat rows (COD-286). Archived chats no longer hang off the sidebar (COD-375):
+ * Settings → Lưu trữ lists them, grouped by `archive.ts`. What a chat was is still named here.
  */
 type ChatRow = { id: string; archivedAt?: string; deletedAt?: string; teamId?: string; assignees?: 'all' | string[]; routineId?: string; sideOf?: unknown };
 
-/** The sidebar section an archived chat is listed in. */
-export type ArchivedChatSection = 'teams' | 'workers' | 'channels';
-
 /** What an archived chat was, so its row can say so: a main chat, a side thread, a schedule's run or a channel. */
 export type ArchivedChatKind = 'main' | 'side' | 'schedule' | 'channel';
-
-export type ArchivedChat<T extends ChatRow> = { task: T; kind: ArchivedChatKind };
-
-/** Where the chat's own row sat: the Channels section (a crew's chat too, since COD-369), or its one orglet. */
-export function archivedChatSection(task: ChatRow): ArchivedChatSection {
-  if (task.teamId || task.assignees) return 'channels';
-  return 'workers';
-}
 
 export function archivedChatKind(task: ChatRow): ArchivedChatKind {
   if (task.sideOf) return 'side';
   if (task.routineId) return 'schedule';
   if (task.teamId || task.assignees) return 'channel';
   return 'main';
-}
-
-/** The archived chats listed in one section, most recently archived first. Deleted chats are gone for good. */
-export function archivedChatsIn<T extends ChatRow>(tasks: readonly T[], section: ArchivedChatSection): ArchivedChat<T>[] {
-  const archived = tasks.filter(task => task.archivedAt && !task.deletedAt && archivedChatSection(task) === section);
-  const newestFirst = [...archived].sort((first, second) => second.archivedAt!.localeCompare(first.archivedAt!));
-  return newestFirst.map(task => ({ task, kind: archivedChatKind(task) }));
 }
 
 /**

@@ -196,6 +196,7 @@ async function seedWorkspace(page) {
   }
   const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
   const channels = await seedChannels(page, crew);
+  await seedArchive(page, researcher);
   return { researcher, crew, islandCrew, earlierChatBrief, channels };
 }
 
@@ -210,6 +211,34 @@ async function seedChannels(page, crew) {
   await waitForTask(page, taskId);
   await callCore(page, 'createChannel', { name: 'ideas', topic: '', members: [{ kind: 'orglet', id: workspace.workers[0].id }] });
   return { launch: '#launch', ideas: '#ideas' };
+}
+
+/**
+ * One archived orglet, one archived chat of it and one archived channel, so Settings → Lưu trữ shows every group (COD-375).
+ * Archived last and kept away from the screens above: none of them is a row anywhere else.
+ */
+async function seedArchive(page, researcher) {
+  const retired = await callCore(page, 'saveWorker', { name: 'Retired helper', description: 'Handled an old project', instructions: 'Answer clearly and briefly.', provider: 'demo', skillId: researcher.skillId });
+  const retiredChatId = await callCore(page, 'createTask', { workerId: retired.id, brief: 'Wrap up the old project and list what is left.', sourceIds: [], consent: false, budgetMicros: 1000 });
+  await waitForTask(page, retiredChatId);
+  const retroChannelId = await callCore(page, 'createChannel', { name: 'retro', topic: '', members: [{ kind: 'orglet', id: researcher.id }] });
+  const retroTaskId = await callCore(page, 'createTask', { workerId: researcher.id, assignees: [researcher.id], channelId: retroChannelId, brief: 'What went well last month?', sourceIds: [], consent: false, budgetMicros: 1000 });
+  await waitForTask(page, retroTaskId);
+  // A finished turn can still be wrapping up when its status flips; the core refuses to archive until it has.
+  await archiveWhenIdle(page, 'archiveTask', { id: retiredChatId, archived: true });
+  await archiveWhenIdle(page, 'archiveTask', { id: retroTaskId, archived: true });
+  await archiveWhenIdle(page, 'archiveEntity', { kind: 'worker', id: retired.id, archived: true });
+}
+
+async function archiveWhenIdle(page, command, input) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await callCore(page, command, input);
+    } catch (error) {
+      if (attempt >= 40) throw error;
+      await page.waitForTimeout(500);
+    }
+  }
 }
 
 async function settle(page) {
@@ -327,6 +356,8 @@ const SCREENS = [
   // lead column of their list rows are compared with each other (familyFindings in rules.ts).
   { name: 'settings-general', family: 'settings', open: page => openSettingsTab(page, 'Chung') },
   { name: 'settings-chat', family: 'settings', open: page => openSettingsTab(page, 'Cuộc trò chuyện') },
+  // Archived orglets, channels and chats, with Restore and the auto-delete rule (COD-375).
+  { name: 'settings-archive', family: 'settings', open: page => openSettingsTab(page, 'Lưu trữ') },
   { name: 'settings-connections', family: 'settings', open: page => openSettingsTab(page, 'Kết nối API') },
   { name: 'settings-search', family: 'settings', open: page => openSettingsTab(page, 'Tìm kiếm web') },
   { name: 'settings-harness', family: 'settings', open: page => openSettingsTab(page, 'Harness trên máy') },
