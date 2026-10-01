@@ -55,8 +55,8 @@ const CONTROLS: Record<string, ChatControl> = { '/stop': 'stop', '/pause': 'paus
 export const HISTORY_PAGE = 10;
 
 export const SLASH_HELP: readonly [string, string][] = [
-  ['/to <name>', 'Switch to another orglet or crew; without a name, pick from the list'],
-  ['/list', 'List orglets and crews'],
+  ['/to <name>', 'Switch to another orglet or channel; without a name, pick from the list'],
+  ['/list', 'List orglets and channels'],
   ['/read', 'Show the latest answer in this chat again'],
   ['/open', 'Bring the app forward on this chat'],
   ['/clear', 'Clear the screen'],
@@ -78,7 +78,7 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/chats [archived]', t("Liệt kê chat cùng mã; /to #mã mở một chat")],
   ['/side <message>', t("Gửi tin trong một chat phụ mới của Tí này")],
   ['/bring [#n]', t("Đưa câu trả lời của chat phụ này vào chat chính")],
-  ['/channel <name, …> -- <message>', t("Tạo kênh với các Tí và hội này (/group là tên cũ)")],
+  ['/channel <name, …> -- <message>', t("Tạo kênh với các Tí và kênh này (/group là tên cũ)")],
   ['/members <name, …>', t("Đổi thành viên của kênh này")],
   ['/rename <title>', t("Đổi tên chat này")],
   ['/archive', t("Lưu trữ chat này")],
@@ -86,14 +86,14 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/schedule on|off|run <name>', t("Bật, tắt hoặc chạy ngay một lịch")],
   ['/search <words>', t("Tìm trong mọi chat")],
   ['/running', t("Mọi lượt đang chạy hoặc đang chờ")],
-  ['/memory', t("Ghi nhớ của Tí hoặc hội này")],
+  ['/memory', t("Ghi nhớ của Tí hoặc kênh này")],
   ['/usage', t("Mức dùng gói của các tài khoản CLI")],
   ['/models', t("Các model của kết nối mà Tí này dùng")],
   ['/language vi|en|en-GB', t("Đổi ngôn ngữ của app")],
   ['/theme system|light|dark', t("Đổi giao diện của app")],
-  ['/new [orglet|crew]', t("Tạo Tí hoặc hội trong terminal này")],
+  ['/new [orglet|channel]', t("Tạo Tí hoặc kênh trong terminal này")],
   ['/edit [name]', t("Sửa cấu hình; bỏ tên để chọn trong danh sách")],
-  ['/delete [name]', t("Xóa Tí hoặc hội sau khi gõ tên đầy đủ")],
+  ['/delete [name]', t("Xóa Tí hoặc kênh sau khi gõ tên đầy đủ")],
   ['/help', 'Show these commands'],
   ['/exit', 'Leave (Ctrl+D does the same)'],
 ];
@@ -142,7 +142,7 @@ export function parseSlash(line: string): SlashCommand {
     case '/models': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'models' };
     case '/language': return parseLanguage(rest);
     case '/theme': return parseTheme(rest);
-    case '/new': return rest === 'orglet' ? { kind: 'new', entity: 'worker' } : rest === 'crew' || rest === 'team' ? { kind: 'new', entity: 'team' } : rest ? { kind: 'unknown', command: trimmed } : { kind: 'new' };
+    case '/new': return rest === 'orglet' ? { kind: 'new', entity: 'worker' } : rest === 'channel' || rest === 'crew' || rest === 'team' ? { kind: 'new', entity: 'team' } : rest ? { kind: 'unknown', command: trimmed } : { kind: 'new' };
     case '/edit': return { kind: 'edit', ...(rest ? { name: rest } : {}) };
     case '/delete': return { kind: 'delete', ...(rest ? { name: rest } : {}) };
     case '/help': return { kind: 'help' };
@@ -184,7 +184,7 @@ function parseForward(rest: string): SlashCommand {
   const last = rest.split(/\s+/).at(-1) ?? '';
   const hasRef = last.startsWith('#') && isMessageRef(last);
   const names = (hasRef ? rest.slice(0, rest.length - last.length) : rest).split(',').map(name => name.trim()).filter(Boolean);
-  if (names.length === 0) return { kind: 'usage', message: t("Gõ /forward rồi tên Tí hoặc hội, cách nhau bằng dấu phẩy.") };
+  if (names.length === 0) return { kind: 'usage', message: t("Gõ /forward rồi tên Tí hoặc kênh, cách nhau bằng dấu phẩy.") };
   return { kind: 'forward', targets: names, ...(hasRef ? { ref: last } : {}) };
 }
 
@@ -197,13 +197,13 @@ function parseChannel(command: string, rest: string): SlashCommand {
   const separator = rest.indexOf(' -- ');
   const names = separator === -1 ? [] : nameList(rest.slice(0, separator));
   const message = separator === -1 ? '' : rest.slice(separator + 4).trim();
-  if (!names.length || !message) return { kind: 'usage', message: t("Gõ {0} Tí một, Hội hai -- tin nhắn đầu tiên.", command) };
+  if (!names.length || !message) return { kind: 'usage', message: t("Gõ {0} Tí một, Kênh hai -- tin nhắn đầu tiên.", command) };
   return { kind: 'channel', names, message };
 }
 
 function parseMembers(rest: string): SlashCommand {
   const names = nameList(rest);
-  if (!names.length) return { kind: 'usage', message: t("Gõ /members rồi tên các Tí hoặc hội, cách nhau bằng dấu phẩy.") };
+  if (!names.length) return { kind: 'usage', message: t("Gõ /members rồi tên các Tí hoặc kênh, cách nhau bằng dấu phẩy.") };
   return { kind: 'members', names };
 }
 
@@ -237,7 +237,7 @@ function startsWithIgnoringCase(text: string, start: string): boolean {
 export function completeSlash(line: string, names: readonly string[]): [string[], string] {
   if (!isSlashCommand(line)) return [[], line];
   const newMatch = line.match(/^\s*\/new\s+(.*)$/i);
-  if (newMatch) return [['orglet', 'crew'].filter(kind => startsWithIgnoringCase(kind, newMatch[1])).map(kind => `/new ${kind}`), line];
+  if (newMatch) return [['orglet', 'channel'].filter(kind => startsWithIgnoringCase(kind, newMatch[1])).map(kind => `/new ${kind}`), line];
   const reactMatch = line.match(/^\s*\/(react|unreact)\s+(\S*)$/i);
   if (reactMatch) return [Reaction.options.filter(emoji => startsWithIgnoringCase(emoji, reactMatch[2])).map(emoji => `/${reactMatch[1].toLowerCase()} ${emoji}`), line];
   const toMatch = line.match(/^\s*\/(to|edit|delete|forward)\s+(.*)$/i);

@@ -68,7 +68,7 @@ export class ManagementEditor {
       else {
         this.state = 'entity';
         this.filter = name;
-        this.error = matches.length > 1 ? t("Nhiều mục có cùng tên. Dùng phím mũi tên để chọn.") : t("Chọn Tí hoặc hội cần quản lý.");
+        this.error = matches.length > 1 ? t("Nhiều mục có cùng tên. Dùng phím mũi tên để chọn.") : t("Chọn Tí hoặc kênh cần quản lý.");
       }
     }
   }
@@ -79,7 +79,7 @@ export class ManagementEditor {
 
   get title(): string {
     const verb = { new: t("Tạo"), edit: t("Sửa"), delete: t("Xóa"), menu: t('Quản lý') }[this.action];
-    return `${verb} ${this.kind === 'team' ? 'crew' : this.kind === 'worker' ? 'orglet' : 'orglet or crew'}${this.originalName ? ` · ${this.originalName}` : ''}`;
+    return `${verb} ${this.kind === 'team' ? 'channel' : this.kind === 'worker' ? 'orglet' : 'orglet or channel'}${this.originalName ? ` · ${this.originalName}` : ''}`;
   }
 
   get placeholder(): string {
@@ -91,7 +91,7 @@ export class ManagementEditor {
 
   context(width: number, mode: ColorMode): string[] {
     const icon = this.kind === 'team' ? '▦' : this.kind === 'worker' ? renderMiniFace((this.values.avatar as { color?: string } | undefined)?.color, mode) : '';
-    const title = this.state === 'confirm' ? `${t('Xóa')} ${this.kind === 'team' ? 'crew' : 'orglet'}` : `${icon ? `${icon} ` : ''}${this.title}`;
+    const title = this.state === 'confirm' ? `${t('Xóa')} ${this.kind === 'team' ? 'channel' : 'orglet'}` : `${icon ? `${icon} ` : ''}${this.title}`;
     const lines = [paint(truncate(title, width), { bold: true }, mode)];
     if (this.target && this.state !== 'confirm' && this.state !== 'saving') {
       const detail = this.kind === 'worker'
@@ -104,7 +104,7 @@ export class ManagementEditor {
     if (this.state === 'confirm') {
       lines.push(...wrapSegments([{ text: this.originalName, style: { bold: true } }], { width, mode }));
       lines.push(truncate(t("Mục này sẽ rời danh sách đang dùng. Chat cũ vẫn đọc được."), width));
-      lines.push(truncate(t("Hội, lịch đang bật và việc đang chạy có thể ngăn xóa."), width));
+      lines.push(truncate(t("Kênh, lịch đang bật và việc đang chạy có thể ngăn xóa."), width));
       if (this.error) lines.push(...wrapSegments([{ text: this.error }], { width, mode }));
     } else if (this.state === 'value' && this.field) {
       lines.push(paint(this.field.label, { bold: true }, mode));
@@ -117,7 +117,7 @@ export class ManagementEditor {
 
   choices(): Choice[] {
     let choices: Choice[];
-    if (this.state === 'kind') choices = [{ key: 'worker', label: 'Orglet' }, { key: 'team', label: 'Crew' }, { key: 'cancel', label: t("Hủy") }];
+    if (this.state === 'kind') choices = [{ key: 'worker', label: 'Orglet' }, { key: 'team', label: 'Channel' }, { key: 'cancel', label: t("Hủy") }];
     else if (this.state === 'menu') choices = [{ key: 'edit', label: t('Sửa cấu hình') }, { key: 'delete', label: t('Xóa') }, { key: 'cancel', label: t('Quay lại danh sách') }];
     else if (this.state === 'entity') {
       choices = [

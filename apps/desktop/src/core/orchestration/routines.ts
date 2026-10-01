@@ -315,7 +315,7 @@ export class Routines {
     if (this.dispatching.has(routine.id)) throw new Error('Lịch đang được xử lý.');
     this.dispatching.add(routine.id);
     try {
-      if (routine.approvedConfig !== this.configuration(routine.task, routine.trigger, routine.workspace, routine.schedule)) throw new Error('Tí, skill, hội hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
+      if (routine.approvedConfig !== this.configuration(routine.task, routine.trigger, routine.workspace, routine.schedule)) throw new Error('Tí, skill, kênh hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
       if (this.previousRunActive(routine.id)) throw new PreviousRunBusy(previousRunMessage);
       if (this.previousChangesWait(routine.id)) throw new PreviousRunBusy(PREVIOUS_CHANGES_WAIT);
       // Checked here so the card says so before anything else runs; core checks it again as it writes the task.

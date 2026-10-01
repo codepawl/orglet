@@ -40,9 +40,9 @@ export function removalBlocker<C extends CrewRow, S extends ScheduleRow>(
  * three or more are counted and listed, so the sentence stays short.
  */
 export function leaveCrewsMessage(workerName: string, crewNames: readonly string[]): string {
-  if (crewNames.length === 1) return `Bỏ ${workerName} khỏi hội ${crewNames[0]} trước.`;
-  if (crewNames.length === 2) return `Bỏ ${workerName} khỏi hội ${crewNames[0]} và ${crewNames[1]} trước.`;
-  return `Bỏ ${workerName} khỏi ${crewNames.length} hội trước: ${crewNames.join(', ')}.`;
+  if (crewNames.length === 1) return `Bỏ ${workerName} khỏi kênh ${crewNames[0]} trước.`;
+  if (crewNames.length === 2) return `Bỏ ${workerName} khỏi kênh ${crewNames[0]} và ${crewNames[1]} trước.`;
+  return `Bỏ ${workerName} khỏi ${crewNames.length} kênh trước: ${crewNames.join(', ')}.`;
 }
 
 /** The refusal for an orglet or crew that an enabled schedule still runs. */

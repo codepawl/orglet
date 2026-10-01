@@ -91,6 +91,9 @@ describe('orglet chat arguments', () => {
     expect(parseArguments(['restore', '--chat', 'eeee'])).toEqual({ kind: 'chat-change', change: 'restore', chat: 'eeee', json: false });
     expect(parseArguments(['delete', '--chat', 'eeee', '--confirm', 'Old notes'])).toEqual({ kind: 'chat-change', change: 'delete', chat: 'eeee', confirmName: 'Old notes', json: false });
     expect(parseArguments(['archive', 'crew', 'Review crew'])).toEqual({ kind: 'archive-entity', entity: 'team', name: 'Review crew', archived: true, json: false });
+    // Crews are channels where the lead splits the work (COD-369): `channel` names the same record, `crew` still works.
+    expect(parseArguments(['archive', 'channel', 'Review crew'])).toEqual({ kind: 'archive-entity', entity: 'team', name: 'Review crew', archived: true, json: false });
+    expect(parseArguments(['edit', 'channel', 'Review crew', '--config', 'patch.json'])).toMatchObject({ kind: 'edit', entity: 'team', name: 'Review crew' });
     expect(parseArguments(['restore', 'orglet', 'Old helper'])).toEqual({ kind: 'archive-entity', entity: 'worker', name: 'Old helper', archived: false, json: false });
     expect(parseArguments(['template', 'research-review', '--provider', 'demo'])).toEqual({ kind: 'template', templateId: 'research-review', provider: 'demo', json: false });
     expect(parseArguments(['delete', 'orglet', 'Writer', '--confirm', 'Writer'])).toMatchObject({ kind: 'delete', entity: 'worker' });

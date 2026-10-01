@@ -207,7 +207,7 @@ export class KnowledgeBase {
   private memoryScope(run: Run, name: 'worker' | 'team' | 'workspace'): KnowledgeScope {
     if (name === 'workspace') return { type: 'workspace' };
     if (name === 'team') {
-      if (!run.snapshot.team) throw new Error('Lượt chạy này không thuộc hội nào; ghi nhớ cho Tí hoặc toàn workspace.');
+      if (!run.snapshot.team) throw new Error('Lượt chạy này không thuộc kênh nào; ghi nhớ cho Tí hoặc toàn workspace.');
       return { type: 'team', id: run.snapshot.team.id };
     }
     return { type: 'worker', id: run.snapshot.worker.id };

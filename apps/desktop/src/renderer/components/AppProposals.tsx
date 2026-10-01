@@ -31,15 +31,15 @@ export type ProposalActions = {
 };
 
 const createTitles: Record<AppProposalKind, string> = translated({
-  orglet: 'Tí mới', crew: 'Hội mới', crew_template: 'Xuất template', skill: 'Skill mới', schedule: 'Lịch mới', settings: 'Cài đặt',
+  orglet: 'Tí mới', crew: 'Kênh mới', crew_template: 'Xuất template', skill: 'Skill mới', schedule: 'Lịch mới', settings: 'Cài đặt',
 });
 const editTitles: Record<AppProposalKind, string> = translated({
-  orglet: 'Sửa Tí', crew: 'Sửa hội', crew_template: 'Xuất template', skill: 'Skill · bản mới', schedule: 'Sửa lịch', settings: 'Cài đặt',
+  orglet: 'Sửa Tí', crew: 'Sửa kênh', crew_template: 'Xuất template', skill: 'Skill · bản mới', schedule: 'Sửa lịch', settings: 'Cài đặt',
 });
 const fieldNames: Record<string, string> = translated({
   name: 'Tên', description: 'Mô tả', instructions: 'Hướng dẫn', provider: 'Model', modelId: 'ID model', skillId: 'Kỹ năng', taskBudgetMicros: 'Giới hạn mỗi task',
   memberIds: 'Thành viên', synthesizerId: 'Tí trưởng', workflow: 'Cách chạy', monthlyBudgetMicros: 'Ngân sách tháng', content: 'Nội dung',
-  brief: 'Tin nhắn', schedule: 'Lịch', target: 'Giao cho', enabled: 'Bật lịch', team: 'Hội được xuất',
+  brief: 'Tin nhắn', schedule: 'Lịch', target: 'Giao cho', enabled: 'Bật lịch', team: 'Kênh được xuất',
   theme: 'Giao diện', language: 'Ngôn ngữ', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Font giao diện', codeFont: 'Font code',
   copyFormat: 'Định dạng sao chép', downloadFormat: 'Định dạng tải xuống', autoTitles: 'Tự đặt tên chat', confirmOpenTask: 'Hỏi trước khi mở công việc',
 });
@@ -54,7 +54,7 @@ const signalLabels: Record<ImprovementSignalKind, string> = translated({
   revision: 'Yêu cầu sửa', thumbs_down: 'Không ổn', report_rejected: 'Báo cáo bị từ chối', run_failed: 'Lỗi lặp lại',
 });
 const openLabels: Record<ProposalTarget['kind'], string> = translated({
-  worker: 'Mở Tí', team: 'Mở hội', skill: 'Mở skill', routine: 'Mở lịch', settings: 'Mở cài đặt', template: 'Mở hội',
+  worker: 'Mở Tí', team: 'Mở kênh', skill: 'Mở skill', routine: 'Mở lịch', settings: 'Mở cài đặt', template: 'Mở kênh',
 });
 
 function cardTitle(proposal: AppProposal) {
