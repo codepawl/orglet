@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight } from 'lucide-react';
 import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
@@ -372,7 +372,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
    * named, while the author's own line is not; the same runs give a crew answer its handoff rows in the trace
    * (COD-220). `proposals` are the cards this answer's run proposed.
    */
-  const answer = (artifact: Artifact, author: Run | undefined, runs: readonly Run[], proposals: AppProposal[], latest: boolean) => {
+  const answer = (artifact: Artifact, author: Run | undefined, runs: readonly Run[], proposals: AppProposal[], latest: boolean, retry?: ReactNode, receipts?: ReactNode) => {
     const authorName = author?.snapshot.worker.name ?? 'Orglet';
     const chat = artifact.report.format === 'chat';
     // A source id the model copied into its message reads as the file's name, here and in what is copied (COD-257).
@@ -396,12 +396,12 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         leading={<>
           {chat && <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} />}
           {detail.task.sideOf && <BringIntoMainChat artifactId={artifact.id} brought={broughtIn.has(artifact.id)} about={t('Câu trả lời của {0}', [authorName])} action={action} openChat={openChat} />}
-        </>} />,
+        </>} trailing={receipts} />,
     });
     // The reactions ride on the answer's own corner, whichever shape it takes (COD-219).
     const badges = <MessageBadges taskId={detail.task.id} messageId={artifact.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="end" />;
     return chat
-      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} />
+      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} retry={retry} />
       : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} />;
   };
   /**
@@ -481,6 +481,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         // A member that handed in a blocker still saved its report; the card's message points at it, so it opens from here.
         const blockerReport = unresolvedError?.stage === 'member' ? detail.artifacts.find(artifact => artifact.runId === unresolvedError.id) : undefined;
+        // The crew answer already records this failure as `Role chưa hoàn tất: …`. A second card would repeat the
+        // same sentence. A blocker keeps the card, because that is where its saved report opens.
+        const answerAlreadyRecords = Boolean(turn.artifact && unresolvedError?.error && !blockerReport
+          && unresolvedError.errorCode !== 'hand_in_blocked' && unresolvedError.errorCode !== 'unresolved_attempt'
+          && turn.artifact.report.limitations.some(limitation => limitation === unresolvedError.error || limitation.endsWith(`: ${unresolvedError.error}`)));
         const previousSentAt = turns[index - 1]?.sentAt;
         const addedFiles = filesAddedWith(turn.sources, turns[index - 1]?.sources);
         // A group-chat reply carries the cards its own run proposed; the rest of the turn's cards sit with the turn.
@@ -509,6 +514,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const waitingAuthor = askingRun ?? pausedAuthor ?? turn.author;
         // A crew turn's plan as a flow diagram (COD-331); it takes the place of the plain progress lines below.
         const crewPlan = crewPlanDiagram(turn.runs, detail.artifacts);
+        const retryButton = latest && !busy && !['completed', 'waiting_input'].includes(detail.task.status)
+          ? <Button className="limit-retry" variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>
+          : null;
         return <div className="chat-turn" key={turn.revision}>
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
@@ -580,38 +588,26 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {latest && detail.task.status === 'waiting_input' && !pendingDecision && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && detail.task.pendingStart && <p role="status">{t('Đã lưu yêu cầu mới. Đang dừng lượt cũ rồi sẽ bắt đầu.')}</p>}
             {crewPlan && <CrewPlanFlow diagram={crewPlan} live={latest && busy} statusLabel={statusLabel} />}
-            {latest && detail.task.status !== 'completed' && !crewPlan && <div className="team-progress" role="status">
-              {teamProgress(turn.runs, detail.artifacts).map(({ run, waitingFor }) => {
-                const brief = run.snapshot.assignment!.brief;
-                const characters = Array.from(brief.replace(/\s+/g, ' ').trim());
-                const description = characters.length > 160 ? `${characters.slice(0, 160).join('')}…` : characters.join('');
-                const status = <span>{run.snapshot.worker.name} · {statusLabel[run.status]}
-                  {waitingFor.length > 0 ? ` · ${t('Chờ {0}', [waitingFor.join(', ')])}` : ''}</span>;
-                return characters.length > 160 ? <details className="muted" key={run.id}>
-                  <summary>{status} · {description}</summary>
-                  <p>{brief}</p>
-                </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
-              })}
-            </div>}
+            {latest && detail.task.status !== 'completed' && !crewPlan && <TeamJobs runs={turn.runs} artifacts={detail.artifacts} namedRunId={busy && thinkingRun ? thinkingRun.id : undefined} />}
             {latest && busy && runStatus && <RunStatusLine line={runStatus} waiting={runStatus === waitingLine} />}
             {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} />}
             {latest && detail.task.status === 'paused' && <p role="status">{stoppedAfter
               ? t('Đã tạm dừng sau bước của {0}, chờ bạn tiếp tục. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.', [stoppedAfter.snapshot.worker.name])
               : t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
-            {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
+            {latest && detail.task.status === 'partial' && !turn.artifact?.report.limitations.length && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
             {/* A turn that ended without an answer keeps what became of it, also once newer messages follow (COD-290);
                 the latest turn's pause already says so in its own line. */}
             {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
             {answered
-              ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest)
+              ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest, retryButton && turn.artifact!.report.format === 'chat' && turn.artifact!.report.limitations.length > 0 ? retryButton : undefined, turn.artifact!.report.format === 'chat' ? <ReadReceipts readers={readersByRevision.get(turn.revision) ?? []} /> : undefined)
               : heldRun
                 ? heldAnswer(heldRun, remainingProposals)
                 /* No answer of its own to hang them on (still running, failed, or a group turn whose replies carry
                    theirs), so what the turn's runs produced still reads in the same order under the turn. */
                 : turnNotices({ handIn: blockedLines, changes: turn.replies.length ? undefined : changedFilesLines(turn.runs, () => true), proposals: proposalCards(remainingProposals) }).after}
             {/* A held answer says itself why nothing was applied, under the answer; it needs no error card. */}
-            {unresolvedError?.error && !heldRun && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
+            {unresolvedError?.error && !heldRun && !answerAlreadyRecords && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
               {/* A plain stop on a connection that never charges says only what the heading already says. */}
@@ -627,10 +623,10 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
               {!busy && unresolvedError?.errorCode === 'unresolved_attempt' && reviewRecovery && <Button variant="primary" onClick={() => reviewRecovery(groupRecoveryAttempts(recovery, detail.runs).blocking?.runId)}><FolderOpen size={16} />{t('Xem trong Chi tiết')}</Button>}
               {blockerReport && unresolvedError && <Button variant="primary" onClick={() => setSavedReportId(blockerReport.id)}><FileText size={16} />{t('Mở báo cáo của {0}', [unresolvedError.snapshot.worker.name])}</Button>}
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
-              {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
+              {retryButton && !(answered && turn.artifact?.report.format === 'chat' && turn.artifact.report.limitations.length > 0) && retryButton}
             </div>}
           </section>}
-          <ReadReceipts readers={readersByRevision.get(turn.revision) ?? []} />
+          {answered && turn.artifact?.report.format === 'chat' ? null : <ReadReceipts readers={readersByRevision.get(turn.revision) ?? []} />}
           {(detail.task.quotes ?? []).filter(quote => quote.afterRevision === turn.revision).map(quote =>
             <BroughtInQuote key={quote.id} quote={quote} threadName={threadName(quote.fromTaskId)} onOpen={openChat && threadName(quote.fromTaskId) ? () => openChat(quote.fromTaskId) : undefined} />)}
         </div>;
@@ -642,6 +638,41 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}
     <BrowserLiveViewer detail={detail} />
   </div>;
+}
+
+/**
+ * Unfinished assignments on this turn. The worker and its state are one line; the brief is the line under them, and a
+ * long brief stays on that one line until the row is opened. The worker already named in the byline, with nothing to
+ * wait for, is not named again.
+ */
+function TeamJobs({ runs, artifacts, namedRunId }: { runs: Run[]; artifacts: Artifact[]; namedRunId?: string }) {
+  const jobs = teamProgress(runs, artifacts);
+  if (!jobs.length) return null;
+  const hideWho = jobs.length === 1 && jobs[0].waitingFor.length === 0 && jobs[0].run.id === namedRunId;
+  return <div className="team-progress">
+    {jobs.map(job => <TeamJob key={job.run.id} run={job.run} waitingFor={job.waitingFor} hideWho={hideWho} />)}
+  </div>;
+}
+
+/** Past this, the brief leaves the row and the row keeps one line of it. A line break folds too. */
+const JOB_LINE = 96;
+
+function TeamJob({ run, waitingFor, hideWho }: { run: Run; waitingFor: string[]; hideWho: boolean }) {
+  const brief = run.snapshot.assignment?.brief ?? '';
+  const state = waitingFor.length > 0 ? t('Chờ {0}', [waitingFor.join(', ')]) : statusLabel[run.status];
+  const who = hideWho ? null : <span className="team-job-who"><strong>{run.snapshot.worker.name}</strong><span className="team-job-state">{state}</span></span>;
+  const folded = Array.from(brief.trim()).length > JOB_LINE || /[\r\n]/.test(brief);
+  if (!folded) return <div className="team-job">{who}{brief.trim() && <p className="team-job-brief">{brief}</p>}</div>;
+  return <details className="team-job">
+    <summary>
+      <span className="team-job-main">
+        {who}
+        <span className="team-job-preview">{brief.replace(/\s+/g, ' ').trim()}</span>
+      </span>
+      <ChevronRight size={14} aria-hidden="true" className="activity-chevron" />
+    </summary>
+    {who && <p className="team-job-brief">{brief}</p>}
+  </details>;
 }
 
 /** What became of a turn without an answer, one muted line; a long error is cut and kept whole in the tooltip. */
@@ -661,18 +692,21 @@ function OutOfStepsLine({ busy, onContinue }: { busy: boolean; onContinue?: () =
 }
 
 /**
- * A normal chat answer: the message as a bubble, its limitations, and the turn's notices around it in their order
- * (COD-217): what was loaded before writing above, what came out of it and the action row below.
+ * A normal chat answer: the message as a bubble, the action row directly under it, then its limitations.
+ * Notices stay in their order (COD-217): what was loaded before writing above, what came out of it below the row.
  */
-function ChatReply({ artifact, text, notices, badges }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges: ReactNode }) {
+function ChatReply({ artifact, text, notices, badges, retry }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges: ReactNode; retry?: ReactNode }) {
   return <div className="chat-reply">
     {notices.before}
-    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} />{badges}</div>
+    <div className="chat-bubble-row">
+      <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} />{badges}</div>
+      {notices.after}
+    </div>
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
-      <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
+      {artifact.report.limitations.map((limitation, index) => <p key={index}>{tMessage(limitation)}</p>)}
+      {retry}
     </div>}
-    {notices.after}
   </div>;
 }
 
@@ -686,11 +720,11 @@ function HeldReply({ runId, title, text, limitations, notices }: { runId: string
     <div className="chat-bubble" id={`held-${runId}`} tabIndex={-1}>
       <Markdown className="prose" text={title ? `**${title}**\n\n${text}` : text} />
     </div>
+    {notices.after}
     {limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
-      <ul>{limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
+      {limitations.map((limitation, index) => <p key={index}>{tMessage(limitation)}</p>)}
     </div>}
-    {notices.after}
   </div>;
 }
 
@@ -803,8 +837,8 @@ function MessageFiles({ files, onOpen }: { files: TaskDetail['sources']; onOpen:
 }
 
 /**
- * Who has read this far. Faces sit under the last message each orglet has worked from, the way a messenger
- * shows a reader's avatar at the message they reached (user, 2026-09-20).
+ * Who has read this far. On a chat answer the faces sit at the end of that bubble's action row, level with
+ * the buttons (user, 2026-09-20). A later note does not push them down.
  */
 function ReadReceipts({ readers }: { readers: readonly Run[] }) {
   if (!readers.length) return null;

@@ -612,6 +612,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-team-message p + p { margin-top:4px; }
 /* The wrapper is only as wide as the bubble, so a badge anchored to its corner lands on the bubble. */
 .chat-bubble { position:relative; width:fit-content; max-width:100%; }
+/* The row is only as wide as the bubble, so the read faces land on its right end, level with the buttons. */
+.chat-bubble-row { display:flex; flex-direction:column; align-items:stretch; width:fit-content; max-width:var(--bubble-max); }
+.chat-bubble-row > .turn-after { width:100%; }
+/* The row already stops at --bubble-max; a percentage max on the bubble would take that share of the row again. */
+.chat-reply .chat-bubble-row > .chat-bubble { max-width:100%; }
+.chat-bubble-row .read-receipts { margin:0 0 0 auto; }
 /* An answer a reply quote or a search result jumped to takes the focus ring; it follows the bubble's corners (COD-267). */
 .chat-bubble:focus-visible { border-radius:18px; }
 .user-message { position:relative; }
@@ -809,6 +815,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .run-error { background:var(--surface); padding:18px; border-radius:12px; margin-top:16px; }
 .run-error p { margin-top:6px; font-size:14px; }
+/* The card and the turn's buttons sit outside the reply, so they take the same inset as the bubble under the name. */
+.assistant-message > .run-error,
+.assistant-message > .actions { margin-left:35px; }
 /* What became of a past turn without an answer (COD-290): one line; a long error ends in an ellipsis, whole in the tooltip. */
 .turn-outcome { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .error { color:var(--error); font-size:13px; }
@@ -1981,10 +1990,32 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* A sent message's actions sit under its bubble like an answer's, lined up with the bubble's right edge. */
 .user-message + .message-actions { justify-content:flex-end; }
 .chat-reply .prose { line-height:1.65; }
-.chat-limitations { margin-top:16px; overflow-wrap:anywhere; }
-.chat-limitations ul { margin:8px 0 0; padding-left:20px; }
-.team-progress { overflow-wrap:anywhere; }
-.team-progress details p { white-space:pre-wrap; }
+/* What the answer could not finish. A warm note, not the reply's cool wash, so it reads as a leftover rather than another message. */
+.chat-limitations { --limit-wash:color-mix(in srgb, var(--working) 14%, var(--bg)); --limit-ink:color-mix(in srgb, var(--working) 68%, var(--text)); margin-top:12px; padding:12px 14px 13px; border-radius:14px; background:var(--limit-wash); overflow-wrap:anywhere; }
+.chat-limitations strong { display:block; font-size:13px; font-weight:600; color:var(--limit-ink); }
+.chat-limitations p { margin:6px 0 0; font-size:13px; line-height:1.5; }
+.chat-limitations .limit-retry { margin-top:10px; background:var(--primary); color:var(--primary-text); }
+.chat-limitations .limit-retry:hover:not(:disabled) { background:var(--primary); color:var(--primary-text); opacity:.85; }
+/* Unfinished crew jobs under the byline (team-chat.md). The name and the state share one line; the brief is a
+   short line under them, cut with an ellipsis, until the row opens. Indented with the working line, so both sit
+   under the name rather than running back to the face. */
+.team-progress { display:flex; flex-direction:column; gap:10px; margin:2px 0 4px; padding-left:39px; min-width:0; }
+.team-job { display:flex; flex-direction:column; gap:2px; min-width:0; color:var(--muted); font-size:13px; line-height:1.45; }
+.team-job > summary { display:flex; align-items:flex-start; gap:8px; width:fit-content; max-width:100%; min-width:0; list-style:none; cursor:pointer; }
+.team-job > summary::-webkit-details-marker { display:none; }
+.team-job > summary:hover { color:var(--text); }
+.team-job-main { display:flex; flex-direction:column; gap:2px; min-width:0; max-width:100%; }
+.team-job-who { display:flex; align-items:baseline; gap:8px; min-width:0; }
+.team-job-who strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:var(--text); }
+.team-job-state { flex-shrink:0; font-size:12px; }
+.team-job-preview { display:block; max-width:36ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Open, the one-line preview gives way to the brief. With no name on the row, the preview itself wraps into the
+   brief, so the summary is never an empty chevron. */
+.team-job[open]:has(.team-job-who) .team-job-preview { display:none; }
+.team-job[open]:not(:has(.team-job-who)) .team-job-preview { max-width:none; overflow:visible; text-overflow:unset; white-space:pre-wrap; overflow-wrap:anywhere; }
+.team-job[open] > summary .activity-chevron { transform:rotate(90deg); }
+.team-job .activity-chevron { flex-shrink:0; margin-top:2px; }
+.team-job-brief { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 /*
  * Workspace recovery in Details (COD-191): one row per attempt, newest first. The head is who and when on the left
  * and the files' fate on the right, centred on the same line; the state takes the colour of what it means (red
@@ -2120,7 +2151,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .proposal-crew-lead { display:grid; place-items:center; width:100%; height:100%; border-radius:50%; background:var(--bg); color:var(--working); }
 .proposal-crew-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .proposal-crew-chips:empty { display:none; }
-@media(max-width:1000px) { .chat-reply,.report-turn,.assistant-message > .turn-after { padding-left:0; } .thread-usage { margin-left:0; } }
+@media(max-width:1000px) { .chat-reply,.report-turn,.assistant-message > .turn-after { padding-left:0; } .assistant-message > .run-error,.assistant-message > .actions,.thread-usage { margin-left:0; } }
 /* The auto-apply switch sits under the chat permissions in the worker dialog, spaced as a second group. */
 
 /* Task rows carry their own menu (rename lives there, not on double-click). */
@@ -2577,19 +2608,22 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    Rows share one line box: the icon is set 3px down to sit on the first line's centre, and a chip is exactly the
    text's height, so nothing tugs the row off its line. */
 .turn-trace { font-size:13px; color:var(--muted); }
-.turn-trace[open] { align-self:stretch; }
+.turn-trace[open] { align-self:stretch; margin-bottom:12px; }
 .turn-trace > summary { list-style:none; cursor:pointer; }
 .turn-trace > summary::-webkit-details-marker { display:none; }
 .turn-trace[open] > summary .activity-chevron { transform:rotate(90deg); }
 .trace-detail { display:flex; flex-direction:column; align-items:flex-start; gap:6px; margin-top:4px; padding-left:24px; }
 .trace-list { display:flex; flex-direction:column; align-self:stretch; gap:4px; margin:0; padding:0; list-style:none; }
 .trace-row { display:flex; align-items:flex-start; gap:8px; min-width:0; line-height:1.5; }
-.trace-row > svg { flex-shrink:0; margin-top:3px; }
+.trace-row > svg, .trace-row > .avatar { flex-shrink:0; margin-top:3px; }
 .trace-row-muted { opacity:.7; }
 .trace-verb { flex-shrink:0; }
 .trace-note,.trace-text { min-width:0; overflow-wrap:anywhere; }
 .trace-text { color:var(--text); }
 .trace-target { min-width:0; padding:0 8px; border-radius:6px; background:var(--surface); color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* A handoff names one orglet: that face sits in the chip, beside the name. */
+.trace-person { display:inline-flex; align-items:center; gap:5px; padding-left:3px; }
+.trace-person .avatar { margin-top:0; }
 .trace-why { flex-shrink:0; }
 .trace-row.running .trace-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
 .trace-link { padding:0; border:0; background:none; font:inherit; font-size:12px; color:var(--muted); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
@@ -2643,14 +2677,15 @@ button.crew-node:hover { background:var(--row-hover); }
 .crew-node-stopped .crew-node-name { color:var(--muted); }
 @media (prefers-reduced-motion: reduce) { .crew-node { transition:none; } }
 @media(max-width:1000px) { .crew-plan { padding-left:0; } }
-/* The working line under an orglet's name: muted words with a brighter band sweeping across them, left to right. */
-.run-status-line { margin:0; padding-left:39px; min-height:28px; line-height:28px; font-size:14px; color:transparent; background:linear-gradient(90deg, var(--muted) 0%, var(--muted) 38%, var(--text) 50%, var(--muted) 62%, var(--muted) 100%) 0 0 / 250% 100%; -webkit-background-clip:text; background-clip:text; animation:status-sweep 2.2s linear infinite; }
+/* The working line under an orglet's name. The letters rest lighter than muted text, so the brighter band
+   sweeping across them, left to right, reads as a glow rather than a slight shift of the same grey. */
+.run-status-line { margin:0; padding-left:39px; min-height:28px; line-height:28px; font-size:14px; color:transparent; --status-ink:color-mix(in srgb, var(--muted) 48%, var(--bg)); background:linear-gradient(90deg, var(--status-ink) 0%, var(--status-ink) 44%, var(--text) 50%, var(--status-ink) 56%, var(--status-ink) 100%) 0 0 / 250% 100%; -webkit-background-clip:text; background-clip:text; animation:status-sweep 2.2s linear infinite; }
 @keyframes status-sweep { from { background-position:100% 0; } to { background-position:0% 0; } }
 /* A run waiting on the person is not working: its line holds still (COD-290). It sits under the card it waits on,
    which starts at the section's edge, not under the name, so it starts there too. */
 .run-status-line.waiting { padding-left:0; animation:none; background:none; color:var(--muted); }
 @media (prefers-reduced-motion: reduce) { .run-status-line { animation:none; background:none; color:var(--muted); } }
-@media(max-width:1000px) { .live-run { padding-left:0; } .run-status-line { padding-left:4px; } }
+@media(max-width:1000px) { .live-run { padding-left:0; } .run-status-line { padding-left:4px; } .team-progress { padding-left:4px; } }
 @media (prefers-reduced-motion: reduce) { .trace-row.running .trace-verb { animation:none; } .activity-chevron { transition:none; } }
 
 /* Memory (COD-161): what a worker remembered from its chats, one quiet row each, corrected in place. Rows are told

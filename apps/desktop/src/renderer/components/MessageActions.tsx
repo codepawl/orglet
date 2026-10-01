@@ -35,10 +35,12 @@ function useReactionPick({ taskId, messageId, reactions, action }: ReactionProps
  * an answer). The reactions themselves are not here: they sit on the bubble's corner as `MessageBadges` (COD-219).
  * `onForward` opens the forward picker for this message (COD-257); without it the row has no Forward.
  */
-export function MessageActions({ taskId, messageId, author, text, reactions, action, leading, onForward }: ReactionProps & {
+export function MessageActions({ taskId, messageId, author, text, reactions, action, leading, trailing, onForward }: ReactionProps & {
   author: string;
   text: string;
   leading?: ReactNode;
+  /** Faces of who has read this far, at the row's end, level with the buttons. */
+  trailing?: ReactNode;
   onForward?: () => void;
 }) {
   const { current, pick } = useReactionPick({ taskId, messageId, reactions, action });
@@ -47,6 +49,7 @@ export function MessageActions({ taskId, messageId, author, text, reactions, act
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
     {onForward && <Button size="icon" aria-label={t('Chuyển tiếp tin này')} title={t('Chuyển tiếp tin này')} onClick={onForward}><Forward size={15} /></Button>}
     <ReactionBar options={reactionOptions()} picked={current} onPick={pick} label={t('Thả react')} icon={<SmilePlus size={15} />} />
+    {trailing}
   </div>;
 }
 
