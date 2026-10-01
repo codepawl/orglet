@@ -176,7 +176,8 @@ async function seedWorkspace(page) {
   const chatTaskId = await callCore(page, 'createTask', { workerId: researcher.id, brief: 'Plan the launch of my weekly newsletter next month. Keep it short.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, chatTaskId);
   // A side thread of that chat, which opens in the right panel beside it (COD-365).
-  const sideThreadBrief = 'Draft three subject lines for it.';
+  // No closing period: the row is named by the chat's title, which drops one (the button's name is the title, not the brief).
+  const sideThreadBrief = 'Draft three subject lines for it';
   const sideThreadId = await callCore(page, 'startSideThread', { taskId: chatTaskId, brief: sideThreadBrief, sourceIds: [], consent: false, providerScopes: [], budgetMicros: 1000 });
   await waitForTask(page, sideThreadId);
   // An earlier chat of an orglet, replaced by a newer one: it has no row anywhere in the sidebar, so opening it puts it on
@@ -287,7 +288,7 @@ const SCREENS = [
   // A side thread opened from its row: in the right panel beside its main chat, or in the main card when the window has no room for the panel.
   { name: 'side-thread-panel', open: async (page, context) => {
     await openSidebar(page);
-    await page.getByRole('button', { name: context.sideThreadBrief }).first().click();
+    await page.getByRole('button', { name: context.sideThreadBrief, exact: true }).click();
     await page.locator('.thread-pane .chat-reply, .main-pane .side-thread-origin').first().waitFor();
   } },
   { name: 'chat-options-menu', open: async page => { await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
