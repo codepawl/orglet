@@ -66,8 +66,8 @@ try {
   assert.ok(review.checks.every(check => check.status === 'not_assessed'));
   await page.getByRole('heading', { name: 'Chưa đủ bằng chứng', exact: true }).waitFor();
   await page.getByText('Run stability · Chưa đánh giá', { exact: true }).click();
-  const layout = await page.evaluate(() => ({ viewport: innerHeight, main: document.querySelector('.main-pane').getBoundingClientRect().bottom, settings: document.querySelector('.sidebar-footer').getBoundingClientRect().bottom }));
-  assert.ok(layout.main <= layout.viewport + 1 && layout.settings <= layout.viewport + 1, 'Long report and role list must keep main/sidebar footers inside the viewport');
+  const layout = await page.evaluate(() => ({ viewport: innerHeight, main: document.querySelector('.main-pane').getBoundingClientRect().bottom, settings: document.querySelector('.user-panel').getBoundingClientRect().bottom }));
+  assert.ok(layout.main <= layout.viewport + 1 && layout.settings <= layout.viewport + 1, 'Long report and role list must keep the main card and the user panel inside the viewport');
   console.log(JSON.stringify({ automaticPreflight: 'passed', taskId: preflightTaskId, checks: preflightDetail.profiles.length, reports: preflightDetail.artifacts.length, layout }));
   await page.keyboard.press('Escape');
   await page.locator('.org-viewer').waitFor({ state: 'detached' });
