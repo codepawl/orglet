@@ -76,6 +76,12 @@ export function replyCountLabel(count: number): string {
   return t('{0} lượt', [count]);
 }
 
+/** How many files the chat has, with its own words for one. */
+function fileCountLabel(count: number): string {
+  if (count === 1) return t('1 tệp đính kèm');
+  return t('{0} tệp đính kèm', [count]);
+}
+
 type TimedEvent = { runId?: string; message: string; createdAt: string };
 
 /** The events a run leaves as it saves its answer or report: its work ends there, whatever the person does later. */
@@ -435,11 +441,11 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           {tokens > 0 && <Fact icon={Cpu} title={t('Token đã dùng')}>{t('{0} token', [tokens.toLocaleString(currentLocale())])}</Fact>}
           {model && <Fact icon={Sparkles} title={t('Model đã trả lời')}>{model}</Fact>}
           <Fact icon={MessageSquare} title={t('Số lượt trả lời')}>{replyCountLabel(detail.artifacts.length)}</Fact>
+          {/* The files themselves are the chat's Files view (COD-355); the count here leads there. */}
+          {detail.sources.length > 0 && <button type="button" className="details-fact details-fact-link" title={t('Mở phần Tệp của chat')} onClick={onOpenSources}>
+            <FileText size={13} aria-hidden="true" />{fileCountLabel(detail.sources.length)}
+          </button>}
         </div>
-        {detail.sources.length > 0 && <>
-          <ShowMore items={detail.sources} limit={3} empty="" render={source => <p key={source.id} className="details-source"><FileText size={14} aria-hidden="true" />{source.name}</p>} />
-          <Button variant="outline" onClick={onOpenSources}><FileText size={16} />{t('Xem nguồn')}</Button>
-        </>}
       </section>}
 
       {tools && <section className="details-section task-tools" aria-labelledby="task-tools-heading">

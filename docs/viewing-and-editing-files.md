@@ -11,7 +11,7 @@ Part of the [user guide](user-guide.md). How files get into a chat: [Attach file
 
 ## Open a file
 
-Click a file card in the chat, or open **Details → Sources** and click a row. The viewer shows:
+Click a file card in the chat, or open the chat's **Files** tab and click a row. The viewer shows:
 
 - text and code with line numbers and colours
 - Markdown as a document, with **View source text** to see the text
@@ -99,7 +99,7 @@ If you close the viewer, press **Esc**, or click **Cancel** with changes that ar
 
 ## What a saved version is
 
-- It is a file of the chat, listed under **Details → Sources** with its original. The viewer's meta line says which file it was edited from.
+- It is a file of the chat, listed in the chat's **Files** tab with its original. The viewer's meta line says which file it was edited from.
 - The orglet reads it only when a message carries it: use **Ask about this**, or attach it from the chat's files. Saving alone sends nothing.
 - Orglet keeps the edited copy in its own data folder, never next to your file. **Settings → Data → Delete imported sources** and **Erase everything** remove these copies too.
 - It counts toward the chat's files like any other.

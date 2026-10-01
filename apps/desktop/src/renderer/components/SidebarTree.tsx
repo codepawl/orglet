@@ -266,7 +266,7 @@ export function ArchivedList({ count, label, children }: { count: number; label?
 }
 
 /** Scrolls a sidebar row into view once it becomes the chat on screen, such as a chat opened from search. */
-function useScrolledIntoViewWhenActive<E extends HTMLElement>(active: boolean) {
+export function useScrolledIntoViewWhenActive<E extends HTMLElement>(active: boolean) {
   const row = useRef<E>(null);
   useEffect(() => {
     if (active) row.current?.scrollIntoView({ block: 'nearest' });

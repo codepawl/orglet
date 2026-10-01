@@ -175,6 +175,12 @@ async function seedWorkspace(page) {
   await waitForTask(page, crewTaskId);
   const chatTaskId = await callCore(page, 'createTask', { workerId: researcher.id, brief: 'Plan the launch of my weekly newsletter next month. Keep it short.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, chatTaskId);
+  // A group chat, the kind of chat that goes on the Open list when it is opened (COD-355).
+  const writer = (await callCore(page, 'workspace', {})).workers.find(worker => worker.name === 'Writer');
+  const groupChatName = 'Newsletter tone';
+  const groupTaskId = await callCore(page, 'createTask', { workerId: researcher.id, assignees: [researcher.id, writer.id], brief: 'Agree on a tone for the newsletter.', sourceIds: [], consent: false, budgetMicros: 1000 });
+  await waitForTask(page, groupTaskId);
+  await callCore(page, 'renameTask', { id: groupTaskId, title: groupChatName });
   const base = { enabled: true, task: { sourceIds: [], consent: false, budgetMicros: 50_000 } };
   const schedules = [
     { name: 'Morning digest', schedule: { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency: 'daily', weekday: 1, dailyCapMicros: 200_000 }, task: { workerId: researcher.id, brief: 'Summarise what changed in my inbox overnight.' } },
@@ -187,7 +193,7 @@ async function seedWorkspace(page) {
     await callCore(page, 'saveRoutine', { ...base, name: schedule.name, enabled: schedule.enabled ?? true, schedule: schedule.schedule, task: { ...base.task, ...schedule.task } });
   }
   const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
-  return { researcher, crew, islandCrew };
+  return { researcher, crew, islandCrew, groupChatName };
 }
 
 async function settle(page) {
@@ -214,6 +220,9 @@ async function reset(page, context) {
   if (await page.locator('.details-pane').count()) await page.keyboard.press('Escape');
   await openSidebar(page);
   await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
+  // A chat keeps the view it was on (COD-355): come back to its messages.
+  const chatView = page.getByRole('tab', { name: label('Trò chuyện'), exact: true });
+  if (await chatView.count()) await chatView.click();
   await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
 }
 
@@ -230,14 +239,17 @@ async function openWorkerTab(page, context, tab) {
   await page.getByRole('tab', { name: label(tab), exact: true }).click();
 }
 
-/** A tab for each of four chats (COD-340), ending on the orglet's own, so the strip shows above the main card. */
-async function openTabs(page, context) {
+/**
+ * The group chat opened from its sidebar row, so it lands on the Open list (COD-355), then back to the orglet's own chat,
+ * whose views (Chat, Schedules) show under its name.
+ */
+async function openOpenChats(page, context) {
   await openSidebar(page);
-  for (const name of [context.crew.name, 'Writer', 'Data analyst', context.researcher.name]) {
-    await openSidebar(page);
-    await page.getByRole('button', { name, exact: true }).first().click();
-  }
-  await page.locator('.chat-tabs').waitFor();
+  await page.getByRole('button', { name: context.groupChatName, exact: true }).first().click();
+  await page.locator('.open-chat-row .worker.active').waitFor({ state: 'attached' });
+  await openSidebar(page);
+  await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
+  await page.locator('.chat-views').waitFor();
 }
 
 /** Folds the sidebar to the rail (COD-340); the next reset opens it again. A narrow window has folded it already. */
@@ -263,11 +275,16 @@ const SCREENS = [
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
   { name: 'empty-chat', open: async page => { await openSidebar(page); await page.getByRole('button', { name: 'Writer', exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
-  // The open chats as tabs, beside the full sidebar and beside the rail, and with the right panel open (COD-340).
-  { name: 'chat-tabs', open: openTabs },
-  { name: 'rail', open: async (page, context) => { await openTabs(page, context); await foldSidebar(page); } },
+  // The Open list beside the full sidebar and on the rail, the chat's views, and the right panel (COD-340, COD-355).
+  { name: 'open-chats', open: openOpenChats },
+  { name: 'chat-view-schedules', open: async (page, context) => {
+    await openOpenChats(page, context);
+    await page.getByRole('tab', { name: startsWith('Lịch chạy') }).click();
+    await page.getByRole('tabpanel').getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor();
+  } },
+  { name: 'rail', open: async (page, context) => { await openOpenChats(page, context); await foldSidebar(page); } },
   { name: 'rail-details', open: async (page, context) => {
-    await openTabs(page, context);
+    await openOpenChats(page, context);
     await foldSidebar(page);
     await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click();
     await page.getByRole('menuitem', { name: label('Chi tiết') }).click();

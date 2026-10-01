@@ -543,7 +543,7 @@ export const en: Dictionary = {
   'Mở bằng ứng dụng mặc định': 'Open in default app',
   'Nguồn gốc': 'Origin',
   'Nguồn này là văn bản; dùng previewSource.': 'This source is text; use previewSource.',
-  'Nguồn {0} là {1}. Tí chưa đọc được loại tệp này; chỉ xem được trong Nguồn của cuộc trò chuyện.': '{0} is {1}. Workers cannot read this kind of file yet; it can only be viewed in Chat sources.',
+  'Nguồn {0} là {1}. Tí chưa đọc được loại tệp này; chỉ xem được trong Nguồn của cuộc trò chuyện.': '{0} is {1}. Workers cannot read this kind of file yet; it can only be viewed in the chat’s Files.',
   'Nguồn {0} là ảnh nên không có văn bản để đọc.': '{0} is an image, so it has no text to read.',
   'Nguồn {0} không phải PDF.': '{0} is not a PDF.',
   'Nguồn {0} không phải ảnh.': '{0} is not an image.',
@@ -766,7 +766,7 @@ export const en: Dictionary = {
   'Không có lần chạy để tiếp tục.': 'No run to continue.',
   'Không có mục khớp.': 'No matching items.',
   'Không có quyền đọc nguồn ngoài task này.': 'No read access to sources outside this task.',
-  'Không còn tệp nguồn {0} ở chỗ cũ. Tệp có thể đã bị đổi tên, di chuyển hoặc xóa. Đính kèm lại tệp, hoặc mở Nguồn của cuộc trò chuyện và Thu hồi quyền đọc để tiếp tục mà không có tệp này.': '{0} is no longer where it was attached from. The file may have been renamed, moved or deleted. Attach it again, or open Chat sources and revoke read access to carry on without it.',
+  'Không còn tệp nguồn {0} ở chỗ cũ. Tệp có thể đã bị đổi tên, di chuyển hoặc xóa. Đính kèm lại tệp, hoặc mở Nguồn của cuộc trò chuyện và Thu hồi quyền đọc để tiếp tục mà không có tệp này.': '{0} is no longer where it was attached from. The file may have been renamed, moved or deleted. Attach it again, or open it from the chat’s Files and revoke read access to carry on without it.',
   'Không có tỷ giá hợp lệ cho {0}.': 'No valid exchange rate for {0}.',
   'Không hoàn tất checker cho nguồn này. Kiểm tra định dạng, tên cột ID và giới hạn tài nguyên.': 'The checker did not finish for this source. Check the format, the ID column name and resource limits.',
   'Không hỗ trợ symlink hoặc junction. Chọn tệp gốc.': 'Symlinks and junctions are not supported. Choose the original file.',
@@ -1188,7 +1188,6 @@ export const en: Dictionary = {
   'Ngôn ngữ': 'Language',
   'Nguồn ({0}/20)': 'Sources ({0}/20)',
   'Nguồn chưa được đọc: {0} ({1}). Không xem đây là đánh giá đầy đủ tệp này.': 'Source not read: {0} ({1}). Do not treat this as a full review of the file.',
-  'Nguồn của cuộc trò chuyện': 'Chat sources',
   'Nguồn gốc finding': 'Finding provenance',
   'Nguồn gốc finding không khớp writer/run hoặc ID bị trùng.': 'Finding provenance does not match the writer/run, or IDs are duplicated.',
   'Nguồn này chưa có checker dữ liệu tương ứng; role chỉ có thể đọc như văn bản. Không chạy code hoặc xác nhận scoring từ việc đọc tệp.': 'This source has no matching data checker; roles can only read it as text. No code is run and scoring is not confirmed by reading the file.',
@@ -1533,7 +1532,6 @@ export const en: Dictionary = {
   'Workspace đã có đủ 100 lịch. Xóa hoặc sửa một lịch hiện có.': 'The workspace already has 100 schedules. Delete or edit one.',
   'Xem kiểm tra trước review': 'View pre-review checks',
   'Xem lịch chạy': 'View schedules',
-  'Xem nguồn': 'View sources',
   'Xem thêm {0}': 'Show {0} more',
   'Xuất gói skill': 'Export skill package',
   'Xuất skill chưa hoàn tất. Kiểm tra thư mục mới: {0}. Gói trong Orglet vẫn được giữ nguyên.': 'The skill export did not finish. Check the new folder: {0}. The package in Orglet is unchanged.',
@@ -3613,11 +3611,18 @@ export const en: Dictionary = {
   'Thống kê sử dụng và báo lỗi': 'Usage statistics and error reports',
   'Thống kê sử dụng': 'Usage statistics',
   'Sắp có. Hiện chưa có chat hay tệp nào rời khỏi máy này.': 'Coming next. No chat or file leaves this computer yet.',
-  // COD-340: open chats as tabs across the top, and the sidebar folded to a rail of faces.
-  'Chat đang mở': 'Open chats',
-  'Đóng tab {0}': 'Close tab {0}',
-  'Đóng tab (Ctrl W)': 'Close tab (Ctrl W)',
+  // COD-340: the sidebar folded to a rail of faces.
   'Tạo mới': 'Create',
+  // COD-355: the Open list in the sidebar and on the rail, and the views of the chat on screen.
+  'Đóng (Ctrl W)': 'Close (Ctrl W)',
+  'Lần chạy theo lịch của {0}': 'Schedule run of {0}',
+  'Chat cũ của {0}': 'Earlier chat with {0}',
+  'Trò chuyện': 'Chat',
+  'Thay đổi': 'Changes',
+  'Các phần của chat': 'Chat views',
+  '1 tệp đính kèm': '1 attached file',
+  '{0} tệp đính kèm': '{0} attached files',
+  'Mở phần Tệp của chat': 'Open the chat’s Files',
 
 };
 
