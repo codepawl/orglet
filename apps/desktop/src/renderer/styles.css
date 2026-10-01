@@ -457,15 +457,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
    side. The row is a fixed height and each face moves inside its own box, so a hop never shifts the heading. */
 .fresh-faces { display:flex; justify-content:center; align-items:flex-end; gap:18px; min-height:96px; margin-bottom:26px; }
 .fresh-faces .avatar.xl { margin-bottom:8px; }
-/* Prompt bar: a one-line pill (input · send) that grows into a box when the text wraps or sources are attached, with
+/* Prompt bar: a one-line box with rounded corners (input · send; owner, 2026-10-01: corners, not a pill) that grows taller when the text wraps or sources are attached, with
    the toolbar row (add · model or recipient · usage ring) under it (owner's reference, 2026-09-30). Grown, the box is
    zones stacked: the reply target, the attached files, then the text with send beside its last line. The zones are
-   told apart by what they are made of (cards on a surface, bare text, a round button) and by spacing, never by a line. */
-.composer { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--bar-line); border-radius:24px; background:var(--bg); box-shadow:0 1px 2px #0000000d, 0 6px 20px #00000014; }
+   told apart by what they are made of (cards on a surface, bare text, the send button) and by spacing, never by a line. */
+.composer { --composer-radius:16px; --composer-padding:5px; position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"input send"; align-items:end; column-gap:4px; padding:var(--composer-padding); border:1px solid var(--bar-line); border-radius:var(--composer-radius); background:var(--bg); box-shadow:0 1px 2px #0000000d, 0 6px 20px #00000014; }
 /* Only the zones that are there get a row, so an empty one adds no gap above the text. */
-.composer.expanded { row-gap:6px; border-radius:22px; padding:7px; }
+.composer.expanded { --composer-padding:7px; row-gap:6px; }
 .composer.expanded.has-attachments { grid-template-areas:"attach attach" "input send"; }
-/* A reply target is the bar's first zone, inside the pill with the text it belongs to (user, 2026-09-22). */
+/* A reply target is the bar's first zone, inside the bar with the text it belongs to (user, 2026-09-22). */
 .composer.expanded.has-context { grid-template-areas:"context context" "input send"; }
 .composer.expanded.has-context.has-attachments { grid-template-areas:"context context" "attach attach" "input send"; }
 .composer-context { grid-area:context; min-width:0; }
@@ -524,7 +524,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
    fills with the accent, so the two states differ by more than a shade. */
 .composer-send { grid-area:send; display:flex; align-items:center; gap:4px; margin-bottom:3px; }
 .composer.expanded .composer-send { margin-bottom:0; }
-.composer .composer-send .send { width:30px; height:30px; min-height:30px; padding:0; border-radius:50%; }
+/* The send button's corners follow the bar's, inset by the bar's padding, so the two curves stay concentric. */
+.composer .composer-send .send { width:30px; height:30px; min-height:30px; padding:0; border-radius:calc(var(--composer-radius) - var(--composer-padding)); }
 .send:disabled { opacity:.45; }
 /* While a run is in progress the send button is the stop button, and a ring turns inside it so the eye lands
    there (user, 2026-09-19). The arc is drawn in the button's own text colour: outside the button it would run
@@ -587,7 +588,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Thread: the prompt bar stays pinned under the conversation. */
 /* What is being replied to, above the bar: who said it and enough of it to recognise, with a way out. It is a
    quote, so it is set apart by a soft surface rather than by the quote bar a border would draw. */
-.composer-reply { display:flex; align-items:center; gap:10px; padding:4px 4px 4px 12px; border-radius:15px; background:var(--surface); color:var(--muted); font-size:12.5px; }
+.composer-reply { display:flex; align-items:center; gap:10px; padding:4px 4px 4px 12px; border-radius:calc(var(--composer-radius, 16px) - var(--composer-padding, 7px)); background:var(--surface); color:var(--muted); font-size:12.5px; }
 .composer-reply > svg { flex-shrink:0; }
 .composer-reply p { display:flex; gap:8px; min-width:0; flex:1; }
 .composer-reply strong { flex-shrink:0; color:var(--text); font-weight:600; }
