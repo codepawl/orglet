@@ -69,7 +69,7 @@ export class Forwards {
   /** The name of a place a forward goes to, for a result that did not go there. */
   targetName(target: ForwardTarget): string {
     if (target.kind === 'worker') return this.store.all<Worker>('workers').find(item => item.id === target.id)?.name ?? 'Tí';
-    if (target.kind === 'team') return this.store.all<Team>('teams').find(item => item.id === target.id)?.name ?? 'Hội';
+    if (target.kind === 'team') return this.store.all<Team>('teams').find(item => item.id === target.id)?.name ?? 'Kênh';
     const task = this.store.all<Task>('tasks').find(item => item.id === target.id && !item.deletedAt);
     return task ? this.chatName(task) : 'Chat';
   }

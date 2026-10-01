@@ -34,7 +34,7 @@ import { changedFilesRecords, restoredChangesKey } from './workspace-recovery';
 import { RunAttention } from '../../shared/quiet-runs';
 import { MAX_TURN_ROUTES, TurnRoute } from '../../shared/turn-routing';
 import { Channel } from '../../shared/channels';
-import { migrateGroupChats } from './channels';
+import { migrateCrews, migrateGroupChats } from './channels';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -102,7 +102,7 @@ function validateRelations(data: Payload) {
     })) fail('Checker accuracy không thuộc lượt chạy.');
   }
   const routines = map(data.routines ?? []);
-  for (const routine of routines.values()) if (!workers.has(routine.task.workerId) || (routine.task.teamId && !teams.has(routine.task.teamId)) || routine.task.sourceIds.some(id => !sources.has(id)) || (routine.lastTaskId && tasks.get(routine.lastTaskId)?.routineId !== routine.id)) fail('Lịch thiếu Tí, hội, nguồn hoặc task.');
+  for (const routine of routines.values()) if (!workers.has(routine.task.workerId) || (routine.task.teamId && !teams.has(routine.task.teamId)) || routine.task.sourceIds.some(id => !sources.has(id)) || (routine.lastTaskId && tasks.get(routine.lastTaskId)?.routineId !== routine.id)) fail('Lịch thiếu Tí, kênh, nguồn hoặc task.');
   for (const task of tasks.values()) {
     if (task.currentInput?.sourceIds.some(id => !task.sourceIds.includes(id))) fail('Đầu vào hiện tại tham chiếu nguồn ngoài task.');
     const decisions = task.decisionRequests ?? [];
@@ -153,10 +153,10 @@ function validateRelations(data: Payload) {
   }
   for (const run of runs.values()) if (run.snapshot.preflightId && preflights.get(run.snapshot.preflightId)?.taskId !== run.taskId) fail('Run thiếu preflight.');
   for (const workerId of Object.keys(data.entityState?.workers ?? {})) if (!workers.has(workerId)) fail('Trạng thái lưu trữ tham chiếu Tí không tồn tại.');
-  for (const teamId of Object.keys(data.entityState?.teams ?? {})) if (!teams.has(teamId)) fail('Trạng thái lưu trữ tham chiếu hội không tồn tại.');
+  for (const teamId of Object.keys(data.entityState?.teams ?? {})) if (!teams.has(teamId)) fail('Trạng thái lưu trữ tham chiếu kênh không tồn tại.');
   for (const worker of workers.values()) if (!skills.has(worker.skillId)) fail('Tí thiếu skill.');
-  for (const team of teams.values()) if ([...team.memberIds, team.synthesizerId].some(id => !workers.has(id))) fail('Hội thiếu Tí.');
-  for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu Tí, hội hoặc nguồn.');
+  for (const team of teams.values()) if ([...team.memberIds, team.synthesizerId].some(id => !workers.has(id))) fail('Kênh thiếu Tí.');
+  for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu Tí, kênh hoặc nguồn.');
   for (const run of runs.values()) if (!tasks.has(run.taskId) || run.snapshot.worker.skillId !== run.snapshot.skill.id || run.snapshot.upstreamArtifactIds?.some(id => !artifacts.has(id))) fail('Snapshot hoặc task của run không hợp lệ.');
   for (const run of runs.values()) {
     if (run.snapshot.assignment && (run.stage !== 'member' || (!run.snapshot.reassignment && run.snapshot.assignment.workerId !== run.snapshot.worker.id))) {
@@ -395,7 +395,7 @@ function validateRelations(data: Payload) {
     knowledgeRevisions.set(key, row.data);
   }
   for (const item of [...map(data.knowledge ?? []).values(), ...knowledgeRevisions.values()]) {
-    if ((item.scope.type === 'team' && !teams.has(item.scope.id)) || (item.scope.type === 'worker' && !workers.has(item.scope.id))) fail('Knowledge tham chiếu hội/Tí không tồn tại.');
+    if ((item.scope.type === 'team' && !teams.has(item.scope.id)) || (item.scope.type === 'worker' && !workers.has(item.scope.id))) fail('Knowledge tham chiếu kênh/Tí không tồn tại.');
     const origin = item.provenance.kind === 'run' ? item.provenance : undefined;
     if (origin && (runs.get(origin.runId)?.taskId !== origin.taskId || artifacts.get(origin.artifactId)?.runId !== origin.runId)) fail('Knowledge tham chiếu lần chạy ngoài lịch sử.');
   }
@@ -709,6 +709,8 @@ export class Backups {
     });
     // A backup made before channels brings its group chats back as group chats; they become channels like any other (COD-361).
     migrateGroupChats(this.store);
+    // A backup made before crews became channels brings its crews back as crews; they become channels too (COD-369).
+    migrateCrews(this.store, now);
     this.pending = undefined; this.notify();
   }
 }

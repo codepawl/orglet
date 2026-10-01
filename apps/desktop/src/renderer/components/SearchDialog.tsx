@@ -34,7 +34,7 @@ type SearchRow =
 
 const GROUP_TITLES: Record<SearchRow['kind'], () => string> = {
   orglet: () => t('Tí'),
-  crew: () => t('Hội'),
+  crew: () => t('Kênh'),
   chat: () => t('Các cuộc trò chuyện'),
 };
 
@@ -170,7 +170,7 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
   const empty = !searching
     ? workspace.tasks.length ? '' : t('Chưa có cuộc trò chuyện nào.')
     : failure ? tMessage(failure)
-      : found && !rows.length ? t('Không có tin nhắn, Tí hay hội nào khớp.') : '';
+      : found && !rows.length ? t('Không có tin nhắn, Tí hay kênh nào khớp.') : '';
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
@@ -183,7 +183,7 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
         <Dialog.Title className="sr-only">{t('Tìm cuộc trò chuyện')}</Dialog.Title>
         <div className="search-dialog-input">
           <Search size={20} aria-hidden="true" />
-          <input autoFocus role="combobox" aria-expanded={rows.length > 0} aria-controls="search-results" aria-activedescendant={activeRow ? `search-result-${activeRow.key}` : undefined} aria-autocomplete="list" aria-label={t('Tìm cuộc trò chuyện')} placeholder={t('Tìm tin nhắn, Tí và hội')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+          <input autoFocus role="combobox" aria-expanded={rows.length > 0} aria-controls="search-results" aria-activedescendant={activeRow ? `search-result-${activeRow.key}` : undefined} aria-autocomplete="list" aria-label={t('Tìm cuộc trò chuyện')} placeholder={t('Tìm tin nhắn, Tí và kênh')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
             if (event.key === 'ArrowDown') { event.preventDefault(); setActive(index => Math.min(index + 1, rows.length - 1)); }
             if (event.key === 'ArrowUp') { event.preventDefault(); setActive(index => Math.max(index - 1, 0)); }
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); choose(active); }
@@ -219,7 +219,7 @@ function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose 
   } else if (row.kind === 'crew') {
     const members = teamRoster(row.team, workspace.workers);
     faces = <Faces workers={members} several fallbackName={row.team.name} fallbackSeed={row.team.id} />;
-    name = row.team.name;
+    name = channelLabel(row.team.name);
     detail = members.map(worker => worker.name).join(', ');
   } else {
     const workers = chatFaces(row.task, workspace);

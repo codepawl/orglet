@@ -355,11 +355,11 @@ describe('orglet round trip through the real server', () => {
     const output = { stdout: (text: string) => printed.push(text), stderr: (text: string) => errors.push(text) };
     const environment = { ORGLET_USER_DATA: started.folder };
     expect(await runCli(['status'], output, environment)).toBe(0);
-    expect(printed.pop()).toBe('Orglet 9.9.9 is running.\n1 orglet, 0 crews.');
+    expect(printed.pop()).toBe('Orglet 9.9.9 is running.\n1 orglet, 0 channels.');
     expect(await runCli(['open', '--to', 'researcher'], output, environment)).toBe(0);
     expect(started.opened).toEqual([{ kind: 'worker', id: workerId, name: 'Researcher', color: '#4f7fe0' }]);
     expect(await runCli(['read', '--to', 'Nobody', '--json'], output, environment)).toBe(1);
-    expect(JSON.parse(printed.pop()!)).toMatchObject({ ok: false, code: 'not_found', error: 'EN:Không có Tí hay hội nào tên "Nobody". Có: Researcher.' });
+    expect(JSON.parse(printed.pop()!)).toMatchObject({ ok: false, code: 'not_found', error: 'EN:Không có Tí hay kênh nào tên "Nobody". Có: Researcher.' });
     const refused = await exchange(cliEndpoint(started.folder), { op: 'status', token: createCliToken() });
     expect(refused).toMatchObject({ ok: false, code: 'unauthorized' });
   });

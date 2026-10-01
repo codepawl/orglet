@@ -21,7 +21,7 @@ it('keeps a singular key beside each plural count the app shows at one', () => {
   const pairs = [
     ['1 trang', '{0} trang'], ['1 phần tử', '{0} phần tử'], ['1 trường', '{0} trường'], ['1 yêu cầu', '{0} yêu cầu'],
     ['1 mục không được thêm vào chat', '{0} mục không được thêm vào chat'], ['1 Tí', '{0} Tí'], ['1 nguồn', '{0} nguồn'],
-    ['Đã xóa 1 Tí', 'Đã xóa {0} Tí'], ['Đã lưu trữ 1 hội', 'Đã lưu trữ {0} hội'], ['Tự xóa sau 1 ngày', 'Tự xóa sau {0} ngày'],
+    ['Đã xóa 1 Tí', 'Đã xóa {0} Tí'], ['Đã lưu trữ 1 Tí', 'Đã lưu trữ {0} Tí'], ['Tự xóa sau 1 ngày', 'Tự xóa sau {0} ngày'],
   ];
   for (const [one, several] of pairs) {
     expect(en[one], one).toMatch(/\b1 [a-z]/);

@@ -40,7 +40,7 @@ try {
   // The starters themselves come from the orglet's role, so this checks the one stable row in that list.
   await page.getByRole('button', { name: 'Schedule this message', exact: true }).waitFor();
   assert.ok(await page.locator('.suggestions button').count() > 1, 'the empty chat offers starters');
-  for (const name of ['New crew', 'New orglet']) await page.getByRole('button', { name, exact: true }).first().waitFor();
+  for (const name of ['Create channel', 'New orglet']) await page.getByRole('button', { name, exact: true }).first().waitFor();
   assert.equal(await page.getByRole('button', { name: 'New task', exact: true }).count(), 0);
   assert.equal(await page.getByRole('navigation', { name: 'All tasks' }).count(), 0);
   await page.getByRole('button', { name: /^Schedules/ }).click();
@@ -48,9 +48,9 @@ try {
   await page.keyboard.press('Escape');
 
   // Validation text in dialogs follows the language too.
-  await page.getByRole('button', { name: 'New crew', exact: true }).click();
-  await page.getByRole('button', { name: 'Save crew', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'Enter a crew name.' }).waitFor();
+  await page.getByRole('button', { name: 'Create channel', exact: true }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Create channel', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Give the channel a name.' }).waitFor();
   await page.keyboard.press('Escape');
   await page.screenshot({ path: 'test-results/i18n-home-en.png' });
 

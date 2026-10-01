@@ -98,6 +98,19 @@ it('keeps team knowledge inside its team even when the same worker serves anothe
   expect(knowledgeMessages.every(message => message?.includes('Alpha'))).toBe(true);
 });
 
+it('tells every orglet and crew run to read a trailing list as open and an example as a pattern (COD-368)', () => {
+  const [worker] = store.workspace().workers;
+  const skill = store.get<Skill>('skills', worker.skillId);
+  const team = { id: crypto.randomUUID(), revision: 1, instructions: 'Work together.' } as Team;
+  for (const system of [compileContext({ worker, skill, brief: 'List launch tasks', candidates: [] }).system, compileContext({ worker, skill, team, brief: 'List launch tasks', candidates: [] }).system]) {
+    expect(system).toContain('"etc."');
+    expect(system).toContain('"vân vân"');
+    expect(system).toContain('instead of stopping at the ones listed');
+    expect(system).toContain('"ví dụ như"');
+    expect(system).toContain('not text to reuse');
+  }
+});
+
 it('deduplicates repeated instructions and knowledge, and records omissions against the context limit', () => {
   const [worker] = store.workspace().workers; const skill = store.get<Skill>('skills', worker.skillId);
   const team = { id: crypto.randomUUID(), revision: 1, instructions: `  ${skill.content.toUpperCase()} ` } as Team;
@@ -202,7 +215,7 @@ it('backs up knowledge with frozen run context, rejects dangling scope and carri
   item.scope.id = crypto.randomUUID();
   envelope.payload.knowledgeRevisions.filter((row: { id: string }) => row.id === item.id).forEach((row: { data: { scope: { id: string } } }) => { row.data.scope.id = item.scope.id; });
   envelope.checksum = (await import('node:crypto')).createHash('sha256').update(JSON.stringify(envelope.payload)).digest('hex');
-  expect(() => core.backups.preview(JSON.stringify(envelope))).toThrow('hội/Tí');
+  expect(() => core.backups.preview(JSON.stringify(envelope))).toThrow('kênh/Tí');
 
   const template = JSON.parse(core.templates.export(team.id));
   expect(template.knowledge).toEqual([{ title: 'Team note', content: 'Team specific review note.', tags: ['team'], pinned: true }]);

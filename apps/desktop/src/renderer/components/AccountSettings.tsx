@@ -44,7 +44,7 @@ function PolicyLink({ link, label }: { link: Extract<AboutLink, 'privacy' | 'ter
 function WhatIsSent() {
   return <InfoTip label={t('Những gì được gửi')} rows={[
     { label: t('Được gửi'), value: t('Phiên bản, hệ điều hành, tính năng đã dùng, loại cuộc trò chuyện, nhà cung cấp và model, kết quả lượt chạy, và lỗi đã bỏ thông tin cá nhân.') },
-    { label: t('Không bao giờ gửi'), value: t('Nội dung chat, prompt, câu trả lời, tên và nội dung tệp, đường dẫn thư mục, tên và hướng dẫn của Tí hay hội, key, token và email.') },
+    { label: t('Không bao giờ gửi'), value: t('Nội dung chat, prompt, câu trả lời, tên và nội dung tệp, đường dẫn thư mục, tên và hướng dẫn của Tí hay kênh, key, token và email.') },
     { label: t('Lưu giữ'), value: t('180 ngày, và bị xóa cùng tài khoản.') },
   ]} />;
 }
@@ -64,7 +64,7 @@ export function AnalyticsDisclosure({ signedIn }: { signedIn: boolean }) {
 function Benefits() {
   const items: { icon: ReactNode; text: string }[] = [
     { icon: <UserRound size={16} />, text: t('Miễn phí, một tài khoản CodePawl cho mọi sản phẩm CodePawl.') },
-    { icon: <RefreshCw size={16} />, text: t('Sắp có: đồng bộ Tí, hội, cuộc trò chuyện và cài đặt giữa các máy.') },
+    { icon: <RefreshCw size={16} />, text: t('Sắp có: đồng bộ Tí, kênh, cuộc trò chuyện và cài đặt giữa các máy.') },
     { icon: <Smartphone size={16} />, text: t('Sau này: dùng Orglet trên điện thoại.') },
     { icon: <ChartNoAxesColumn size={16} />, text: t('Thống kê sử dụng giúp Orglet tốt hơn cho cách bạn dùng.') },
   ];

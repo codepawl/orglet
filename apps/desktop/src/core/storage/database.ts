@@ -16,7 +16,7 @@ import { McpServer, type McpServerView } from '../../shared/mcp';
 import { CHAT_SEARCH_BACKFILL } from './chat-search';
 import { DEFAULT_WEB_SEARCH_PROVIDER, WebSearchProvider } from '../../shared/web-tools';
 import type { RunActivity } from '../../shared/run-activity';
-import { emptyChannels, migrateGroupChats } from './channels';
+import { emptyChannels, migrateCrews, migrateGroupChats } from './channels';
 
 /** The skill a new workspace starts with. */
 export function seedSkill(skillId: string): Skill {
@@ -261,6 +261,8 @@ export class Store {
     this.seedDefaults();
     // Group chats become channels (COD-361); optional JSON on their rows, so no schema version.
     migrateGroupChats(this);
+    // Crews become channels where the lead splits the work (COD-369); the crew rows stay, so no schema version either.
+    migrateCrews(this, now);
     if (newInstall) this.setSetting('accountChoice', firstRunChoice());
     this.recover();
   }

@@ -190,15 +190,36 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
   submit_plan: defineTool('submit_plan', SUBMIT_PLAN_DESCRIPTION, TeamPlan, ModelTeamPlan, undefined, 20000, 'synchronous'),
 };
 
+/**
+ * Whether this run is a Plan first turn (COD-367): the person asked for a plan before anything changes. The flag is on
+ * the run's frozen input, so a run that started without it never loses tools and one that started with it never gains them.
+ */
+export const isPlanFirst = (run: Run) => run.snapshot.input?.planFirst === true;
+
+/**
+ * Why a Plan first run is offered a tool or not: it keeps everything that only reads (the folder's list, read and
+ * search, attached sources, the web, reading pages and windows) and the cards it may store for the person, and loses
+ * every tool that changes something outside the answer: folder writes, moves and deletions, commands, acting in the
+ * browser or a desktop app, borrowing the mouse. MCP tools are withheld as a whole, since Orglet cannot tell which of a
+ * server's tools only read.
+ */
+function withheldForPlanFirst(definition: ToolDefinition): boolean {
+  if (definition.workspacePermission) return definition.workspacePermission !== 'read';
+  return definition.capability === 'browser.act' || definition.capability === 'desktop.act';
+}
+
+export const PLAN_FIRST_INSTRUCTION = 'The person chose Plan first for this message. Do not change anything in this turn: you can read and search the working folder and the attached sources, but you cannot edit, create, move or delete files, run commands, act in the browser or desktop apps, or call MCP tools. Look at what you need, then answer with a short plan the person can approve: what you would change and where, in order, what you would check afterwards, and any question that would change the plan. Write it as a normal chat message. The person can then tell you to follow the plan in their next message.';
+
 /** Largest argument object an MCP call may carry, so a model cannot push megabytes at a server. */
 const MCP_ARGUMENTS_BYTES = 64 * 1024;
 
 /**
  * Whether this run may be offered the MCP tools its snapshot froze (COD-241): never while a lead is routing, never
- * on a scheduled run nobody is there to approve, and never on Demo, which calls no tools.
+ * on a scheduled run nobody is there to approve, never on a Plan first turn (COD-367), and never on Demo, which calls
+ * no tools.
  */
 export function mcpToolsOffered(run: Run, task: Task) {
-  return run.stage !== 'plan' && !task.routineId && run.snapshot.worker.provider !== 'demo' && (run.snapshot.mcpTools?.length ?? 0) > 0;
+  return run.stage !== 'plan' && !task.routineId && !isPlanFirst(run) && run.snapshot.worker.provider !== 'demo' && (run.snapshot.mcpTools?.length ?? 0) > 0;
 }
 
 /** The frozen MCP tool behind a model-facing name, or undefined when this run was not offered it. */
@@ -251,6 +272,7 @@ function builtInToolsFor(run: Run, task: Task): ChatCompletionTool[] {
     // Borrowing the real mouse always asks the person, so only a solo chat's run (side threads included) is offered it;
     // a crew member, a lead and a group chat have nobody to ask (phase 2b).
     if (name === 'desktop_borrow_input' && run.stage !== undefined) return false;
+    if (isPlanFirst(run) && withheldForPlanFirst(definition)) return false;
     if (definition.workspacePermission) {
       return run.snapshot.worker.provider !== 'demo'
         && run.snapshot.workspaceGrant?.taskId === task.id

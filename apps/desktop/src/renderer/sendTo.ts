@@ -2,6 +2,7 @@ import type { Task, Worker, Workspace } from '../shared/contracts';
 import { taskWorkers, teamRoster } from './assignees';
 import { t } from './i18n';
 import { chatHeadline } from '../shared/forward';
+import { channelLabel } from '../shared/channels';
 
 /**
  * The places files sent from Explorer can go (COD-246): the most recent chats first, then every orglet and every
@@ -83,7 +84,8 @@ export function sendToOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | '
       key: `team:${team.id}`,
       group: 'crews',
       target: { kind: 'team', id: team.id },
-      name: team.name,
+      // A crew is a channel where the lead splits the work (COD-369), named the way every channel is.
+      name: channelLabel(team.name),
       faces: roster,
       detail: roster.map(worker => worker.name).join(', '),
     };

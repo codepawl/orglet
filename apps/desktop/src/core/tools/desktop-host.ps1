@@ -1336,7 +1336,7 @@ namespace OrgletDesktop {
         overlay = new Thread(() => RunOverlay(area));
         overlay.IsBackground = true;
         overlay.SetApartmentState(ApartmentState.STA);
-        // The hooks sit on every input on this desktop, so their thread answers first even in a below-normal process.
+        // The hooks sit on every input on this desktop, so their thread answers first even when the computer is busy.
         overlay.Priority = ThreadPriority.Highest;
         overlay.Start();
         var completed = 0;

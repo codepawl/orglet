@@ -151,9 +151,12 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
  * One channel in the sidebar's Channels section (COD-361): its status mark, the `#` every channel wears where an
  * orglet's row has its face, its name, and a menu to edit, rename, archive or delete it. It has no reorder: the list
  * is newest first. Renaming happens in place. A channel nobody has written in has nothing to archive, so its menu
- * leaves Archive out (`onArchive` absent).
+ * leaves Archive out (`onArchive` absent). One where the lead splits the work lists its schedules' runs under it, the
+ * way its crew's row did (COD-369).
  */
-export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, deleteQuestion }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; deleteQuestion: string }) {
+export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, deleteQuestion, children, childrenLabel }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; deleteQuestion: string;
+  /** Rows listed under the channel: its schedules' newest runs, when the lead splits the work (COD-369). */ children?: ReactNode;
+  /** What the rows under this one are, for assistive technology. */ childrenLabel?: string }) {
   const [editing, setEditing] = useState(false);
   const dwell = dwellHandlers(onDwell);
   const row = useScrolledIntoViewWhenActive<HTMLDivElement>(active);
@@ -174,6 +177,7 @@ export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRe
         { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: deleteQuestion, label: t('Xóa') } },
       ]} /></span>
     </div>
+    {children && <div className="tree-children" role="group" aria-label={childrenLabel ?? label} data-no-drag>{children}</div>}
   </div>;
 }
 
