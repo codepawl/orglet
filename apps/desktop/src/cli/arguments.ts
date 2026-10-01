@@ -131,7 +131,7 @@ Exit codes: 0 ok, 1 failure, 2 usage error, 3 app not reachable.`;
 
 /** The help of `orglet channel` and of `orglet group`, its older name (COD-361). */
 function channelHelp(command: 'channel' | 'group'): string {
-  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí và kênh này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt; một kênh trả lời bằng các Tí của nó. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
+  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
 }
 
 export const COMMAND_HELP: Record<CommandName, string> = {
@@ -641,7 +641,7 @@ function parseBring(options: Options): ParsedCommand {
 /** The orglets and crews given with --with, at least one (COD-361). */
 function memberNames(options: Options): string[] {
   const names = options.members.map(name => name.trim()).filter(Boolean);
-  if (!names.length) throw new UsageError(t("Kênh cần ít nhất một --with <tên Tí hoặc kênh>."));
+  if (!names.length) throw new UsageError(t("Kênh cần ít nhất một --with <tên Tí>."));
   return names;
 }
 

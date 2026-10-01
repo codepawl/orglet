@@ -78,7 +78,7 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/chats [archived]', t("Liệt kê chat cùng mã; /to #mã mở một chat")],
   ['/side <message>', t("Gửi tin trong một chat phụ mới của Tí này")],
   ['/bring [#n]', t("Đưa câu trả lời của chat phụ này vào chat chính")],
-  ['/channel <name, …> -- <message>', t("Tạo kênh với các Tí và kênh này (/group là tên cũ)")],
+  ['/channel <name, …> -- <message>', t("Tạo kênh với các Tí này (/group là tên cũ)")],
   ['/members <name, …>', t("Đổi thành viên của kênh này")],
   ['/rename <title>', t("Đổi tên chat này")],
   ['/archive', t("Lưu trữ chat này")],
@@ -197,13 +197,13 @@ function parseChannel(command: string, rest: string): SlashCommand {
   const separator = rest.indexOf(' -- ');
   const names = separator === -1 ? [] : nameList(rest.slice(0, separator));
   const message = separator === -1 ? '' : rest.slice(separator + 4).trim();
-  if (!names.length || !message) return { kind: 'usage', message: t("Gõ {0} Tí một, Kênh hai -- tin nhắn đầu tiên.", command) };
+  if (!names.length || !message) return { kind: 'usage', message: t("Gõ {0} Tí một, Tí hai -- tin nhắn đầu tiên.", command) };
   return { kind: 'channel', names, message };
 }
 
 function parseMembers(rest: string): SlashCommand {
   const names = nameList(rest);
-  if (!names.length) return { kind: 'usage', message: t("Gõ /members rồi tên các Tí hoặc kênh, cách nhau bằng dấu phẩy.") };
+  if (!names.length) return { kind: 'usage', message: t("Gõ /members rồi tên các Tí, cách nhau bằng dấu phẩy.") };
   return { kind: 'members', names };
 }
 
