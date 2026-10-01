@@ -249,6 +249,10 @@ describe('trust decisions stay in the desktop', () => {
 
 const list: ListValue = { orglets: [{ name: 'Researcher', provider: 'openai', providerId: 'openai', color: '#4f7fe0' }], crews: [] };
 
+async function notUsed(): Promise<never> {
+  throw new Error('Not used in this test.');
+}
+
 /** A fake app whose chat with Researcher has three past turns and asks a question after a message. */
 function actionClient() {
   const calls: string[] = [];
@@ -281,6 +285,14 @@ function actionClient() {
       calls.push(`answer ${answer}`);
       return { ...turnValue('completed', { answers: [{ name: 'Researcher', text: 'Using plan.md.', createdAt: '1' }] }), action: 'answer' };
     },
+    // The chats themselves have their own tests in cli-chat-admin.test.ts.
+    chats: notUsed,
+    side: notUsed,
+    bring: notUsed,
+    group: notUsed,
+    members: notUsed,
+    rename: notUsed,
+    archive: notUsed,
   };
   const client: ChatClient = {
     list: async () => list,

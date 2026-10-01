@@ -2,7 +2,7 @@ import type { Run, TaskDetail, Workspace } from '../shared/contracts';
 import type { ForwardResult, ForwardTarget } from '../shared/forward';
 import { canContinueRun } from '../shared/out-of-steps';
 import type { CliChat, CliRequest, ControlValue, ForwardValue, ReactValue } from '../cli/protocol';
-import { chatsOf, CliFailure, existingChat, matchChat } from './cli-chats';
+import { chatsOf, CliFailure, matchChat, targetChat } from './cli-chats';
 import { isTurnRunning, pendingDecision, resolveMessage, turnArtifacts } from './cli-chat-history';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
@@ -29,7 +29,7 @@ export class CliChatActions {
 
   async react(request: Extract<CliRequest, { op: 'react' }>): Promise<ReactValue> {
     const workspace = await this.workspace();
-    const { chat, task } = existingChat(workspace, request.to);
+    const { chat, task } = targetChat(workspace, request);
     const message = resolveMessage(await this.detail(task.id), request.message);
     await this.dependencies.request('setMessageReaction', { taskId: task.id, messageId: message.messageId, emoji: request.emoji, active: request.active });
     return { chat, taskId: task.id, ref: message.ref, emoji: request.emoji, active: request.active };
@@ -38,7 +38,7 @@ export class CliChatActions {
   /** Forwards one message to up to five orglets' or crews' chats, as the person's own message; files go by name only. */
   async forward(request: Extract<CliRequest, { op: 'forward' }>): Promise<ForwardValue> {
     const workspace = await this.workspace();
-    const { task } = existingChat(workspace, request.to);
+    const { task } = targetChat(workspace, request);
     const message = resolveMessage(await this.detail(task.id), request.message);
     const chats = chatsOf(workspace);
     const destinations = uniqueChats(request.targets.map(name => matchChat(name, chats)));
@@ -54,7 +54,7 @@ export class CliChatActions {
 
   async control(request: ControlRequest, signal: AbortSignal): Promise<ControlValue> {
     const workspace = await this.workspace();
-    const { chat, task } = existingChat(workspace, request.to);
+    const { chat, task } = targetChat(workspace, request);
     if (request.action === 'continue') return this.continueTurn(request, workspace, chat, task.id, signal);
     if (request.action === 'stop' && !isTurnRunning(task)) throw new CliFailure('failed', 'Không có lượt nào đang chạy trong chat này.');
     const command = request.action === 'stop' ? 'cancel' : request.action;
@@ -92,7 +92,7 @@ export class CliChatActions {
    */
   async answer(request: AnswerRequest, signal: AbortSignal): Promise<ControlValue> {
     const workspace = await this.workspace();
-    const { chat, task } = existingChat(workspace, request.to);
+    const { chat, task } = targetChat(workspace, request);
     const decision = task.status === 'waiting_input' ? pendingDecision(task) : undefined;
     if (!decision) throw new CliFailure('failed', 'Chat này không chờ câu trả lời nào.');
     if (decision.approval) throw new CliFailure('failed', 'Câu hỏi này xin quyền dùng công cụ MCP. Chỉ app trả lời được: mở chat trong app.');

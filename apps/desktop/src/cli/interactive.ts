@@ -12,9 +12,10 @@ import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
 import { completeSlash, HISTORY_PAGE, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
 import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
-import type { ChatControl, CliProgressFrame, CliQuestion } from './protocol';
+import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
-import { ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
+import { formatChats } from './output';
+import { ERROR_COLOR, muted, MUTED_COLOR, NEUTRAL_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
 import type { ManagementResult } from './management';
 
@@ -47,7 +48,23 @@ const PICKER_MAX_ROWS = 8;
 const WELCOME_FACE_LIMIT = 12;
 const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
 /** These controls do not change the chat or submit a turn, so they need not wait behind one. */
-const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage']);
+const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage', 'chats']);
+
+/** What requests name a chat by: its id for a chat opened with `/to #id`, else the orglet's or crew's name. */
+function targetOf(entry: ChatEntry): string {
+  return entry.target ?? entry.name;
+}
+
+/** The key a chat's transcript and draft are kept under. */
+function entryKey(entry: ChatEntry): string {
+  return entry.target ?? `${entry.kind}:${entry.name}`;
+}
+
+/** A chat from `orglet chats` as the terminal opens it: named, coloured, and reached by its id. */
+function chatEntry(row: CliChatRow): ChatEntry {
+  const color = row.color ?? NEUTRAL_COLOR;
+  return { kind: row.kind === 'crew' ? 'team' : 'worker', name: row.name, detail: `${row.kind} · ${row.with.join(', ')}`, color, colors: [color], target: `#${row.short}` };
+}
 
 /** Stop and pause act on the turn this terminal is waiting for, so they cannot wait behind it. */
 function isImmediate(command: SlashCommand): boolean {
@@ -405,7 +422,7 @@ class Session {
     this.saveDraft();
     this.view = 'chat';
     this.chat = entry;
-    const key = `${entry.kind}:${entry.name}`;
+    const key = entryKey(entry);
     if (!this.transcripts.has(key)) this.transcripts.set(key, new Transcript());
     this.transcript = this.transcripts.get(key)!;
     this.agentsVisible = false;
@@ -425,14 +442,14 @@ class Session {
       this.view = 'chat';
       this.chat = back;
       this.pickerReturn = undefined;
-      this.replaceLine(this.drafts.get(`${back.kind}:${back.name}`) ?? '');
+      this.replaceLine(this.drafts.get(entryKey(back)) ?? '');
       this.showPrompt();
     }
   }
 
   private saveDraft(): void {
     if (this.view === 'chat' && this.chat && this.composer) {
-      this.drafts.set(`${this.chat.kind}:${this.chat.name}`, this.composer.text);
+      this.drafts.set(entryKey(this.chat), this.composer.text);
     }
   }
 
@@ -572,9 +589,16 @@ class Session {
       case 'reply': return this.send(command.message, command.ref);
       case 'react': return this.react(command.emoji, command.active, command.ref);
       case 'forward': return this.forward(command.targets, command.ref);
-      case 'answer': return this.awaitAction(actions => signal => actions.answer(this.chat!.name, command.answer, signal));
+      case 'answer': return this.awaitAction(actions => signal => actions.answer(targetOf(this.chat!), command.answer, signal));
       case 'control': return this.control(command.action);
       case 'usage': return this.printMuted(command.message);
+      case 'chats': return this.listChats(command.archived);
+      case 'side': return this.awaitNewChat(actions => signal => actions.side(targetOf(this.chat!), command.message, signal));
+      case 'group': return this.awaitNewChat(actions => signal => actions.group(command.names, command.message, signal));
+      case 'bring': return this.chatChange(actions => actions.bring(this.chatId(), command.ref), value => t('Đã đưa #{0} vào chat chính với {1}.', value.ref, value.chat.name));
+      case 'members': return this.chatChange(actions => actions.members(this.chatId(), command.names), value => t('Từ tin nhắn sau, chat nhóm gửi tới: {0}.', value.names.join(', ')));
+      case 'rename': return this.chatChange(actions => actions.rename(targetOf(this.chat!), command.title), value => t('Đã đổi tên chat thành {0}.', value.title ?? value.name));
+      case 'archive': return this.chatChange(actions => actions.archive(targetOf(this.chat!)), value => t('Đã lưu trữ chat {0}.', value.name));
       case 'new': return this.manage('new', command.entity);
       case 'edit': return this.manage('edit', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
@@ -706,7 +730,22 @@ class Session {
     this.replaceLine(this.picker.filter);
   }
 
-  private switchChat(name: string | undefined): void {
+  /** Opens a side thread, group chat or any other chat by the start of its id, as `/chats` printed it (COD-354). */
+  private async openChatById(prefix: string): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    try {
+      const wanted = prefix.toLowerCase();
+      const rows = (await actions.chats(false)).chats.filter(row => row.id.toLowerCase().startsWith(wanted));
+      if (rows.length === 1) this.enterChat(chatEntry(rows[0]));
+      else this.printMuted(rows.length ? t('Mã #{0} khớp với nhiều chat. Gõ thêm vài ký tự.', prefix) : t('Không có chat đang mở nào có mã #{0}. /chats liệt kê các chat.', prefix));
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  private switchChat(name: string | undefined): void | Promise<void> {
+    if (name?.startsWith('#')) return this.openChatById(name.slice(1));
     if (!name) {
       this.showPicker('', this.chat);
       return;
@@ -743,7 +782,7 @@ class Session {
   private async read(): Promise<void> {
     const chat = this.chat!;
     try {
-      const value = await this.options.client.read(chat.name);
+      const value = await this.options.client.read(targetOf(chat));
       if (value.answers.length === 0) this.printMuted(`No answer in the chat with ${chat.name} yet.`);
       else this.printAnswers(value.answers);
       if (['queued', 'running', 'pausing'].includes(value.status)) this.printMuted(`${chat.name} is working on a newer message.`);
@@ -758,7 +797,7 @@ class Session {
   private async openInApp(): Promise<void> {
     const chat = this.chat!;
     try {
-      await this.options.client.open(chat.name);
+      await this.options.client.open(targetOf(chat));
       this.printMuted(`Opened the chat with ${chat.name} in the app.`);
     } catch (error) {
       this.printFailure(error);
@@ -832,8 +871,8 @@ class Session {
       this.printError('Nothing was sent: this chat uses Demo. /open lets you choose a real connection.');
       return;
     }
-    if (replyTo) return this.awaitAction(actions => (signal, progress) => actions.reply(chat.name, text, replyTo, signal, progress));
-    return this.awaitTurn((signal, progress) => this.options.client.send(chat.name, text, signal, progress));
+    if (replyTo) return this.awaitAction(actions => (signal, progress) => actions.reply(targetOf(chat), text, replyTo, signal, progress));
+    return this.awaitTurn((signal, progress) => this.options.client.send(targetOf(chat), text, signal, progress));
   }
 
   /** The chat actions of an app new enough to have them (COD-354); an older one gets a hint instead. */
@@ -852,11 +891,11 @@ class Session {
   /** Stop and pause act at once; resume, retry and continue wait for the turn they start, like a message. */
   private async control(action: ChatControl): Promise<void> {
     const chat = this.chat!;
-    if (action !== 'stop' && action !== 'pause') return this.awaitAction(actions => signal => actions.control(chat.name, action, signal));
+    if (action !== 'stop' && action !== 'pause') return this.awaitAction(actions => signal => actions.control(targetOf(chat), action, signal));
     const actions = this.actions();
     if (!actions) return;
     try {
-      await actions.control(chat.name, action, new AbortController().signal);
+      await actions.control(targetOf(chat), action, new AbortController().signal);
       this.printMuted(action === 'stop' ? t('Đã dừng lượt đang chạy với {0}.', chat.name) : t('{0} sẽ tạm dừng sau bước đang làm.', chat.name));
     } catch (error) {
       this.printFailure(error);
@@ -867,7 +906,7 @@ class Session {
     const actions = this.actions();
     if (!actions) return;
     try {
-      const value = await actions.react(this.chat!.name, emoji, active, ref);
+      const value = await actions.react(targetOf(this.chat!), emoji, active, ref);
       this.printMuted(value.active ? t('Đã thả {0} vào #{1}.', value.emoji, value.ref) : t('Đã gỡ {0} khỏi #{1}.', value.emoji, value.ref));
     } catch (error) {
       this.printFailure(error);
@@ -878,12 +917,54 @@ class Session {
     const actions = this.actions();
     if (!actions) return;
     try {
-      const value = await actions.forward(this.chat!.name, targets, ref);
+      const value = await actions.forward(targetOf(this.chat!), targets, ref);
       for (const item of value.sent) this.printMuted(t('Đã chuyển tiếp tới {0}.', item.name));
       for (const item of value.failed) this.printError(t('Không chuyển tiếp được tới {0}: {1}', item.name, item.error));
     } catch (error) {
       this.printFailure(error);
     }
+  }
+
+  /** The id of a chat opened with `/to #id`; side threads and group chats have no other name. */
+  private chatId(): string {
+    const target = this.chat?.target;
+    if (!target) throw new AppRefusal(t('Mở chat bằng /to #mã trước; /chats liệt kê mã của từng chat.'), 'invalid');
+    return target.slice(1);
+  }
+
+  /** Lists chats with their short ids, the way `orglet chats` does; `/to #id` opens one. */
+  private async listChats(archived: boolean): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    try {
+      const value = await actions.chats(archived);
+      this.printLines(formatChats(value).split('\n'));
+      if (value.chats.length) this.printMuted(t('/to #mã mở một chat.'));
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  /** A change to the chat itself, such as a rename; prints what it did. */
+  private async chatChange<Value>(change: (actions: ChatActionClient) => Promise<Value>, describe: (value: Value) => string): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    try {
+      this.printMuted(describe(await change(actions)));
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  /** Waits for a side thread or group chat's first answer, then says how to open that chat here. */
+  private async awaitNewChat(start: (actions: ChatActionClient) => (signal: AbortSignal) => Promise<SendValue>): Promise<void> {
+    let opened: SendValue | undefined;
+    await this.awaitAction(actions => async signal => {
+      opened = await start(actions)(signal);
+      return opened;
+    });
+    const taskId = opened?.chat.taskId;
+    if (taskId) this.printMuted(t('/to #{0} mở chat này.', taskId.slice(0, 8)));
   }
 
   private scrollTranscript(lines: number): void {
@@ -909,7 +990,7 @@ class Session {
     if (!actions) return;
     this.historyLoading = true;
     try {
-      const value = await actions.history(chat.name, count, transcript.earliestTurn ?? transcript.firstSentTurn);
+      const value = await actions.history(targetOf(chat), count, transcript.earliestTurn ?? transcript.firstSentTurn);
       const turns = value.turns ?? [];
       transcript.historyComplete = !value.earlier;
       if (turns.length) transcript.earliestTurn = turns[0].number;

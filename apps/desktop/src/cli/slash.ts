@@ -19,6 +19,13 @@ export type SlashCommand =
   | { kind: 'forward'; targets: string[]; ref?: string }
   | { kind: 'answer'; answer: string }
   | { kind: 'control'; action: ChatControl }
+  | { kind: 'chats'; archived: boolean }
+  | { kind: 'side'; message: string }
+  | { kind: 'bring'; ref?: string }
+  | { kind: 'group'; names: string[]; message: string }
+  | { kind: 'members'; names: string[] }
+  | { kind: 'rename'; title: string }
+  | { kind: 'archive' }
   | { kind: 'new'; entity?: 'worker' | 'team' }
   | { kind: 'edit' | 'delete'; name?: string }
   | { kind: 'help' }
@@ -30,6 +37,7 @@ export type SlashCommand =
 /** In the order `/help` lists them. */
 export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
   '/history', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
+  '/chats', '/side', '/bring', '/group', '/members', '/rename', '/archive',
   '/new', '/edit', '/delete', '/help', '/exit'] as const;
 
 const CONTROLS: Record<string, ChatControl> = { '/stop': 'stop', '/pause': 'pause', '/resume': 'resume', '/retry': 'retry', '/continue': 'continue' };
@@ -57,6 +65,13 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/resume', t("Tiếp tục lượt đã tạm dừng")],
   ['/retry', t("Chạy lại tin nhắn mới nhất")],
   ['/continue', t("Tiếp tục câu trả lời bị dừng vì hết bước")],
+  ['/chats [archived]', t("Liệt kê chat cùng mã; /to #mã mở một chat")],
+  ['/side <message>', t("Gửi tin trong một chat phụ mới của Tí này")],
+  ['/bring [#n]', t("Đưa câu trả lời của chat phụ này vào chat chính")],
+  ['/group <name, …> -- <message>', t("Bắt đầu chat nhóm với các Tí này")],
+  ['/members <name, …>', t("Đổi các Tí của chat nhóm này")],
+  ['/rename <title>', t("Đổi tên chat này")],
+  ['/archive', t("Lưu trữ chat này")],
   ['/new [orglet|crew]', t("Tạo Tí hoặc hội trong terminal này")],
   ['/edit [name]', t("Sửa cấu hình; bỏ tên để chọn trong danh sách")],
   ['/delete [name]', t("Xóa Tí hoặc hội sau khi gõ tên đầy đủ")],
@@ -91,6 +106,13 @@ export function parseSlash(line: string): SlashCommand {
     case '/unreact': return parseReact(rest, command === '/react');
     case '/forward': return parseForward(rest);
     case '/answer': return rest ? { kind: 'answer', answer: rest } : { kind: 'usage', message: t("Gõ /answer rồi số của lựa chọn hoặc câu trả lời của bạn.") };
+    case '/chats': return rest === '' || rest === 'archived' ? { kind: 'chats', archived: rest === 'archived' } : { kind: 'unknown', command: trimmed };
+    case '/side': return rest ? { kind: 'side', message: rest } : { kind: 'usage', message: t("Gõ /side rồi tin nhắn cho chat phụ.") };
+    case '/bring': return !rest ? { kind: 'bring' } : isMessageRef(rest) ? { kind: 'bring', ref: rest } : { kind: 'usage', message: t("Gõ /bring hoặc /bring #2.1.") };
+    case '/group': return parseGroup(rest);
+    case '/members': return parseMembers(rest);
+    case '/rename': return rest ? { kind: 'rename', title: rest } : { kind: 'usage', message: t("Gõ /rename rồi tên mới.") };
+    case '/archive': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'archive' };
     case '/new': return rest === 'orglet' ? { kind: 'new', entity: 'worker' } : rest === 'crew' || rest === 'team' ? { kind: 'new', entity: 'team' } : rest ? { kind: 'unknown', command: trimmed } : { kind: 'new' };
     case '/edit': return { kind: 'edit', ...(rest ? { name: rest } : {}) };
     case '/delete': return { kind: 'delete', ...(rest ? { name: rest } : {}) };
@@ -135,6 +157,25 @@ function parseForward(rest: string): SlashCommand {
   const names = (hasRef ? rest.slice(0, rest.length - last.length) : rest).split(',').map(name => name.trim()).filter(Boolean);
   if (names.length === 0) return { kind: 'usage', message: t("Gõ /forward rồi tên Tí hoặc hội, cách nhau bằng dấu phẩy.") };
   return { kind: 'forward', targets: names, ...(hasRef ? { ref: last } : {}) };
+}
+
+function nameList(text: string): string[] {
+  return text.split(',').map(name => name.trim()).filter(Boolean);
+}
+
+/** `/group Writer, Researcher -- Compare these`: two or more orglet names, then the first message after ` -- `. */
+function parseGroup(rest: string): SlashCommand {
+  const separator = rest.indexOf(' -- ');
+  const names = separator === -1 ? [] : nameList(rest.slice(0, separator));
+  const message = separator === -1 ? '' : rest.slice(separator + 4).trim();
+  if (names.length < 2 || !message) return { kind: 'usage', message: t("Gõ /group Tí một, Tí hai -- tin nhắn đầu tiên.") };
+  return { kind: 'group', names, message };
+}
+
+function parseMembers(rest: string): SlashCommand {
+  const names = nameList(rest);
+  if (names.length < 2) return { kind: 'usage', message: t("Gõ /members rồi ít nhất hai tên Tí, cách nhau bằng dấu phẩy.") };
+  return { kind: 'members', names };
 }
 
 function startsWithIgnoringCase(text: string, start: string): boolean {

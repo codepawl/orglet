@@ -20,6 +20,8 @@ export type ChatEntry = {
   billing?: string;
   description?: string;
   members?: string[];
+  /** Set for a chat opened by its id (`/to #id`, COD-354): `#` and the id, which every request then names. */
+  target?: string;
 };
 
 function validColor(color: string | undefined): string {

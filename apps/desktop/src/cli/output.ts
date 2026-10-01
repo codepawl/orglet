@@ -1,4 +1,4 @@
-import type { CliAnswer, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue } from './protocol';
+import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
 
 /** Plain text for a person at a terminal; `--json` prints the values as they came instead (COD-234). */
@@ -63,9 +63,52 @@ export function formatTurns(turns: readonly CliTurn[]): string {
 }
 
 /** The question a turn stopped on, its numbered choices and how to answer it from here. */
-export function formatQuestion(question: CliQuestion, chatName: string): string {
+export function formatQuestion(question: CliQuestion, chat: CliChat): string {
   const options = question.options.map((option, index) => `  ${index + 1}. ${option}`);
-  return [question.question, ...options, t('Trả lời bằng: orglet answer <số hoặc câu trả lời> --to "{0}"', chatName)].join('\n');
+  return [question.question, ...options, t('Trả lời bằng: orglet answer <số hoặc câu trả lời> {0}', chatOption(chat))].join('\n');
+}
+
+/** The option that reaches a chat again: `--to` an orglet's or crew's main chat, `--chat` and its short id for any other. */
+export function chatOption(chat: CliChat): string {
+  return chat.taskId ? `--chat ${chat.taskId.slice(0, SHORT_CHAT_ID)}` : `--to "${chat.name}"`;
+}
+
+/** As many characters of a chat id as `orglet chats` prints. */
+const SHORT_CHAT_ID = 8;
+
+/** Chats one per line: the short id `--chat` takes, what kind of chat, its name, who answers and how it stands. */
+export function formatChats(value: ChatsValue): string {
+  if (value.chats.length === 0) return t('Chưa có chat nào.');
+  return padded(value.chats.map(row => [row.short, row.kind, row.name, row.with.join(', '), row.status])).join('\n');
+}
+
+/** Where a new side thread or group chat is, so the next message can reach it. */
+export function formatNewChat(value: SendValue): string {
+  return t('Nhắn tiếp trong chat này: orglet send "<tin nhắn>" {0}', chatOption(value.chat));
+}
+
+export function formatBring(value: BringValue): string {
+  return t('Đã đưa #{0} vào chat chính với {1}.', value.ref, value.chat.name);
+}
+
+export function formatMembers(value: MembersValue): string {
+  return t('Từ tin nhắn sau, chat nhóm gửi tới: {0}.', value.names.join(', '));
+}
+
+export function formatChatChange(value: ChatChangeValue): string {
+  if (value.change === 'rename') return t('Đã đổi tên chat thành {0}.', value.title ?? value.name);
+  if (value.change === 'archive') return t('Đã lưu trữ chat {0}.', value.name);
+  if (value.change === 'restore') return t('Đã khôi phục chat {0}.', value.name);
+  return t('Đã xóa chat {0}.', value.name);
+}
+
+export function formatArchiveEntity(value: ArchiveEntityValue): string {
+  const kind = value.kind === 'worker' ? 'orglet' : 'crew';
+  return value.archived ? t('Đã lưu trữ {0} {1}.', kind, value.name) : t('Đã khôi phục {0} {1}.', kind, value.name);
+}
+
+export function formatTemplate(value: TemplateValue): string {
+  return t('Đã tạo hội {0} với {1}.', value.name, value.members.join(', '));
 }
 
 export function formatReact(value: ReactValue): string {
