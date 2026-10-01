@@ -31,8 +31,8 @@ const src = path.join(__dirname, '..', 'apps', 'desktop', 'src');
 const vietnamese = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/;
 const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
 
-// Vietnamese words the app matches text against and never shows, so they have no English entry.
-const matchedNeverShown = [path.join(src, 'core', 'context', 'stop-words.ts')];
+// Vietnamese words the app matches text against, or that only the model reads, and never shows, so they have no English entry.
+const matchedNeverShown = [path.join(src, 'core', 'context', 'stop-words.ts'), path.join(src, 'core', 'context', 'shorthand-cues.ts')];
 
 const keys = new Set();
 for (const file of walk(src).filter(file => /\.tsx?$/.test(file) && !file.includes(`${path.sep}locales${path.sep}`) && !matchedNeverShown.includes(file))) {
