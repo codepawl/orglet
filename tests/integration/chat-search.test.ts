@@ -159,7 +159,6 @@ describe('names and renames', () => {
     await core.command('saveWorker', { ...dev, name: 'Builder' });
     expect((await search('dev')).orgletIds).toEqual([]);
     expect((await search('build')).orgletIds).toEqual([dev.id]);
-    // The last active orglet cannot be archived, so another one stays.
     await core.command('saveWorker', { name: 'Helper', instructions: 'Help.', provider: 'demo', skillId: dev.skillId });
     await core.command('archiveEntity', { kind: 'worker', id: dev.id, archived: true });
     expect((await search('builder')).orgletIds).toEqual([]);
