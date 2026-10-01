@@ -85,7 +85,7 @@ it('orders a finished chat turn: the trace, the answer, then changed files, prop
   expect(html.match(/class="app-proposals"/g)).toHaveLength(1);
 });
 
-it('keeps the action row under the bubble and states a member failure once', () => {
+it('keeps the read faces under the answer, the toolbar on it, and states a member failure once', () => {
   const error = 'Check đã đánh giá cần nguồn được cung cấp cho lần chạy.';
   const memberId = '22222222-2222-4222-8222-222222222222';
   const listener: Worker = { ...worker, id: '44444444-4444-4444-8444-444444444442', name: 'Listener' };
@@ -108,9 +108,12 @@ it('keeps the action row under the bubble and states a member failure once', () 
   const actions = html.indexOf('class="message-actions"', answerStart);
   const receipts = html.indexOf('class="read-receipts"', answerStart);
   const limitations = html.indexOf('Incomplete work and limitations', answerStart);
-  expect(bubble).toBeLessThan(actions);
-  expect(actions).toBeLessThan(receipts);
-  expect(receipts).toBeLessThan(limitations);
+  // COD-365: the limitations note follows the text, the read faces end the line under it, and the toolbar that
+  // floats on the message comes last in the markup.
+  expect(bubble).toBeLessThan(limitations);
+  expect(limitations).toBeLessThan(receipts);
+  expect(receipts).toBeLessThan(actions);
+  expect(html.slice(actions)).toMatch(/^class="message-actions" role="group" aria-label="Message actions"/);
   const note = html.slice(limitations);
   const noteEnd = note.indexOf('class="read-receipts"');
   const box = noteEnd === -1 ? note : note.slice(0, noteEnd);

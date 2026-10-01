@@ -44,10 +44,13 @@ try {
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   const taskId = state.tasks[0].id; assert.equal(state.tasks[0].accepted, false);
   const answer = page.locator('.chat-reply').first();
+  // The buttons are the message's toolbar, which shows while the message is pointed at (COD-365).
+  await answer.hover();
   await answer.getByRole('button', { name: 'Thả react' }).click();
   await answer.getByRole('button', { name: 'Mình thấy ổn, giữ hướng này.' }).click();
   const reacted = await page.evaluate(id => window.orglet.call('task', { id }), taskId);
   assert.equal(reacted.task.messageReactions?.[0].emoji, 'agree');
+  await answer.hover();
   await answer.getByRole('button', { name: 'Trả lời tin này' }).click();
   await page.locator('.composer-reply').waitFor();
   await page.getByRole('button', { name: 'Bỏ trả lời' }).click();
@@ -77,7 +80,17 @@ try {
   await viewer.waitFor({ state: 'hidden' });
   const exported = join(data, 'report.md');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, exported);
-  await page.getByRole('button', { name: 'Tải xuống', exact: true }).first().click();
+  // The download is in this answer's own toolbar (COD-365): it shows while the answer is pointed at, and a button in it
+  // that takes focus from the keyboard shows it too.
+  const toolbar = answer.locator('.message-actions');
+  const toolbarShown = () => toolbar.evaluate(element => getComputedStyle(element).opacity);
+  await page.mouse.move(0, 0);
+  await toolbar.getByRole('button', { name: 'Tải xuống', exact: true }).focus();
+  assert.equal(await toolbarShown(), '1');
+  await page.locator(':focus').evaluate(element => element.blur());
+  await answer.hover();
+  assert.equal(await toolbarShown(), '1');
+  await toolbar.getByRole('button', { name: 'Tải xuống', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Tải Markdown (.md)', exact: true }).click();
   // The export is written asynchronously after the save dialog resolves.
   for (let attempt = 0; attempt < 50 && !(await readFile(exported, 'utf8').catch(() => '')); attempt++) await new Promise(resolve => setTimeout(resolve, 100));

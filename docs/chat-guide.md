@@ -61,6 +61,12 @@ With nothing but the messages, there are no tabs. Use the arrow keys to move bet
 
 **Details** is remembered per chat while Orglet is open: a chat you had open with Details opens with Details again. The panel holds what is not a tab: who the chat is with, what it cost, its permissions, MCP, browser and desktop settings, and the working copies to recover. You can drag its edge. It never pushes the chat narrower than 480 px.
 
+## Messages
+
+Every message starts at the left: a face, the name and the time, then the text. Your own messages look the same, with **You** as the name. When the same person or orglet writes several messages within five minutes, only the first shows the face and name; point at a later one to see its time at the left.
+
+Point at a message, or move to it with Tab, to see its buttons at its top right: copy and download for an answer, then **Reply**, **Forward** and **React**. Reactions show in a row under the message. Small faces at the end of that row show which orglets read up to here but have not answered yet.
+
 ## Attach files
 
 An orglet reads only what you attach to **that** chat, or what is inside the working folder you granted it ([Permissions](permissions-and-learning.md#permissions)).
@@ -115,7 +121,9 @@ Each orglet has one main chat. Clicking the orglet always opens it. When you wan
 
 1. Type the message in the orglet's main chat.
 2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow in the row under the message box and choose **Send in a new thread**.
-3. You stay in the main chat. A short message says the side thread started; click **Open** to go there, or open it later.
+3. You stay in the main chat. A short message says the side thread started; click **Open** to see it, or open it later.
+
+A side thread opens in the panel on the right, next to its main chat, so you can read both at once. It has its own message box at the bottom of the panel. Close it with the **×** at the top of the panel or Esc. The panel is the one **Details** uses: opening Details closes the thread, and opening a thread closes Details. In a narrow window, where there is no room for the panel, the thread opens in place of the main chat instead, with **Open main chat** at the top.
 
 Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).
 
@@ -126,7 +134,7 @@ What a side thread knows and can do:
 - It has the main chat's permissions: the same switches, the same working folder at the same level, and the same MCP tools allowed. It never gets more. If you turn something off in the main chat, its side threads lose it at once. A side thread that was working with a switch or the folder you turned off stops; an MCP tool you took back asks again the next time it is used. To change permissions, change them in the main chat. An MCP tool that asks in a side thread can only be allowed once there.
 - It counts as its own chat for the **Limit per task**, and it shares the orglet's connection and slots with the main chat.
 
-To use an answer in the main chat, click **Bring into main chat** (the quote icon under the answer). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
+To use an answer in the main chat, point at it and click **Bring into main chat** (the quote icon in its toolbar). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
 
 Side threads are for single orglets. A channel does not have them yet.
 
@@ -139,7 +147,7 @@ You can pass a message on to another orglet, a channel or another chat, the way 
 3. If the message had files, tick the ones to send along. Files you leave unticked go by name only.
 4. Add a note if you like, then click **Send** (Ctrl+Enter in the note works too).
 
-Each chat you picked gets the message as yours, so the orglet or channel there answers it, the same as if you had typed it. It shows as a grey bubble headed **Forwarded from Researcher** (click it to open the chat it came from), with your note under it. It costs what any message there costs and uses that chat's own permissions and limit.
+Each chat you picked gets the message as yours, so the orglet or channel there answers it, the same as if you had typed it. It shows as a grey card headed **Forwarded from Researcher** (click it to open the chat it came from), with your note under it. It costs what any message there costs and uses that chat's own permissions and limit.
 
 A few things to know:
 

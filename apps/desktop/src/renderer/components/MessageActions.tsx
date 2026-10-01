@@ -32,44 +32,48 @@ function useReactionPick({ taskId, messageId, reactions, action }: ReactionProps
 }
 
 /**
- * The action row under a message: reply, forward, react and whatever the caller leads with (copy and download for
- * an answer). The reactions themselves are not here: they sit on the bubble's corner as `MessageBadges` (COD-219).
- * `onForward` opens the forward picker for this message (COD-257); without it the row has no Forward.
+ * A message's toolbar: reply, forward, react and whatever the caller leads with (copy and download for an answer).
+ * It floats at the message's top right and shows while the pointer is over the message or focus is inside it (COD-365,
+ * the way Slack does it), so it stays in the tab order and every button keeps its name. The reactions themselves are
+ * not here: they sit under the message as `MessageBadges` (COD-219). `onForward` opens the forward picker for this
+ * message (COD-257); without it the toolbar has no Forward.
  */
-export function MessageActions({ taskId, messageId, author, text, reactions, action, leading, trailing, onForward }: ReactionProps & {
+export function MessageActions({ taskId, messageId, author, text, reactions, action, leading, onForward }: ReactionProps & {
   author: string;
   text: string;
   leading?: ReactNode;
-  /** Faces of who has read this far, at the row's end, level with the buttons. */
-  trailing?: ReactNode;
   onForward?: () => void;
 }) {
   const { current, pick } = useReactionPick({ taskId, messageId, reactions, action });
   // Save for later (COD-366): the message goes to Activity's Saved view, and the same button takes it off again.
   const isSaved = useSavedMessages().some(item => savedKey(item.taskId, item.messageId) === savedKey(taskId, messageId));
   const toggleSaved = () => isSaved ? unsaveMessage(taskId, messageId) : saveMessage({ taskId, messageId, author, text });
-  return <div className="message-actions">
+  return <div className="message-actions" role="group" aria-label={t('Thao tác với tin nhắn')}>
     {leading}
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
     {onForward && <Button size="icon" aria-label={t('Chuyển tiếp tin này')} title={t('Chuyển tiếp tin này')} onClick={onForward}><Forward size={15} /></Button>}
     <ReactionBar options={reactionOptions()} picked={current} onPick={pick} label={t('Thả react')} icon={<SmilePlus size={15} />} />
     <Button size="icon" aria-label={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} title={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} aria-pressed={isSaved} onClick={toggleSaved}>{isSaved ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}</Button>
-    {trailing}
   </div>;
 }
 
 /**
- * The reactions one message wears, the person's and the workers' together, anchored to the bubble that renders
- * it. `runs` name the workers behind their marks.
+ * The reactions one message wears, the person's and the workers' together, in a row under the message (COD-365).
+ * `runs` name the workers behind their marks. Nothing is drawn for a message nobody reacted to.
  */
-export function MessageBadges({ taskId, messageId, reactions, runs, action, align }: ReactionProps & {
+export function MessageBadges({ taskId, messageId, reactions, runs, action }: ReactionProps & {
   runs: readonly Run[];
-  align: 'start' | 'end' | 'inline';
 }) {
   const { pick } = useReactionPick({ taskId, messageId, reactions, action });
   const marks = reactions.filter(item => item.messageId === messageId);
   const badges = reactionGroups(marks, runs).map(group => ({
     name: group.emoji, emoji: reactionEmoji[group.emoji], count: group.count, mine: group.includesUser, label: group.label,
   }));
-  return <ReactionBadges badges={badges} align={align} onPick={pick} />;
+  if (badges.length === 0) return null;
+  return <ReactionBadges badges={badges} align="inline" onPick={pick} />;
+}
+
+/** Whether a message wears any reaction, so its foot row can be left out when it would be empty. */
+export function hasReactions(reactions: readonly MessageReaction[], messageId: string): boolean {
+  return reactions.some(item => item.messageId === messageId);
 }
