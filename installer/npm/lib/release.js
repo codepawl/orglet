@@ -46,3 +46,17 @@ export async function latestRelease(fetchImplementation = fetch) {
   const release = await response.json();
   return { version: versionOfTag(release.tag_name), assets: release.assets ?? [] };
 }
+
+/** Where every Orglet release asset lives. A download URL anywhere else is refused before anything is fetched. */
+export const RELEASE_DOWNLOADS = 'https://github.com/codepawl/orglet/releases/download/';
+
+/** Whether a URL is an asset of a codepawl/orglet GitHub Release. */
+export function isReleaseDownload(url) {
+  try {
+    const parsed = new URL(url);
+    const expected = new URL(RELEASE_DOWNLOADS);
+    return parsed.protocol === expected.protocol && parsed.host === expected.host && parsed.pathname.startsWith(expected.pathname);
+  } catch {
+    return false;
+  }
+}

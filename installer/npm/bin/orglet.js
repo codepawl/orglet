@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
+import { installConsent } from '../lib/consent.js';
 import { install, RELEASES_PAGE } from '../lib/install.js';
 import { installedLaunch, windowsAppInstalled } from '../lib/installed.js';
 
@@ -21,8 +22,8 @@ function drawProgress(received, total) {
 }
 
 async function confirmed(question) {
-  if (process.argv.includes('--yes') || process.argv.includes('-y')) return true;
-  if (!process.stdin.isTTY) return true;
+  const consent = installConsent(process.argv, Boolean(process.stdin.isTTY));
+  if (consent === 'yes') return true;
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
   const answer = (await prompt.question(`${question} [Y/n] `)).trim().toLowerCase();
   prompt.close();
@@ -30,6 +31,11 @@ async function confirmed(question) {
 }
 
 async function runInstall() {
+  // A script or CI job that did not pass --yes fails here instead of reading "Nothing was installed" as success.
+  if (installConsent(process.argv, Boolean(process.stdin.isTTY)) === 'refuse') {
+    print('No terminal to ask in. Run it again with --yes to install Orglet without a prompt.');
+    return 1;
+  }
   if (!(await confirmed('Install the latest Orglet for this Windows user?'))) {
     print('Nothing was installed.');
     return 0;
