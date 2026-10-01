@@ -12,8 +12,13 @@ import type { DesktopHost, DesktopHostRequest } from '../../shared/desktop-host'
  * `desktop-host.ps1` with .NET's System.Windows.Automation. Nothing new is installed or written to disk: a short
  * command reads the script from the first line of standard input, and requests and answers follow as JSON lines.
  *
- * It starts the first time a step needs it, at below-normal priority so it never competes with the person's own work,
- * with only the system variables PowerShell needs (no keys, no tokens), and stops after a minute with nothing to do.
+ * It starts the first time a step needs it, with only the system variables PowerShell needs (no keys, no tokens), and
+ * stops after a minute with nothing to do. Once it is ready it runs at below-normal priority so its work never
+ * competes with the person's own. It starts at normal priority: starting is a second or two of CPU (PowerShell, then
+ * csc.exe compiling the C# part, which inherits the priority), and at below-normal Windows gives it almost none of
+ * that while normal-priority work keeps every core busy. Measured on 2026-10-01 with one busy thread per core, it was
+ * not ready after 150 seconds at below-normal and was ready in 6 to 10 seconds at normal; CI hit this as a 30 second
+ * start timeout.
  */
 
 /** How long the helper stays up after its last answer. */
@@ -45,6 +50,15 @@ export function powershellPath(): string {
   return join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 }
 
+function lowerPriority(child: ChildProcessWithoutNullStreams) {
+  if (!child.pid) return;
+  try {
+    setPriority(child.pid, constants.priority.PRIORITY_BELOW_NORMAL);
+  } catch {
+    // Priority is a courtesy to the person's own work; the helper still works at normal priority.
+  }
+}
+
 export class DesktopHelperProcess implements DesktopHost {
   private child?: ChildProcessWithoutNullStreams;
   private starting?: Promise<ChildProcessWithoutNullStreams>;
@@ -70,13 +84,6 @@ export class DesktopHelperProcess implements DesktopHost {
       const child = spawn(this.executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
         stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, env: environment,
       });
-      if (child.pid) {
-        try {
-          setPriority(child.pid, constants.priority.PRIORITY_BELOW_NORMAL);
-        } catch {
-          // Priority is a courtesy to the person's own work; the helper still works at normal priority.
-        }
-      }
       const timer = setTimeout(() => {
         child.kill();
         reject(new Error('Không khởi động được trình hỗ trợ ứng dụng của Orglet.'));
@@ -97,6 +104,7 @@ export class DesktopHelperProcess implements DesktopHost {
         }
         if ((message as { ready?: boolean }).ready) {
           clearTimeout(timer);
+          lowerPriority(child);
           this.child = child;
           resolve(child);
           return;
@@ -118,6 +126,9 @@ export class DesktopHelperProcess implements DesktopHost {
         this.pending.clear();
         reject(new Error(stderr.includes('Exception') ? 'Trình hỗ trợ ứng dụng không khởi động được trên máy này.' : 'Không khởi động được trình hỗ trợ ứng dụng của Orglet.'));
       });
+      // A helper that died or was stopped before reading its input fails the write with EOF or EPIPE; the exit
+      // handler above already reports that, and an unhandled stream error would take down the whole core.
+      child.stdin.on('error', () => {});
       child.stdin.write(`${Buffer.from(helperScript, 'utf8').toString('base64')}\n`);
     });
     this.starting.catch(() => { this.starting = undefined; });
