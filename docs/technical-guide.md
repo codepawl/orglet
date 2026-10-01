@@ -255,7 +255,7 @@ Focus never falls to the page after something the person did (COD-284). The rule
 - **The + menu hands focus to the message box** before the file dialog opens (`MessageBoxFocus` in `SourcePicker.tsx`, provided by `Composer`), so the window gives it back there when the dialog closes.
 - **Dialogs return focus to what opened them.** Radix only does that for a `Dialog.Trigger`, and Orglet opens its dialogs from state, so the kit's `useReturnFocus` remembers the focused element when a dialog opens and focuses it again when it closes, but only when focus would otherwise be lost (on the page or inside the closed dialog): a link inside a viewer that closes it and focuses its target, such as a report's checker link, keeps that focus. `Drawer`, `TabbedDialog` (Settings and every tabbed editor), `Confirmer`, `Viewer` and the forward picker use it.
 - **Details takes focus when it opens** (its heading) and gives it back to what opened it when it closes with focus inside. A link that opens Details on one message or attempt focuses that on a later frame.
-- **The prompt bar shows focus like every other control**: typing in it rings the pill in `--focus`, two pixels, and the live tab docked on it follows. The idle bar keeps its quiet outline.
+- **The prompt bar shows focus like every other control**: typing in it rings the bar in `--focus`, two pixels, and the live tab docked on it follows. The idle bar keeps its quiet outline.
 
 ## What is running and the queue
 
