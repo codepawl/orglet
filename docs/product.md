@@ -43,13 +43,14 @@ All four of these matter. When two conflict, the order below breaks the tie.
 | Chat | One live conversation with a worker or a team. Stored as a `tasks` row under the hood. |
 | Worker (Nhân viên) | An AI coworker with a role, instructions and a skill. Click the worker to open **that worker's chat**. |
 | Team (Nhóm) | Workers who take a message together and combine their results. Click the team to open **that team's chat**. |
+| Channel (Kênh) | A named chat with a topic, like Slack's or Discord's #launch, whose members are orglets and crews. Each orglet answers in turn, a crew as its orglets. A one-to-one chat with an orglet is its DM. |
 | Routine (Lịch chạy) | A request that repeats on a schedule |
 | Skill / Knowledge | Reusable instructions and notes workers can use |
 | Capability | A concrete action, such as reading an attachment, editing a granted folder, running a check, or reading the web. The chat Details shows whether each worker can do it now and what setup is missing. |
 | Proposal (Đề xuất) | An app change a worker suggests when you ask for one (a new orglet, a crew, a template, a skill, a schedule, a setting): a card in the chat you apply or dismiss. Setup help on request, not an agent running the workspace; see [agent-tools.md](agent-tools.md#proposing-app-changes). |
 | Connection | The API or signed-in local CLI that runs the model. A skill, imported package, or note never grants a capability. |
 
-Projects that group several tasks are postponed until real use shows a need (shared files or shared context across tasks).
+Channels ([COD-361](https://linear.app/codepawl/issue/COD-361)) are how several orglets and crews share one conversation, by the owner's decision on 2026-10-01: they revisit the "projects that group several tasks" this page used to postpone, as named chats rather than folders of tasks. A channel is still one chat; shared files and shared context across separate chats stay postponed until real use shows a need. Channels are local. Their members can later include people (COD-362, after account sync), and nothing is built for people yet.
 
 A worker's **Permissions** tab and the chat Details show its abilities as controls you set: a switch for anything with exactly two values, a dropdown for the working folder's levels (owner's rule, COD-168). A blocker such as Demo or a missing connection disables the control with one reason beside it, never a third position. File and web access belongs to the chat; the worker's tab acts on that worker's own chat, a team chat on its own, and both can be set before the first message. Changes apply to every run that has not started yet, while revocation blocks active access. With an editable folder, an orglet's changes wait for the person to review and apply them unless the chat's review switch is off; crews, group chats and schedules apply as each run finishes (COD-279). Technical tool names stay in the tool guide. Routines decide when a turn starts; they do not grant access.
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
+import { Hash, Settings2 } from 'lucide-react';
 import { GripVertical, Archive, ArchiveRestore, CalendarClock, EllipsisVertical, Pencil, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
@@ -147,27 +148,30 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
 }
 
 /**
- * One group chat in the sidebar's Group chats section (COD-268): its status mark, the faces of the orglets in it, its
- * name, and a menu to rename, archive or delete it. It looks like an orglet's row but has no reorder: the list is
- * newest first. Renaming happens in place.
+ * One channel in the sidebar's Channels section (COD-361): its status mark, the `#` every channel wears where an
+ * orglet's row has its face, its name, and a menu to edit, rename, archive or delete it. It has no reorder: the list
+ * is newest first. Renaming happens in place. A channel nobody has written in has nothing to archive, so its menu
+ * leaves Archive out (`onArchive` absent).
  */
-export function GroupChatRow({ name, faces, active, status, onOpen, onDwell, onRename, onArchive, onDelete }: { name: string; faces: ReactNode; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onRename: (title: string) => void; onArchive: () => void; onDelete: () => void }) {
+export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, deleteQuestion }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; deleteQuestion: string }) {
   const [editing, setEditing] = useState(false);
   const dwell = dwellHandlers(onDwell);
   const row = useScrolledIntoViewWhenActive<HTMLDivElement>(active);
-  if (editing) return <div className="tree-item group-chat-row"><div className="worker-row editing"><RenameField name={name} label={t('Tên mới cho nhóm chat {0}', [name])} onSave={onRename} onDone={() => setEditing(false)} /></div></div>;
-  return <div ref={row} className="tree-item group-chat-row" {...dwell}>
+  const label = `#${name}`;
+  if (editing) return <div className="tree-item channel-row"><div className="worker-row editing"><RenameField name={name} label={t('Tên mới cho kênh {0}', [label])} onSave={onRename} onDone={() => setEditing(false)} /></div></div>;
+  return <div ref={row} className="tree-item channel-row" {...dwell}>
     <div className="worker-row">
       <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />
-      <span className="row-disclosure" aria-hidden="true">{faces}</span>
-      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={name} onClick={onOpen}>
+      <span className="row-disclosure channel-hash" aria-hidden="true"><Hash size={16} /></span>
+      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} aria-label={label} title={label} onClick={onOpen}>
         <span>{name}</span>
       </button>
       {/* Wrapped like an orglet row's menu, so it floats over the row's end instead of taking the name's room. */}
-      <span data-no-drag><RowMenu label={t('Tùy chọn nhóm chat {0}', [name])} icon={EllipsisVertical} contextMenuOf=".group-chat-row" items={[
+      <span data-no-drag><RowMenu label={t('Tùy chọn kênh {0}', [label])} icon={EllipsisVertical} contextMenuOf=".channel-row" items={[
+        { label: t('Thiết lập kênh'), icon: Settings2, onSelect: onEdit },
         { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) },
-        { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },
-        { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa nhóm chat này? Không thể hoàn tác.'), label: t('Xóa') } },
+        ...(onArchive ? [{ label: t('Lưu trữ'), icon: Archive, onSelect: onArchive }] : []),
+        { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: deleteQuestion, label: t('Xóa') } },
       ]} /></span>
     </div>
   </div>;

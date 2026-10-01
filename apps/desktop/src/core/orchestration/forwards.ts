@@ -2,6 +2,7 @@ import type { Artifact, Routine, RunInput, Task, TaskDetail, Team, Worker } from
 import { turnMessageId } from '../../shared/message-interactions';
 import { withoutSourceIds } from '../../shared/source-mentions';
 import { chatHeadline, type ForwardedMessage, type ForwardTarget } from '../../shared/forward';
+import { channelLabel } from '../../shared/channels';
 import type { Store } from '../storage/database';
 
 /** A chat's name in "Forwarded from …" never runs past this. */
@@ -40,6 +41,7 @@ export class Forwards {
    * run by the schedule, and any other chat (a side thread, a group chat) by its title or its first line.
    */
   chatName(task: Task): string {
+    if (task.channel) return clip(channelLabel(task.channel.name));
     const workers = this.store.all<Worker>('workers');
     const title = this.store.setting<Record<string, string>>('taskTitles', {})[task.id]?.trim();
     if (task.routineId) {

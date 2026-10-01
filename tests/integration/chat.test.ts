@@ -121,7 +121,7 @@ it('changes who a task is assigned to, its name and limit, but not while it runs
   await expect(core.command('updateTask', { id: taskId, title: '', assignee: { kind: 'workers', workerIds: [workerId] }, budgetMicros: 200_000 })).rejects.toThrow('đang chạy');
 });
 
-it('lets several workers, or all of them, answer each message in turn, each seeing the earlier replies', async () => {
+it('lets several workers answer each message in turn, each seeing the earlier replies, and a channel take a new member', async () => {
   const workerId = await chatWorker('openai');
   const skillId = store.all<Worker>('workers')[0].skillId;
   const second = await core.command('saveWorker', { name: 'Kế toán', instructions: 'Help with accounting.', provider: 'openai', skillId, taskBudgetMicros: 100_000 }) as Worker;
@@ -140,9 +140,14 @@ it('lets several workers, or all of them, answer each message in turn, each seei
   expect(earlier(2)).toContainEqual(expect.objectContaining({ from: 'Researcher', id: expect.any(String), text: 'Researcher đây.' }));
   expect(earlier(2)).toContainEqual(expect.objectContaining({ from: 'Researcher', id: expect.any(String), text: 'Chào từ Researcher.' }));
 
+  // Several orglets make a channel (COD-361). Its members are its own: the chat's settings change only its limit, and
+  // an orglet added later answers once it joins the channel.
+  const channel = store.detail(taskId).task.channel!;
+  expect(channel.members).toEqual([{ kind: 'orglet', id: workerId }, { kind: 'orglet', id: second.id }]);
   await core.command('updateTask', { id: taskId, title: '', assignee: { kind: 'all' }, budgetMicros: 100_000 });
-  expect(store.detail(taskId).task.assignees).toBe('all');
+  expect(store.detail(taskId).task.assignees).toEqual([workerId, second.id]);
   const third = await core.command('saveWorker', { name: 'Người mới', instructions: 'Help.', provider: 'openai', skillId, taskBudgetMicros: 100_000 }) as Worker;
+  await core.command('updateChannel', { id: channel.id, name: channel.name, topic: '', members: [...channel.members, { kind: 'orglet', id: third.id }] });
   replies.push(answer('1'), answer('2'), answer('3'));
   await core.command('reviseTask', { taskId, brief: 'Tất cả nhé', ...scope });
   await until(() => store.detail(taskId).task.status === 'completed' && store.detail(taskId).runs.filter(run => run.stage === 'group' && run.snapshot.inputRevision === 2).length === 3);

@@ -12,7 +12,7 @@ The row marked **Default** is the model that runs when you have not picked one. 
 
 The left side picks the chat. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
 
-**The sidebar.** It lists your crews and your orglets, each with its side threads and schedule runs under it, and your group chats. Click a row to open that chat. A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top. With nothing like that open, there is no **Open** section. Each row shows a face, the name and one mark:
+**The sidebar.** It lists your crews and your orglets, each with its side threads and schedule runs under it, and your channels under **Channels**: each a **#** and its name, newest first, the empty ones included. An orglet's row opens your DM with it, a channel's row opens the channel ([Channels](orglets-and-crews.md#channels)). Click a row to open that chat. A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top. With nothing like that open, there is no **Open** section. Each row shows a face, the name and one mark:
 
 | Mark | Meaning |
 |---|---|
@@ -32,7 +32,7 @@ To take a chat off **Open**, hover it and click **×**, or click it with the mid
 2. The magnifier opens search (**Ctrl+K**).
 3. **+** offers **New orglet** and **New crew**.
 4. One face per crew, then one per orglet, in the sidebar's order. Click a face to open that chat. Hover it to see the name. A small mark on the corner shows the chat's state, the same as in the sidebar.
-5. When you have group chats, one button lists them. Click one to open it.
+5. When you have channels, one **#** button lists them. Click one to open it.
 6. Under those, the faces of the chats on **Open**, the same ones the sidebar lists there. Hover one to see its name and whose chat it is, and click the small **×** on its corner to close it. Side threads and schedule runs are reached through their orglet's face, as before.
 7. At the foot: Notifications, Running, Schedules, Library and Settings, each with a count when something is waiting.
 
@@ -101,7 +101,7 @@ Click the ring to see what it is made of:
 
 From 80% of a plan allowance, a line under that row says how much is used and when it resets. At 100%, the line says the plan ran out. If another account of the same app has room, the line offers it (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
 
-In a crew or group chat, the ring follows the account closest to its limit among the orglets in the chat, and the details list each app.
+In a crew or a channel, the ring follows the account closest to its limit among the orglets in the chat, and the details list each app.
 
 The ring shows only what a provider reported. A model's size comes from its model list (OpenRouter today) or from what Claude Code said on an earlier answer with that model; until one of them says, the line reads **Window size unknown**. Codex reports neither its context use nor its window, so a Codex chat's ring follows its plan. Nothing shows for Demo, Cursor Agent or Gemini CLI, which report neither a plan nor a window.
 
@@ -126,7 +126,7 @@ What a side thread knows and can do:
 
 To use an answer in the main chat, point at it and click **Bring into main chat** (the quote icon in its toolbar). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
 
-Side threads are for single orglets. A crew chat and a group chat do not have them yet. Group chats you started by picking several orglets are listed in the sidebar under **Group chats**, newest first, so you can get back to one after opening another chat.
+Side threads are for single orglets. A crew chat and a channel do not have them yet.
 
 ## Forward a message
 
@@ -144,7 +144,7 @@ A few things to know:
 - A chat that is working right now, or whose orglets are not connected, cannot be picked until it is ready. A message arriving would otherwise stop the work there.
 - A file you tick becomes a file of that chat, as if you had attached it there yourself. Revoking it in one chat does not revoke it in the other.
 - A side thread only uses its main chat's files, so files cannot be sent along into one.
-- `@` names inside a forwarded message do not choose who answers in a crew or group chat; only `@` names in your note do.
+- `@` names inside a forwarded message do not choose who answers in a crew or a channel; only `@` names in your note do.
 - Forwarding a forwarded message passes on the original, still labelled with where it first came from.
 
 Orglets never forward anything themselves. How it works: [team-chat.md](team-chat.md#forwarding).
@@ -212,7 +212,7 @@ To have changes applied as soon as a run finishes, turn off **Review before appl
 - **Files and processes**: every attempt that changed files, with its outcome, its commands and their output. An attempt whose outcome is unknown after a crash or cancel blocks the chat until you check your files and choose **Keep current files**. See [Reviewing an interrupted attempt](agent-tools.md#reviewing-an-interrupted-attempt).
 
 If the app closes while an orglet works, that turn stops where it was and is not sent again on its own. The chat says so on that turn ("This turn stopped partway because the app closed."), also after you have sent newer messages; check the cost and send the message again if you still need the answer.
-- **Messages between workers** and **Reactions** in a crew or group chat, and export of any job's report.
+- **Messages between workers** and **Reactions** in a crew or a channel, and export of any job's report.
 
 ## Schedules
 

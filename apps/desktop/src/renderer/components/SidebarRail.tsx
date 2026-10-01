@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { MessagesSquare } from 'lucide-react';
+import { Hash } from 'lucide-react';
 import { PanelLeft, Plus, Search, X } from './icons';
 import { t } from '../i18n';
 import { Button } from './ui';
@@ -33,20 +33,20 @@ export type RailAction = { key: string; icon: ReactNode; label: string; ariaLabe
 /**
  * The left column folded to a narrow rail (COD-340): the roster as faces. Top: the way to the full sidebar, search and
  * the create menu. Then one face per crew and per orglet, in the sidebar's order, each with the sidebar row's mark
- * when it has news; the group chats behind one button that opens their list; then the chats on the Open list
+ * when it has news; the channels behind one button that opens their list (COD-361); then the chats on the Open list
  * (COD-355), each with a × that shows on hover. The foot keeps the sidebar's footer as icons with their counts. Names
  * live in tooltips and accessible names, since there is no room for them.
  */
-export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, groupChats, groupChatsMark, openChats, actions, trailing, covered = false }: {
+export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, channels, channelsMark, openChats, actions, trailing, covered = false }: {
   onExpand: () => void;
   onSearch: () => void;
   createItems: RowMenuItem[];
   crews: readonly RailEntry[];
   orglets: readonly RailEntry[];
-  groupChats: readonly RailEntry[];
-  /** The strongest mark among the group chats, for their one button. */
-  groupChatsMark: StatusMarkState;
-  /** The Open list: side threads, group chats and schedule runs kept at hand. */
+  channels: readonly RailEntry[];
+  /** The strongest mark among the channels, for their one button. */
+  channelsMark: StatusMarkState;
+  /** The Open list: side threads and schedule runs kept at hand. */
   openChats: readonly RailEntry[];
   actions: readonly RailAction[];
   /** Anything after the foot's buttons, such as a ready update. */
@@ -55,7 +55,7 @@ export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, g
   covered?: boolean;
 }) {
   const roster = useRef<HTMLDivElement>(null);
-  const scrollEnds = useScrollEnds(roster, `${crews.length}:${orglets.length}:${groupChats.length}:${openChats.length}`);
+  const scrollEnds = useScrollEnds(roster, `${crews.length}:${orglets.length}:${channels.length}:${openChats.length}`);
   return <nav className="rail" aria-label={t('Điều hướng')} inert={covered || undefined} aria-hidden={covered || undefined}>
     <div className="rail-top">
       <Button size="icon" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={onExpand}><PanelLeft size={18} /></Button>
@@ -65,7 +65,7 @@ export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, g
     <div ref={roster} className="rail-roster" {...scrollEnds}>
       {crews.length > 0 && <ul className="rail-group" aria-label={t('Hội')}>{crews.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
       {orglets.length > 0 && <ul className="rail-group" aria-label={t('Tí')}>{orglets.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
-      {groupChats.length > 0 && <RailGroupChats chats={groupChats} mark={groupChatsMark} />}
+      {channels.length > 0 && <RailChannels chats={channels} mark={channelsMark} />}
       {openChats.length > 0 && <ul className="rail-group rail-open" aria-label={t('Đang mở')}>{openChats.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
     </div>
     <div className="rail-foot">
@@ -92,27 +92,27 @@ function RailFace({ entry }: { entry: RailEntry }) {
   </li>;
 }
 
-/** The group chats, behind one button with the strongest mark among them, listed in a small popover beside it. */
-function RailGroupChats({ chats, mark }: { chats: readonly RailEntry[]; mark: StatusMarkState }) {
+/** The channels, behind one `#` button with the strongest mark among them, listed in a small popover beside it. */
+function RailChannels({ chats, mark }: { chats: readonly RailEntry[]; mark: StatusMarkState }) {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const active = chats.some(chat => chat.active);
-  const label = t('Nhóm chat');
+  const label = t('Kênh');
   const choose = (chat: RailEntry) => {
     setOpen(false);
     chat.onOpen();
   };
   return <div className="rail-group">
-    <button ref={anchor} type="button" className={`rail-face rail-groups${active ? ' active' : ''}`} aria-label={label} title={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(current => !current)}>
-      <MessagesSquare size={18} aria-hidden="true" />
+    <button ref={anchor} type="button" className={`rail-face rail-channels${active ? ' active' : ''}`} aria-label={label} title={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(current => !current)}>
+      <Hash size={18} aria-hidden="true" />
       {mark.variant !== 'empty' && <StatusMark variant={mark.variant} tone={mark.tone} label={statusMarkLabel(mark)} decorative className="rail-face-mark" />}
     </button>
     <AnchoredPopover anchor={anchor} open={open} onClose={() => setOpen(false)} label={label}>
       <ul className="rail-group-list">
         {chats.map(chat => <li key={chat.key}>
-          <button type="button" className={`rail-group-chat${chat.active ? ' active' : ''}`} aria-current={chat.active || undefined} title={chat.name} onClick={() => choose(chat)} {...dwellHandlers(chat.onDwell)}>
-            <span className="rail-group-faces" aria-hidden="true">{chat.face}</span>
-            <span className="rail-group-name">{chat.name}</span>
+          <button type="button" className={`rail-channel${chat.active ? ' active' : ''}`} aria-current={chat.active || undefined} title={chat.name} onClick={() => choose(chat)} {...dwellHandlers(chat.onDwell)}>
+            <span className="rail-channel-mark" aria-hidden="true">{chat.face}</span>
+            <span className="rail-channel-name">{chat.name}</span>
             {chat.status.variant !== 'empty' && <StatusMark variant={chat.status.variant} tone={chat.status.tone} label={statusMarkLabel(chat.status)} decorative />}
           </button>
         </li>)}

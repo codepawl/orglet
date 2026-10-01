@@ -176,7 +176,7 @@ function Fact({ icon: Icon, children, title }: { icon: typeof Users; children: R
  * Who this chat is with: the face, the name, and the few facts worth knowing, as icons and values on one wrapping
  * line rather than a sentence per fact (user, 2026-09-19).
  */
-function ChatSubject({ team, worker, group, members }: { team?: Team; worker?: Worker; group?: readonly Worker[]; members: readonly Worker[] }) {
+function ChatSubject({ team, worker, group, groupName, members }: { team?: Team; worker?: Worker; group?: readonly Worker[]; groupName?: string; members: readonly Worker[] }) {
   if (team) {
     return <div className="details-subject">
       <p className="details-subject-name"><RosterAvatars workers={members} size="sm" max={2} /><strong>{team.name}</strong></p>
@@ -190,10 +190,10 @@ function ChatSubject({ team, worker, group, members }: { team?: Team; worker?: W
       </div>
     </div>;
   }
-  // A group chat that has not started has no name of its own: its faces and their count say who it is.
+  // A channel that has not started yet (COD-361): its `#name`, the faces of the orglets that answer and their count.
   if (group) {
     return <div className="details-subject">
-      <p className="details-subject-name"><RosterAvatars workers={group} size="sm" max={2} /><strong>{t('Trò chuyện nhóm')}</strong></p>
+      <p className="details-subject-name"><RosterAvatars workers={group} size="sm" max={2} /><strong>{groupName}</strong></p>
       <div className="details-facts">
         <Fact icon={Users} title={t('Số Tí trong nhóm')}>{group.length}</Fact>
       </div>
@@ -354,12 +354,13 @@ function OutcomeCount({ value, tone }: { value: number; tone: 'success' | 'error
   return <span className={value > 0 ? `outcome-count outcome-count-${tone}` : 'outcome-count'}>{value.toLocaleString(currentLocale())}</span>;
 }
 
-export function DetailsPanel({ workspace, team, worker, group, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
+export function DetailsPanel({ workspace, team, worker, group, groupName, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
   worker?: Worker;
-  /** The orglets of a group chat that has not started yet (COD-215), in the order they were picked. */
+  /** The orglets of a channel that has not started yet (COD-215, COD-361), and the channel's `#name`. */
   group?: readonly Worker[];
+  groupName?: string;
   detail?: TaskDetail;
   recovery?: WorkspaceRecoveryView;
   /** Set when the chat asked to review an attempt: Details scrolls to that attempt (or to the blocking one). */
@@ -423,7 +424,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
       <Button size="icon" aria-label={t('Đóng panel')} onClick={onClose}><X size={18} /></Button>
     </div>
     <div className="details-body">
-      <ChatSubject team={team} worker={worker} group={group} members={members} />
+      <ChatSubject team={team} worker={worker} group={group} groupName={groupName} members={members} />
 
       {(team || group) && <Section icon={Users} title={t('Thành viên')}>
         <ShowMore items={members} empty={t('Hội chưa có Tí nào.')} render={member => {

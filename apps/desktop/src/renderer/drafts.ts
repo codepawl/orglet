@@ -48,8 +48,9 @@ export function taskDraftKey(taskId: string) {
 }
 
 /** The empty chat of an orglet, a crew or a group of orglets, or undefined when none is on screen. */
-export function emptyChatDraftKey(target: { teamId?: string; workerIds?: readonly string[]; workerId?: string }): string | undefined {
+export function emptyChatDraftKey(target: { teamId?: string; channelId?: string; workerIds?: readonly string[]; workerId?: string }): string | undefined {
   if (target.teamId) return `team:${target.teamId}`;
+  if (target.channelId) return `channel:${target.channelId}`;
   if (target.workerIds?.length) return `group:${[...target.workerIds].sort().join(',')}`;
   if (target.workerId) return `worker:${target.workerId}`;
   return undefined;

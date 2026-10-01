@@ -57,7 +57,7 @@ export class CliOperations {
       case 'chats': return this.chatAdmin.chats(request);
       case 'side-thread': return this.chatAdmin.sideThread(request, signal);
       case 'bring': return this.chatAdmin.bring(request);
-      case 'group': return this.chatAdmin.group(request, signal);
+      case 'channel': return this.chatAdmin.channel(request, signal);
       case 'members': return this.chatAdmin.members(request);
       case 'chat-change': return this.chatAdmin.change(request);
       case 'archive-entity': return this.chatAdmin.archiveEntity(request);
@@ -167,7 +167,7 @@ export class CliOperations {
 
   /**
    * The chat a message goes to: an orglet's or crew's main chat, which the first message creates, or any existing
-   * chat by its id, such as a side thread or a group chat (COD-354).
+   * chat by its id, such as a side thread or a channel (COD-354).
    */
   private sendTarget(workspace: Workspace, request: ChatTargetRequest): { chat: CliChat; live?: Task; team?: Team; worker?: Worker } {
     assertOneTarget(request);

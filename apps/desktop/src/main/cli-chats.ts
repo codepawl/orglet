@@ -1,5 +1,6 @@
 import type { Routine, Task, Team, Worker, Workspace } from '../shared/contracts';
 import { chatHeadline } from '../shared/forward';
+import { channelLabel } from '../shared/channels';
 import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { CliChat, CliChatKind, CliErrorCode } from '../cli/protocol';
@@ -125,11 +126,11 @@ export function chatKind(task: Pick<Task, 'routineId' | 'sideOf' | 'teamId' | 'a
   if (task.routineId) return 'schedule';
   if (task.sideOf) return 'side';
   if (task.teamId) return 'crew';
-  if (task.assignees) return 'group';
+  if (task.assignees) return 'channel';
   return 'orglet';
 }
 
-/** The orglets a chat's messages go to: a crew's roster, a group's orglets, or the one orglet. */
+/** The orglets a chat's messages go to: a crew's roster, a channel's orglets, or the one orglet. */
 export function taskRunners(workspace: Pick<Workspace, 'workers' | 'teams'>, task: Pick<Task, 'teamId' | 'assignees' | 'workerId'>): Worker[] {
   const team = task.teamId ? workspace.teams.find(item => item.id === task.teamId) : undefined;
   if (team) return crewRoster(team, workspace.workers);
@@ -138,8 +139,9 @@ export function taskRunners(workspace: Pick<Workspace, 'workers' | 'teams'>, tas
   return ids.map(id => workspace.workers.find(worker => worker.id === id)).filter((worker): worker is Worker => Boolean(worker));
 }
 
-/** The name a chat goes by: the title it was given, its orglet's or crew's name, or the first line of its first message. */
+/** The name a chat goes by: a channel's `#name`, the title it was given, its orglet's or crew's name, or its first line. */
 export function chatName(workspace: Pick<Workspace, 'workers' | 'teams'>, task: Task): string {
+  if (task.channel) return channelLabel(task.channel.name);
   if (task.title) return task.title;
   const kind = chatKind(task);
   if (kind === 'orglet') return workspace.workers.find(worker => worker.id === task.workerId)?.name ?? chatHeadline(task);

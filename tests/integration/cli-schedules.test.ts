@@ -149,7 +149,7 @@ describe('orglet chat session schedules', () => {
     const row = { id: routineId, name: 'Morning review', enabled: true, target: 'Researcher', trigger: 'schedule' as const, frequency: 'daily' as const, time: '08:00', weekday: 1, timeZone: 'UTC', nextDueAt: '2026-10-02T08:00:00.000Z', budgetMicros: 500_000 };
     const actions: ChatActionClient = {
       history: notUsed, reply: notUsed, react: notUsed, forward: notUsed, control: notUsed, answer: notUsed,
-      chats: notUsed, side: notUsed, bring: notUsed, group: notUsed, members: notUsed, rename: notUsed, archive: notUsed,
+      chats: notUsed, side: notUsed, bring: notUsed, channel: notUsed, members: notUsed, rename: notUsed, archive: notUsed,
       schedules: async () => ({ schedules: [row] }),
       enableSchedule: async (name, enabled) => {
         calls.push(`enable ${name} ${enabled}`);

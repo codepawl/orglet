@@ -160,7 +160,7 @@ export class ChatSearch {
     // Rows arrive newest first, so the first one kept for a chat is its newest.
     for (const row of phraseRows) matchOf(row.task_id).phrase ??= row;
     for (const row of wordRows) matchOf(row.task_id).words ??= row;
-    const titles = this.store.setting<Record<string, string>>('taskTitles', {});
+    const titles = { ...this.store.setting<Record<string, string>>('taskTitles', {}), ...this.channelNames() };
     for (const [taskId, title] of Object.entries(titles)) {
       if (!matchesEveryWord(title, terms)) continue;
       const match = matchOf(taskId);
@@ -190,6 +190,11 @@ export class ChatSearch {
   }
 
   /** The chats among these ids that still exist and are not deleted, by id. */
+  /** A channel is found by its name like a chat by its title (COD-361); the name lives on the channel, not in `taskTitles`. */
+  private channelNames(): Record<string, string> {
+    const named = this.store.all<Task>('tasks').flatMap(task => task.channel && !task.deletedAt ? [[task.id, task.channel.name] as const] : []);
+    return Object.fromEntries(named);
+  }
   private liveTasks(taskIds: readonly string[]): Map<string, Task> {
     const rows = this.store.db.prepare('SELECT data FROM tasks WHERE id IN (SELECT value FROM json_each(?))').all(JSON.stringify(taskIds));
     const tasks = rows.map(row => JSON.parse(String(row.data)) as Task).filter(task => !task.deletedAt);

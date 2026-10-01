@@ -8,6 +8,7 @@ import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency } from '
 import { ProviderId } from '../shared/contracts';
 import { Language } from '../shared/i18n';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
+import { CHANNEL_TOPIC_LIMIT, ChannelName } from '../shared/channels';
 import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
 
 /**
@@ -50,12 +51,12 @@ export function cliEndpoint(userData: string, platform: NodeJS.Platform = proces
 
 export const CliToken = z.string().regex(/^[a-f0-9]{64}$/);
 const ChatName = z.string().trim().min(1).max(80);
-/** A chat by the start of its id, as `orglet chats` prints it (COD-354): side threads and group chats have no name. */
+/** A chat by the start of its id, as `orglet chats` prints it (COD-354): side threads and channels are found this way. */
 export const ChatId = z.string().trim().regex(/^#?[0-9a-f-]{4,36}$/i);
 /** A chat named by its orglet or crew (`to`) or by its id (`chat`); the app refuses both or neither. */
 const ChatTarget = { to: ChatName.optional(), chat: ChatId.optional() };
-/** The orglets of a group chat. */
-const GroupNames = z.array(ChatName).min(2).max(50);
+/** The orglets and crews of a channel, by name (COD-361). */
+const MemberNames = z.array(ChatName).min(1).max(50);
 /** The crew templates the core can create, as `createTemplate` names them. */
 export const TEMPLATE_IDS = ['research-review', 'eris-review'] as const;
 /** What a chat can be renamed, archived, restored or deleted as. */
@@ -126,8 +127,8 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('chats'), token: CliToken, archived: z.boolean() }).strict(),
   z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...WaitFields }).strict(),
   z.object({ op: z.literal('bring'), token: CliToken, chat: ChatId, message: MessageRef.optional() }).strict(),
-  z.object({ op: z.literal('group'), token: CliToken, names: GroupNames, message: Message, ...WaitFields }).strict(),
-  z.object({ op: z.literal('members'), token: CliToken, chat: ChatId, names: GroupNames }).strict(),
+  z.object({ op: z.literal('channel'), token: CliToken, names: MemberNames, message: Message, name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), ...WaitFields }).strict(),
+  z.object({ op: z.literal('members'), token: CliToken, chat: ChatId, names: MemberNames }).strict(),
   z.object({
     op: z.literal('chat-change'),
     token: CliToken,
@@ -215,7 +216,7 @@ export type CliChat = {
   color?: string;
   /** A crew's orglets in crew order (members, then the lead), each in its colour. */
   colors?: string[];
-  /** Set when the chat is not an orglet's or crew's main chat: a side thread or a group chat, by its id (COD-354). */
+  /** Set when the chat is not an orglet's or crew's main chat: a side thread or a channel, by its id (COD-354). */
   taskId?: string;
 };
 export type CliAnswer = {
@@ -281,8 +282,8 @@ export type ReadValue = {
 export type ReactValue = { chat: CliChat; taskId: string; ref: string; emoji: Reaction; active: boolean };
 export type ForwardValue = { sent: { name: string; taskId: string }[]; failed: { name: string; error: string }[] };
 export type ControlValue = SendValue & { action: ChatControl | 'answer' };
-/** Which kind of chat a row is: an orglet's or crew's main chat, a side thread, a group chat or a schedule's run. */
-export type CliChatKind = 'orglet' | 'crew' | 'side' | 'group' | 'schedule';
+/** Which kind of chat a row is: an orglet's or crew's main chat, a side thread, a channel or a schedule's run. */
+export type CliChatKind = 'orglet' | 'crew' | 'side' | 'channel' | 'schedule';
 /** One chat as `orglet chats` lists it (COD-354); `short` is the start of its id that `--chat` takes. */
 export type CliChatRow = { id: string; short: string; kind: CliChatKind; name: string; with: string[]; status: string; archived: boolean; createdAt: string; color?: string };
 export type ChatsValue = { chats: CliChatRow[] };

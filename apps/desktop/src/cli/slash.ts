@@ -22,7 +22,7 @@ export type SlashCommand =
   | { kind: 'chats'; archived: boolean }
   | { kind: 'side'; message: string }
   | { kind: 'bring'; ref?: string }
-  | { kind: 'group'; names: string[]; message: string }
+  | { kind: 'channel'; names: string[]; message: string }
   | { kind: 'members'; names: string[] }
   | { kind: 'rename'; title: string }
   | { kind: 'archive' }
@@ -46,7 +46,7 @@ export type SlashCommand =
 /** In the order `/help` lists them. */
 export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
   '/history', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
-  '/chats', '/side', '/bring', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
+  '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
   '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme',
   '/new', '/edit', '/delete', '/help', '/exit'] as const;
 
@@ -78,8 +78,8 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/chats [archived]', t("Liệt kê chat cùng mã; /to #mã mở một chat")],
   ['/side <message>', t("Gửi tin trong một chat phụ mới của Tí này")],
   ['/bring [#n]', t("Đưa câu trả lời của chat phụ này vào chat chính")],
-  ['/group <name, …> -- <message>', t("Bắt đầu chat nhóm với các Tí này")],
-  ['/members <name, …>', t("Đổi các Tí của chat nhóm này")],
+  ['/channel <name, …> -- <message>', t("Tạo kênh với các Tí và hội này (/group là tên cũ)")],
+  ['/members <name, …>', t("Đổi thành viên của kênh này")],
   ['/rename <title>', t("Đổi tên chat này")],
   ['/archive', t("Lưu trữ chat này")],
   ['/schedules', t("Liệt kê lịch")],
@@ -128,7 +128,8 @@ export function parseSlash(line: string): SlashCommand {
     case '/chats': return rest === '' || rest === 'archived' ? { kind: 'chats', archived: rest === 'archived' } : { kind: 'unknown', command: trimmed };
     case '/side': return rest ? { kind: 'side', message: rest } : { kind: 'usage', message: t("Gõ /side rồi tin nhắn cho chat phụ.") };
     case '/bring': return !rest ? { kind: 'bring' } : isMessageRef(rest) ? { kind: 'bring', ref: rest } : { kind: 'usage', message: t("Gõ /bring hoặc /bring #2.1.") };
-    case '/group': return parseGroup(rest);
+    case '/channel':
+    case '/group': return parseChannel(command, rest);
     case '/members': return parseMembers(rest);
     case '/rename': return rest ? { kind: 'rename', title: rest } : { kind: 'usage', message: t("Gõ /rename rồi tên mới.") };
     case '/archive': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'archive' };
@@ -191,18 +192,18 @@ function nameList(text: string): string[] {
   return text.split(',').map(name => name.trim()).filter(Boolean);
 }
 
-/** `/group Writer, Researcher -- Compare these`: two or more orglet names, then the first message after ` -- `. */
-function parseGroup(rest: string): SlashCommand {
+/** `/channel Writer, Launch crew -- Compare these`: orglet or crew names, then the first message after ` -- `. */
+function parseChannel(command: string, rest: string): SlashCommand {
   const separator = rest.indexOf(' -- ');
   const names = separator === -1 ? [] : nameList(rest.slice(0, separator));
   const message = separator === -1 ? '' : rest.slice(separator + 4).trim();
-  if (names.length < 2 || !message) return { kind: 'usage', message: t("Gõ /group Tí một, Tí hai -- tin nhắn đầu tiên.") };
-  return { kind: 'group', names, message };
+  if (!names.length || !message) return { kind: 'usage', message: t("Gõ {0} Tí một, Hội hai -- tin nhắn đầu tiên.", command) };
+  return { kind: 'channel', names, message };
 }
 
 function parseMembers(rest: string): SlashCommand {
   const names = nameList(rest);
-  if (names.length < 2) return { kind: 'usage', message: t("Gõ /members rồi ít nhất hai tên Tí, cách nhau bằng dấu phẩy.") };
+  if (!names.length) return { kind: 'usage', message: t("Gõ /members rồi tên các Tí hoặc hội, cách nhau bằng dấu phẩy.") };
   return { kind: 'members', names };
 }
 

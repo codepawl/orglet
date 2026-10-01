@@ -199,7 +199,21 @@ async function seedWorkspace(page) {
     await callCore(page, 'saveRoutine', { ...base, name: schedule.name, enabled: schedule.enabled ?? true, schedule: schedule.schedule, task: { ...base.task, ...schedule.task } });
   }
   const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
-  return { researcher, crew, islandCrew, earlierChatBrief, sideThreadBrief };
+  const channels = await seedChannels(page, crew);
+  return { researcher, crew, islandCrew, earlierChatBrief, sideThreadBrief, channels };
+}
+
+/** A channel of an orglet and a crew with one answered message, and an empty one (COD-361). */
+async function seedChannels(page, crew) {
+  const writer = (await callCore(page, 'workspace', {})).workers.find(worker => worker.name === 'Writer');
+  const members = [{ kind: 'orglet', id: writer.id }, { kind: 'crew', id: crew.id }];
+  const channelId = await callCore(page, 'createChannel', { name: 'launch', topic: 'Ship the newsletter on Friday and tell the early readers first', members });
+  const workspace = await callCore(page, 'workspace', {});
+  const orgletIds = [writer.id, ...[...crew.memberIds, crew.synthesizerId].filter(id => id !== writer.id)];
+  const taskId = await callCore(page, 'createTask', { workerId: writer.id, assignees: orgletIds, channelId, brief: 'What should go into Friday’s first issue?', sourceIds: [], consent: false, budgetMicros: 1000 });
+  await waitForTask(page, taskId);
+  await callCore(page, 'createChannel', { name: 'ideas', topic: '', members: [{ kind: 'orglet', id: workspace.workers[0].id }] });
+  return { launch: '#launch', ideas: '#ideas' };
 }
 
 async function settle(page) {
@@ -289,6 +303,16 @@ const SCREENS = [
   { name: 'sidebar-row-menu', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
+  // Channels (COD-361): one written in, its settings, a new one, and one still empty.
+  { name: 'channel-chat', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click(); await page.locator('.topbar-topic').waitFor(); } },
+  { name: 'channel-members', open: async (page, context) => {
+    await openSidebar(page);
+    await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click();
+    await page.locator('.topbar-members').click();
+    await page.getByRole('dialog').waitFor();
+  } },
+  { name: 'channel-new', open: async page => { await openSidebar(page); await page.getByRole('button', { name: label('Tạo kênh'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },
+  { name: 'channel-empty', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: context.channels.ideas, exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
   { name: 'empty-chat', open: async page => { await openSidebar(page); await page.getByRole('button', { name: 'Writer', exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
   // The Open list beside the full sidebar and on the rail, the chat's views, and the right panel (COD-340, COD-355).
   { name: 'open-chats', open: openOpenChats },

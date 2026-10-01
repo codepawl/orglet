@@ -11,6 +11,7 @@ import { Avatar, RosterAvatars } from './Avatar';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { taskWorkers, teamRoster } from '../assignees';
+import { channelLabel } from '../../shared/channels';
 
 /** Vietnamese relative day labels like the reference palette; older items fall back to a short date. */
 export function relativeDay(iso: string, now = new Date()) {
@@ -61,6 +62,7 @@ function chatOwner(task: Task, workspace: SearchWorkspace, faces: readonly Worke
 function chatLabel(task: Task, workspace: SearchWorkspace, faces: readonly Worker[]): { name: string; detail?: string } {
   const owner = chatOwner(task, workspace, faces);
   if (task.sideOf) return { name: task.title || chatHeadline(task), detail: owner ? t('chat phụ · {0}', [owner]) : t('chat phụ') };
+  if (task.channel) return { name: channelLabel(task.channel.name), detail: owner };
   if (task.title) return { name: task.title, detail: owner };
   if (owner) return { name: owner, detail: chatHeadline(task) };
   return { name: chatHeadline(task) };

@@ -35,7 +35,7 @@ Open the row's menu (right-click, or the **⋯** on the row) to edit, archive or
 
 After you archive something, the toast has **Undo**. An orglet that is still in a crew cannot be archived or deleted: the toast names every crew it is in and has a button that opens the crew, so you can take it out. The same goes for a schedule that still runs it.
 
-Archived orglets and crews are listed at the end of their section under **Archived**. Archived chats are listed just below, under **Archived chats**: side threads and schedule runs with the orglets, a crew's chats with the crews, group chats with the group chats. When archived items delete themselves after a while (**Settings → Chat**), each row shows the days it has left. Its menu has **Restore** and **Delete permanently**.
+Archived orglets and crews are listed at the end of their section under **Archived**. Archived chats are listed just below, under **Archived chats**: side threads and schedule runs with the orglets, a crew's chats with the crews, channels with the channels. When archived items delete themselves after a while (**Settings → Chat**), each row shows the days it has left. Its menu has **Restore** and **Delete permanently**.
 
 ## Crews
 
@@ -61,17 +61,25 @@ Members' own replies and messages to each other stay under **Details**, with cos
 
 ### Tag who should answer
 
-In a crew or group chat, type `@` to pick an orglet, or **Everyone in this chat**. Tagged names highlight. In a crew, the lead is told who you tagged and may still bring in others; in a group chat, only the tagged orglets answer. Replying to one orglet's answer in a group chat, without tagging anyone, addresses that orglet alone.
+In a crew or a channel, type `@` to pick an orglet, or **Everyone in this chat**. Tagged names highlight. In a crew, the lead is told who you tagged and may still bring in others; in a channel, only the tagged orglets answer. Replying to one orglet's answer in a channel, without tagging anyone, addresses that orglet alone.
 
-## Group chats
+## Channels
 
-A group chat is a few orglets in one conversation without a lead: each one answers in turn, and each can see what the others said.
+A channel is a named conversation, like **#launch** or **#research**, with a topic and the orglets and crews you put in it. There is no lead: each orglet answers in turn and can see what the others said. A crew in a channel answers as its orglets, one after another like the rest; its lead does not plan the turn the way it does in the crew's own chat. A one-to-one chat with an orglet, the one you get by clicking it under **Orglets**, is its DM.
 
-1. Click the pencil next to **Orglets**, or Ctrl-click rows, and pick two or more orglets.
-2. Choose **Group chat** in the bar that appears.
-3. The chat opens empty, with the orglets' faces above the message box. Nothing is created until your first message.
+To make one:
 
-A group chat is its own conversation. It does not become any orglet's live chat, and search finds it later. Permissions and a working folder set in **Details** before the first message apply to it the same way as for an orglet or crew.
+1. Click **+** next to **Channels**.
+2. Give it a name and, if you like, a topic.
+3. Under **Members**, tick the crews and orglets that belong in it, then choose **Create channel**.
+
+You can also pick two or more orglets, or any crews, in the sidebar (the pencil next to the section, or Ctrl-click) and choose the **#** button in the bar that appears. The dialog opens with them ticked.
+
+The channel opens empty, with its orglets' faces above the message box, and waits in **Channels** until you write in it. Its header shows **#name**, the topic and the members' faces; click the faces to change who is in it. **Channel settings** in the header's **⋯** or the row's menu changes the name, topic and members; a change applies from the next message. Rename it in place from the row's menu or by clicking its name in the header. Archive and delete are in the same menus. A channel with no messages yet has nothing to archive, so it can only be deleted.
+
+A channel is its own conversation. It never becomes an orglet's DM, and search finds it by its name. Permissions and a working folder set in **Details** before the first message apply to it the same way as for an orglet or crew.
+
+Group chats from before channels became channels when the app updated, with their history: each kept its name, or took its orglets' names when it never had one.
 
 If you downloaded Tacet in **Settings → Chat**, a message that tags nobody and replies to no one can go to just the orglet it clearly fits, going by each orglet's name, description and instructions. Your message then says **Tacet picked *name* to answer**. When Tacet is not sure, everyone answers, as without it. Tag `@all` to ask everyone anyway. See [how Tacet decides](decisions.md#who-answers-in-a-group-chat).
 

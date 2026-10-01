@@ -268,11 +268,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .rail-count.quiet { background:var(--surface); color:var(--text); }
 /* The group chats behind the rail's one button: faces, name and mark on one line each. */
 .rail-group-list { display:flex; flex-direction:column; gap:2px; width:240px; margin:0; padding:0; list-style:none; }
-.rail-group-chat { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:0 8px; border:0; border-radius:8px; background:transparent; color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
-.rail-group-chat:hover { background:var(--row-hover); }
-.rail-group-chat.active { background:var(--row-active); }
-.rail-group-faces { display:inline-flex; align-items:center; flex-shrink:0; }
-.rail-group-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rail-channel { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:0 8px; border:0; border-radius:8px; background:transparent; color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.rail-channel:hover { background:var(--row-hover); }
+.rail-channel.active { background:var(--row-active); }
+.rail-channel-mark { display:inline-flex; align-items:center; flex-shrink:0; }
+.rail-channel-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* The Open list on the rail (COD-355): faces under the roster, each with a × in the mark's corner on hover or keyboard
    focus. The × takes the mark's place, so nothing moves; it answers hover with colour only. */
 .rail-closable { position:relative; }
@@ -422,7 +422,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .main-pane { min-width:0; min-height:0; display:flex; flex-direction:column; position:relative; background:var(--bg); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); overflow:hidden; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:var(--chrome-y) var(--page-x); min-height:56px; gap:10px; }
 .topbar>div { display:flex; align-items:center; gap:10px; min-width:0; }
-/* The chat's name; the faces of an empty group chat sit before it (COD-215), so the name is named rather than counted. */
+/* The chat's name; a channel's members sit at the header's end instead (COD-361). */
 /* The name and the model beside it sit on one baseline: centred boxes of 14px and 12px text left the smaller one
    visibly off the line (owner, 2026-09-25). */
 .topbar-title { display:inline-flex; align-items:baseline; gap:10px; min-width:0; line-height:20px; }
@@ -433,6 +433,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .topbar-main > .topbar-lead { display:flex; align-items:baseline; gap:10px; min-width:0; }
 .topbar-lead > :not(.topbar-title) { align-self:center; }
 .topbar-name { font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; min-width:0; }
+/* A channel's header (COD-361): a muted `#` set close to its name, then its topic, quieter and cut before the name is. */
+.topbar-hash { flex-shrink:0; margin-right:-7px; color:var(--muted); font-weight:600; }
+.topbar-topic { flex:0 10 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; color:var(--muted); }
+/* The channel's members as faces at the header's end; pressing them opens the members to change. */
+.topbar-members { display:inline-flex; align-items:center; height:32px; padding:0 6px; border:0; border-radius:8px; background:transparent; cursor:pointer; }
+.topbar-members:hover { background:var(--row-hover); }
 .topbar-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:auto; }
 .task-cost {
   display:inline-flex; align-items:center; gap:6px; max-width:min(280px,46vw);
@@ -1743,6 +1749,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    members of a team cluster end up at beside it (user, 2026-09-19). */
 /* An even size, like the 24-pixel drawing it holds, so the drawing centres on a whole pixel (COD-154). */
 .worker-row .row-disclosure > .avatar.sm { width:22px; height:22px; border-radius:6px; font-size:10px; }
+/* A channel row's `#` takes the face's 22px box, so channel names start where orglet names do (COD-361). */
+.worker-row .channel-hash > svg { width:22px; }
+/* An archived channel's mark, in the place an archived chat shows whose face it was. */
+.archived-channel-mark { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; color:var(--muted); flex-shrink:0; }
 .row-disclosure .disclosure-chevron { flex-shrink:0; width:0; margin-right:0; opacity:0; transition:width .15s ease, margin-right .15s ease, opacity .12s, transform .15s; }
 .worker-row:hover .disclosure-chevron,.row-disclosure:focus-visible .disclosure-chevron,.tree-item.open .disclosure-chevron,.tree-item.dragging .disclosure-chevron { width:14px; margin-right:4px; opacity:1; }
 .tree-leaf .avatar { margin-right:2px; }

@@ -29,11 +29,11 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet forward --to <name> --target <name>` | Forwards a message to up to five other chats. See [forward](#forward). |
 | `orglet answer "<answer>" --to <name>` | Answers the question an orglet is waiting on. See [answer](#answer). |
 | `orglet stop\|pause\|resume\|retry\|continue --to <name>` | The buttons under a chat's latest turn. See [Stop, pause, resume, retry, continue](#stop-pause-resume-retry-continue). |
-| `orglet chats [--archived]` | Lists chats, side threads and group chats with the short id `--chat` takes. See [Chats by id](#chats-by-id). |
+| `orglet chats [--archived]` | Lists chats, side threads and channels with the short id `--chat` takes. See [Chats by id](#chats-by-id). |
 | `orglet side "message" --to <orglet>` | Sends a message in a new side thread of that orglet |
 | `orglet bring --chat <id>` | Brings a side thread's answer into its main chat |
-| `orglet group "message" --with <name> --with <name>` | Starts a group chat of those orglets |
-| `orglet members --chat <id> --with <name> …` | Changes who a group chat's messages go to |
+| `orglet channel "message" --with <name> [--name <name>] [--topic <topic>]` | Creates a channel of those orglets and crews and sends its first message (`group` is the older name) |
+| `orglet members --chat <id> --with <name> …` | Changes who is in a channel |
 | `orglet rename\|archive --to <name> \| --chat <id>` | Renames or archives a chat; `restore --chat <id>` brings it back |
 | `orglet delete --chat <id> --confirm "<chat name>"` | Deletes a chat after its exact name |
 | `orglet archive\|restore <orglet\|crew> "<name>"` | Archives or restores an orglet or crew |
@@ -144,7 +144,7 @@ Page Up at the top of the conversation loads the ten turns before what is shown,
 
 When an orglet asks a question, the chat prints it with numbered choices. `/answer 2` picks the second; `/answer <words>` answers in your own words, as the desktop's message box does. The terminal then waits for the turn to go on. A question asking to use an MCP tool is not shown this way: it is an approval, so the chat says to open it in the app.
 
-`/chats` lists the chats with their short ids, and `/to #bbbb0000` opens one of them here: a side thread, a group chat or an older chat. Everything after that, messages included, goes to that chat. `/side <message>` starts a side thread from the current orglet's main chat and prints the `/to #id` that opens it; in a side thread, `/bring [#n]` brings its latest answer, or answer `#n`, into the main chat. `/group Researcher, Writer -- <message>` starts a group chat, and in one, `/members <names>` changes who it goes to. `/rename <title>` and `/archive` act on the open chat.
+`/chats` lists the chats with their short ids, and `/to #bbbb0000` opens one of them here: a side thread, a channel or an older chat. Everything after that, messages included, goes to that chat. `/side <message>` starts a side thread from the current orglet's main chat and prints the `/to #id` that opens it; in a side thread, `/bring [#n]` brings its latest answer, or answer `#n`, into the main chat. `/channel Researcher, Launch crew -- <message>` creates a channel (`/group` still works), and in one, `/members <names>` changes who is in it. `/rename <title>` and `/archive` act on the open chat.
 
 `/stop` and `/pause` act at once, even while a message is waiting for its answer. `/resume`, `/retry` and `/continue` wait for the turn they start, like a message. `/continue` is only there for an answer that stopped because its steps ran out, the same as the desktop's Continue.
 
@@ -233,8 +233,8 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/chats [archived]` | Lists chats with their short ids; `/to #id` opens one |
 | `/side <message>` | Sends the message in a new side thread of this orglet |
 | `/bring [#n]` | In a side thread, brings its latest answer or answer `#n` into the main chat |
-| `/group <name, …> -- <message>` | Starts a group chat of those orglets |
-| `/members <name, …>` | In a group chat, changes who its messages go to |
+| `/channel <name, …> -- <message>` | Creates a channel of those orglets and crews; `/group` is the older name |
+| `/members <name, …>` | In a channel, changes who is in it |
 | `/rename <title>`, `/archive` | Renames or archives the open chat |
 | `/schedules` | Lists schedules |
 | `/schedule on\|off\|run <name>` | Switches a schedule on or off, or starts it now |
@@ -353,7 +353,7 @@ orglet chats
 orglet read --chat bbbb0000 --turns 3
 ```
 
-`orglet chats` lists the open chats, newest first: each orglet's and crew's main chat, side threads, group chats and schedule runs, with the first eight characters of the chat's id, what kind of chat it is, its name, who answers in it and how it stands. `--archived` lists archived chats instead. Every command that takes `--to` also takes `--chat <id>` with that id, or any unique start of it of four characters or more, and a leading `#` is fine. A side thread or group chat has no other name.
+`orglet chats` lists the open chats, newest first: each orglet's and crew's main chat, side threads, channels (`#name`) and schedule runs, with the first eight characters of the chat's id, what kind of chat it is, its name, who answers in it and how it stands. `--archived` lists archived chats instead. Every command that takes `--to` also takes `--chat <id>` with that id, or any unique start of it of four characters or more, and a leading `#` is fine. A side thread has no other name, and a channel is reached by its id too.
 
 ### Side threads
 
@@ -362,19 +362,19 @@ orglet side "Try it with the 2025 numbers instead" --to Researcher
 orglet bring --chat 7f3a91c2
 ```
 
-`side` sends a message "in a new thread" from an orglet's main chat, as the app's composer does. The side thread starts with a copy of the main chat's permissions, folder and MCP grants, never more, and the main chat stays as it was. Crews and group chats have no side threads. The command waits for the answer like `send`, prints it, and says how to reach the side thread again with `--chat`.
+`side` sends a message "in a new thread" from an orglet's main chat, as the app's composer does. The side thread starts with a copy of the main chat's permissions, folder and MCP grants, never more, and the main chat stays as it was. Crews and channels have no side threads. The command waits for the answer like `send`, prints it, and says how to reach the side thread again with `--chat`.
 
 `bring` copies one answer of a side thread into its main chat as a quote, the latest by default or `--message 2.1`. It never starts a run there.
 
-### Group chats
+### Channels
 
 ```sh
-orglet group "Compare your takes on this plan" --with Researcher --with Writer
+orglet channel "Compare your takes on this plan" --with Researcher --with "Launch crew" --name launch --topic "Friday's release"
 orglet send "And the budget?" --chat c41d0e88
 orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 ```
 
-`group` starts a group chat of two or more orglets with its first message, the way picking several orglets in the sidebar does: each one answers, and the first one named owns the chat. Each `group` makes a new chat; the next message goes in with `send --chat`. `members` changes who the chat's messages go to from the next message on; it replaces the whole list and is refused while the chat is working.
+`channel` creates a channel of these orglets and crews and sends its first message, the way **New channel** in the app does ([COD-361](https://linear.app/codepawl/issue/COD-361)): each orglet answers in turn, and a crew answers as its orglets. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and crews alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
 
 ### Rename, archive, restore and delete chats
 

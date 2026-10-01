@@ -1,4 +1,5 @@
 import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
+import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
@@ -6,7 +7,7 @@ import { resolveMessage } from './cli-chat-history';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 /**
- * The chats themselves from the terminal (COD-354): listing them, side threads and group chats, renaming, archiving,
+ * The chats themselves from the terminal (COD-354): listing them, side threads and channels (COD-361), renaming, archiving,
  * restoring and deleting a chat, archiving and restoring an orglet or crew, and a crew from a template. Each step is
  * the core command the desktop uses, with its guards. A side thread copies its main chat's permissions in the core,
  * never more; nothing here sets a permission, a folder or a browser.
@@ -74,16 +75,21 @@ export class CliChatAdmin {
   }
 
   /**
-   * Starts a group chat of these orglets with its first message, the way picking several orglets in the sidebar
-   * does: every one answers, and the first one named owns the row. The next message goes in with `--chat`.
+   * Creates a channel of these orglets and crews and sends its first message, the way the app's New channel does
+   * (COD-361): the channel is created empty, then the message makes its chat. Every orglet answers in turn, a crew as
+   * its orglets. Named by `name`, or by its members' names. The next message goes in with `--chat`.
    */
-  async group(request: Request<'group'>, signal: AbortSignal): Promise<SendValue> {
+  async channel(request: Request<'channel'>, signal: AbortSignal): Promise<SendValue> {
     const workspace = await this.workspace();
-    const workers = uniqueWorkers(workspace, request.names);
-    if (workers.length < 2) throw new CliFailure('failed', 'Chat nhóm cần ít nhất hai Tí khác nhau.');
+    const members = uniqueMembers(workspace, request.names);
+    const workers = answeringWorkers(workspace, members);
+    if (!workers.length) throw new CliFailure('failed', 'Kênh chưa có Tí nào để trả lời. Thêm một Tí hoặc một hội.');
+    const name = request.name ?? channelNameFrom(members.map(member => memberNameOf(workspace, member)));
+    const channelId = String(await this.dependencies.request('createChannel', { name, topic: request.topic ?? '', members }));
     const input: TaskInput = {
       workerId: workers[0].id,
       assignees: workers.map(worker => worker.id),
+      channelId,
       brief: request.message,
       sourceIds: [],
       excludedSources: [],
@@ -95,20 +101,14 @@ export class CliChatAdmin {
     return this.settle(taskId, request.wait, request.timeoutSeconds, signal);
   }
 
-  /** Changes who a group chat's messages go to, from the next message on, as the chat's settings do. */
+  /** Changes who is in a channel, from the next message on, as its settings in the app do; its name and topic stay. */
   async members(request: Request<'members'>): Promise<MembersValue> {
     const workspace = await this.workspace();
     const task = taskById(workspace, request.chat);
-    if (chatKind(task) !== 'group') throw new CliFailure('failed', 'Chỉ đổi được thành viên của chat nhóm.');
-    const workers = uniqueWorkers(workspace, request.names);
-    if (workers.length < 2) throw new CliFailure('failed', 'Chat nhóm cần ít nhất hai Tí khác nhau.');
-    await this.dependencies.request('updateTask', {
-      id: task.id,
-      title: task.title ?? '',
-      assignee: { kind: 'workers', workerIds: workers.map(worker => worker.id) },
-      budgetMicros: task.budgetMicros,
-    });
-    return { taskId: task.id, names: workers.map(worker => worker.name) };
+    if (!task.channel) throw new CliFailure('failed', 'Chỉ đổi được thành viên của một kênh.');
+    const members = uniqueMembers(workspace, request.names);
+    await this.dependencies.request('updateChannel', { id: task.channel.id, name: task.channel.name, topic: task.channel.topic ?? '', members });
+    return { taskId: task.id, names: members.map(member => memberNameOf(workspace, member)) };
   }
 
   /** Renames, archives, restores or deletes one chat; deleting needs the chat's displayed name typed out. */
@@ -124,7 +124,9 @@ export class CliChatAdmin {
       return { ...value, title: request.title };
     }
     if (request.change === 'delete') {
-      if (request.confirmName !== name) throw new CliFailure('failed', `Gõ đúng tên chat để xác nhận xóa: ${name}`);
+      // A channel goes by `#name`, and a shell reads an unquoted `#` as a comment, so the name without it is enough.
+      const confirmed = request.confirmName === name || (task.channel !== undefined && `#${request.confirmName}` === name);
+      if (!confirmed) throw new CliFailure('failed', `Gõ đúng tên chat để xác nhận xóa: ${name}`);
       await this.dependencies.request('deleteTask', { id: task.id });
       return value;
     }
@@ -165,12 +167,26 @@ export class CliChatAdmin {
   }
 }
 
-/** The orglets these names find, each once, in the order named; a crew's name is not an orglet. */
-function uniqueWorkers(workspace: Workspace, names: readonly string[]): Worker[] {
-  const orglets = chatsOf({ workers: workspace.workers, teams: [] });
-  const found = names.map(name => matchChat(name, orglets));
-  const ids = [...new Set(found.map(chat => chat.id))];
-  return ids.map(id => workspace.workers.find(worker => worker.id === id)!);
+/** The orglets and crews these names find, each once, in the order named (COD-361). */
+function uniqueMembers(workspace: Workspace, names: readonly string[]): ChannelMember[] {
+  const everyone = chatsOf({ workers: workspace.workers, teams: workspace.teams });
+  const members: ChannelMember[] = [];
+  for (const name of names) {
+    const found = matchChat(name, everyone);
+    const member: ChannelMember = { kind: found.kind === 'team' ? 'crew' : 'orglet', id: found.id };
+    if (!members.some(item => item.kind === member.kind && item.id === member.id)) members.push(member);
+  }
+  return members;
+}
+
+/** The orglets that answer for these members, a crew as its orglets. */
+function answeringWorkers(workspace: Workspace, members: readonly ChannelMember[]): Worker[] {
+  return channelOrgletIds(members, workspace).map(id => workspace.workers.find(worker => worker.id === id)!);
+}
+
+function memberNameOf(workspace: Workspace, member: ChannelMember): string {
+  if (member.kind === 'crew') return workspace.teams.find(team => team.id === member.id)?.name ?? member.id;
+  return workspace.workers.find(worker => worker.id === member.id)?.name ?? member.id;
 }
 
 function chatRow(workspace: Workspace, task: Task): CliChatRow {
