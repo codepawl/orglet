@@ -819,10 +819,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The face's own slot in the gutter; the animation system below reads its state classes (working, landed). */
 .message-byline { display:flex; }
 /* The message's toolbar floats on its top right, over the message's top edge, and shows while the message is pointed
-   at, while focus inside it is visible, or while one of its menus is open. It stays in the tab order the whole time,
-   so tabbing into it is what shows it. It appears and goes without a fade: motion belongs to the orglets. */
-:is(.person-message, .assistant-message) .message-actions { position:absolute; top:-14px; right:12px; z-index:3; width:auto; margin:0; padding:2px; gap:0; border-radius:10px; background:var(--bg); box-shadow:0 0 0 1px var(--border), 0 4px 12px #00000014; opacity:0; pointer-events:none; }
-:is(.person-message, .assistant-message):is(:hover, :has(:focus-visible), :has([aria-expanded=true])) .message-actions { opacity:1; pointer-events:auto; }
+   at, while focus inside the message is visible, while a button in it has focus, or while one of its menus is open.
+   It stays in the tab order the whole time, so tabbing into it is what shows it. It is only transparent at rest, never
+   out of reach of the pointer: its upper half lies over the message above, and moving onto it must keep it shown
+   (the pointer over the toolbar is over its message), where `pointer-events:none` let that half fall through to the
+   message above and hid it again under the pointer. It appears and goes without a fade: motion belongs to the orglets. */
+:is(.person-message, .assistant-message) .message-actions { position:absolute; top:-14px; right:12px; z-index:3; width:auto; margin:0; padding:2px; gap:0; border-radius:10px; background:var(--bg); box-shadow:0 0 0 1px var(--border), 0 4px 12px #00000014; opacity:0; }
+:is(.person-message, .assistant-message):is(:hover, :has(:focus-visible), :has([aria-expanded=true])) .message-actions,
+:is(.person-message, .assistant-message) .message-actions:focus-within { opacity:1; }
 /* Under a message: its reactions and, at the line's end, the faces of who has read this far. */
 /* It is as wide as the text column at most, so the read faces end where the message's lines end, as they ended at the
    bubble's edge before (user, 2026-09-20). */
