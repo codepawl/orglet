@@ -1,4 +1,5 @@
-import type { Source, TaskDetail, TaskInput, Worker, Workspace } from '../shared/contracts';
+import type { Source, Task, TaskDetail, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
+import type { CliChat } from '../cli/protocol';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from '../cli/protocol';
 import { connectionPricing, findCustomConnection } from '../shared/custom-connections';
@@ -8,9 +9,10 @@ import { resolveWorkerModel } from '../core/models/resolve';
 import { CliActivityFeed } from './cli-activity';
 import type { CliProgressFrame } from '../cli/protocol';
 import { manageCli } from './cli-management';
-import { chatsOf, CliFailure, crewRoster, existingChat, liveChatTask, matchChat, matchSchedule } from './cli-chats';
+import { assertOneTarget, chatOfTask, chatsOf, CliFailure, crewRoster, liveChatTask, matchChat, matchSchedule, targetChat, taskById, taskRunners, type ChatTargetRequest } from './cli-chats';
 import { chatTurns, isTurnRunning, latestAnsweredRevision, pendingQuestion, resolveMessage, turnAnswers, waitsForDesktop } from './cli-chat-history';
 import { CliChatActions } from './cli-chat-actions';
+import { CliChatAdmin } from './cli-chat-admin';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from './cli-chats';
@@ -27,9 +29,11 @@ const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 
 export class CliOperations {
   private readonly chatActions: CliChatActions;
+  private readonly chatAdmin: CliChatAdmin;
 
   constructor(private readonly dependencies: CliDependencies) {
     this.chatActions = new CliChatActions(dependencies);
+    this.chatAdmin = new CliChatAdmin(dependencies);
   }
 
   async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
@@ -44,6 +48,14 @@ export class CliOperations {
       case 'forward': return this.chatActions.forward(request);
       case 'control': return this.chatActions.control(request, signal);
       case 'answer': return this.chatActions.answer(request, signal);
+      case 'chats': return this.chatAdmin.chats(request);
+      case 'side-thread': return this.chatAdmin.sideThread(request, signal);
+      case 'bring': return this.chatAdmin.bring(request);
+      case 'group': return this.chatAdmin.group(request, signal);
+      case 'members': return this.chatAdmin.members(request);
+      case 'chat-change': return this.chatAdmin.change(request);
+      case 'archive-entity': return this.chatAdmin.archiveEntity(request);
+      case 'template': return this.chatAdmin.template(request);
       case 'config':
       case 'save-orglet':
       case 'save-crew':
@@ -102,14 +114,11 @@ export class CliOperations {
 
   private async sendTurn(request: Extract<CliRequest, { op: 'send' }>, signal: AbortSignal, feed?: CliActivityFeed): Promise<SendValue> {
     const workspace = await this.workspace();
-    const chat = matchChat(request.to, chatsOf(workspace));
-    const live = liveChatTask(workspace, chat);
+    const { chat, live, team, worker } = this.sendTarget(workspace, request);
     const replyTo = request.replyTo ? await this.replyTarget(live?.id, request.replyTo) : undefined;
     const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
     const sourceIds = sources.map(source => source.id);
-    const team = chat.kind === 'team' ? workspace.teams.find(item => item.id === chat.id) : undefined;
-    const worker = chat.kind === 'worker' ? workspace.workers.find(item => item.id === chat.id) : undefined;
-    const runners = team ? crewRoster(team, workspace.workers) : worker ? [worker] : [];
+    const runners = live ? taskRunners(workspace, live) : team ? crewRoster(team, workspace.workers) : worker ? [worker] : [];
     const providerScopes = [...new Set(runners.map(item => item.provider).filter(provider => provider !== 'demo'))] as NonNullable<TaskInput['providerScopes']>;
     const unsubscribe = feed ? this.dependencies.observe?.(observation => feed.observe(observation)) : undefined;
     if (live) feed?.bind(live.id);
@@ -138,6 +147,22 @@ export class CliOperations {
     }
   }
 
+  /**
+   * The chat a message goes to: an orglet's or crew's main chat, which the first message creates, or any existing
+   * chat by its id, such as a side thread or a group chat (COD-354).
+   */
+  private sendTarget(workspace: Workspace, request: ChatTargetRequest): { chat: CliChat; live?: Task; team?: Team; worker?: Worker } {
+    assertOneTarget(request);
+    if (request.chat !== undefined) {
+      const task = taskById(workspace, request.chat);
+      return { chat: chatOfTask(workspace, task), live: task };
+    }
+    const chat = matchChat(request.to!, chatsOf(workspace));
+    const team = chat.kind === 'team' ? workspace.teams.find(item => item.id === chat.id) : undefined;
+    const worker = chat.kind === 'worker' ? workspace.workers.find(item => item.id === chat.id) : undefined;
+    return { chat, live: liveChatTask(workspace, chat), team, worker };
+  }
+
   /** The message id a reply points at; a chat with no conversation yet has nothing to reply to. */
   private async replyTarget(taskId: string | undefined, ref: string): Promise<string> {
     if (!taskId) throw new CliFailure('not_found', 'Chat này chưa có tin nhắn nào để trả lời.');
@@ -150,7 +175,7 @@ export class CliOperations {
    */
   async read(request: Extract<CliRequest, { op: 'read' }>): Promise<ReadValue> {
     const workspace = await this.workspace();
-    const { chat, task } = existingChat(workspace, request.to);
+    const { chat, task } = targetChat(workspace, request);
     const detail = await this.taskDetail(task.id);
     const answers = turnAnswers(detail, latestAnsweredRevision(detail));
     const history = request.turns ? chatTurns(detail, request.turns, request.before) : undefined;

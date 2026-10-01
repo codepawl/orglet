@@ -1,13 +1,17 @@
 import { t } from './text';
-import { DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, type ChatControl } from './protocol';
+import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl } from './protocol';
 import { MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
 
 /** Turning `orglet …` arguments into one command, and the help text for each (COD-234). */
 
 export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open' | 'run' | 'config' | 'create' | 'edit' | 'delete'
-  | 'react' | 'forward' | 'answer' | ChatControl;
+  | 'react' | 'forward' | 'answer' | ChatControl
+  | 'chats' | 'side' | 'bring' | 'group' | 'members' | 'rename' | 'archive' | 'restore' | 'template';
 export type ManagementCommand = { entity: 'worker' | 'team'; name?: string; config?: string; confirm?: string; json: boolean } & ({ kind: 'create' } | { kind: 'edit' } | { kind: 'delete' });
+/** A chat named by its orglet or crew, or by the start of its id as `orglet chats` prints it (COD-354). */
+export type ChatTarget = { to: string } | { chat: string };
+type TemplateId = typeof TEMPLATE_IDS[number];
 
 export type ParsedCommand =
   | { kind: 'help'; topic?: CommandName }
@@ -17,12 +21,20 @@ export type ParsedCommand =
   | { kind: 'chat'; to?: string }
   | { kind: 'status'; json: boolean }
   | { kind: 'list'; json: boolean }
-  | { kind: 'send'; message: string; to: string; files: string[]; wait: boolean; timeoutSeconds: number; json: boolean; replyTo?: string }
-  | { kind: 'read'; to: string; json: boolean; turns?: number }
-  | { kind: 'react'; to: string; emoji: Reaction; active: boolean; message?: string; json: boolean }
-  | { kind: 'forward'; to: string; targets: string[]; message?: string; note?: string; json: boolean }
-  | { kind: 'control'; action: ChatControl; to: string; wait: boolean; timeoutSeconds: number; json: boolean }
-  | { kind: 'answer'; to: string; answer: string; wait: boolean; timeoutSeconds: number; json: boolean }
+  | ({ kind: 'send'; message: string; files: string[]; wait: boolean; timeoutSeconds: number; json: boolean; replyTo?: string } & ChatTarget)
+  | ({ kind: 'read'; json: boolean; turns?: number } & ChatTarget)
+  | ({ kind: 'react'; emoji: Reaction; active: boolean; message?: string; json: boolean } & ChatTarget)
+  | ({ kind: 'forward'; targets: string[]; message?: string; note?: string; json: boolean } & ChatTarget)
+  | ({ kind: 'control'; action: ChatControl; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
+  | ({ kind: 'answer'; answer: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
+  | { kind: 'chats'; archived: boolean; json: boolean }
+  | ({ kind: 'side'; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
+  | { kind: 'bring'; chat: string; message?: string; json: boolean }
+  | { kind: 'group'; names: string[]; message: string; wait: boolean; timeoutSeconds: number; json: boolean }
+  | { kind: 'members'; chat: string; names: string[]; json: boolean }
+  | ({ kind: 'chat-change'; change: ChatChange; title?: string; confirmName?: string; json: boolean } & ChatTarget)
+  | { kind: 'archive-entity'; entity: 'worker' | 'team'; name: string; archived: boolean; json: boolean }
+  | { kind: 'template'; templateId: TemplateId; provider: 'demo' | 'openai'; json: boolean }
   | { kind: 'open'; to?: string; json: boolean }
   | { kind: 'run'; schedule: string; files: string[]; json: boolean };
 
@@ -31,11 +43,13 @@ export class UsageError extends Error {}
 
 const CONTROL_COMMANDS: readonly ChatControl[] = ['stop', 'pause', 'resume', 'retry', 'continue'];
 const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run', 'config', 'create', 'edit', 'delete',
-  'react', 'forward', 'answer', ...CONTROL_COMMANDS];
+  'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'group', 'members', 'rename', 'archive', 'restore', 'template'];
 /** Commands that name a chat with --to. */
-const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', ...CONTROL_COMMANDS];
+const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'side', 'rename', 'archive'];
+/** Commands that name a chat with --chat, by the start of its id. */
+const CHAT_ID_COMMANDS: readonly CommandName[] = ['send', 'read', 'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'side', 'bring', 'members', 'rename', 'archive', 'restore', 'delete'];
 /** Commands that start a turn and wait for it, so --no-wait and --timeout apply. */
-const WAITING_COMMANDS: readonly CommandName[] = ['send', 'answer', 'resume', 'retry', 'continue'];
+const WAITING_COMMANDS: readonly CommandName[] = ['send', 'answer', 'resume', 'retry', 'continue', 'side', 'group'];
 
 export const MAIN_HELP = `orglet: talk to the Orglet app from a terminal.
 
@@ -60,12 +74,24 @@ Commands:
   resume    Resume a paused or interrupted turn
   retry     Run the latest message again
   continue  Continue an answer that ran out of steps
+  chats     List chats, side threads and group chats with their ids
+  side      Start a side thread from an orglet's chat
+  bring     Bring a side thread's answer into its main chat
+  group     Start a group chat of several orglets
+  members   Change who a group chat's messages go to
+  rename    Rename a chat
+  archive   Archive a chat, an orglet or a crew
+  restore   Restore an archived chat, orglet or crew
+  template  Create a crew from one of the app's templates
   open      Bring the Orglet window forward, optionally on one chat
   run       Start a schedule now, optionally with files
   config    Show editable configurations, skill IDs and existing connections
   create    Create an orglet or crew from a JSON configuration
   edit      Apply a JSON patch to an orglet or crew
-  delete    Remove an orglet or crew with an exact-name confirmation
+  delete    Remove an orglet or crew, or a chat, with an exact-name confirmation
+
+Commands that name a chat with --to also take --chat <id>, the start of a chat's
+id as "orglet chats" prints it, for side threads, group chats and older chats.
 
 Options:
   -h, --help       Show help. "orglet <command> --help" shows a command's options.
@@ -77,7 +103,7 @@ export const COMMAND_HELP: Record<CommandName, string> = {
   config: t("Cách dùng: orglet config [--json]\n\nHiện cấu hình có thể sửa, ID, phiên bản, skill và tên kết nối.\nKhông bao gồm khóa hay quyền truy cập."),
   create: t("Cách dùng: orglet create <orglet|crew> --config <file.json> [--json]\n\nTạo Tí hoặc hội. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nHội cần name, instructions, memberIds, synthesizerId, workflow và monthlyBudgetMicros.\nGiới hạn là số nguyên phần triệu USD."),
   edit: t("Cách dùng: orglet edit <orglet|crew> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nTrong TUI, /edit mở thiết lập của chat đang chọn."),
-  delete: t("Cách dùng: orglet delete <orglet|crew> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nHội, lịch đang bật và việc đang chạy có thể ngăn xóa. Không xóa Tí cuối cùng.\nTrong TUI, /delete yêu cầu gõ tên."),
+  delete: `${t("Cách dùng: orglet delete <orglet|crew> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nHội, lịch đang bật và việc đang chạy có thể ngăn xóa. Không xóa Tí cuối cùng.\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`,
   chat: `Usage: orglet chat [--to <name>]
 
 Opens a chat in this terminal. Pick an orglet or crew with the arrow keys or by
@@ -90,7 +116,9 @@ clears the screen, /queue shows pending messages and commands, /undo takes the
 last queued item back into the draft, /help lists these and /exit leaves.
 /new [orglet|crew], /edit [name] and /delete [name] manage configurations here.
 /history, /reply, /react, /forward, /answer, /stop, /pause, /resume, /retry and
-/continue act on this chat; /help describes each.
+/continue act on this chat; /chats, /side, /bring, /group, /members, /rename
+and /archive handle the chats themselves, and /to #id opens one by its id.
+/help describes each.
 /open, /clear, /queue, /undo and /help work while waiting. Press Ctrl+C twice
 to leave; typing or Esc dismisses the first hint. Sent work keeps running.
 
@@ -138,6 +166,15 @@ Example:
   forward: t("Cách dùng: orglet forward --to <tên> --target <tên> [--target <tên>] [tùy chọn]\n\nChuyển tiếp một tin nhắn sang chat của Tí hoặc hội khác, như tin của chính\nbạn, tối đa {0} nơi. Mỗi nơi nhận nó như một lượt mới và trả lời. Tệp chỉ\nđi kèm tên; đính tệp thật trong app.\n\nTùy chọn:\n  --to <tên>         Chat có tin nhắn (bắt buộc)\n  --target <tên>     Nơi nhận; lặp lại để gửi nhiều nơi\n  --message <số>     Tin nhắn theo số của read --turns; mặc định là câu trả\n                     lời mới nhất\n  --note <chữ>       Lời nhắn kèm theo\n  --json             In JSON cho máy đọc", MAX_FORWARD_TARGETS),
   answer: t("Cách dùng: orglet answer \"<câu trả lời>\" --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nTrả lời câu hỏi Tí đang chờ, rồi đợi lượt chạy tiếp như send. Gõ số của một\nlựa chọn (1, 2, 3) hoặc câu của bạn. read và send in câu hỏi cùng các lựa\nchọn. Câu hỏi xin quyền dùng công cụ MCP chỉ trả lời được trong app.\n\nTùy chọn:\n  --to <tên>           Tí hoặc hội (bắt buộc)\n  --no-wait            Trả về ngay sau khi trả lời\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
   ...controlHelp(),
+  chats: t("Cách dùng: orglet chats [--archived] [--json]\n\nLiệt kê chat, mới nhất trước: chat chính của Tí và hội, chat phụ, chat nhóm và lần\nchạy của lịch, mỗi chat có mã ngắn. Dùng mã với --chat trong các lệnh khác.\n\nTùy chọn:\n  --archived     Chỉ liệt kê chat đã lưu trữ\n  --json         In JSON cho máy đọc"),
+  side: t("Cách dùng: orglet side \"<tin nhắn>\" --to <tên Tí> [--no-wait] [--timeout <giây>] [--json]\n\nGửi tin trong một chat phụ mới của Tí, như \"Gửi trong luồng mới\" trong app.\nChat phụ mang quyền, thư mục và MCP của chat chính, không bao giờ rộng hơn.\nChat chính giữ nguyên. Lệnh in mã của chat phụ để nhắn tiếp bằng --chat.\n\nTùy chọn:\n  --to <tên>           Tí có chat chính (hoặc --chat <mã> của chat đó)\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
+  bring: t("Cách dùng: orglet bring --chat <mã chat phụ> [--message <số>] [--json]\n\nĐưa một câu trả lời của chat phụ vào chat chính dưới dạng trích dẫn. Không\nchạy lượt mới nào. Mặc định là câu trả lời mới nhất.\n\nTùy chọn:\n  --chat <mã>        Chat phụ (bắt buộc)\n  --message <số>     Câu trả lời theo số của read --turns, như 2.1\n  --json             In JSON cho máy đọc"),
+  group: t("Cách dùng: orglet group \"<tin nhắn>\" --with <tên> --with <tên> [--no-wait] [--timeout <giây>] [--json]\n\nBắt đầu chat nhóm với các Tí này bằng tin nhắn đầu tiên, như chọn nhiều Tí\ntrong app. Mỗi Tí trả lời; Tí đầu tiên giữ chat. Nhắn tiếp bằng\norglet send --chat <mã>.\n\nTùy chọn:\n  --with <tên>         Một Tí trong nhóm; lặp lại, ít nhất hai\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
+  members: t("Cách dùng: orglet members --chat <mã> --with <tên> --with <tên> [--json]\n\nĐổi các Tí nhận tin trong chat nhóm, từ tin nhắn sau. Thay cả danh sách.\n\nTùy chọn:\n  --chat <mã>      Chat nhóm (bắt buộc)\n  --with <tên>     Một Tí trong nhóm; lặp lại, ít nhất hai\n  --json           In JSON cho máy đọc"),
+  rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --title \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc hội không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc hội\n  --chat <mã>        Chat theo mã của orglet chats\n  --title <tên>      Tên mới (bắt buộc)\n  --json             In JSON cho máy đọc"),
+  archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|crew> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay hội. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay hội đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc hội\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
+  restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|crew> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay hội đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
+  template: t("Cách dùng: orglet template <{0}> --provider <demo|openai> [--json]\n\nTạo một hội từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: demo cho câu trả lời mẫu, openai cho kết nối OpenAI đã\nthiết lập trong app.\n\nTùy chọn:\n  --provider <tên>   demo hoặc openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
   open: `Usage: orglet open [--to <name>]
 
 Brings the Orglet window forward. With --to, opens that chat.
@@ -177,7 +214,9 @@ type Options = {
   json: boolean;
   wait: boolean;
   off: boolean;
+  archived: boolean;
   to?: string;
+  chat?: string;
   timeout?: string;
   config?: string;
   confirm?: string;
@@ -185,18 +224,22 @@ type Options = {
   message?: string;
   replyTo?: string;
   note?: string;
+  title?: string;
+  provider?: string;
   files: string[];
   targets: string[];
+  members: string[];
   positionals: string[];
 };
 
-type SingleOption = 'to' | 'timeout' | 'config' | 'confirm' | 'turns' | 'message' | 'replyTo' | 'note';
+type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' | 'message' | 'replyTo' | 'note' | 'title' | 'provider';
 
 /** Options that take a value, written as `--to Researcher` or `--to=Researcher`. */
-const VALUE_OPTIONS = new Set(['--to', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target']);
+const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider']);
 /** Options given at most once, and the field each one fills. */
 const SINGLE_OPTIONS: Record<string, SingleOption> = {
   '--to': 'to',
+  '--chat': 'chat',
   '--timeout': 'timeout',
   '--config': 'config',
   '--confirm': 'confirm',
@@ -204,21 +247,30 @@ const SINGLE_OPTIONS: Record<string, SingleOption> = {
   '--message': 'message',
   '--reply-to': 'replyTo',
   '--note': 'note',
+  '--title': 'title',
+  '--provider': 'provider',
 };
 /** The chat options added for COD-354 and the only commands that take each. */
 const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) => boolean; commands: readonly CommandName[] }[] = [
+  { option: '--chat', given: options => options.chat !== undefined, commands: CHAT_ID_COMMANDS },
   { option: '--turns', given: options => options.turns !== undefined, commands: ['read'] },
-  { option: '--message', given: options => options.message !== undefined, commands: ['react', 'forward'] },
+  { option: '--message', given: options => options.message !== undefined, commands: ['react', 'forward', 'bring'] },
   { option: '--reply-to', given: options => options.replyTo !== undefined, commands: ['send'] },
   { option: '--note', given: options => options.note !== undefined, commands: ['forward'] },
   { option: '--target', given: options => options.targets.length > 0, commands: ['forward'] },
   { option: '--off', given: options => options.off, commands: ['react'] },
+  { option: '--with', given: options => options.members.length > 0, commands: ['group', 'members'] },
+  { option: '--title', given: options => options.title !== undefined, commands: ['rename'] },
+  { option: '--provider', given: options => options.provider !== undefined, commands: ['template'] },
+  { option: '--archived', given: options => options.archived, commands: ['chats'] },
 ];
-/** Commands that take one positional value after their name: a message, a schedule, an emoji or an answer. */
-const VALUE_COMMANDS: readonly CommandName[] = ['send', 'run', 'react', 'answer'];
+/** Commands that take one positional value after their name: a message, a schedule, an emoji, an answer or a template. */
+const VALUE_COMMANDS: readonly CommandName[] = ['send', 'run', 'react', 'answer', 'side', 'group', 'template'];
+/** Commands whose positionals may name an orglet or crew: `<orglet|crew> "<name>"`. */
+const ENTITY_COMMANDS: readonly CommandName[] = ['create', 'edit', 'delete', 'archive', 'restore'];
 
 function readOptions(argumentList: readonly string[]): Options {
-  const options: Options = { help: false, version: false, json: false, wait: true, off: false, files: [], targets: [], positionals: [] };
+  const options: Options = { help: false, version: false, json: false, wait: true, off: false, archived: false, files: [], targets: [], members: [], positionals: [] };
   let index = 0;
   while (index < argumentList.length) {
     const argument = argumentList[index];
@@ -260,6 +312,10 @@ function assignValue(options: Options, name: string, value: string): void {
     options.targets.push(value);
     return;
   }
+  if (name === '--with') {
+    options.members.push(value);
+    return;
+  }
   const key = SINGLE_OPTIONS[name];
   if (options[key] !== undefined) throw new UsageError(`${name} can be given once.`);
   options[key] = value;
@@ -271,6 +327,7 @@ function assignFlag(options: Options, name: string): void {
   else if (name === '--json') options.json = true;
   else if (name === '--no-wait') options.wait = false;
   else if (name === '--off') options.off = true;
+  else if (name === '--archived') options.archived = true;
   else throw new UsageError(`Unknown option ${name}.`);
 }
 
@@ -283,12 +340,26 @@ function parseTimeout(value: string | undefined): number {
   return seconds;
 }
 
+/** Whether the command names an orglet or crew with `<orglet|crew> "<name>"` rather than a chat. */
+function namesEntity(command: CommandName, options: Options): boolean {
+  if (!ENTITY_COMMANDS.includes(command)) return false;
+  if (command === 'delete') return options.chat === undefined;
+  return ['create', 'edit'].includes(command) || options.positionals[1] !== undefined;
+}
+
+/** Positionals after the command that nothing reads, which usually means a message with spaces lost its quotes. */
+function extraPositionals(command: CommandName, options: Options): string[] {
+  if (namesEntity(command, options)) return options.positionals.slice(command === 'create' ? 2 : 3);
+  if (VALUE_COMMANDS.includes(command)) return options.positionals.slice(2);
+  return options.positionals.slice(1);
+}
+
 /** Options that only one command understands, so `orglet list --file x` is a mistake rather than ignored. */
 function rejectForeignOptions(command: CommandName, options: Options): void {
   if (!['create', 'edit'].includes(command) && options.config !== undefined) throw new UsageError('--config belongs to "orglet create" and "orglet edit".');
   if (command !== 'delete' && options.confirm !== undefined) throw new UsageError('--confirm belongs to "orglet delete".');
   const waitOptions = !options.wait || options.timeout !== undefined;
-  if (!WAITING_COMMANDS.includes(command) && waitOptions) throw new UsageError('--no-wait and --timeout belong to "orglet send", "answer", "resume", "retry" and "continue".');
+  if (!WAITING_COMMANDS.includes(command) && waitOptions) throw new UsageError('--no-wait and --timeout belong to commands that wait for an answer, such as "orglet send".');
   const takesFiles = command === 'send' || command === 'run';
   if (!takesFiles && options.files.length > 0) throw new UsageError('--file belongs to "orglet send" and "orglet run".');
   if (!CHAT_COMMANDS.includes(command) && options.to !== undefined) throw new UsageError(`"orglet ${command}" does not take --to.`);
@@ -296,7 +367,7 @@ function rejectForeignOptions(command: CommandName, options: Options): void {
     if (owner.given(options) && !owner.commands.includes(command)) throw new UsageError(`"orglet ${command}" does not take ${owner.option}.`);
   }
   if (command === 'chat' && options.json) throw new UsageError('"orglet chat" does not take --json. Use "orglet send --json" in scripts.');
-  const extra = ['create', 'edit', 'delete'].includes(command) ? options.positionals.slice(command === 'create' ? 2 : 3) : VALUE_COMMANDS.includes(command) ? options.positionals.slice(2) : options.positionals.slice(1);
+  const extra = extraPositionals(command, options);
   if (extra.length > 0) throw new UsageError(`Unexpected argument "${extra[0]}". Put a message with spaces in quotes.`);
 }
 
@@ -304,6 +375,23 @@ function requireName(command: CommandName, to: string | undefined): string {
   const name = to?.trim();
   if (!name) throw new UsageError(`"orglet ${command}" needs --to <name>.`);
   return name;
+}
+
+function parseChatId(value: string): string {
+  if (!ChatId.safeParse(value).success) throw new UsageError(t("--chat cần mã chat như orglet chats in ra, ít nhất bốn ký tự."));
+  return value.trim().replace(/^#/, '');
+}
+
+function requireChatId(command: CommandName, chat: string | undefined): string {
+  if (chat === undefined) throw new UsageError(`"orglet ${command}" needs --chat <id>. "orglet chats" lists them.`);
+  return parseChatId(chat);
+}
+
+/** The chat a command names: `--to` an orglet or crew, or `--chat` an id, never both. */
+function requireTarget(command: CommandName, options: Options): ChatTarget {
+  if (options.to !== undefined && options.chat !== undefined) throw new UsageError(`"orglet ${command}" takes --to or --chat, not both.`);
+  if (options.chat !== undefined) return { chat: parseChatId(options.chat) };
+  return { to: requireName(command, options.to) };
 }
 
 export function parseArguments(argumentList: readonly string[]): ParsedCommand {
@@ -325,8 +413,8 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
   const json = options.json;
   switch (command) {
     case 'create':
-    case 'edit':
-    case 'delete': return parseManagement(command, options);
+    case 'edit': return parseManagement(command, options);
+    case 'delete': return options.chat === undefined ? parseManagement(command, options) : parseChatDelete(options);
     case 'config': return { kind: 'config', json };
     case 'chat': return { kind: 'chat', ...(options.to?.trim() ? { to: options.to.trim() } : {}) };
     case 'status': return { kind: 'status', json };
@@ -343,6 +431,15 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'resume':
     case 'retry':
     case 'continue': return parseControl(command, options);
+    case 'chats': return { kind: 'chats', archived: options.archived, json };
+    case 'side': return parseSide(options);
+    case 'bring': return parseBring(options);
+    case 'group': return parseGroup(options);
+    case 'members': return parseMembers(options);
+    case 'rename': return parseRename(options);
+    case 'archive':
+    case 'restore': return parseArchive(command, options);
+    case 'template': return parseTemplate(options);
   }
 }
 
@@ -371,7 +468,7 @@ function parseSend(options: Options): ParsedCommand {
   return {
     kind: 'send',
     message,
-    to: requireName('send', options.to),
+    ...requireTarget('send', options),
     files: options.files,
     wait: options.wait,
     timeoutSeconds: parseTimeout(options.timeout),
@@ -381,11 +478,11 @@ function parseSend(options: Options): ParsedCommand {
 }
 
 function parseRead(options: Options): ParsedCommand {
-  const to = requireName('read', options.to);
-  if (options.turns === undefined) return { kind: 'read', to, json: options.json };
+  const target = requireTarget('read', options);
+  if (options.turns === undefined) return { kind: 'read', ...target, json: options.json };
   const turns = Number(options.turns);
   if (!Number.isInteger(turns) || turns < 1 || turns > MAX_READ_TURNS) throw new UsageError(t("--turns cần là số nguyên từ 1 đến {0}.", MAX_READ_TURNS));
-  return { kind: 'read', to, turns, json: options.json };
+  return { kind: 'read', ...target, turns, json: options.json };
 }
 
 /** A message number as `read --turns` prints it: `3`, `3.1`, `#3.1` or `last`. */
@@ -398,7 +495,7 @@ function parseReact(options: Options): ParsedCommand {
   const emoji = Reaction.safeParse(options.positionals[1]?.trim().toLowerCase());
   if (!emoji.success) throw new UsageError(t("Gõ một cảm xúc: {0}.", Reaction.options.join(', ')));
   const message = options.message === undefined ? {} : { message: parseMessageRef('--message', options.message) };
-  return { kind: 'react', to: requireName('react', options.to), emoji: emoji.data, active: !options.off, ...message, json: options.json };
+  return { kind: 'react', ...requireTarget('react', options), emoji: emoji.data, active: !options.off, ...message, json: options.json };
 }
 
 function parseForward(options: Options): ParsedCommand {
@@ -407,15 +504,77 @@ function parseForward(options: Options): ParsedCommand {
   if (targets.length > MAX_FORWARD_TARGETS) throw new UsageError(t("Chuyển tiếp tối đa {0} nơi.", MAX_FORWARD_TARGETS));
   const message = options.message === undefined ? {} : { message: parseMessageRef('--message', options.message) };
   const note = options.note?.trim() ? { note: options.note.trim() } : {};
-  return { kind: 'forward', to: requireName('forward', options.to), targets, ...message, ...note, json: options.json };
+  return { kind: 'forward', ...requireTarget('forward', options), targets, ...message, ...note, json: options.json };
 }
 
 function parseAnswer(options: Options): ParsedCommand {
   const answer = options.positionals[1]?.trim();
   if (!answer) throw new UsageError(t("Gõ câu trả lời, ví dụ: orglet answer 1 --to Researcher"));
-  return { kind: 'answer', to: requireName('answer', options.to), answer, wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
+  return { kind: 'answer', ...requireTarget('answer', options), answer, wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
 }
 
 function parseControl(action: ChatControl, options: Options): ParsedCommand {
-  return { kind: 'control', action, to: requireName(action, options.to), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
+  return { kind: 'control', action, ...requireTarget(action, options), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
+}
+
+function parseSide(options: Options): ParsedCommand {
+  const message = options.positionals[1]?.trim();
+  if (!message) throw new UsageError(t("Gõ tin nhắn cho chat phụ, ví dụ: orglet side \"Thử cách khác\" --to Researcher"));
+  return { kind: 'side', message, ...requireTarget('side', options), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
+}
+
+function parseBring(options: Options): ParsedCommand {
+  const message = options.message === undefined ? {} : { message: parseMessageRef('--message', options.message) };
+  return { kind: 'bring', chat: requireChatId('bring', options.chat), ...message, json: options.json };
+}
+
+/** At least two orglet names given with --with. */
+function groupNames(options: Options): string[] {
+  const names = options.members.map(name => name.trim()).filter(Boolean);
+  if (names.length < 2) throw new UsageError(t("Chat nhóm cần ít nhất hai --with <tên Tí>."));
+  return names;
+}
+
+function parseGroup(options: Options): ParsedCommand {
+  const message = options.positionals[1]?.trim();
+  if (!message) throw new UsageError(t("Gõ tin nhắn đầu tiên, ví dụ: orglet group \"Chào cả nhóm\" --with Researcher --with Writer"));
+  return { kind: 'group', names: groupNames(options), message, wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
+}
+
+function parseMembers(options: Options): ParsedCommand {
+  return { kind: 'members', chat: requireChatId('members', options.chat), names: groupNames(options), json: options.json };
+}
+
+function parseRename(options: Options): ParsedCommand {
+  const title = options.title?.trim();
+  if (!title) throw new UsageError(t("Đổi tên cần --title \"<tên mới>\"."));
+  return { kind: 'chat-change', change: 'rename', ...requireTarget('rename', options), title, json: options.json };
+}
+
+function parseChatDelete(options: Options): ParsedCommand {
+  const confirmName = options.confirm?.trim();
+  if (!confirmName) throw new UsageError(t("Xóa chat cần --confirm \"<tên chat>\" đúng như orglet chats in ra."));
+  return { kind: 'chat-change', change: 'delete', chat: parseChatId(options.chat!), confirmName, json: options.json };
+}
+
+/** `archive --to X`, `restore --chat <id>`, or `archive|restore <orglet|crew> "<name>"`. */
+function parseArchive(command: 'archive' | 'restore', options: Options): ParsedCommand {
+  const archived = command === 'archive';
+  const entityName = options.positionals[1];
+  if (entityName === undefined) {
+    if (archived) return { kind: 'chat-change', change: 'archive', ...requireTarget(command, options), json: options.json };
+    return { kind: 'chat-change', change: 'restore', chat: requireChatId(command, options.chat), json: options.json };
+  }
+  if (entityName !== 'orglet' && entityName !== 'crew' && entityName !== 'team') throw new UsageError(t("Gõ orglet hoặc crew sau lệnh."));
+  if (options.to !== undefined || options.chat !== undefined) throw new UsageError(`"orglet ${command} ${entityName}" takes a name, not --to or --chat.`);
+  const name = options.positionals[2]?.trim();
+  if (!name) throw new UsageError(t("Gõ tên đầy đủ của Tí hoặc hội."));
+  return { kind: 'archive-entity', entity: entityName === 'orglet' ? 'worker' : 'team', name, archived, json: options.json };
+}
+
+function parseTemplate(options: Options): ParsedCommand {
+  const templateId = TEMPLATE_IDS.find(id => id === options.positionals[1]);
+  if (!templateId) throw new UsageError(t("Chọn một mẫu: {0}.", TEMPLATE_IDS.join(', ')));
+  if (options.provider !== 'demo' && options.provider !== 'openai') throw new UsageError(t("Mẫu cần --provider demo hoặc --provider openai."));
+  return { kind: 'template', templateId, provider: options.provider, json: options.json };
 }

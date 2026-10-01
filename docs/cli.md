@@ -29,6 +29,15 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet forward --to <name> --target <name>` | Forwards a message to up to five other chats. See [forward](#forward). |
 | `orglet answer "<answer>" --to <name>` | Answers the question an orglet is waiting on. See [answer](#answer). |
 | `orglet stop\|pause\|resume\|retry\|continue --to <name>` | The buttons under a chat's latest turn. See [Stop, pause, resume, retry, continue](#stop-pause-resume-retry-continue). |
+| `orglet chats [--archived]` | Lists chats, side threads and group chats with the short id `--chat` takes. See [Chats by id](#chats-by-id). |
+| `orglet side "message" --to <orglet>` | Sends a message in a new side thread of that orglet |
+| `orglet bring --chat <id>` | Brings a side thread's answer into its main chat |
+| `orglet group "message" --with <name> --with <name>` | Starts a group chat of those orglets |
+| `orglet members --chat <id> --with <name> …` | Changes who a group chat's messages go to |
+| `orglet rename\|archive --to <name> \| --chat <id>` | Renames or archives a chat; `restore --chat <id>` brings it back |
+| `orglet delete --chat <id> --confirm "<chat name>"` | Deletes a chat after its exact name |
+| `orglet archive\|restore <orglet\|crew> "<name>"` | Archives or restores an orglet or crew |
+| `orglet template <id> --provider <demo\|openai>` | Creates a crew from one of the app's templates |
 | `orglet open [--to <name>]` | Brings the Orglet window forward, and with `--to` opens that chat |
 | `orglet run "<schedule>" [--file <path>]` | Starts a schedule now, with the files you attach. See [run](#run). |
 
@@ -126,6 +135,8 @@ Page Up at the top of the conversation loads the ten turns before what is shown,
 
 When an orglet asks a question, the chat prints it with numbered choices. `/answer 2` picks the second; `/answer <words>` answers in your own words, as the desktop's message box does. The terminal then waits for the turn to go on. A question asking to use an MCP tool is not shown this way: it is an approval, so the chat says to open it in the app.
 
+`/chats` lists the chats with their short ids, and `/to #bbbb0000` opens one of them here: a side thread, a group chat or an older chat. Everything after that, messages included, goes to that chat. `/side <message>` starts a side thread from the current orglet's main chat and prints the `/to #id` that opens it; in a side thread, `/bring [#n]` brings its latest answer, or answer `#n`, into the main chat. `/group Researcher, Writer -- <message>` starts a group chat, and in one, `/members <names>` changes who it goes to. `/rename <title>` and `/archive` act on the open chat.
+
 `/stop` and `/pause` act at once, even while a message is waiting for its answer. `/resume`, `/retry` and `/continue` wait for the turn they start, like a message. `/continue` is only there for an answer that stopped because its steps ran out, the same as the desktop's Continue.
 
 ## Create, edit and remove orglets and crews
@@ -210,6 +221,12 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/answer <n\|text>` | Answers the question the orglet is waiting on |
 | `/stop`, `/pause` | Stops the running turn, or pauses it after its current step; both act at once |
 | `/resume`, `/retry`, `/continue` | Resumes, runs again or continues the latest turn, and waits for the answer |
+| `/chats [archived]` | Lists chats with their short ids; `/to #id` opens one |
+| `/side <message>` | Sends the message in a new side thread of this orglet |
+| `/bring [#n]` | In a side thread, brings its latest answer or answer `#n` into the main chat |
+| `/group <name, …> -- <message>` | Starts a group chat of those orglets |
+| `/members <name, …>` | In a group chat, changes who its messages go to |
+| `/rename <title>`, `/archive` | Renames or archives the open chat |
 | `/new [orglet|crew]` | Creates an orglet or crew in a keyboard form |
 | `/edit [name]` | Edits the current chat’s orglet or crew; without a current chat, choose an entry |
 | `/delete [name]` | Removes an orglet or crew after exact-name confirmation |
@@ -312,6 +329,65 @@ The buttons under a chat's latest turn. `stop` ends the turn that is running and
 
 When a turn the command waits for stops on a question, the question is printed on standard error with how to answer it, and the exit code is 1. When it stops on a browser, desktop or MCP approval, the command stops waiting, says so and exits 1.
 
+### Chats by id
+
+```sh
+orglet chats
+orglet read --chat bbbb0000 --turns 3
+```
+
+`orglet chats` lists the open chats, newest first: each orglet's and crew's main chat, side threads, group chats and schedule runs, with the first eight characters of the chat's id, what kind of chat it is, its name, who answers in it and how it stands. `--archived` lists archived chats instead. Every command that takes `--to` also takes `--chat <id>` with that id, or any unique start of it of four characters or more, and a leading `#` is fine. A side thread or group chat has no other name.
+
+### Side threads
+
+```sh
+orglet side "Try it with the 2025 numbers instead" --to Researcher
+orglet bring --chat 7f3a91c2
+```
+
+`side` sends a message "in a new thread" from an orglet's main chat, as the app's composer does. The side thread starts with a copy of the main chat's permissions, folder and MCP grants, never more, and the main chat stays as it was. Crews and group chats have no side threads. The command waits for the answer like `send`, prints it, and says how to reach the side thread again with `--chat`.
+
+`bring` copies one answer of a side thread into its main chat as a quote, the latest by default or `--message 2.1`. It never starts a run there.
+
+### Group chats
+
+```sh
+orglet group "Compare your takes on this plan" --with Researcher --with Writer
+orglet send "And the budget?" --chat c41d0e88
+orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
+```
+
+`group` starts a group chat of two or more orglets with its first message, the way picking several orglets in the sidebar does: each one answers, and the first one named owns the chat. Each `group` makes a new chat; the next message goes in with `send --chat`. `members` changes who the chat's messages go to from the next message on; it replaces the whole list and is refused while the chat is working.
+
+### Rename, archive, restore and delete chats
+
+```sh
+orglet rename --to Researcher --title "Q3 research"
+orglet archive --chat 7f3a91c2
+orglet chats --archived
+orglet restore --chat 7f3a91c2
+orglet delete --chat 7f3a91c2 --confirm "Try it with the 2025 numbers instead"
+```
+
+The same as the chat's menu in the app. An archived chat takes no new message until it is restored; archiving is refused while the chat is working. `restore` takes `--chat`, because an archived chat is no longer an orglet's main chat. `delete` needs the chat's name exactly as `orglet chats` prints it and cannot be undone.
+
+### Archive and restore orglets and crews
+
+```sh
+orglet archive crew "Review crew"
+orglet restore orglet "Old helper"
+```
+
+Archiving takes an orglet or crew off the active list, keeping its chats and history; restoring brings it back. The name must match a full name, ignoring case. The app refuses what it refuses in the desktop: an orglet a crew uses, an owner of an enabled schedule, or one with work running.
+
+### template
+
+```sh
+orglet template research-review --provider openai
+```
+
+Creates a crew from one of the app's templates (`research-review` or `eris-review`) with its orglets and evidence skill. `--provider demo` gives the new orglets sample replies; `--provider openai` puts them on the OpenAI connection, which must already be set up in the app.
+
 ### open
 
 ```sh
@@ -367,6 +443,7 @@ Messages that come from the app are in the app's language.
 - If an older app refuses the progress option before dispatch, chat retries once without it. The message is sent once, with the older app's usual waiting status.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
 - `react`, `forward`, `control` and `answer` name a chat by its orglet or crew and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
+- `chats`, `side-thread`, `bring`, `group`, `members`, `chat-change`, `archive-entity` and `template` call `startSideThread`, `bringIntoMainChat`, `createTask` with several orglets, `updateTask`, `renameTask`, `archiveTask`, `deleteTask`, `archiveEntity` and `createTemplate`. None of them carries a permission, folder, browser or MCP field; the protocol refuses a request that adds one.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
 - Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.
