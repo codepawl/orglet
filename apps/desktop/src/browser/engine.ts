@@ -206,7 +206,10 @@ export class BrowserEngine {
     diagStartedAt = startedAt;
     DIAG_MARKS.length = 0;
     const label = `${(raw as { kind?: string }).kind}:${(raw as { step?: { kind?: string } }).step?.kind ?? ''}`;
-    const watchdog = setTimeout(() => console.error(`HANGDIAG ${label} still running after 8s: ${DIAG_MARKS.join(' | ')}`), 8_000);
+    const watchdog = setTimeout(() => {
+      console.error(`HANGDIAG ${label} still running after 8s: ${DIAG_MARKS.join(' | ')}`);
+      void this.diagnose((raw as { runId?: string }).runId);
+    }, 8_000);
     try {
       return await this.handleTimed(raw, signal);
     } catch (error) {
@@ -216,6 +219,24 @@ export class BrowserEngine {
       clearTimeout(watchdog);
       if (Date.now() - startedAt > 3_000) console.error(`HANGDIAG ${label} slow ${Date.now() - startedAt}ms :: ${DIAG_MARKS.join(' | ')}`);
     }
+  }
+
+  /** Temporary diagnostics: is each tab of the run answering, is the browser connected, what is the proxy holding. */
+  private async diagnose(runId: string | undefined) {
+    const session = runId ? this.runs.get(runId) : undefined;
+    if (!session) {
+      console.error('HANGDIAG no session');
+      return;
+    }
+    const lines: string[] = [`browserConnected=${session.context.browser()?.isConnected()} pages=${session.context.pages().length} proxy=${session.proxy?.describe() ?? this.profileProxies.get(session.profileId)?.describe()}`];
+    for (const [tabId, page] of session.tabs) {
+      const probe = await Promise.race([
+        page.evaluate(() => `${document.readyState} ${document.visibilityState} hasFocus=${document.hasFocus()} ${location.href}`).then(value => `ok ${value}`, error => `error ${String(error).slice(0, 80)}`),
+        delay(2_000).then(() => 'NO ANSWER in 2s'),
+      ]);
+      lines.push(`${tabId} closed=${page.isClosed()} url=${page.url()} probe=${probe}`);
+    }
+    console.error(`HANGDIAG state :: ${lines.join(' || ')}`);
   }
 
   async handleTimed(raw: unknown, signal: AbortSignal): Promise<unknown> {

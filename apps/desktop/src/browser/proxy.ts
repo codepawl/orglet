@@ -38,6 +38,22 @@ function checkedConnection(host: string, addresses: string[]): CheckedConnection
 export class PolicyProxy {
   private server: Server;
   private sockets = new Set<Socket | Duplex>();
+  private pending = new Map<number, { what: string; startedAt: number; state: string }>();
+  private nextPending = 0;
+
+  /** Temporary diagnostics: what the proxy has in flight. */
+  describe(): string {
+    const now = Date.now();
+    const entries = [...this.pending.values()].map(entry => `${entry.what} [${entry.state}] ${now - entry.startedAt}ms`);
+    return `sockets=${this.sockets.size} pending=${entries.length}${entries.length ? ' ' + entries.join('; ') : ''}`;
+  }
+
+  private track(what: string) {
+    const key = this.nextPending;
+    this.nextPending += 1;
+    this.pending.set(key, { what, startedAt: Date.now(), state: 'start' });
+    return { state: (state: string) => { const entry = this.pending.get(key); if (entry) entry.state = state; }, done: () => { this.pending.delete(key); } };
+  }
 
   /** `policy` is read for every connection, so a narrowed site list applies to the next one. */
   constructor(private policy: () => BrowserPolicy, private resolve: ResolveAddresses) {
@@ -128,7 +144,11 @@ export class PolicyProxy {
       response.writeHead(400).end();
       return;
     }
+    const tracked = this.track(`${request.method} ${url.href.slice(0, 80)}`);
+    response.on('close', () => tracked.done());
+    tracked.state('deciding');
     const decided = await this.target(url.href, url.hostname);
+    tracked.state('decided');
     if ('refusal' in decided) {
       response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' }).end(decided.refusal);
       return;
@@ -139,6 +159,7 @@ export class PolicyProxy {
     const upstream = httpRequest({
       ...decided.connection, port: url.port || 80, method: request.method, path: `${url.pathname}${url.search}`, headers, setHost: false,
     }, answer => {
+      tracked.state('answered');
       response.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
       answer.pipe(response);
     });
@@ -146,6 +167,7 @@ export class PolicyProxy {
       if (!response.headersSent) response.writeHead(502).end();
       else response.destroy();
     });
+    tracked.state('upstream-sent');
     request.pipe(upstream);
   }
 

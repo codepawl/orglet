@@ -192,7 +192,7 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, inChrome: false, using: false, waiting: false });
   });
 
-  it('asks before Place order: Allow once places it, Don\'t allow sends nothing, and a password is never typed', async () => {
+  it.for(Array.from({ length: 25 }, (_, index) => index))('REPEAT asks before Place order %i', { timeout: 120_000 }, async () => {
     const script: Script = [
       () => call('browser_open', { url: `${base}/shop`, tabId: null }),
       () => call('browser_snapshot', { tabId: 't1', offset: 0 }),
@@ -247,7 +247,7 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     const asked = core!.browser.actions(chat.taskId)[2];
     expect(asked.screenshotId).toBe(first.screenshotId);
     expect(asked.target).toBe('Place order');
-  }, 120_000);
+  });
 
   it('stops cleanly while the card waits, and nothing is sent', async () => {
     const script: Script = [
