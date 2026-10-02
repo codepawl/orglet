@@ -35,6 +35,7 @@ import { RunAttention } from '../../shared/quiet-runs';
 import { MAX_TURN_ROUTES, TurnRoute } from '../../shared/turn-routing';
 import { Channel } from '../../shared/channels';
 import { migrateCrews, migrateGroupChats } from './channels';
+import { MarketOrigins } from '../../shared/market';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -72,6 +73,7 @@ const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge
 const EntityStateEntry = z.object({ archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
 const EntityStates = z.object({ workers: z.record(Id, EntityStateEntry), teams: z.record(Id, EntityStateEntry) }).strict();
 const Payload = z.object({
+  marketOrigins: MarketOrigins.optional(),
   // Which orglets and crews were archived or deleted when the backup was saved (COD-281). Older backups lack it.
   entityState: EntityStates.optional(),
   routines: z.array(Routine).max(100).optional(),
@@ -93,6 +95,11 @@ const fail = (message: string): never => { throw new Error(`Bản sao lưu khôn
 function validateRelations(data: Payload) {
   const map = <T extends { id: string }>(rows: T[]) => { const result = new Map(rows.map(row => [row.id, row])); if (result.size !== rows.length) fail('ID bị trùng.'); return result; };
   const workers = map(data.workers); const skills = map(data.skills); const teams = map(data.teams);
+  for (const origin of data.marketOrigins ?? []) {
+    const targets = origin.kind === 'orglet' ? workers : teams;
+    const originWorkers = Object.values(origin.workerIds);
+    if (!targets.has(origin.entityId) || originWorkers.some(workerId => !workers.has(workerId)) || Object.values(origin.skillIds).some(skillId => !skills.has(skillId)) || new Set(originWorkers).size !== originWorkers.length || (origin.kind === 'orglet' && (originWorkers.length !== 1 || originWorkers[0] !== origin.entityId))) fail('Nguồn danh mục thiếu Tí, nhóm hoặc kỹ năng.');
+  }
   const tasks = map(data.tasks); const runs = map(data.runs); const sources = map(data.sources); const artifacts = map(data.artifacts);
   for (const run of runs.values()) {
     const scoreIds = run.snapshot.scoreProfileIds ?? [];
@@ -409,6 +416,7 @@ function snapshot(store: Store): Payload {
   const runs = store.all<z.infer<typeof Run>>('runs');
   const runIds = new Set(runs.map(run => run.id));
   return Payload.parse({
+    marketOrigins: MarketOrigins.parse(store.setting('marketOrigins', [])),
     entityState: store.entityState(),
     routines: store.all('routines'),
     customConnections: readCustomConnections(store),
@@ -667,12 +675,21 @@ export class Backups {
       for (const row of current.knowledgeRevisions ?? []) { const key = `${row.id}:${row.revision}`; if (knowledgeRevisions.has(key) && digest(knowledgeRevisions.get(key)) !== digest(row)) fail('Revision knowledge xung đột.'); knowledgeRevisions.set(key, row); }
       merged.knowledgeRevisions = [...knowledgeRevisions.values()];
       merged.entityState = mergedEntityState(current, incoming);
+      // Additive restore keeps existing entity rows, so their installed origins must stay aligned with them too.
+      const origins = new Map((incoming.marketOrigins ?? []).map(origin => [origin.entityId, origin]));
+      for (const origin of current.marketOrigins ?? []) {
+        const imported = origins.get(origin.entityId);
+        if (imported && (imported.listingId !== origin.listingId || imported.kind !== origin.kind)) fail('Nguồn danh mục xung đột.');
+        origins.set(origin.entityId, origin);
+      }
+      merged.marketOrigins = MarketOrigins.parse([...origins.values()]);
       validateRelations(merged);
       if ((merged.routines?.length ?? 0) > 100) fail('Tổng số lịch sau khôi phục vượt 100.');
       const connections = mergeCustomConnections(readCustomConnections(this.store), incoming.customConnections ?? []);
       if (connections.length > MAX_CUSTOM_CONNECTIONS) fail(`Tổng số kết nối tùy chỉnh sau khôi phục vượt ${MAX_CUSTOM_CONNECTIONS}.`);
       writeCustomConnections(this.store, connections);
       this.store.setSetting('entityState', merged.entityState);
+      this.store.setSetting('marketOrigins', merged.marketOrigins);
       for (const routine of merged.routines ?? []) this.store.put('routines', routine);
       for (const table of ['skills', 'workers', 'teams', 'tasks'] as const) for (const row of merged[table]) this.store.put(table, row);
       for (const source of merged.sources) {
@@ -714,4 +731,3 @@ export class Backups {
     this.pending = undefined; this.notify();
   }
 }
-

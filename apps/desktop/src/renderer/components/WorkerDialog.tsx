@@ -12,6 +12,7 @@ import { snapshotCapabilities, withCapability, type ToolCapability } from '../..
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import { harnessCatalog, harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
+import { MarketProfileUpdate } from './Marketplace';
 import { Select, type SelectOption } from './Select';
 import { ModelPicker } from './ModelPicker';
 import { modelIdRequired } from './workerModel';
@@ -217,6 +218,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
 
   return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; một kênh có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error} focusField={initialField}>
     {tab === 'general' && <>
+      {worker && <MarketProfileUpdate entityId={worker.id} onUpdated={onClose} />}
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={shownAvatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>

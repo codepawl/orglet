@@ -28,6 +28,8 @@ import { ReviewPolicy } from '../shared/review';
 import { Preflight } from './orchestration/preflight';
 import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
+import { Marketplace } from './market/service';
+import { harnessReady, isHarness } from '../shared/harness';
 import { Routines, SCHEDULE_NEVER_ACTS, SCHEDULE_NO_DESKTOP } from './orchestration/routines';
 import { FolderTriggers } from './orchestration/folder-triggers';
 import { RoutineFolders } from './storage/routine-folders';
@@ -152,6 +154,7 @@ export class CoreService {
   readonly teams: TeamRunner;
   readonly backups: Backups;
   readonly templates: TeamTemplates;
+  readonly market: Marketplace;
   readonly routines: Routines;
   /** Folders routines watch, granted through main's picker (COD-245). */
   readonly routineFolders: RoutineFolders;
@@ -221,6 +224,11 @@ export class CoreService {
     this.channels = new Channels(store, clock, { save: input => this.saveTeam(input), retire: teamId => this.deleteEntity('team', teamId) });
     this.forwards = new Forwards(store);
     this.templates = new TeamTemplates(store, this.notify);
+    this.market = new Marketplace(store, this.notify, {
+      connected: provider => this.marketConnected(provider),
+      defaultModel: () => this.marketDefaultModel(),
+      followCrew: team => this.channels.followCrew(team),
+    });
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
     this.browser = new BrowserTools(store, browserHost, () => this.notify());
@@ -366,6 +374,17 @@ export class CoreService {
         new BudgetLedger(this.store).reconcile(input.reservationId, input.amountMicros, input.source);
         this.notify();
         return;
+      }
+      case 'marketCatalog': return this.market.catalog(commands.marketCatalog.parse(args).refresh);
+      case 'marketInstallations': commands.marketInstallations.parse(args); return this.market.installations();
+      case 'marketAdd': {
+        const input = commands.marketAdd.parse(args);
+        return this.market.add(input.listingId, input.version);
+      }
+      case 'marketPreviewUpdate': return this.market.previewUpdate(commands.marketPreviewUpdate.parse(args).entityId);
+      case 'marketApplyUpdate': {
+        const input = commands.marketApplyUpdate.parse(args);
+        return this.market.applyUpdate(input.entityId, input.token);
       }
       case 'saveWorker': {
         const worker = this.saveWorker(commands.saveWorker.parse(args));
@@ -972,6 +991,26 @@ export class CoreService {
     }
   }
   /** Creates a worker or a new revision of one, validated the way the worker dialog is. */
+  private async marketConnected(provider: Worker['provider']): Promise<boolean> {
+    if (provider === 'demo') return true;
+    if (isCustomProvider(provider)) return !!findCustomConnection(this.store.workspace().customConnections, provider);
+    if (isHarness(provider)) {
+      const item = (await this.harnesses(false)).find(entry => entry.id === provider);
+      return !!item && harnessReady(item);
+    }
+    return !!await this.modelListRuntime.readKey?.(provider).catch(() => null);
+  }
+  private async marketDefaultModel(): Promise<{ provider: Worker['provider']; modelId?: string }> {
+    const providers: Worker['provider'][] = ['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', ...harnessCatalog, ...readCustomConnections(this.store).map(connection => customProviderId(connection.id))];
+    for (const provider of providers) {
+      if (!await this.marketConnected(provider)) continue;
+      if (isHarness(provider)) return { provider };
+      const models = await this.modelList({ provider });
+      const model = models.models.find(item => item.isDefault) ?? models.models[0];
+      if (model) return { provider, modelId: model.id };
+    }
+    return { provider: 'demo' };
+  }
   private saveWorker(input: Args<'saveWorker'>): Worker {
     this.assertEntityRevision('worker', input.id, input.expectedRevision);
     assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
