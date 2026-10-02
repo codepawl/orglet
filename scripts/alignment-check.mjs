@@ -235,11 +235,14 @@ async function seedArchive(page, researcher) {
   await archiveWhenIdle(page, 'archiveEntity', { kind: 'worker', id: retired.id, archived: true });
 }
 
-async function archiveWhenIdle(page, command, input) {
+async function archiveWhenIdle(page, command, input, expectedBusyMessage) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await callCore(page, command, input);
     } catch (error) {
+      if (expectedBusyMessage && !(error instanceof Error && error.message.includes(expectedBusyMessage))) {
+        throw error;
+      }
       if (attempt >= 40) throw error;
       await page.waitForTimeout(500);
     }
@@ -343,7 +346,8 @@ const SCREENS = [
       return detail.task.status === 'cancelled';
     }, context.islandTaskId);
     // The crew is a channel now: a second turn started the same way would add a second row for it, and the first one would be opened. Archiving the stopped chat leaves the crew its empty channel, which the next first message takes.
-    await callCore(page, 'archiveTask', { id: context.islandTaskId, archived: true });
+    // A cancelled task can still have run cleanup in progress; the archive guard is the authority.
+    await archiveWhenIdle(page, 'archiveTask', { id: context.islandTaskId, archived: true }, 'Công việc đang chạy. Dừng trước khi lưu trữ.');
   } },
   { name: 'sidebar-row-menu', open: async (page, context) => { await openArea(page, 'Bạn bè và tin nhắn'); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
