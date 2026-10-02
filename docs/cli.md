@@ -25,6 +25,7 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet delete <orglet\|channel> "<name>" --confirm "<full name>"` | Removes a confirmed entity while retaining past chats |
 | `orglet send "message" --to <name> [--reply-to <number>]` | Sends a message into that chat and prints the answer, optionally as a reply |
 | `orglet read --to <name> [--turns <n>]` | Prints the latest answer in that chat, or its last turns, numbered |
+| `orglet revise "corrected text" --to <name> --message <number>` | Starts a new turn from your saved message; keeps earlier history |
 | `orglet react <reaction> --to <name>` | Reacts to the latest answer or a numbered message. See [react](#react). |
 | `orglet forward --to <name> --target <name>` | Forwards a message to up to five other chats. See [forward](#forward). |
 | `orglet answer "<answer>" --to <name>` | Answers the question an orglet is waiting on. See [answer](#answer). |
@@ -224,6 +225,7 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/details` | Expands or collapses completed steps and answer details |
 | `/agents` | Opens or closes agent details |
 | `/history [n]` | Loads earlier turns of this chat, numbered |
+| `/revise <#n> <text>` | Corrects your saved message and waits for a new answer |
 | `/reply <#n> <message>` | Replies to message `#n` |
 | `/react <reaction> [#n]`, `/unreact <reaction> [#n]` | Puts a reaction on the latest answer or message `#n`, or takes it off |
 | `/forward <name, …> [#n]` | Forwards the latest answer or message `#n` to other chats |
@@ -322,6 +324,10 @@ orglet forward --to Researcher --message 2.1 --target Writer --target "Review ch
 ```
 
 Forwards one message, the newest answer by default, to up to five orglets' or channels' chats. It arrives there as your own message with your note, and each chat answers it as a new turn with its own cost limit and permissions. Files the message had go by name only; attach the real files in the app. The command prints where it went and why any place refused it, and exits 1 if one did.
+
+### revise
+
+Correct a saved message with `orglet revise "corrected text" --to Researcher --message 3`, or `/revise #3 corrected text` in the terminal chat. Use `/history` or `orglet read --turns 5` to find your message number. This starts a new turn and keeps earlier messages and answers unchanged. It reuses that message’s files, reply reference and plan choice, omitting files no longer allowed; it does not copy a forward’s attribution. Only your own numbered messages can be revised, and a running turn must stop first. `--chat <id>`, `--no-wait`, `--timeout` and `--json` work as with other message commands. If an old message has no saved input, the command reports that its original files cannot be recovered.
 
 ### answer
 

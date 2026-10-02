@@ -54,6 +54,7 @@ export class CliOperations {
       case 'forward': return this.chatActions.forward(request);
       case 'control': return this.chatActions.control(request, signal);
       case 'answer': return this.chatActions.answer(request, signal);
+      case 'revise': return this.chatActions.revise(request, signal);
       case 'chats': return this.chatAdmin.chats(request);
       case 'side-thread': return this.chatAdmin.sideThread(request, signal);
       case 'bring': return this.chatAdmin.bring(request);

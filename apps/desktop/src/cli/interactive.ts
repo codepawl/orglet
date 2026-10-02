@@ -589,6 +589,10 @@ class Session {
       case 'reply': return this.send(command.message, command.ref);
       case 'react': return this.react(command.emoji, command.active, command.ref);
       case 'forward': return this.forward(command.targets, command.ref);
+      case 'revise': return this.awaitAction(actions => signal => {
+        if (!actions.revise) throw new Error(t('App này chưa hỗ trợ sửa tin nhắn từ terminal. Cập nhật app rồi thử lại.'));
+        return actions.revise(targetOf(this.chat!), command.ref, command.text, signal);
+      });
       case 'answer': return this.awaitAction(actions => signal => actions.answer(targetOf(this.chat!), command.answer, signal));
       case 'control': return this.control(command.action);
       case 'usage': return this.printMuted(command.message);

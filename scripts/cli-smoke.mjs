@@ -134,6 +134,15 @@ try {
   assert.ok(answer.length > 0, 'orglet send printed no answer');
   const read = expectOk(orglet(userData, 'read', '--to', 'Researcher'), 'orglet read');
   assert.equal(read, answer, 'orglet read should print the answer orglet send printed');
+  const revisedMessage = JSON.parse(expectOk(orglet(userData, 'revise', 'corrected CLI smoke message', '--to', 'Researcher', '--message', '1', '--json'), 'orglet revise'));
+  assert.equal(revisedMessage.action, 'revise');
+  assert.equal(revisedMessage.finished, true);
+  assert.equal(revisedMessage.turn, 2);
+  const revisedHistory = JSON.parse(expectOk(orglet(userData, 'read', '--to', 'Researcher', '--turns', '2', '--json'), 'history after revise'));
+  assert.equal(revisedHistory.turns[0].text, 'hello from the CLI smoke', 'Revising must preserve the original message');
+  assert.equal(revisedHistory.turns[0].answers[0].text, answer, 'Revising must preserve the original answer');
+  assert.equal(revisedHistory.turns[1].text, 'corrected CLI smoke message');
+  assert.equal(orglet(userData, 'revise', 'wrong target', '--to', 'Researcher', '--message', '1.1').code, 2, 'Orglet answers cannot be revised');
   const progressFrames = await rawRequest(userData, { op: 'send', token, to: 'Researcher', message: 'progress protocol smoke',
     files: [], wait: true, timeoutSeconds: 120, progress: true }, true);
   assert.ok(progressFrames.some(frame => frame.type === 'progress' && Array.isArray(frame.steps)), 'An opted-in send must emit a progress frame');

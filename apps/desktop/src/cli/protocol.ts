@@ -71,6 +71,7 @@ export const MAX_READ_TURNS = 50;
  * answer to it, `last` the newest answer. A leading `#` is allowed, as the terminal prints it.
  */
 export const MessageRef = z.string().trim().regex(/^#?(last|\d{1,6}(\.\d{1,3})?)$/i);
+export const UserMessageRef = z.string().trim().regex(/^#?[1-9]\d{0,5}$/);
 const Answer = z.string().trim().min(1).max(2000);
 const Message = z.string().trim().min(1).max(16000);
 const WaitFields = { wait: z.boolean(), timeoutSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS) };
@@ -124,6 +125,7 @@ export const CliRequest = z.discriminatedUnion('op', [
   }).strict(),
   z.object({ op: z.literal('control'), token: CliToken, ...ChatTarget, action: ChatControl, ...WaitFields }).strict(),
   z.object({ op: z.literal('answer'), token: CliToken, ...ChatTarget, answer: Answer, ...WaitFields }).strict(),
+  z.object({ op: z.literal('revise'), token: CliToken, ...ChatTarget, message: UserMessageRef, text: Message, ...WaitFields }).strict(),
   z.object({ op: z.literal('chats'), token: CliToken, archived: z.boolean() }).strict(),
   z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...WaitFields }).strict(),
   z.object({ op: z.literal('bring'), token: CliToken, chat: ChatId, message: MessageRef.optional() }).strict(),
@@ -281,7 +283,7 @@ export type ReadValue = {
 /** What a reaction, a forward or a control changed (COD-354). */
 export type ReactValue = { chat: CliChat; taskId: string; ref: string; emoji: Reaction; active: boolean };
 export type ForwardValue = { sent: { name: string; taskId: string }[]; failed: { name: string; error: string }[] };
-export type ControlValue = SendValue & { action: ChatControl | 'answer' };
+export type ControlValue = SendValue & { action: ChatControl | 'answer' | 'revise' };
 /** Which kind of chat a row is: an orglet's or crew's main chat, a side thread, a channel or a schedule's run. */
 export type CliChatKind = 'orglet' | 'crew' | 'side' | 'channel' | 'schedule';
 /** One chat as `orglet chats` lists it (COD-354); `short` is the start of its id that `--chat` takes. */

@@ -215,6 +215,7 @@ export function formatForward(value: ForwardValue): string {
 export function formatControl(value: ControlValue): string {
   if (value.action === 'stop') return t('Đã dừng lượt đang chạy với {0}.', value.chat.name);
   if (value.action === 'pause') return t('{0} sẽ tạm dừng sau bước đang làm.', value.chat.name);
+  if (value.action === 'revise' && !value.waited) return t('Đã sửa tin nhắn và gửi lượt mới tới {0}. Đọc câu trả lời sau bằng orglet read.', value.chat.name);
   if (!value.waited) return t('Đã gửi tới {0}. Đọc câu trả lời sau bằng orglet read.', value.chat.name);
   return formatAnswers(value.answers, value.chat.kind === 'team');
 }

@@ -88,6 +88,7 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
       ...(command.note ? { note: command.note } : {}),
     };
     case 'control': return { op: 'control', ...targetFields(command), action: command.action, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'revise': return { op: 'revise', ...targetFields(command), text: command.text, message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'answer': return { op: 'answer', ...targetFields(command), answer: command.answer, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'chats': return { op: 'chats', archived: command.archived };
     case 'side': return { op: 'side-thread', ...targetFields(command), message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
@@ -218,6 +219,7 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       return forwardValue.failed.length ? EXIT_CODES.failure : EXIT_CODES.ok;
     }
     case 'control':
+    case 'revise':
     case 'answer': return reportControl(command.json, value as ControlValue, output, layout);
     case 'side':
     case 'channel': return reportNewChat(command.json, value as SendValue, output, layout);
@@ -330,7 +332,7 @@ async function sendWaiting(to: string, terminal: StatusTerminal, userData: strin
 
 /** The chat a command waits on for an answer, if it does: `send`, `answer`, `side`, `channel`, and resume, retry and continue. */
 function waitedChat(command: RequestCommand): string | undefined {
-  if (command.kind === 'send' || command.kind === 'answer' || command.kind === 'side') return command.wait ? targetLabel(command) : undefined;
+  if (command.kind === 'send' || command.kind === 'revise' || command.kind === 'answer' || command.kind === 'side') return command.wait ? targetLabel(command) : undefined;
   if (command.kind === 'channel') return command.wait ? command.name ?? command.names[0] : undefined;
   if (command.kind !== 'control') return undefined;
   const startsTurn = command.action === 'resume' || command.action === 'retry' || command.action === 'continue';

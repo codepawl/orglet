@@ -1,5 +1,5 @@
 import { t } from './text';
-import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody } from './protocol';
+import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, UserMessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody } from './protocol';
 import { ClockTime, EVERY_HOURS_CHOICES, MAX_DAILY_CAP_MICROS } from '../shared/schedule';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { ProviderId } from '../shared/contracts';
@@ -9,7 +9,7 @@ import { Reaction } from '../shared/message-interactions';
 /** Turning `orglet …` arguments into one command, and the help text for each (COD-234). */
 
 export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open' | 'run' | 'config' | 'create' | 'edit' | 'delete'
-  | 'react' | 'forward' | 'answer' | ChatControl
+  | 'react' | 'forward' | 'answer' | 'revise' | ChatControl
   | 'chats' | 'side' | 'bring' | 'channel' | 'group' | 'members' | 'rename' | 'archive' | 'restore' | 'template'
   | 'schedules' | 'schedule'
   | 'search' | 'running' | 'library' | 'memory' | 'usage' | 'models' | 'preferences';
@@ -33,6 +33,7 @@ export type ParsedCommand =
   | ({ kind: 'react'; emoji: Reaction; active: boolean; message?: string; json: boolean } & ChatTarget)
   | ({ kind: 'forward'; targets: string[]; message?: string; note?: string; json: boolean } & ChatTarget)
   | ({ kind: 'control'; action: ChatControl; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
+  | ({ kind: 'revise'; text: string; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | ({ kind: 'answer'; answer: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | { kind: 'chats'; archived: boolean; json: boolean }
   | ({ kind: 'side'; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
@@ -62,14 +63,14 @@ export class UsageError extends Error {}
 
 const CONTROL_COMMANDS: readonly ChatControl[] = ['stop', 'pause', 'resume', 'retry', 'continue'];
 const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run', 'config', 'create', 'edit', 'delete',
-  'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'channel', 'group', 'members', 'rename', 'archive', 'restore', 'template',
+  'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'channel', 'group', 'members', 'rename', 'archive', 'restore', 'template',
   'schedules', 'schedule', 'search', 'running', 'library', 'memory', 'usage', 'models', 'preferences'];
 /** Commands that name an orglet or crew with --to; `schedule` names the one it runs for, `library` and `models` whose. */
-const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule', 'library', 'models'];
+const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule', 'library', 'models'];
 /** Commands that name a chat with --chat, by the start of its id. */
-const CHAT_ID_COMMANDS: readonly CommandName[] = ['send', 'read', 'react', 'forward', 'answer', ...CONTROL_COMMANDS, 'side', 'bring', 'members', 'rename', 'archive', 'restore', 'delete'];
+const CHAT_ID_COMMANDS: readonly CommandName[] = ['send', 'read', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'bring', 'members', 'rename', 'archive', 'restore', 'delete'];
 /** Commands that start a turn and wait for it, so --no-wait and --timeout apply. */
-const WAITING_COMMANDS: readonly CommandName[] = ['send', 'answer', 'resume', 'retry', 'continue', 'side', 'channel', 'group'];
+const WAITING_COMMANDS: readonly CommandName[] = ['send', 'answer', 'revise', 'resume', 'retry', 'continue', 'side', 'channel', 'group'];
 
 export const MAIN_HELP = `orglet: talk to the Orglet app from a terminal.
 
@@ -88,6 +89,7 @@ Commands:
   read      Print the latest answer in a chat, or its past turns with --turns
   react     React to a message in a chat
   forward   Forward a message to other orglets or channels
+  revise    Correct a saved message and start a new turn
   answer    Answer the question an orglet is waiting on
   stop      Stop the turn that is running in a chat
   pause     Pause the running turn after its current step
@@ -150,7 +152,7 @@ shows the latest answer again, /open brings the app to this chat, /clear
 clears the screen, /queue shows pending messages and commands, /undo takes the
 last queued item back into the draft, /help lists these and /exit leaves.
 /new [orglet|channel], /edit [name] and /delete [name] manage configurations here.
-/history, /reply, /react, /forward, /answer, /stop, /pause, /resume, /retry and
+/history, /revise, /reply, /react, /forward, /answer, /stop, /pause, /resume, /retry and
 /continue act on this chat; /chats, /side, /bring, /channel, /members, /rename
 and /archive handle the chats themselves, and /to #id opens one by its id.
 /help describes each.
@@ -200,6 +202,7 @@ Example:
   react: t("Cách dùng: orglet react <cảm xúc> --to <tên> [--message <số>] [--off] [--json]\n\nThả cảm xúc lên một tin nhắn, như nút cảm xúc trong app. Mỗi tin có một cảm\nxúc của bạn; cảm xúc mới thay cái cũ. Tí đọc cảm xúc ở lượt sau.\nCảm xúc: {0}.\n\nTùy chọn:\n  --to <tên>         Tí hoặc kênh (bắt buộc)\n  --message <số>     Tin nhắn theo số của read --turns, như 3 hoặc 3.1;\n                     mặc định là câu trả lời mới nhất\n  --off              Gỡ cảm xúc này\n  --json             In JSON cho máy đọc", Reaction.options.join(', ')),
   forward: t("Cách dùng: orglet forward --to <tên> --target <tên> [--target <tên>] [tùy chọn]\n\nChuyển tiếp một tin nhắn sang chat của Tí hoặc kênh khác, như tin của chính\nbạn, tối đa {0} nơi. Mỗi nơi nhận nó như một lượt mới và trả lời. Tệp chỉ\nđi kèm tên; đính tệp thật trong app.\n\nTùy chọn:\n  --to <tên>         Chat có tin nhắn (bắt buộc)\n  --target <tên>     Nơi nhận; lặp lại để gửi nhiều nơi\n  --message <số>     Tin nhắn theo số của read --turns; mặc định là câu trả\n                     lời mới nhất\n  --note <chữ>       Lời nhắn kèm theo\n  --json             In JSON cho máy đọc", MAX_FORWARD_TARGETS),
   answer: t("Cách dùng: orglet answer \"<câu trả lời>\" --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nTrả lời câu hỏi Tí đang chờ, rồi đợi lượt chạy tiếp như send. Gõ số của một\nlựa chọn (1, 2, 3) hoặc câu của bạn. read và send in câu hỏi cùng các lựa\nchọn. Câu hỏi xin quyền dùng công cụ MCP chỉ trả lời được trong app.\n\nTùy chọn:\n  --to <tên>           Tí hoặc kênh (bắt buộc)\n  --no-wait            Trả về ngay sau khi trả lời\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
+  revise: t('Cách dùng: orglet revise "<chữ đã sửa>" --to <tên> --message <số> [--no-wait] [--timeout <giây>] [--json]\n\nSửa tin nhắn của bạn và chạy một lượt mới với tệp gốc còn được phép dùng.\nLịch sử cũ giữ nguyên. Chờ lượt đang chạy dừng trước khi sửa. Dùng --chat <mã> để chọn chat theo mã.'),
   ...controlHelp(),
   chats: t("Cách dùng: orglet chats [--archived] [--json]\n\nLiệt kê chat, mới nhất trước: chat chính của Tí và kênh, chat phụ, kênh và lần\nchạy của lịch, mỗi chat có mã ngắn. Dùng mã với --chat trong các lệnh khác.\n\nTùy chọn:\n  --archived     Chỉ liệt kê chat đã lưu trữ\n  --json         In JSON cho máy đọc"),
   side: t("Cách dùng: orglet side \"<tin nhắn>\" --to <tên Tí> [--no-wait] [--timeout <giây>] [--json]\n\nGửi tin trong một chat phụ mới của Tí, như \"Gửi trong luồng mới\" trong app.\nChat phụ mang quyền, thư mục và MCP của chat chính, không bao giờ rộng hơn.\nChat chính giữ nguyên. Lệnh in mã của chat phụ để nhắn tiếp bằng --chat.\n\nTùy chọn:\n  --to <tên>           Tí có chat chính (hoặc --chat <mã> của chat đó)\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
@@ -329,7 +332,7 @@ const SINGLE_OPTIONS: Record<string, SingleOption> = {
 const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) => boolean; commands: readonly CommandName[] }[] = [
   { option: '--chat', given: options => options.chat !== undefined, commands: CHAT_ID_COMMANDS },
   { option: '--turns', given: options => options.turns !== undefined, commands: ['read'] },
-  { option: '--message', given: options => options.message !== undefined, commands: ['react', 'forward', 'bring'] },
+  { option: '--message', given: options => options.message !== undefined, commands: ['react', 'forward', 'bring', 'revise'] },
   { option: '--reply-to', given: options => options.replyTo !== undefined, commands: ['send'] },
   { option: '--note', given: options => options.note !== undefined, commands: ['forward'] },
   { option: '--target', given: options => options.targets.length > 0, commands: ['forward'] },
@@ -349,7 +352,7 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
   { option: '--archived', given: options => options.archived, commands: ['chats'] },
 ];
 /** Commands that take one positional value after their name: a message, a schedule, an emoji, an answer or a template. */
-const VALUE_COMMANDS: readonly CommandName[] = ['send', 'run', 'react', 'answer', 'side', 'channel', 'group', 'template', 'search', 'library', 'models'];
+const VALUE_COMMANDS: readonly CommandName[] = ['send', 'run', 'react', 'answer', 'revise', 'side', 'channel', 'group', 'template', 'search', 'library', 'models'];
 /** Commands whose positionals may name an orglet or crew: `<orglet|channel> "<name>"`. */
 const ENTITY_COMMANDS: readonly CommandName[] = ['create', 'edit', 'delete', 'archive', 'restore'];
 
@@ -516,6 +519,7 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'react': return parseReact(options);
     case 'forward': return parseForward(options);
     case 'answer': return parseAnswer(options);
+    case 'revise': return parseRevise(options);
     case 'stop':
     case 'pause':
     case 'resume':
@@ -615,6 +619,13 @@ function parseForward(options: Options): ParsedCommand {
   const message = options.message === undefined ? {} : { message: parseMessageRef('--message', options.message) };
   const note = options.note?.trim() ? { note: options.note.trim() } : {};
   return { kind: 'forward', ...requireTarget('forward', options), targets, ...message, ...note, json: options.json };
+}
+
+function parseRevise(options: Options): ParsedCommand {
+  const text = options.positionals[1]?.trim();
+  const message = UserMessageRef.safeParse(options.message);
+  if (!text || !message.success) throw new UsageError(t('Gõ orglet revise \"chữ đã sửa\" --to Researcher --message 3. Chỉ sửa được tin nhắn của bạn.'));
+  return { kind: 'revise', text, message: message.data, ...requireTarget('revise', options), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
 }
 
 function parseAnswer(options: Options): ParsedCommand {
