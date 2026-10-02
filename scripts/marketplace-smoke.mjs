@@ -3,6 +3,8 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 import { useVietnamese, openHome } from './smoke-language.mjs';
@@ -12,6 +14,7 @@ const { env } = await isolatedHarnessEnvironment(directory);
 await mkdir('test-results', { recursive: true });
 const launch = () => electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}));
+const settle = page => page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => undefined))));
 async function openDiscover(page) {
   await openHome(page);
   await page.getByRole('button', { name: 'Bạn bè', exact: true }).first().click();
@@ -54,11 +57,81 @@ try {
   const overflow = await page.locator('.marketplace').evaluate(element => element.scrollWidth > element.clientWidth);
   assert.equal(overflow, false, 'Discover content fits the narrow panel');
   const before = await page.evaluate(() => window.orglet.call('marketInstallations', {}));
+  const catalog = await page.evaluate(() => window.orglet.call('marketCatalog', {}));
+  await page.evaluate(async entityId => {
+    const workspace = await window.orglet.call('workspace', {});
+    const worker = workspace.workers.find(item => item.id === entityId);
+    await window.orglet.call('saveWorker', { ...worker, instructions: 'My customized research instructions' });
+  }, orglet.id);
   await app.close();
+  // An immutable v2 fixture in this throwaway profile exercises the real cached-body IPC update path offline.
+  const database = new DatabaseSync(join(directory, 'orglet.sqlite'));
+  try {
+    const row = database.prepare("SELECT data FROM settings WHERE id LIKE 'marketBody:research-friend:1:%'").get();
+    const template = JSON.parse(JSON.parse(row.data));
+    template.worker.instructions = 'Research updated questions and clearly distinguish evidence from assumptions.';
+    template.skill.content = 'Compare sources, then write a concise evidence note.';
+    const body = JSON.stringify(template);
+    const sha256 = createHash('sha256').update(body).digest('hex');
+    const listing = catalog.listings.find(item => item.listingId === 'research-friend');
+    const listings = catalog.listings.map(item => item.listingId === listing.listingId ? { ...item, version: 2, sha256, changelog: 'Updated research instructions and evidence skill.' } : item);
+    const save = database.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data');
+    save.run('marketCatalog', JSON.stringify({ catalog: { listings }, fetchedAt: new Date().toISOString() }));
+    save.run(`marketBody:research-friend:2:${sha256}`, JSON.stringify(body));
+  } finally {
+    database.close();
+  }
   app = await launch();
   page = await app.firstWindow();
   await page.waitForFunction(() => window.orglet !== undefined);
   const after = await page.evaluate(() => window.orglet.call('marketInstallations', {}));
-  assert.deepEqual(after, before, 'origin links survive a packaged app restart');
-  console.log('Packaged marketplace smoke passed: Discover, orglet and crew Add, safe defaults, no chat side effects, narrow dark layout, persisted origins.');
-} finally { await app.close().catch(() => undefined); }
+  assert.deepEqual(after.map(item => ({ ...item, updateAvailable: false })), before, 'origin links survive a packaged app restart');
+  await openHome(page);
+  await page.getByRole('button', { name: 'Bạn bè', exact: true }).first().click();
+  await page.getByRole('tab', { name: /^Tất cả/ }).click();
+  await page.locator('.friend-row').filter({ hasText: 'Research friend' }).first().getByRole('button', { name: 'Tùy chọn Research friend', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Chỉnh sửa', exact: true }).click();
+  await page.locator('.marketplace-profile').waitFor();
+  await settle(page);
+  await page.screenshot({ path: 'test-results/marketplace-profile-update.png' });
+  assert.equal(await page.locator('.marketplace-profile button').getAttribute('type'), 'button');
+  await page.locator('.marketplace-profile').getByRole('button', { name: 'Có bản cập nhật', exact: true }).click();
+  await page.locator('.marketplace-update').waitFor();
+  await page.getByRole('button', { name: 'Hủy', exact: true }).click();
+  await page.locator('.marketplace-update').waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.marketplace-profile').isVisible(), true, 'Review never submits or closes the profile form');
+  assert.equal((await workspace(page)).workers.find(worker => worker.id === orglet.id).revision, 2);
+  await page.keyboard.press('Escape');
+  await page.locator('.marketplace-profile').waitFor({ state: 'detached' });
+  await openDiscover(page);
+  await page.getByRole('button', { name: 'Xem bản cập nhật', exact: true }).click();
+  await page.locator('.marketplace-update').waitFor();
+  assert.match(await page.locator('.marketplace-update').innerText(), /My customized research instructions/);
+  assert.match(await page.locator('.marketplace-update').innerText(), /Bạn đã chỉnh sửa bản này/);
+  await page.keyboard.press('Escape');
+  await page.locator('.marketplace-update').waitFor({ state: 'detached' });
+  assert.equal(await page.getByRole('button', { name: 'Xem bản cập nhật', exact: true }).evaluate(element => element === document.activeElement), true);
+  await page.keyboard.press('Enter');
+  await page.locator('.marketplace-update').waitFor();
+  await page.getByRole('button', { name: 'Hủy', exact: true }).click();
+  await page.locator('.marketplace-update').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Xem bản cập nhật', exact: true }).click();
+  await page.locator('.marketplace-update').waitFor();
+  await page.setViewportSize({ width: 1200, height: 820 });
+  await settle(page);
+  assert.equal(await page.locator('.marketplace-comparison-columns').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 2);
+  await page.screenshot({ path: 'test-results/marketplace-update-wide.png' });
+  await page.setViewportSize({ width: 580, height: 600 });
+  await settle(page);
+  assert.equal(await page.locator('.marketplace-comparison-columns').first().evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), 1);
+  await page.screenshot({ path: 'test-results/marketplace-update-narrow.png' });
+  assert.equal(await page.locator('.marketplace-update').evaluate(element => element.scrollWidth > element.clientWidth), false);
+  await page.getByRole('button', { name: 'Áp dụng bản cập nhật', exact: true }).click();
+  await page.locator('.marketplace-update').waitFor({ state: 'detached' });
+  const updated = (await workspace(page)).workers.find(worker => worker.id === orglet.id);
+  assert.equal(updated.revision, 3);
+  assert.match(updated.instructions, /Research updated questions/);
+  console.log('Packaged marketplace smoke passed: Discover, orglet and crew Add, safe defaults, no chat side effects, narrow layouts, persisted origins, customized update comparison and revision.');
+} finally {
+  await app.close().catch(() => undefined);
+}

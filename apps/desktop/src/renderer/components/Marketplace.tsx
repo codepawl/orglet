@@ -10,7 +10,7 @@ function addedNotice(result: MarketAdded) {
   if (result.fallbackNames.length) toast(t('Đã dùng kết nối mặc định cho {0}; kết nối gợi ý chưa sẵn sàng.', [result.fallbackNames.join(', ')]));
 }
 
-export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => void }) {
+export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => void | Promise<void> }) {
   const [catalog, setCatalog] = useState<MarketCatalogView>();
   const [installed, setInstalled] = useState<MarketInstallation[]>([]);
   const [busy, setBusy] = useState(false);
@@ -38,13 +38,17 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
   const action = async (operation: () => Promise<void>) => {
     setBusy(true);
     setError('');
-    try { await operation(); }
-    catch (reason) { setError(tMessage(reason instanceof Error ? reason.message : String(reason))); }
-    finally { setBusy(false); }
+    try {
+      await operation();
+    } catch (reason) {
+      setError(tMessage(reason instanceof Error ? reason.message : String(reason)));
+    } finally {
+      setBusy(false);
+    }
   };
   return <section className="page-section marketplace" aria-labelledby="marketplace-title">
     <PanelHeading title={<span id="marketplace-title">{t('Khám phá')}</span>} description={t('Bạn làm sẵn từ CodePawl. Thêm bản sao của riêng bạn, không cần tài khoản.')}>
-      <Button variant="ghost" disabled={busy} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{t('Làm mới')}</Button>
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{t('Làm mới')}</Button>
     </PanelHeading>
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
     {catalog?.error && <p className="muted" role="status">{tMessage(catalog.error)}</p>}
@@ -52,17 +56,20 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <ul className="friends-sources">
       {catalog.listings.map(listing => <li key={listing.listingId} className="friend-source marketplace-listing">
         <span className="friend-source-text"><span className="friend-name">{listing.name}</span><span className="friend-status">{listing.summary}</span><span className="friend-status">{listing.kind === 'crew' ? t('Nhóm Tí') : t('Tí')} · {listing.author} · {listing.license} · {listing.language.toUpperCase()} · v{listing.version}</span></span>
-        <Button variant="outline" disabled={busy} onClick={() => void action(async () => {
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void action(async () => {
           const result = await orglet.call('marketAdd', { listingId: listing.listingId, version: listing.version });
           addedNotice(result);
-          onAdded(result);
+          await onAdded(result);
           setInstalled(await orglet.call('marketInstallations', {}));
         })}><UserRoundPlus size={16} />{t('Thêm bạn')}</Button>
       </li>)}
     </ul>}
     {installed.filter(item => item.updateAvailable).map(item => <div className="friend-source" key={item.entityId}>
       <span className="friend-source-text"><span className="friend-name">{item.name}</span><span className="friend-status">{t('Có bản cập nhật')} · v{item.version}</span></span>
-      <Button variant="outline" disabled={busy} onClick={() => void action(async () => setUpdate(await orglet.call('marketPreviewUpdate', { entityId: item.entityId })))}><ArrowDownToLine size={16} />{t('Xem bản cập nhật')}</Button>
+      <Button type="button" variant="outline" aria-disabled={busy} onClick={() => {
+        if (busy) return;
+        void action(async () => setUpdate(await orglet.call('marketPreviewUpdate', { entityId: item.entityId })));
+      }}><ArrowDownToLine size={16} />{t('Xem bản cập nhật')}</Button>
     </div>)}
     {update && <MarketUpdateCard update={update} onClose={() => setUpdate(undefined)} onApplied={async result => { addedNotice(result); setUpdate(undefined); await load(false); }} />}
   </section>;
@@ -91,7 +98,8 @@ export function MarketProfileUpdate({ entityId, onUpdated }: { entityId: string;
   if (!installation) return null;
   return <div className="marketplace-profile">
     <p className="muted">{t('Từ danh mục CodePawl')} · {installation.listingId} · v{installation.version}</p>
-    {installation.updateAvailable && <Button variant="outline" disabled={busy} onClick={() => {
+    {installation.updateAvailable && <Button type="button" variant="outline" aria-disabled={busy} onClick={() => {
+      if (busy) return;
       setBusy(true);
       setError('');
       void orglet.call('marketPreviewUpdate', { entityId }).then(setUpdate).catch(reason => setError(tMessage(reason.message))).finally(() => setBusy(false));
@@ -113,7 +121,7 @@ function MarketUpdateCard({ update, onClose, onApplied }: { update: MarketUpdate
         <div className="marketplace-comparison-columns"><div><p className="muted">{t('Bản của bạn')}</p><pre>{change.before || t('Chưa có')}</pre></div><div><p className="muted">{t('Bản mới')}</p><pre>{change.after}</pre></div></div>
       </section>)}
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="actions"><Button variant="outline" disabled={busy} onClick={onClose}><X size={16} />{t('Hủy')}</Button><Button variant="primary" disabled={busy} onClick={() => {
+      <div className="actions"><Button type="button" variant="outline" disabled={busy} onClick={onClose}><X size={16} />{t('Hủy')}</Button><Button type="button" variant="primary" disabled={busy} onClick={() => {
         setBusy(true);
         void orglet.call('marketApplyUpdate', { entityId: update.entityId, token: update.token }).then(onApplied).catch(reason => setError(tMessage(reason.message))).finally(() => setBusy(false));
       }}><ArrowDownToLine size={16} />{t('Áp dụng bản cập nhật')}</Button></div>

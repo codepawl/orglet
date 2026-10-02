@@ -36,7 +36,7 @@ export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage,
   templates: readonly FriendTemplate[];
   onTemplate: (id: FriendTemplate['id']) => void;
   onImport: () => void;
-  onMarketAdded: (result: MarketAdded) => void;
+  onMarketAdded: (result: MarketAdded) => void | Promise<void>;
   busy: boolean;
 }) {
   const [query, setQuery] = useState('');

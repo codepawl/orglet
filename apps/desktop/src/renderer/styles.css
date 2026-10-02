@@ -3065,7 +3065,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .marketplace-loading > div { height: 68px; border-radius: var(--radius); background: var(--row-hover); }
 .marketplace-profile { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .marketplace-profile p { flex: 1; }
-.marketplace-update { display: grid; gap: 16px; max-height: 65vh; overflow: auto; }
+.marketplace-update { display: grid; gap: 16px; }
 .marketplace-comparison h3 { margin: 0 0 8px; font-size: 14px; }
 .marketplace-comparison-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .marketplace-comparison-columns p { margin: 0 0 6px; }
