@@ -3,6 +3,10 @@ import { MAX_CREW_TEMPLATE_WORKERS } from './crew-limits';
 
 export const MARKET_URL = 'https://market.orglet.codepawl.com';
 export const MARKET_BODY_LIMIT = 2 * 1024 * 1024;
+export const MARKET_METADATA_LIMIT = 16 * 1024;
+// Metadata has at most 2,640 authored UTF-16 units (15,840 escaped bytes) plus <544 fixed JSON bytes.
+// Joining its object to the template adds ,"template": (12 bytes); the closing brace replaces the removed one.
+export const MARKET_REQUEST_LIMIT = MARKET_BODY_LIMIT + MARKET_METADATA_LIMIT + 12;
 export const ListingId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
 export const MarketVersion = z.number().int().positive();
 export const MarketListing = z.object({
@@ -36,6 +40,30 @@ export const MarketCatalogPageV2 = z.object({
   nextCursor: z.string().max(256).nullable(),
 }).strict().refine(page => new Set(page.listings.map(listing => listing.listingId)).size === page.listings.length);
 export type MarketCatalogPageV2 = z.infer<typeof MarketCatalogPageV2>;
+
+export const MarketIdempotencyKey = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+export const MarketReviewState = z.enum(['pending', 'approved', 'rejected']);
+export const MarketMutationReceipt = z.discriminatedUnion('operation', [
+  z.object({ operation: z.enum(['create', 'version']), listingId: ListingId, version: MarketVersion, state: z.literal('pending') }).strict(),
+  z.object({ operation: z.literal('unpublish'), listingId: ListingId, publicationEpoch: z.number().int().nonnegative() }).strict(),
+]);
+export type MarketMutationReceipt = z.infer<typeof MarketMutationReceipt>;
+export const MarketOwnerVersion = z.object({
+  listing: MarketListingV2,
+  state: MarketReviewState,
+  submittedAt: z.number().int().nonnegative(),
+  published: z.boolean(),
+}).strict();
+export const MarketOwnerPage = z.object({
+  versions: z.array(MarketOwnerVersion).max(100),
+  nextCursor: z.string().max(256).nullable(),
+  allowance: z.object({
+    listingLimit: z.number().int().min(0).max(10),
+    listingCount: z.number().int().min(0).max(10),
+    submissionsInHour: z.number().int().min(0).max(5),
+    submissionLimit: z.literal(5),
+  }).strict(),
+}).strict();
 /** Origin links are local metadata and may travel in a workspace backup, never in a marketplace listing. */
 export const MarketOrigin = z.object({
   entityId: z.string().uuid(), listingId: ListingId, version: MarketVersion, kind: z.enum(['orglet', 'crew']),

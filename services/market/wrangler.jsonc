@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-02",
   "workers_dev": false,
+  "vars": { "MARKET_WRITES_ENABLED": "false" },
   "routes": [{ "pattern": "market.orglet.codepawl.com", "custom_domain": true }],
   "observability": {
     "enabled": true,
@@ -16,6 +17,19 @@
     "traces": {
       "enabled": true,
       "head_sampling_rate": 0.01
+    }
+  },
+  "env": {
+    "local_test": {
+      "routes": [],
+      "vars": { "MARKET_WRITES_ENABLED": "false" },
+      "d1_databases": [{
+        "binding": "MARKET_DB",
+        "database_name": "orglet-market-local-test",
+        "database_id": "00000000-0000-0000-0000-000000000476",
+        "migrations_dir": "migrations",
+        "remote": false
+      }]
     }
   }
 }

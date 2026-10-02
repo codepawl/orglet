@@ -1,27 +1,47 @@
-# Marketplace read API
+# Marketplace API
 
-The phase-one Worker serves text-only CodePawl orglet and crew templates under CC BY 4.0. Reading needs no account. Publishing, uploads, D1 and R2 are not part of this phase. Catalog source and immutable template bodies live in `apps/desktop/src/shared/market-seed.ts`, which also supplies the desktop's clearly labelled offline seed.
+The Worker serves text-only CodePawl orglet and crew templates under CC BY 4.0. Public reading needs no account. Curated catalog source and immutable bodies live in `apps/desktop/src/shared/market-seed.ts`, which also supplies the desktop's offline seed. The owner-submission service uses local D1 fixtures, but production publishing is disabled until moderation is available. There are no image uploads or R2 bindings.
 
-`src/auth.ts` prepares a local JWKS verifier for future authenticated handlers; no route calls it yet. It trusts only `https://accounts.codepawl.com/api/auth`, its `/jwks`, and a market token for `orglet-desktop` with the required scopes, stored verified email/public name, signed grant family and bounded listing entitlement. Sync bearer tokens and mixed cross-product audiences are refused. JWT signature, issuer, audience and expiry checks use pinned jose 6.2.12. Tests may supply an ephemeral local JWKS; production uses the fixed remote issuer. Anonymous reads stay unchanged. Claims can lag issuer changes by the existing 15-minute token lifetime; immediate family revocation is later work.
+`src/auth.ts` authenticates owner handlers with the fixed `https://accounts.codepawl.com/api/auth` issuer and its `/jwks`. It requires a market token for `orglet-desktop`, the required scopes, verified email/public name, a signed grant family and a bounded listing entitlement. Sync tokens and mixed cross-product audiences are refused. Signature, issuer, audience and expiry checks use pinned jose 6.2.12. Claims can lag issuer changes by the existing 15-minute token lifetime; immediate family revocation is later work.
 
-`GET /v1/catalog` returns validated listing metadata. `GET /v1/listings/:listingId/versions/:version` returns the exact JSON body whose SHA-256 appears in the catalog. Bodies use immutable cache headers and ETags. GET and HEAD revalidation accepts weak ETags, validator lists and `*`, including the weak validators Cloudflare returns for compressed bodies. Other methods return 405; missing versions return 404. Desktop imports independently verify the bytes, strict template fields and references before creating local rows.
+`GET /v1/catalog` and `/v1/listings/:listingId/versions/:version` retain their original curated metadata, exact bytes and immutable body cache headers. V2 curated version URLs serve those same bodies. GET/HEAD revalidation accepts weak ETags, validator lists and `*`. Desktop imports independently verify bytes, strict fields and references before creating local rows.
 
-Install tooling separately from the Electron workspace:
+`GET /v2/catalog?limit=50` returns display-only authors and bounded pages of up to 100 listings. With D1 bound, it merges the seed with current approved published pointers using keyset cursors and `no-store`. Without D1 it serves the existing seed snapshot and its snapshot-bound cursors. Invalid, noncanonical or stale seed cursors return 400. HEAD returns the same status and headers with no body. V2 errors use `no-store` too.
+
+Account bodies use `/v2/listings/:listingId/versions/:version`. Pending versions stay private. Public reads reconstruct and verify the body, then recheck current primary visibility before HEAD or ETag revalidation. Account bodies use `no-store`; unpublishing hides historical approved URLs while the listing is withdrawn. After an approved current-epoch version republishes the listing, its historical approved exact bodies become readable again. Pending or rejected versions stay private. The immutable curated seed is reserved and cannot be owned or unpublished by an account.
+
+Owner routes all call the real issuer verifier and use `no-store`:
+
+| Route | Behavior |
+|---|---|
+| `POST /v2/listings` | Create a listing identity and its first pending version |
+| `POST /v2/listings/:listingId/versions` | Add a pending version of the same kind |
+| `POST /v2/listings/:listingId/unpublish` | Hide the whole listing using an empty `{}` payload |
+| `GET/HEAD /v2/me/listings` | Page owned versions and return verified entitlement/D1 allowance counters |
+| `GET/HEAD /v2/me/listings/:listingId/versions/:version` | Preview an owned version, including pending or rejected content |
+
+POST routes require an `Idempotency-Key` matching `[A-Za-z0-9_-]{1,128}`. A D1 batch owns receipt, version allocation, ownership, quota, immutable chunks and initial pending state. Failed batches consume nothing. Exact retries return the original receipt; changed operation, target or authored content under the same key returns 409. Ten listing identities count across all states, or fewer if the signed entitlement says so. Unpublishing does not reclaim capacity. Existing listing versions remain allowed under a lowered cap, subject to ownership and five successful submissions per rolling hour. Unpublishing and exact retries do not spend that hourly allowance.
+
+Unpublish is a listing-wide action, not a comparison against a previously previewed version. It advances a publication epoch so a late review cannot publish a pre-unpublish submission. Retrying the old key cannot clear a later republished pointer. Installed copies and immutable rows remain intact. Approval/report handlers and the desktop publishing flow are separate work.
+
+`validateMarketSubmission` refuses unknown/local fields, malformed crew references, recognizable credentials, nontext or malformed packages, preview/package mismatches and unsupported manifest controls. Diagnostics use fixed rules, logical paths and line numbers without matching values. Normalized template JSON is at most 2 MiB, stored in at most eight 256 KiB chunks. Reads verify contiguous order, count, length, SHA and fatal UTF-8. A separate complete-content review digest binds authored metadata too. Validation and import never execute resources.
+
+The raw envelope limit is 2 MiB + 16 KiB + 12 bytes. The metadata schema allows 2,640 authored UTF-16 units, at most 15,840 escaped bytes plus fewer than 544 fixed JSON bytes. The template is a nested object, serialized once. Streaming bytes, declared length and normalized body size are checked separately; raw whitespace also counts. The decoded file/package limits still apply.
+
+Install the service's own tooling after installing the root workspace:
 
 ```powershell
-pnpm --dir services/market install --frozen-lockfile
-pnpm --dir services/market dev
-pnpm --dir services/market check:deploy
+pnpm --config.verify-deps-before-run=false --dir services/market install --frozen-lockfile
+pnpm --config.verify-deps-before-run=false --dir services/market types
+pnpm --config.verify-deps-before-run=false --dir services/market typecheck
+pnpm --config.verify-deps-before-run=false --dir services/market test
+pnpm --config.verify-deps-before-run=false --dir services/market check:deploy
 ```
 
-The pinned Wrangler version is 4.143.0. `wrangler.jsonc` names `orglet-market`, disables workers.dev, and declares the custom domain `market.orglet.codepawl.com`. There are no bindings or secrets to provision in phase one. Deployment is a separate authorized action: commit and push first, then run `pnpm --dir services/market deploy` from that exact checkout with the intended Cloudflare account. Verify the live catalog and a body hash afterward; a local dry run does not establish deployment.
+The service pins its own TypeScript compiler to 7.0.2, Wrangler to 4.143.0 and Miniflare to 5.20260926.0-alpha. Tests apply the tracked migration twice, start the bundled Worker with native local D1 persistence, and check rollback, races, body boundaries, visibility and anonymous handlers. The repository fixture supplies trusted synthetic identities only in `test/runtime-worker.ts`; the production configuration and entry never install it. Node tests cover real signature verification with ephemeral keys. Positive authenticated HTTP behavior in workerd remains unverified. Local checks do not establish a live deployment.
 
-Add a new immutable body key when editing a published listing. Increment its version and write its changelog in the current metadata; retain earlier bodies for existing version URLs. Never change a body under an existing version. `tests/integration/marketplace.test.ts` exercises the real fetch handler and desktop integrity/import/update behavior. Run the root `pnpm typecheck`, `pnpm test` and `pnpm i18n:keys` before shipping.
+The `types` command runs pinned Wrangler against `local_test`, then exports only the required `D1Database` and `Env` types from the generated declaration module. Service imports are explicit. Worker DOM declarations and binding-derived ProcessEnv types therefore stay outside Electron's ambient scope; use this command when regenerating instead of raw `wrangler types`.
 
-Cloudflare configuration follows the [Wrangler reference](https://developers.cloudflare.com/workers/wrangler/configuration/). A mutable catalog, account publishing and moderation will introduce D1 in phase two without changing these read routes. No image routes or image storage are planned.
+`wrangler.jsonc` keeps `MARKET_WRITES_ENABLED=false` and no default D1 binding. Only the isolated `local_test` environment declares a local-only database. Production writes must stay disabled until moderation is available; database provisioning, migration and deployment require separate authorization. Do not enable writes to run a test. Root integration checks and the service tests both run in Windows, macOS and Linux CI; release workflow behavior is unchanged.
 
-`GET /v2/catalog?limit=50` serves the same curated seed through a separate public-author contract. Authors contain `displayName` only. Limits are 1–100; pass the returned `nextCursor` to continue. Cursors bind the catalog snapshot and position; invalid, noncanonical or stale cursors return 400. HEAD has the same status and headers with no body. V1 remains the desktop default, and template bodies remain at their existing immutable v1 URLs. Future account versions need separate visibility/cache rules; this seed does not implement unpublishing.
-
-The v2 seed passes through `validateMarketSubmission`, the portable content-only boundary also intended for later desktop/server publishing callers. It refuses unknown fields, invalid crew references, recognizable credentials, nontext or malformed packages, preview/package mismatches and unsupported manifest controls. Diagnostics use logical fields/file indexes and line numbers without matching values. A template SHA covers body bytes; `reviewDigest` separately covers the entire authored submission, including metadata. There is no POST/authentication/D1 facade or publish action.
-
-Safe sampled logs record only a fixed operation name, GET/HEAD and status for v2 requests. Invocation logs are disabled, and traces redact query strings; traces can still retain request path/method. Request bodies, headers, cursors, credentials and raw exceptions must never be logged. Local handler tests and `check:deploy` validate behavior/bundling; neither proves a live deployment.
+Sampled catalog logs record only a fixed operation name, GET/HEAD and status. Invocation logs are disabled, and traces redact query strings; traces can still retain request path/method. Never log request bodies, headers, cursors, credentials or raw exceptions. Public errors contain fixed messages/codes and bounded redacted diagnostics.

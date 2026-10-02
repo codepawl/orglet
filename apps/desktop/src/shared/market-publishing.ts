@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { MAX_CREW_TEMPLATE_WORKERS } from './crew-limits';
 import { BuiltInProviderId, MAX_CREW_MEMBERS, WorkerInput, SkillInput, TeamInput } from './contracts';
 import { KnowledgeInput } from './knowledge';
-import { MARKET_BODY_LIMIT } from './market';
+import { MARKET_BODY_LIMIT, MARKET_METADATA_LIMIT, MARKET_REQUEST_LIMIT } from './market';
 import { PackageInput, SKILL_FILE_LIMIT, SKILL_PACKAGE_LIMIT } from './skill-package';
 import { inspectPackageContent, packageBlockers, packageIdentityText } from './skill-package-content';
 import { validateTemplateReferences } from './templates';
@@ -46,7 +46,7 @@ export type MarketDiagnostic = { path: string; line: number; rule: string; messa
 export type MarketSubmissionResult =
   | { ok: true; submission: MarketSubmission; templateText: string; sha256: string; reviewDigest: string }
   | { ok: false; diagnostics: MarketDiagnostic[] };
-export type MarketSubmissionLimits = { bodyBytes?: number; fileBytes?: number; packageBytes?: number };
+export type MarketSubmissionLimits = { bodyBytes?: number; requestBytes?: number; fileBytes?: number; packageBytes?: number };
 
 /** Stable serialization for the complete authored version, separate from its template-body SHA. */
 export function canonicalMarketContent(value: unknown): string {
@@ -104,8 +104,8 @@ function scanAuthoredStrings(value: unknown, path: string, diagnostics: MarketDi
 /** Pure content boundary. Ownership, version IDs and review decisions are supplied by a later authenticated caller. */
 export async function validateMarketSubmission(requestText: string, limits: MarketSubmissionLimits = {}): Promise<MarketSubmissionResult> {
   const diagnostics: MarketDiagnostic[] = [];
-  const bodyLimit = Math.min(limits.bodyBytes ?? MARKET_BODY_LIMIT, MARKET_BODY_LIMIT);
-  if (new TextEncoder().encode(requestText).length > bodyLimit) {
+  const requestLimit = Math.min(limits.requestBytes ?? MARKET_REQUEST_LIMIT, limits.bodyBytes ?? MARKET_REQUEST_LIMIT, MARKET_REQUEST_LIMIT);
+  if (new TextEncoder().encode(requestText).length > requestLimit) {
     return { ok: false, diagnostics: [diagnostic('request', 'body-size')] };
   }
   let raw: unknown;
@@ -125,6 +125,15 @@ export async function validateMarketSubmission(requestText: string, limits: Mark
     return { ok: false, diagnostics: [diagnostic(path, 'schema')] };
   }
   const submission = parsed.data;
+  const templateText = JSON.stringify(submission.template);
+  const bodyLimit = Math.min(limits.bodyBytes ?? MARKET_BODY_LIMIT, MARKET_BODY_LIMIT);
+  if (new TextEncoder().encode(templateText).length > bodyLimit) {
+    return { ok: false, diagnostics: [diagnostic('template', 'body-size')] };
+  }
+  const { template: _template, ...metadata } = submission;
+  if (new TextEncoder().encode(JSON.stringify(metadata)).length > MARKET_METADATA_LIMIT) {
+    return { ok: false, diagnostics: [diagnostic('request', 'metadata-size')] };
+  }
   if (submission.kind === 'crew') {
     try {
       validateTemplateReferences(submission.template);
@@ -163,7 +172,6 @@ export async function validateMarketSubmission(requestText: string, limits: Mark
     }
   }
   if (diagnostics.length) return { ok: false, diagnostics };
-  const templateText = JSON.stringify(submission.template);
   const [bodyHash, reviewDigest] = await Promise.all([
     sha256(templateText), sha256(canonicalMarketContent(submission)),
   ]);
