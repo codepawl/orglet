@@ -8,7 +8,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
-const env = { ...process.env, APPDATA: directory, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = false;
 const launch = async data => {
   const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${data}`], env });
@@ -17,7 +17,7 @@ const launch = async data => {
 let app = await launch(directory);
 try {
   const userData = await app.evaluate(({ app }) => app.getPath('userData'));
-  assert.ok(userData.toLowerCase().startsWith(directory.toLowerCase()), 'Packaged smoke requires isolated APPDATA');
+  assert.ok(userData.toLowerCase().startsWith(directory.toLowerCase()), 'Packaged smoke requires an isolated data folder');
   let page = await app.firstWindow(); await useVietnamese(page);
   const csv = join(directory, 'sample.csv'); await writeFile(csv, 'id,label\n1,alpha\n2,beta\n2,gamma\n');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, csv);

@@ -7,7 +7,7 @@ import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-knowledge-'));
-const env = { ...process.env, APPDATA: directory, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}));
