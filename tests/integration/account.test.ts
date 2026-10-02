@@ -18,6 +18,7 @@ import {
   ACCOUNT_CLIENT_ID,
   ACCOUNT_REDIRECT_URI,
   ACCOUNT_RESOURCE,
+  ACCOUNT_MARKET_RESOURCE,
   ACCOUNT_SCHEME,
   accountsBaseUrl,
   DEFAULT_ACCOUNTS_URL,
@@ -199,7 +200,7 @@ describe('starting a sign-in', () => {
     expect(pkcePair().verifier).not.toBe(verifier);
   });
 
-  it('opens the browser at the authorize endpoint with PKCE, state, scopes and the sync resource', async () => {
+  it('opens the browser at the authorize endpoint with PKCE, state, scopes and separate sync/market resources', async () => {
     const account = service();
     const finished = account.signIn();
     await waitFor(() => opened.length === 1);
@@ -211,8 +212,8 @@ describe('starting a sign-in', () => {
       redirect_uri: 'com.codepawl.orglet:/auth/callback',
       scope: 'openid profile email offline_access',
       code_challenge_method: 'S256',
-      resource: ACCOUNT_RESOURCE,
     });
+    expect(address.searchParams.getAll('resource')).toEqual([ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE]);
     expect(address.searchParams.get('state')).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(address.searchParams.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(account.state()).toEqual({ status: 'signing_in' });

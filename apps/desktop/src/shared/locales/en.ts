@@ -3830,6 +3830,8 @@ export const en: Dictionary = {
   'Đã bắt đầu một lần đăng nhập khác.': 'Another sign-in started.',
   'Phiên đăng nhập đã hết. Đăng nhập lại.': 'Your sign-in ended. Sign in again.',
   'Chưa đăng nhập tài khoản CodePawl.': 'Not signed in to a CodePawl account.',
+  'Đăng nhập lại trong trình duyệt để dùng tài khoản với marketplace.': 'Sign in again in your browser to use your account with the marketplace.',
+  'Không gửi được cập nhật trạng thái tài khoản.': 'Could not send the account status update.',
   // COD-344: what an account gives, and usage analytics for a signed-in account.
   'Tài khoản mang lại gì': 'What an account gives you',
   'Miễn phí, một tài khoản CodePawl cho mọi sản phẩm CodePawl.': 'Free, and one CodePawl account for every CodePawl product.',

@@ -43,6 +43,7 @@ The link back to the app uses the `com.codepawl.orglet:` scheme. Setup registers
 
 - **On this computer**, in Orglet's data folder, one file `account.credential` holds the sign-in, encrypted with your system's secure storage the same way as API keys, plus your email, name and plan so Settings can show them offline. It is not in the database, so a backup never includes it and **Erase all data** leaves it alone.
 - **The short-lived access token** stays in the app's memory and is gone when Orglet closes. The app's window never sees either token; it only learns whether you are signed in, your email, name and plan.
+- Sync and marketplace use separate access tokens. New browser sign-ins authorize both resources; an older saved sign-in still works for sync and usage statistics, but needs another browser sign-in before marketplace account access. This prepares authentication; publishing is not available yet.
 - **Also in the data folder**: `analytics.json`, a random install id made on this computer (never a hardware id), whether the analytics switch is on and the version that last ran, and `analytics-queue.json`, the statistics waiting to be sent. Neither is in the database or a backup.
 - **On CodePawl's servers**: your account (email, name, a hashed password or the Google or GitHub sign-in you used), and the usage statistics and error reports below while analytics is on. No chats, orglets or files, since nothing syncs yet.
 
