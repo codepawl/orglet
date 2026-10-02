@@ -120,7 +120,7 @@ Process detail is [CONTRIBUTING.md](CONTRIBUTING.md). Fill [.github/pull_request
 
 ## Do not
 
-- Expand into product.md **Not now** (a cloud runner, account code ahead of the COD-329 design, org-chart company sim, skill marketplace, scraping model lists).
+- Expand into product.md **Not now** (a cloud runner, account code ahead of the COD-329 design, org-chart company sim, running downloaded scripts, scraping model lists). The marketplace is in scope since 2026-10-01: [docs/marketplace-design.md](docs/marketplace-design.md) (COD-373).
 - Commit `.env`, keys, certificates, or SQLite databases.
 - Claim you tested a live provider, installer, updater or notarized build unless you actually did.
 - "Clean up" unrelated files, regenerate lockfiles without a dependency change, or rephrase docs that are already clear.
