@@ -1,4 +1,5 @@
-import { isLocalApi, type Worker } from '../../shared/contracts';
+import { modelEffort, resolveEffort } from '../../shared/effort';
+import { isLocalApi, type Run, type Worker } from '../../shared/contracts';
 import { isHarness } from '../../shared/harness';
 import { CATALOG_HINT_IDS, type ModelEntry, type ModelListCache } from '../../shared/models';
 import { isOpenCodePlan, type OpenCodePlan } from '../../shared/opencode';
@@ -85,4 +86,13 @@ export function resolveWorkerModel(worker: Pick<Worker, 'provider' | 'modelId'>,
     }
   }
   return { id, pricingVersion: `unknown:${id}` };
+}
+
+export function resolveWorkerEffort(run: Run, cache: ModelListCache, scheduled = false) {
+  const worker = run.snapshot.worker;
+  const models = cache.byProvider[worker.provider as keyof typeof cache.byProvider]?.models;
+  const selected = run.snapshot.model ?? worker.modelId;
+  const entry = selected ? models?.find(item => item.id === selected || item.resolvedId === selected || item.aliases?.includes(selected) || (worker.provider === 'ollama' && item.id.replace(/:latest$/, '') === selected)) : models?.find(item => item.isDefault);
+  const support = modelEffort(worker.provider, entry?.resolvedId ?? selected ?? entry?.id, entry?.effort);
+  return resolveEffort(worker.effort, run.stage, support.capability, support.transport, support.unsupported, scheduled);
 }

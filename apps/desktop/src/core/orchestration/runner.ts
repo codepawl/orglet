@@ -1,3 +1,4 @@
+import type { NativeEffortSetting } from '../../shared/effort';
 import { chatHeadline, ownWords } from '../../shared/forward';
 import { canContinueRun } from '../../shared/out-of-steps';
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
@@ -25,7 +26,7 @@ import { acceptsForcedToolChoice } from '../adapters/anthropic';
 import { ProviderRequestError } from '../adapters/opencode';
 import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
 import { modelContextTokens, readModelListCache, rememberReportedContextWindow } from '../models/cache';
-import { resolveWorkerModel } from '../models/resolve';
+import { resolveWorkerModel, resolveWorkerEffort } from '../models/resolve';
 import { ProfileArgs, type ProfileRecord } from '../../shared/profiles';
 import type { PreflightRecord } from '../../shared/preflight';
 import { Checkpoints, type Checkpoint } from '../storage/checkpoints';
@@ -588,7 +589,9 @@ export class Runner {
    * on this computer, fails or is late. Unset in tests that do not need it.
    */
   knowledgeFit?: (message: string, notes: NoteCandidate[]) => Promise<Map<string, number> | undefined>;
-  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() }), private browser?: BrowserTools, private desktop?: DesktopTools) {
+  /** Refresh native effort metadata only before a new run freezes its model and settings. */
+  prepareEffort?: (worker: Worker) => Promise<void>;
+  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string, effort?: NativeEffortSetting) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() }), private browser?: BrowserTools, private desktop?: DesktopTools) {
     this.slots.onChange = () => this.notify();
   }
   /**
@@ -875,16 +878,35 @@ export class Runner {
       run = { ...run, snapshot: { ...run.snapshot, input, ...this.startPermissions(task, run) } };
       task = { ...task, ...input };
       assertSkillReady(run.snapshot.skill, this.store);
+      const priorCheckpoint = this.checkpoints.get(run.id);
+      const priorRequests = this.store.db.prepare('SELECT COUNT(*) AS count FROM reservations WHERE run_id=?').get(run.id)!.count;
+      const legacyResume = !run.snapshot.effort && Boolean(priorCheckpoint || priorRequests);
+      const firstEffortResolution = !run.snapshot.effort && !legacyResume;
+      if (firstEffortResolution) await this.prepareEffort?.(run.snapshot.worker);
       const resolved = resolveWorkerModel(run.snapshot.worker, readModelListCache(this.store), readCustomConnections(this.store));
       const workerProvider = run.snapshot.worker.provider;
       if (isOpenCodePlan(workerProvider)) assertOpenCodeModel(workerProvider, run.snapshot.model ?? resolved.id);
       if (run.snapshot.worker.provider !== 'demo') {
-        if (!run.snapshot.model && resolved.id) {
+        if (!run.snapshot.model && resolved.id && (!isHarness(workerProvider) || firstEffortResolution)) {
           run = { ...run, snapshot: { ...run.snapshot, model: resolved.id, pricingVersion: resolved.pricingVersion } };
         } else if (run.snapshot.model && !run.snapshot.worker.modelId && !isHarness(run.snapshot.worker.provider) && !isLocalApi(run.snapshot.worker.provider)
           && (run.snapshot.model !== resolved.id || run.snapshot.pricingVersion !== resolved.pricingVersion)) {
           throw new Error('Model hoặc bảng giá đã đổi. Tạo lần chạy mới để dùng cấu hình hiện tại.');
         }
+      }
+      if (!run.snapshot.effort) {
+        if (!legacyResume && isHarness(workerProvider)) {
+          const models = readModelListCache(this.store).byProvider[workerProvider]?.models;
+          const selected = run.snapshot.model;
+          const chosen = selected ? models?.find(entry => entry.id === selected || entry.resolvedId === selected || entry.aliases?.includes(selected)) : models?.find(entry => entry.isDefault);
+          if (chosen?.resolvedId || (!selected && chosen)) run = { ...run, snapshot: { ...run.snapshot, model: chosen?.resolvedId ?? chosen!.id } };
+        }
+        const effort = legacyResume
+          ? { requested: run.snapshot.worker.effort ?? (!task.routineId && (run.stage === 'plan' || run.stage === 'synthesis') ? 'high' : 'medium'), origin: run.snapshot.worker.effort ? 'explicit' as const : 'contextual' as const, support: 'unknown' as const }
+          : resolveWorkerEffort(run, readModelListCache(this.store), Boolean(task.routineId));
+        run = { ...run, snapshot: { ...run.snapshot, effort } };
+        if (effort.support === 'unknown') this.event(run.id, 'Chưa xác minh mức suy nghĩ cho model và kết nối này; lần chạy giữ mặc định của kết nối.');
+        if (effort.support === 'unsupported') this.event(run.id, 'Model và kết nối này không hỗ trợ mức suy nghĩ đã chọn; lần chạy giữ mặc định của kết nối.');
       }
       // Freeze knowledge and transcript layers before any dispatch; later edits only affect new runs.
       const knowledgeBase = new KnowledgeBase(this.store);
@@ -1149,7 +1171,8 @@ export class Runner {
           request: { harness: provider, executable: harness.executable, cwd: harnessDirectory,
             maxBudgetUsd: 0,
             ...(harness.configDir ? { configDir: harness.configDir } : {}),
-            ...(run.snapshot.model ? { model: run.snapshot.model } : {}) },
+            ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
+            ...(run.snapshot.effort?.support === 'supported' ? { effort: run.snapshot.effort.native } : {}) },
           onResult: result => {
             if (result.context) {
               run = { ...run, contextUse: result.context };
@@ -1163,7 +1186,7 @@ export class Runner {
             this.event(run.id, harnessReplyLine(harness.name, result, checkpoint));
           },
         });
-      } else model = await this.adapter(run.snapshot.worker.provider, run.snapshot.model);
+      } else model = await this.adapter(run.snapshot.worker.provider, run.snapshot.model, run.snapshot.effort?.support === 'supported' ? run.snapshot.effort.native : undefined);
       signal.throwIfAborted();
       const ledger = new BudgetLedger(this.store);
       if (checkpoint.phase === 'requesting' || checkpoint.phase === 'done') this.assertResumable(run);
@@ -1341,7 +1364,7 @@ export class Runner {
         }
         // The request is settled by now; a reply the provider cut off or declined stops the run with the reason (COD-358).
         if (reply.stopped) throw new Error(MODEL_STOP_MESSAGES[reply.stopped]);
-        const callMayBeSkipped = run.snapshot.worker.provider === 'anthropic' && !acceptsForcedToolChoice(run.snapshot.model ?? '');
+        const callMayBeSkipped = run.snapshot.worker.provider === 'anthropic' && (!acceptsForcedToolChoice(run.snapshot.model ?? '') || (run.snapshot.effort?.support === 'supported' && run.snapshot.effort.native.transport === 'anthropic' && run.snapshot.effort.native.adaptive === true));
         if (!reply.calls.length && callMayBeSkipped && missingCallsInARow(messages) < MAX_MISSING_CALLS_IN_A_ROW) {
           if (reply.notes || reply.anthropicTurn) messages.push({ role: 'assistant', content: reply.notes ?? '', ...(reply.anthropicTurn ? { anthropicTurn: reply.anthropicTurn } : {}) });
           messages.push({ role: 'user', content: JSON.stringify({ instruction: MISSING_CALL_INSTRUCTION }) });
@@ -2115,6 +2138,7 @@ export class Runner {
           signal,
           maxBudgetUsd: remainingUsd,
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
+          ...(run.snapshot.effort?.support === 'supported' ? { effort: run.snapshot.effort.native } : {}),
           ...(attachedImages.length ? { images: attachedImages } : {}),
           onProgress: update => progress.update(showSourceNames(update)),
         }));

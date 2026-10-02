@@ -58,6 +58,25 @@ pnpm test:live
 
 Anthropic live acceptance needs a separate authorization and is not covered by `pnpm test:live`.
 
+## Thinking effort
+
+An orglet's **Thinking effort** setting is optional: Automatic, Low, Medium, High or Maximum. Automatic requests medium for all scheduled work, members and other chat turns. A channel lead's plan and synthesis use high outside schedules. An explicit choice takes precedence. Maximum means the highest named level evidenced for the selected model and transport. It does not change the output token cap, budget, timeouts or permissions.
+
+New runs first refresh pre-effort native metadata; a newly selected Ollama model is inspected even when its tags cache is fresh. Cache version 3 migrates version 2 rows without discarding verified prices. A failed metadata refresh stays unverified. Frozen and legacy resumes skip this preparation.
+
+Before its first dispatch, each run freezes the requested effort, its explicit or contextual origin, support status and, when supported, the native setting. A harness's resolved model ID is frozen at the same point; saved model aliases remain the person's choice for future runs. Resuming uses that snapshot after model lists or orglet settings change. A legacy run with a checkpoint or earlier request, but no effort snapshot, stays unverified and sends no new effort parameter. Its existing Anthropic prefix digest is preserved; effort-enabled requests bind the new configuration into that digest.
+
+The dialog and activity trace say when support is unverified or the selected level is unsupported. The field is then omitted and the connection keeps its default; Orglet does not select a different model. Current support follows the actual request route:
+
+- OpenAI and xAI use documented named levels for exact model IDs on Chat Completions with tools. GPT-6 Astra and GPT-6.1 Sol are unsupported on this route because their Chat Completions endpoint does not support function calling; [OpenAI's reasoning guide](https://developers.openai.com/api/docs/guides/reasoning) directs that use to Responses. This does not describe native Codex support.
+- Anthropic's documented models use `output_config.effort` with adaptive thinking on supported models. Adaptive requests use automatic tool choice and parallel tool use off. Signed thinking replay is bound to that configuration as well as the prompt, tools and message prefix. A no-tool answer gets one bounded correction. [Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort).
+- Codex preserves `supportedReasoningEfforts` from its native model list and uses `model_reasoning_effort`. Claude Code uses `--effort` for exact supported model IDs. Gemini's exact supported models get a generation override in the private run's settings file; the lockdown remains in place. Cursor exposes no evidenced effort control here.
+- OpenRouter preserves the model's `reasoning.supported_efforts`; a null list accepts all gateway levels, an omitted list is unverified. Dynamic auto/free routers stay unverified. [OpenRouter reasoning options](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens#discovering-per-model-reasoning-options).
+- Ollama reads `thinking.values` from `/api/show` only for locally selected models. Named values are preserved; boolean on/off controls do not establish effort levels. An unavailable metadata request leaves support unverified. [Ollama thinking controls](https://github.com/ollama/ollama/blob/main/docs/capabilities/thinking.mdx).
+- OpenCode and custom connections remain unverified. No provider-wide maximum or speculative token budget is sent.
+
+The optional orglet preference travels through revisions, backups and templates. App proposals use `effort: "auto"` to clear an override; null leaves it unchanged. A marketplace update preserves an installed orglet's local choice, including a deliberate absence. Run snapshots keep the setting they started with.
+
 ## Local harnesses (Claude Code, Codex, Cursor Agent, Gemini CLI)
 
 Orglet can also run a worker through an agent CLI already installed on the machine, signed in as that CLI itself or as one of the accounts added in Settings (see [Accounts](#accounts) below). **Cài đặt → Harness trên máy** always lists Claude Code, Codex, Cursor and Gemini CLI. Each row is **chưa cài** (not installed), **đã thấy · chưa đăng nhập** (found on disk), **đã đăng nhập · sẵn sàng** (signed in, ready to run) or **lỗi đăng nhập** (the status probe failed). Found on disk is not ready. A failed harness login does not fall back to Demo. **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command (Gemini CLI has none; see its entry), and looks in:

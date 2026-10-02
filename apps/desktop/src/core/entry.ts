@@ -110,21 +110,21 @@ const workspaceFiles = new WorkspaceFilesRuntime({
 const workspaceRuntime = new WorkspaceRuntime(store, workspaceFiles,
   new WorkspaceIntegration(store, runtimePaths.integrationExecutable, workspaceDirectory),
   () => port.postMessage({ type: 'changed' }), workspaceFiles);
-const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async (provider, model) => {
+const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async (provider, model, effort) => {
   if (isCustomProvider(provider)) return customConnectionAdapter(store, provider, model, requestKey);
   const apiProvider = ApiProvider.safeParse(provider);
   if (!apiProvider.success) throw new Error('Provider chưa được hỗ trợ.');
   const key = await requestKey(provider);
   if (!key) throw new Error(`Chưa kết nối ${API_PROVIDER_NAMES[apiProvider.data]}. Mở Cài đặt để nhập API key.`);
-  if (provider === 'anthropic') return new AnthropicAdapter(key, undefined, model);
-  if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai', model });
+  if (provider === 'anthropic') return new AnthropicAdapter(key, undefined, model, effort);
+  if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai', model, effort });
   if (provider === 'openrouter') return new OpenAIAdapter(key, {
-    baseURL: MODEL_LIST_ENDPOINTS.openrouter, provider: 'openrouter', model,
+    baseURL: MODEL_LIST_ENDPOINTS.openrouter, provider: 'openrouter', model, effort,
     defaultHeaders: { 'HTTP-Referer': 'https://github.com/codepawl/orglet', 'X-Title': 'Orglet' },
   });
   if (provider === 'opencode-zen' || provider === 'opencode-go') return new OpenCodeAdapter(provider, key, model);
-  if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama });
-  return new OpenAIAdapter(key, { model });
+  if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama, effort });
+  return new OpenAIAdapter(key, { model, effort });
 }, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts'), url => port.postMessage({ type: 'openSignInPage', url })), undefined, {
   readKey: provider => requestKey(provider),
 }, workspaceRuntime, {

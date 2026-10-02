@@ -37,7 +37,7 @@ Messages read as a flat list, the way Slack shows them: a face, a name and the t
 
 Reply to a saved user or worker message to give the next turn a precise reference, or react without starting a run. Team messages appear in Details with the same actions. Reactions and reply links stay with the local chat and its backup; a reaction alone does not change permissions or dispatch work.
 
-Choose an orglet's model from the message box. The picker shows one model name; its menu includes the exact model IDs. [Chat controls](docs/chat-guide.md).
+Choose an orglet's model from the message box. The picker shows one model name; its menu includes the exact model IDs. In orglet settings, **Thinking effort** can stay automatic or use low, medium, high or maximum. Automatic uses medium for schedules and other turns, high for planning and synthesis outside schedules; unverified or unsupported model connections keep their own default. [Chat controls](docs/chat-guide.md), [effort support](docs/technical-guide.md#thinking-effort).
 
 Forward a message, yours or an orglet's, to up to five other chats at once, with a note if you like. Each chat gets it as your message and its orglet answers. Files go along only when you tick them. [How forwarding works](docs/team-chat.md#forwarding).
 

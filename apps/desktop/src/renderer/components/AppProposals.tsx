@@ -37,7 +37,7 @@ const editTitles: Record<AppProposalKind, string> = translated({
   orglet: 'Sửa Tí', crew: 'Sửa kênh', crew_template: 'Xuất template', skill: 'Skill · bản mới', schedule: 'Sửa lịch', settings: 'Cài đặt',
 });
 const fieldNames: Record<string, string> = translated({
-  name: 'Tên', description: 'Mô tả', instructions: 'Hướng dẫn', provider: 'Model', modelId: 'ID model', skillId: 'Kỹ năng', taskBudgetMicros: 'Giới hạn mỗi task',
+  name: 'Tên', description: 'Mô tả', instructions: 'Hướng dẫn', provider: 'Model', modelId: 'ID model', effort: 'Mức suy nghĩ', skillId: 'Kỹ năng', taskBudgetMicros: 'Giới hạn mỗi task',
   memberIds: 'Thành viên', synthesizerId: 'Tí trưởng', workflow: 'Cách chạy', monthlyBudgetMicros: 'Ngân sách tháng', content: 'Nội dung',
   brief: 'Tin nhắn', schedule: 'Lịch', target: 'Giao cho', enabled: 'Bật lịch', team: 'Kênh được xuất',
   theme: 'Giao diện', language: 'Ngôn ngữ', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Font giao diện', codeFont: 'Font code',

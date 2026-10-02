@@ -5,6 +5,15 @@ import type { Dictionary } from '../i18n';
  * Keep keys in sync with `node scripts/i18n-keys.cjs` (it lists missing and unused entries).
  */
 export const en: Dictionary = {
+  "Mức suy nghĩ": "Thinking effort",
+  "Tự động": "Automatic",
+  "Thấp": "Low",
+  "Cao": "High",
+  "Tối đa": "Maximum",
+  "Cao khi lập kế hoạch và tổng hợp; vừa cho lịch và các lượt khác.": "High for planning and synthesis; medium for schedules and other turns.",
+  "Mức cao nhất model và kết nối hỗ trợ.": "The highest level supported by the model and connection.",
+  "Chưa xác minh mức suy nghĩ cho model và kết nối này; lần chạy giữ mặc định của kết nối.": "Thinking effort is unverified for this model and connection; runs keep the connection default.",
+  "Model và kết nối này không hỗ trợ mức suy nghĩ đã chọn; lần chạy giữ mặc định của kết nối.": "This model and connection do not support the selected thinking effort; runs keep the connection default.",
   "Phiên bản danh mục không hợp lệ.": "The catalog version is invalid.",
   "Không cập nhật bạn đã lưu trữ hoặc xóa.": "Archived or deleted friends cannot be updated.",
   "Nguồn danh mục thiếu Tí, nhóm hoặc kỹ năng.": "The catalog origin is missing an orglet, crew, or skill.",

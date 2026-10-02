@@ -1,3 +1,4 @@
+import { NativeEffort } from '../../shared/effort';
 import { execFile } from 'node:child_process';
 import { API_PROVIDER_NAMES, type ApiProvider, type CredentialProvider } from '../../shared/contracts';
 import { isCustomProvider, type CustomConnection, type CustomProviderId } from '../../shared/custom-connections';
@@ -44,6 +45,7 @@ export const GEMINI_CLI_ALIASES: ReadonlyArray<{ id: string; displayName: string
 ];
 
 export type ModelListFetchOptions = {
+  selectedOllamaModels?: () => string[];
   readKey: (provider: CredentialProvider) => Promise<string | null>;
   /** The saved connection behind a `custom:<id>` provider; the service reads it from settings. */
   customConnection?: (provider: CustomProviderId) => CustomConnection | undefined;
@@ -102,6 +104,34 @@ function pickId(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const parsed = CustomModelId.safeParse(value);
   return parsed.success ? parsed.data : undefined;
+}
+
+function codexEffort(row: Record<string, unknown>) {
+  if (!Array.isArray(row.supportedReasoningEfforts)) return {};
+  const levels = [...new Set(row.supportedReasoningEfforts.flatMap(item => {
+    const value = item && typeof item === 'object' ? (item as { reasoningEffort?: unknown }).reasoningEffort : item;
+    const parsed = NativeEffort.safeParse(value);
+    return parsed.success ? [parsed.data] : [];
+  }))];
+  return levels.length ? { effort: { levels } } : {};
+}
+
+function openRouterEffort(model: string, values: unknown) {
+  if (model === 'openrouter/auto' || model === 'openrouter/free') return {};
+  const allowed = NativeEffort.options.filter(level => level !== 'ultra');
+  const levels = values === null ? allowed : Array.isArray(values) ? allowed.filter(level => values.includes(level)) : [];
+  return levels.length ? { effort: { levels } } : {};
+}
+
+export function parseOllamaEffort(answer: unknown) {
+  const values = answer && typeof answer === 'object' ? (answer as { thinking?: { values?: unknown } }).thinking?.values : undefined;
+  if (!Array.isArray(values)) return undefined;
+  // Named controls from /api/show; boolean on/off metadata cannot represent per-orglet effort.
+  const levels = [...new Set(values.flatMap(value => {
+    const parsed = NativeEffort.safeParse(value);
+    return parsed.success ? [parsed.data] : [];
+  }))];
+  return levels.length ? { levels } : undefined;
 }
 
 function sunsetDate(value: unknown): string | undefined {
@@ -238,7 +268,7 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
   const seen = new Set<string>();
   for (const row of data) {
     if (!row || typeof row !== 'object') continue;
-    const rec = row as { id?: unknown; name?: unknown; pricing?: unknown; architecture?: unknown; context_length?: unknown };
+    const rec = row as { id?: unknown; name?: unknown; pricing?: unknown; architecture?: unknown; context_length?: unknown; supported_parameters?: unknown; reasoning?: { supported_efforts?: unknown } };
     if (!openrouterText(rec.architecture)) continue;
     const id = pickId(rec.id);
     if (!id || seen.has(id)) continue;
@@ -251,6 +281,7 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
     models.push({
       provider: 'openrouter',
       id,
+      ...openRouterEffort(id, rec.reasoning?.supported_efforts),
       source: 'native',
       ...(displayName && displayName !== id ? { displayName } : {}),
       ...(inputTenths !== undefined ? { inputTenths } : {}),
@@ -348,6 +379,7 @@ export function parseCodexModels(text: string): ModelEntry[] {
     models.push({
       provider: 'codex',
       id,
+      ...codexEffort(rec),
       source: 'native',
       ...(displayName ? { displayName } : {}),
       ...(replacementId && replacementId !== id ? { replacementId } : {}),
@@ -370,7 +402,7 @@ export function parseCodexModelList(answer: unknown): ModelEntry[] {
   const seen = new Set<string>();
   for (const row of data) {
     if (!row || typeof row !== 'object') continue;
-    const rec = row as { id?: unknown; model?: unknown; displayName?: unknown; upgrade?: unknown; hidden?: unknown; isDefault?: unknown };
+    const rec = row as { id?: unknown; model?: unknown; displayName?: unknown; upgrade?: unknown; hidden?: unknown; isDefault?: unknown; supportedReasoningEfforts?: unknown };
     if (rec.hidden === true) continue;
     const id = pickId(rec.model) ?? pickId(rec.id);
     if (!id || seen.has(id)) continue;
@@ -379,6 +411,7 @@ export function parseCodexModelList(answer: unknown): ModelEntry[] {
     const replacementId = pickId(rec.upgrade);
     models.push({
       provider: 'codex',
+      ...codexEffort(rec),
       id,
       source: 'native',
       ...(displayName ? { displayName } : {}),
@@ -550,7 +583,15 @@ async function fetchOllama(options: ModelListFetchOptions): Promise<Pick<ModelLi
   if (!key) return withCatalogHint('ollama', [], 'native', missingKey(apiName('ollama')));
   const base = options.endpoints?.ollama ?? MODEL_LIST_ENDPOINTS.ollama;
   const payload = await readJson(`${base}/api/tags`, {}, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
-  return withCatalogHint('ollama', parseOllamaTags(payload), 'native');
+  const models = parseOllamaTags(payload);
+  const selected = new Set((options.selectedOllamaModels?.() ?? []).slice(0, 20));
+  await Promise.all(models.filter(model => selected.has(model.id) || selected.has(model.id.replace(/:latest$/, ''))).map(async model => {
+    try {
+      const response = await (options.fetch ?? fetch)(base + '/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model.id }), signal: AbortSignal.timeout(options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS) });
+      if (response.ok) model.effort = parseOllamaEffort(await response.json());
+    } catch { /* The model remains usable without known effort support. */ }
+  }));
+  return withCatalogHint('ollama', models, 'native');
 }
 
 const missingConnection = 'Kết nối tùy chỉnh này không còn. Vẫn có thể gõ ID model tùy chỉnh.';

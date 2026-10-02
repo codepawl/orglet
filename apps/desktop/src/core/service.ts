@@ -1,3 +1,4 @@
+import type { NativeEffortSetting } from '../shared/effort';
 import { dirname, resolve } from 'node:path';
 import { WorkspaceRecovery, restoredChangesKey } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
@@ -54,8 +55,8 @@ import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/cu
 import { assertSkillReady, inspectPackage, packageForImport, packageForExport } from './skill-package';
 import { taskResultStamp } from '../shared/task-seen';
 import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
-import { canStoreModelListRow, dropProviderRow, readModelListCache, readReportedContextWindows, withReportedContextWindows, writeModelListCache } from './models/cache';
-import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
+import { EFFORT_METADATA_REFRESH_AT, canStoreModelListRow, dropProviderRow, readModelListCache, readReportedContextWindows, withReportedContextWindows, writeModelListCache } from './models/cache';
+import { CATALOG_HINT_IDS, emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople, parseMentions } from '../shared/mentions';
 import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../shared/opencode';
 import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
@@ -207,7 +208,7 @@ export class CoreService {
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}, browserHost?: BrowserHost, desktopHost?: DesktopHost, private ownPrograms: readonly string[] = []) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string, effort?: NativeEffortSetting) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}, browserHost?: BrowserHost, desktopHost?: DesktopHost, private ownPrograms: readonly string[] = []) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.knowledge.releaseDeletedOwners();
@@ -234,6 +235,7 @@ export class CoreService {
     this.browser = new BrowserTools(store, browserHost, () => this.notify());
     this.desktop = new DesktopTools(store, desktopHost, () => this.notify(), ownPrograms);
     this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: request => this.executeHarness(request) }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser, this.desktop);
+    this.runner.prepareEffort = worker => this.prepareRunEffort(worker);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routineFolders = new RoutineFolders(store);
@@ -1464,16 +1466,18 @@ export class CoreService {
   private scheduleModelListRefresh(provider: ModelListProviderId) {
     void this.refreshModelList(provider).then(() => this.notify()).catch(() => {});
   }
-  private refreshModelList(provider: ModelListProviderId): Promise<ModelListRow> {
+  private refreshModelList(provider: ModelListProviderId, selectedOllamaModel?: string): Promise<ModelListRow> {
     const existing = this.modelListInflight.get(provider);
     if (existing) return existing;
     const epoch = this.modelListEpoch.get(provider) ?? 0;
     const previous = this.modelListMemory.byProvider[provider];
-    const work = fetchProviderList(provider, this.modelListFetchOptions()).then(row => {
+    const work = fetchProviderList(provider, this.modelListFetchOptions(selectedOllamaModel)).then(row => {
       if ((this.modelListEpoch.get(provider) ?? 0) !== epoch) return previous ?? row;
       this.modelListFailed.delete(provider);
       // A fetch that learned nothing never replaces a list that did; it only puts off the next try (COD-338).
-      const kept = row.retryAfter && previous && !previous.retryAfter ? { ...previous, retryAfter: row.retryAfter } : row;
+      const kept = row.error && previous?.retryAfter === EFFORT_METADATA_REFRESH_AT
+        ? { ...previous, error: row.error, retryAfter: new Date(this.clock().getTime() + 10 * 60_000).toISOString() }
+        : row.retryAfter && previous && !previous.retryAfter ? { ...previous, retryAfter: row.retryAfter } : row;
       this.writeModelListRow(provider, kept);
       return this.modelListMemory.byProvider[provider] ?? kept;
     }).catch(error => {
@@ -1502,7 +1506,19 @@ export class CoreService {
     this.modelListMemory = { version: MODEL_LIST_CACHE_VERSION, byProvider: { ...this.modelListMemory.byProvider, [provider]: row } };
     writeModelListCache(this.store, this.modelListMemory);
   }
-  private modelListFetchOptions() {
+  private async prepareRunEffort(worker: Worker) {
+    const provider = worker.provider;
+    if (provider !== 'codex' && provider !== 'openrouter' && provider !== 'ollama') return;
+    this.hydrateModelLists();
+    const row = this.modelListMemory.byProvider[provider];
+    const selected = worker.modelId ?? (provider === 'ollama' ? CATALOG_HINT_IDS.ollama : undefined);
+    const entry = row?.models.find(model => model.id === selected || model.aliases?.includes(selected ?? '') || (provider === 'ollama' && model.id.replace(/:latest$/, '') === selected));
+    if (row && !modelListStale(row, this.clock()) && (provider !== 'ollama' || entry?.effort)) return;
+    // A picker refresh may already be running; finish it before inspecting this run's selected model.
+    await this.waitForModelListRefresh(provider);
+    await this.refreshModelList(provider, provider === 'ollama' ? selected : undefined);
+  }
+  private modelListFetchOptions(selectedOllamaModel?: string) {
     return {
       readKey: this.modelListRuntime.readKey ?? (async () => null),
       fetch: this.modelListRuntime.fetch,
@@ -1512,6 +1528,10 @@ export class CoreService {
       claudeToken: this.modelListRuntime.claudeToken,
       appServer: this.modelListRuntime.appServer,
       timeoutMs: this.modelListRuntime.timeoutMs,
+      selectedOllamaModels: () => {
+        const workers = this.store.all<Worker>('workers').filter(worker => worker.provider === 'ollama');
+        return [...new Set([...(selectedOllamaModel ? [selectedOllamaModel] : []), ...(workers.length ? workers.map(worker => worker.modelId ?? CATALOG_HINT_IDS.ollama) : [CATALOG_HINT_IDS.ollama])])];
+      },
       harnesses: () => this.harnesses(false),
       customConnection: (provider: string) => findCustomConnection(readCustomConnections(this.store), provider),
       now: this.clock,

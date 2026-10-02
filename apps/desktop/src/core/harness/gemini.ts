@@ -1,3 +1,4 @@
+import type { NativeEffortSetting } from '../../shared/effort';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -58,10 +59,10 @@ export const geminiLockdownSettings = {
 };
 
 /** Writes the lockdown into a fresh private folder; an existing file there means the folder is not Orglet's own. */
-export async function writeGeminiLockdown(directory: string): Promise<void> {
+export async function writeGeminiLockdown(directory: string, model?: string, effort?: NativeEffortSetting): Promise<void> {
   const settingsFolder = join(directory, '.gemini');
   await mkdir(settingsFolder, { recursive: true });
-  await writeFile(join(settingsFolder, 'settings.json'), JSON.stringify(geminiLockdownSettings), { flag: 'wx' });
+  await writeFile(join(settingsFolder, 'settings.json'), JSON.stringify({ ...geminiLockdownSettings, ...(model && effort?.transport === 'gemini' ? { modelConfigs: { overrides: [{ match: { model }, modelConfig: { generateContentConfig: { thinkingConfig: { thinkingLevel: effort.level.toUpperCase() } } } }] } } : {}) }), { flag: 'wx' });
 }
 
 /**

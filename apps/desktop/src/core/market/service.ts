@@ -148,10 +148,11 @@ export class Marketplace {
       const connected = fields.provider === 'demo' || await this.runtime.connected?.(fields.provider) === true;
       const model = previous ? { provider: previous.provider, ...(previous.modelId ? { modelId: previous.modelId } : {}) } : connected ? { provider: fields.provider, ...(fields.modelId ? { modelId: fields.modelId } : {}) } : fallback;
       if (!previous && !connected) fallbackNames.push(fields.name);
-      const { modelId: _suggestedModel, provider: _suggestedProvider, ...configuration } = fields;
+      const { modelId: _suggestedModel, provider: _suggestedProvider, effort: suggestedEffort, ...configuration } = fields;
       const worker: Worker = {
         ...configuration,
         ...model,
+        ...((previous ? previous.effort : suggestedEffort) ? { effort: previous ? previous.effort : suggestedEffort } : {}),
         ...(previous?.autoApplyProposals !== undefined ? { autoApplyProposals: previous.autoApplyProposals } : {}),
         ...(previous?.mcpServerIds !== undefined ? { mcpServerIds: previous.mcpServerIds } : {}),
         id: workerIds[key],

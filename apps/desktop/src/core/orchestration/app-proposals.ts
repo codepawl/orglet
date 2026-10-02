@@ -37,7 +37,7 @@ export type ProposalApplier = {
 /** A proposal the worker got wrong. It goes back to the model as the tool's answer and never fails the run. */
 export class ProposalError extends Error {}
 
-type OrgletPayload = { fields: Partial<WorkerInput>; skillRef?: string };
+type OrgletPayload = { fields: Partial<WorkerInput>; skillRef?: string; resetEffort?: true };
 /** A self-improvement is an orglet edit whose only field is the instructions, plus the sentence it swaps in (COD-162). */
 type SelfImprovementPayload = OrgletPayload & { targetId: string; sentence: { replaces: string | null; sentence: string } };
 type MemberReference = { id: string } | { ref: string };
@@ -161,7 +161,7 @@ export class AppProposals {
       providersInUse: providers,
       thisChat: { workerId: run.snapshot.worker.id, ...(task.teamId ? { teamId: task.teamId } : {}) },
       settings: this.applier.currentSettings(),
-      instruction: 'When the user asks you to set up or change something in Orglet (an orglet, a crew, a template, a skill, a schedule, or one of the listed settings), call the matching propose_* tool once per change, then answer with reply. Each proposal is stored as a card the user applies or dismisses; nothing changes until they do. Use the ids above for existing things; give a new orglet, crew or skill a short ref and point at it with the *Ref fields when a later proposal in this same reply needs it. Null leaves a field alone; an edit needs targetId. You cannot change API keys, connections, harness accounts, backups, tool permissions, working folders, budgets above the current caps, or the auto-apply switch; say so instead of trying.',
+      instruction: 'When the user asks you to set up or change something in Orglet (an orglet, a crew, a template, a skill, a schedule, or one of the listed settings), call the matching propose_* tool once per change, then answer with reply. Each proposal is stored as a card the user applies or dismisses; nothing changes until they do. Use the ids above for existing things; give a new orglet, crew or skill a short ref and point at it with the *Ref fields when a later proposal in this same reply needs it. Null leaves a field alone; effort accepts low, medium, high, max or auto to reset the override; an edit needs targetId. You cannot change API keys, connections, harness accounts, backups, tool permissions, working folders, budgets above the current caps, or the auto-apply switch; say so instead of trying.',
     };
   }
 
@@ -200,13 +200,14 @@ export class AppProposals {
         if (skillId) this.liveSkill(skillId);
         const chosen: Partial<WorkerInput> = {
           name: given(args.name), description: given(args.description), instructions: given(args.instructions),
-          provider: given(args.provider), modelId: given(args.modelId), skillId: skillRef ? undefined : skillId, taskBudgetMicros: given(args.taskBudgetMicros),
+          provider: given(args.provider), modelId: given(args.modelId), effort: args.effort === 'auto' ? undefined : given(args.effort), skillId: skillRef ? undefined : skillId, taskBudgetMicros: given(args.taskBudgetMicros),
         };
-        const payload: OrgletPayload = { fields: chosen, ...(skillRef ? { skillRef: skillRef.ref } : {}) };
+        const payload: OrgletPayload = { fields: chosen, ...(args.effort === 'auto' ? { resetEffort: true } : {}), ...(skillRef ? { skillRef: skillRef.ref } : {}) };
         const targetId = given(args.targetId);
         if (targetId) {
           const current = this.liveWorker(targetId);
           const changes = editChanges(workerFields(current), { ...chosen, ...(skillRef ? { skillId: `ref:${skillRef.ref}` } : {}) });
+          if (payload.resetEffort && current.effort) changes.push({ field: 'effort', before: current.effort, after: 'auto' });
           if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở Tí này.');
           const raised = chosen.taskBudgetMicros !== undefined && chosen.taskBudgetMicros > (current.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS);
           return { kind: 'orglet', action: 'edit', ref: given(args.ref), title: chosen.name ?? current.name, changes, payload: { ...payload, targetId }, hold: raised ? 'budget' : null };
@@ -414,7 +415,7 @@ export class AppProposals {
         if (payload.targetId) {
           const current = this.liveWorker(payload.targetId);
           const previous = workerFields(current);
-          const saved = this.applier.saveWorker(WorkerInput.parse({ ...previous, ...compact(payload.fields), ...(skillId ? { skillId } : {}), id: current.id }));
+          const saved = this.applier.saveWorker(WorkerInput.parse({ ...previous, ...compact(payload.fields), ...(payload.resetEffort ? { effort: undefined } : {}), ...(skillId ? { skillId } : {}), id: current.id }));
           return { target: { kind: 'worker', id: saved.id }, undo: { kind: 'restore', entity: 'worker', previous } };
         }
         const saved = this.applier.saveWorker(WorkerInput.parse({ ...(avatar ? { avatar } : {}), ...compact(payload.fields), skillId }));

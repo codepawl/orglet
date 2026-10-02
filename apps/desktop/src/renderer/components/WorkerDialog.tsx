@@ -3,6 +3,8 @@ import { AlignLeft, Brain, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRo
 import { isMemory } from '../../shared/knowledge';
 import { MemoryList } from './Memories';
 import { isPaidApi, type Connections, type Worker, type Workspace } from '../../shared/contracts';
+import { Effort, modelEffort, resolveEffort } from '../../shared/effort';
+import { useCached } from '../prefetch';
 import { CATALOG_HINT_IDS } from '../../shared/models';
 import { baseUrlHost, connectionPricing, customProviderId, findCustomConnection, type CustomConnection } from '../../shared/custom-connections';
 import { pricingLabel } from '../customConnections';
@@ -30,7 +32,7 @@ import { toast } from './toast';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Input, SwitchField, Textarea } from '@codepawl/orglet-ui';
-import { taskGrants } from '../caches';
+import { taskGrants, modelLists } from '../caches';
 import { Blocks, Zap } from 'lucide-react';
 import { Checkbox } from './Checkbox';
 import { desktopAppsAvailable } from './DesktopApps';
@@ -139,6 +141,12 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   // is ready: harness detection finishes after the dialog opens, and a harness signed in then should not leave it on Demo.
   const [providerPicked, setProviderPicked] = useState(false);
   const [modelId, setModelId] = useState(startsOnSuggestion ? '' : worker.modelId ?? '');
+  const [effort, setEffort] = useState<'' | Effort>(worker?.effort ?? '');
+  const modelList = useCached(modelLists, provider === 'demo' ? undefined : provider);
+  const selectedModel = modelId.trim() || (Object.hasOwn(CATALOG_HINT_IDS, provider) ? CATALOG_HINT_IDS[provider as keyof typeof CATALOG_HINT_IDS] : undefined);
+  const effortEntry = selectedModel ? modelList?.models.find(entry => entry.id === selectedModel || entry.resolvedId === selectedModel || entry.aliases?.includes(selectedModel) || (provider === 'ollama' && entry.id.replace(/:latest$/, '') === selectedModel)) : modelList?.models.find(entry => entry.isDefault);
+  const effortSupport = modelEffort(provider, effortEntry?.resolvedId ?? selectedModel ?? effortEntry?.id, effortEntry?.effort);
+  const resolvedEffort = resolveEffort(effort || undefined, undefined, effortSupport.capability, effortSupport.transport, effortSupport.unsupported);
   const [skillId, setSkill] = useState(worker?.skillId ?? workspace.skills[0].id);
   const [budget, setBudget] = useState(() => startsOnSuggestion ? budgetForProvider(worker ? initialBudget(worker) : DEFAULT_TASK_BUDGET, suggestedProvider) : initialBudget(worker));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
@@ -205,7 +213,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     const pickedServers = mcpServerIds.filter(serverId => (workspace.mcpServers ?? []).some(server => server.id === serverId));
     setBusy(true); clearError();
     try {
-      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(effort ? { effort } : {}), ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name);
       if (!worker) onCreated?.(saved.id);
@@ -227,6 +235,14 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProviderPicked(true); setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
         options={providerOptions} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} required={modelIdRequired(provider)} />}
+      {provider !== 'demo' && <>
+        <Select label={<FieldLabel icon={Brain}>{t('Mức suy nghĩ')}</FieldLabel>} value={effort} onChange={value => setEffort(value as '' | Effort)} options={[
+          { value: '', label: t('Tự động'), detail: t('Cao khi lập kế hoạch và tổng hợp; vừa cho lịch và các lượt khác.') },
+          { value: 'low', label: t('Thấp') }, { value: 'medium', label: t('Vừa') }, { value: 'high', label: t('Cao') }, { value: 'max', label: t('Tối đa'), detail: t('Mức cao nhất model và kết nối hỗ trợ.') },
+        ]} />
+        {resolvedEffort.support === 'unknown' && <p className="muted">{t('Chưa xác minh mức suy nghĩ cho model và kết nối này; lần chạy giữ mặc định của kết nối.')}</p>}
+        {resolvedEffort.support === 'unsupported' && <p className="muted">{t('Model và kết nối này không hỗ trợ mức suy nghĩ đã chọn; lần chạy giữ mặc định của kết nối.')}</p>}
+      </>}
       {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}
       {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}

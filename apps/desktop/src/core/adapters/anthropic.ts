@@ -1,3 +1,4 @@
+import type { NativeEffortSetting } from '../../shared/effort';
 import { createHash, type Hash } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -75,8 +76,8 @@ type Translation = { messages: MessageParam[]; cacheBreakIndexes: number[]; requ
  * after such an edit. A block whose prefix changed goes back as plain notes, and so does every later one, since dropping
  * a block is itself a change to the prefix.
  */
-function translate(system: string, tools: Tool[], runMessages: RunMessage[]): Translation {
-  const hash = createHash('sha256').update(JSON.stringify({ system, tools }));
+function translate(system: string, tools: Tool[], runMessages: RunMessage[], configuration?: object): Translation {
+  const hash = createHash('sha256').update(JSON.stringify({ system, tools, ...(configuration ? { configuration } : {}) }));
   const messages: MessageParam[] = [];
   const cacheBreakIndexes: number[] = [];
   let replayValid = true;
@@ -148,7 +149,7 @@ function turnOf(content: ContentBlock[], requestDigest: string): AnthropicTurn |
 export class AnthropicAdapter implements ModelAdapter {
   private client: Anthropic;
   private model: string;
-  constructor(key: string, baseURL?: string, model?: string) {
+  constructor(key: string, baseURL?: string, model?: string, private effort?: NativeEffortSetting) {
     this.model = model || modelCatalog.anthropic.model;
     this.client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: 90_000, ...(baseURL ? { baseURL } : {}) });
   }
@@ -158,14 +159,21 @@ export class AnthropicAdapter implements ModelAdapter {
       if (tool.type !== 'function') throw new Error('Unsupported canonical tool definition.');
       return { name: tool.function.name, description: tool.function.description, input_schema: tool.function.parameters as Tool['input_schema'] };
     });
-    const translation = translate(system, translatedTools, messages);
+    const thinking = this.effort?.transport === 'anthropic' && this.effort.adaptive ? { type: 'adaptive' as const } : undefined;
+    const tool_choice: ToolChoice = thinking ? { type: 'auto', disable_parallel_tool_use: true } : toolChoiceFor(this.model);
+    const output_config = this.effort?.transport === 'anthropic' ? { effort: this.effort.level } : undefined;
+    const configuration = { model: this.model, thinking, tool_choice, output_config };
+    // Legacy runs omit effort and retain their original prefix digest. New controls are bound together.
+    const translation = translate(system, translatedTools, messages, output_config ? configuration : undefined);
     const stream = this.client.messages.stream({
       model: this.model,
       max_tokens: maxOutputTokens,
       system: [{ type: 'text', text: system, cache_control: CACHE_BREAKPOINT }],
       messages: withCacheBreakpoints(translation.messages, translation.cacheBreakIndexes),
       tools: translatedTools,
-      tool_choice: toolChoiceFor(this.model),
+      tool_choice,
+      ...(thinking ? { thinking } : {}),
+      ...(output_config ? { output_config } : {}),
     }, { signal, ...(correlationId ? { headers: { 'X-Client-Request-Id': correlationId } } : {}) });
     stream.once('streamEvent', () => progress());
     const response = await stream.finalMessage();
