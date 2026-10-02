@@ -184,6 +184,16 @@ export class AccountService {
     });
   }
 
+  /** Main/core binding only: no token, subject or claim-derived publishing allowance reaches the window. */
+  publishingContext() {
+    const profile = this.saved?.profile;
+    const accountKey = profile ? createHash('sha256').update(`${this.endpoints.issuer}:${profile.id}`).digest('hex') : null;
+    const status = !this.saved?.refreshToken || this.persistenceError ? 'local' as const
+      : !(this.saved.resources ?? [ACCOUNT_RESOURCE]).includes(ACCOUNT_MARKET_RESOURCE) ? 'upgradeRequired' as const
+      : profile?.emailVerified !== true ? 'unverified' as const : 'available' as const;
+    return { accountKey, generation: this.generation, status };
+  }
+
   /**
    * Opens the browser at the sign-in page and waits for it to come back through `handleCallback`. Resolves with the
    * signed-in state, or with the earlier state when the person cancels; rejects with a Vietnamese reason otherwise.

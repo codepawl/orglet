@@ -106,6 +106,7 @@ import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry } from './components/AreaRail';
 import { UserPanel } from './components/UserPanel';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
+import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
 import { readArea, writeArea, workingOrgletIds, groupChannels, type Area, type FriendsTab, type ActivityTab, activityTabs } from './areas';
@@ -248,6 +249,7 @@ export function App() {
   
   const [panel, setPanel] = useState<Panel>(null); const [editingWorker, setEditingWorker] = useState<Worker>(); const [workerDialogTab, setWorkerDialogTab] = useState<'memory'>(); const [editingTask, setEditingTask] = useState<string>(); const [editingSkill, setEditingSkill] = useState<Skill>();
   const [editingKnowledge, setEditingKnowledge] = useState<Knowledge>(); const [libraryTab, setLibraryTab] = useState<'skills' | 'knowledge'>('skills');
+  const [publishingSource, setPublishingSource] = useState<{ kind: 'orglet' | 'crew'; entityId: string; name: string }>();
   // The Demo chat's "Kết nối model" opens the worker dialog on its Model field rather than at the top (COD-255), with
   // the first connection that can run already chosen (COD-293).
   const [workerDialogField, setWorkerDialogField] = useState<'provider'>();
@@ -1968,6 +1970,10 @@ export function App() {
             return <ChannelRow key={channel.id} name={channel.name} active={emptyChannelActive(channel)} status={rollupStatusMarks([])}
               onOpen={() => { clearSelection(); showEmptyChannel(channel.id); }}
               onEdit={() => setChannelDraft({ id: channel.id, name: channel.name, topic: channel.topic, members: channel.members, crewId: channel.crewId, category: channel.category })}
+              onPublish={workspace.teams.some(team => team.id === channel.crewId) ? () => {
+                const team = workspace.teams.find(team => team.id === channel.crewId);
+                if (team) setPublishingSource({ kind: 'crew', entityId: team.id, name: team.name });
+              } : undefined}
               onRename={name => renameEmptyChannel(channel.id, name)} onDelete={() => deleteEmptyChannel(channel.id, channel.name)}
               deleteQuestion={t('Xóa kênh này? Kênh chưa có tin nhắn nào.')} {...channelRowsUnder(channel.crewId, channel.name)} />;
           }
@@ -1976,6 +1982,10 @@ export function App() {
           return <ChannelRow key={chat.id} name={name} active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
             onOpen={() => { clearSelection(); openTask(chat.id); }} onDwell={resting => dwellChat(chat.id, resting)}
             onEdit={() => chat.channel && setChannelDraft({ id: chat.channel.id, name: chat.channel.name, topic: chat.channel.topic, members: chat.channel.members, crewId: chat.channel.crewId, category: chat.channel.category })}
+            onPublish={workspace.teams.some(team => team.id === chat.channel?.crewId) ? () => {
+              const team = workspace.teams.find(team => team.id === chat.channel?.crewId);
+              if (team) setPublishingSource({ kind: 'crew', entityId: team.id, name: team.name });
+            } : undefined}
             onRename={title => renameTask(chat.id, title)} onArchive={() => archiveTask(chat.id, true)} onDelete={() => deleteTask(chat.id)}
             deleteQuestion={t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.')} {...channelRowsUnder(chat.channel?.crewId, name)} />;
   };
@@ -2007,6 +2017,7 @@ export function App() {
       onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     : area === 'home' && friendsOpen
       ? <FriendsPage orglets={orderedWorkers} archived={workspace.archivedWorkers} working={workingIds} tab={friendsTab} onTab={setFriendsTab} busy={friendsBusy}
+        onPublish={member => setPublishingSource({ kind: 'orglet', entityId: member.id, name: member.name })}
         onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
         onArchive={member => archiveEntity('worker', member.id, true)} onDelete={member => deleteEntityNow('worker', member.id)}
         onCreate={name => { setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }} onRestore={member => archiveEntity('worker', member.id, false)}
@@ -2231,6 +2242,7 @@ export function App() {
         showChatView('chat');
       }} />}
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}:${newOrgletName}`} open={panel === 'worker'} worker={editingWorker} initialName={newOrgletName} workspace={workspace} connections={connections} harnesses={harnesses ?? []} initialTab={workerDialogTab} initialField={workerDialogField} connectModel={workerDialogConnect} onClose={close} onOpenChat={taskId => { close(); openTask(taskId); }} onCreated={id => setJustCreated({ kind: 'worker', id })} />
+    {publishingSource && <MarketPublishingDialog key={`${publishingSource.kind}:${publishingSource.entityId}`} source={publishingSource} sourceRevision={publishingSourceRevision(workspace, publishingSource)} requiresSuggestion={publishingRequiresSuggestion(workspace, publishingSource)} onClose={() => setPublishingSource(undefined)} />}
     {channelDraft && <ChannelDialog key={`channel:${channelDraft.id ?? 'new'}`} open draft={channelDraft} workspace={workspace} onClose={() => setChannelDraft(undefined)} onCreated={channelCreated} />}
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
     <Toaster />

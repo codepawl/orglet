@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownToLine, RefreshCw, UserRoundPlus, X } from 'lucide-react';
+import { ArrowDownToLine, ChevronLeft, ChevronRight, RefreshCw, UserRoundPlus, X } from 'lucide-react';
 import type { MarketCatalogView, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
 import { orglet } from '../api';
 import { t, tMessage } from '../i18n';
 import { Button, Drawer, PanelHeading } from './ui';
 import { toast } from './toast';
+import { MarketOwnListings } from './MarketPublishing';
+import { Select } from './Select';
 
 function addedNotice(result: MarketAdded) {
   if (result.fallbackNames.length) toast(t('Đã dùng kết nối mặc định cho {0}; kết nối gợi ý chưa sẵn sàng.', [result.fallbackNames.join(', ')]));
@@ -13,12 +15,14 @@ function addedNotice(result: MarketAdded) {
 export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => void | Promise<void> }) {
   const [catalog, setCatalog] = useState<MarketCatalogView>();
   const [installed, setInstalled] = useState<MarketInstallation[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [update, setUpdate] = useState<MarketUpdate>();
+  const [previousPages, setPreviousPages] = useState<(string | undefined)[]>([]);
   const load = async (refresh: boolean) => {
     const next = await orglet.call('marketCatalog', { refresh });
     setCatalog(next);
+    setPreviousPages([]);
     setInstalled(await orglet.call('marketInstallations', {}));
   };
   useEffect(() => {
@@ -32,7 +36,8 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
       if (!mounted) return;
       setCatalog(fresh);
       setInstalled(await orglet.call('marketInstallations', {}));
-    })().catch(reason => { if (mounted) setError(tMessage(String(reason.message ?? reason))); });
+    })().catch(reason => { if (mounted) setError(tMessage(String(reason.message ?? reason))); })
+      .finally(() => { if (mounted) setBusy(false); });
     return () => { mounted = false; };
   }, []);
   const action = async (operation: () => Promise<void>) => {
@@ -47,15 +52,22 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     }
   };
   return <section className="page-section marketplace" aria-labelledby="marketplace-title">
-    <PanelHeading title={<span id="marketplace-title">{t('Khám phá')}</span>} description={t('Bạn làm sẵn từ CodePawl. Thêm bản sao của riêng bạn, không cần tài khoản.')}>
+    <PanelHeading title={<span id="marketplace-title">{t('Khám phá')}</span>} description={t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.')}>
       <Button type="button" variant="outline" disabled={busy} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{t('Làm mới')}</Button>
     </PanelHeading>
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
     {catalog?.error && <p className="muted" role="status">{tMessage(catalog.error)}</p>}
     {error && <p className="error" role="alert">{error}</p>}
+    {catalog?.source === 'cache' && !!catalog.cachedPages?.length && <Select label={t('Mở trang đã lưu')} value={catalog.pageCursor ?? ''} disabled={busy} options={[
+      { value: '', label: t('Trang đầu đã lưu') },
+      ...catalog.cachedPages.map((page, index) => ({ value: page.cursor, label: t('Bản lưu {0}: {1}', [index + 1, page.name || t('Trang trống')]) })),
+    ]} onChange={cursor => void action(async () => {
+      setCatalog(await orglet.call('marketCatalog', { cursor: cursor || undefined }));
+      setPreviousPages([]);
+    })} />}
     {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <ul className="friends-sources">
       {catalog.listings.map(listing => <li key={listing.listingId} className="friend-source marketplace-listing">
-        <span className="friend-source-text"><span className="friend-name">{listing.name}</span><span className="friend-status">{listing.summary}</span><span className="friend-status">{listing.kind === 'crew' ? t('Nhóm Tí') : t('Tí')} · {listing.author} · {listing.license} · {listing.language.toUpperCase()} · v{listing.version}</span></span>
+        <span className="friend-source-text"><span className="friend-name">{listing.name}</span><span className="friend-status">{listing.summary}</span><span className="friend-status">{listing.kind === 'crew' ? t('Nhóm Tí') : t('Tí')} · {typeof listing.author === 'string' ? listing.author : listing.author.displayName} · {listing.license} · {listing.language.toUpperCase()} · v{listing.version}</span></span>
         <Button type="button" variant="outline" disabled={busy} onClick={() => void action(async () => {
           const result = await orglet.call('marketAdd', { listingId: listing.listingId, version: listing.version });
           addedNotice(result);
@@ -64,6 +76,25 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
         })}><UserRoundPlus size={16} />{t('Thêm bạn')}</Button>
       </li>)}
     </ul>}
+    {(previousPages.length > 0 || catalog?.nextCursor) && <div className="marketplace-pagination">
+      <Button type="button" variant="outline" disabled={busy || previousPages.length === 0} onClick={() => void action(async () => {
+        const cursor = previousPages.at(-1);
+        const next = await orglet.call('marketCatalog', { cursor });
+        setCatalog(next);
+        setPreviousPages(cursor === next.pageCursor ? previousPages.slice(0, -1) : []);
+      })}><ChevronLeft size={16} />{t('Trang trước')}</Button>
+      <Button type="button" variant="outline" disabled={busy || !catalog?.nextCursor} onClick={() => void action(async () => {
+        const cursor = catalog!.nextCursor!;
+        const next = await orglet.call('marketCatalog', { refresh: true, cursor });
+        setCatalog(next);
+        if (next.pageCursor === cursor) setPreviousPages(pages => {
+          const history = [...pages, catalog!.pageCursor];
+          return history.length <= 9 ? history : [history[0], ...history.slice(-8)];
+        });
+        else setPreviousPages([]);
+      })}><ChevronRight size={16} />{t('Trang tiếp theo')}</Button>
+    </div>}
+    <MarketOwnListings />
     {installed.filter(item => item.updateAvailable).map(item => <div className="friend-source" key={item.entityId}>
       <span className="friend-source-text"><span className="friend-name">{item.name}</span><span className="friend-status">{t('Có bản cập nhật')} · v{item.version}</span></span>
       <Button type="button" variant="outline" aria-disabled={busy} onClick={() => {
@@ -97,13 +128,13 @@ export function MarketProfileUpdate({ entityId, onUpdated }: { entityId: string;
   }, [entityId]);
   if (!installation) return null;
   return <div className="marketplace-profile">
-    <p className="muted">{t('Từ danh mục CodePawl')} · {installation.listingId} · v{installation.version}</p>
-    {installation.updateAvailable && <Button type="button" variant="outline" aria-disabled={busy} onClick={() => {
+    <p className="muted">{t('Từ marketplace')} · {installation.listingId} · v{installation.version}</p>
+    <Button type="button" variant="outline" aria-disabled={busy} onClick={() => {
       if (busy) return;
       setBusy(true);
       setError('');
       void orglet.call('marketPreviewUpdate', { entityId }).then(setUpdate).catch(reason => setError(tMessage(reason.message))).finally(() => setBusy(false));
-    }}><ArrowDownToLine size={16} />{t('Có bản cập nhật')}</Button>}
+    }}><ArrowDownToLine size={16} />{installation.updateAvailable ? t('Có bản cập nhật') : t('Kiểm tra bản cập nhật')}</Button>
     {error && <p className="error" role="alert">{error}</p>}
     {update && <MarketUpdateCard update={update} onClose={() => setUpdate(undefined)} onApplied={result => { addedNotice(result); setUpdate(undefined); onUpdated(); }} />}
   </div>;

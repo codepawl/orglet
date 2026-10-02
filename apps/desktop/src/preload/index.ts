@@ -37,6 +37,7 @@ const bridge: Bridge = {
   backup: () => invoke('orglet:backup'),
   restore: () => invoke('orglet:restore'),
   about: () => invoke('orglet:about'),
+  marketPublishing: action => invoke('orglet:market-publishing', action),
   accountState: () => invoke('orglet:account-state'),
   accountSignIn: () => invoke('orglet:account-sign-in'),
   accountCancelSignIn: () => invoke('orglet:account-cancel-sign-in'),

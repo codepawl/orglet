@@ -16,6 +16,31 @@ beforeEach(() => { store = new Store(':memory:'); });
 afterEach(() => store.close());
 
 function sha256(text: string) { return createHash('sha256').update(text).digest('hex'); }
+
+it('keeps the first catalog page and recent pages available after restart offline with a bounded cache', async () => {
+  const seed = (await seedCatalog()).listings[0];
+  const server = new Marketplace(store, () => {}, { fetch: async address => {
+    const page = Number(new URL(String(address)).searchParams.get('cursor') ?? 1);
+    const listings = Array.from({ length: 20 }, (_, index) => ({ ...seed, listingId: `fixture-${page}-${index}`, author: { displayName: 'Fixture' }, reviewDigest: 'a'.repeat(64) }));
+    return Response.json({ listings, nextCursor: String(page + 1) });
+  } });
+  const first = await server.catalog(true);
+  for (let page = 2; page <= 12; page += 1) expect((await server.catalog(true, String(page))).pageCursor).toBe(String(page));
+  const cache = store.setting<any>('marketCatalog', null);
+  expect(cache.pages).toHaveLength(9);
+  expect(cache.catalog.listings.length + cache.pages.reduce((sum: number, page: any) => sum + page.catalog.listings.length, 0)).toBe(200);
+  const reopened = new Marketplace(store, () => {}, { fetch: async () => { throw new Error('offline'); } });
+  expect((await reopened.catalog()).listings).toEqual(first.listings);
+  expect((await reopened.catalog()).cachedPages?.map(page => page.cursor)).toEqual(['4', '5', '6', '7', '8', '9', '10', '11', '12']);
+  expect((await reopened.catalog(false, '11')).listings[0].listingId).toBe('fixture-11-0');
+  expect((await reopened.catalog(true, '12')).pageCursor).toBe('12');
+  const expired = await reopened.catalog(false, '2');
+  expect(expired.listings).toEqual(first.listings);
+  expect(expired.pageCursor).toBeUndefined();
+  expect(expired.error).toBeTruthy();
+  expect((await reopened.catalog(true, '2')).error).toBe('Trang này không còn trong bản lưu. Đang hiển thị trang đầu.');
+});
+
 async function remote(kind: 'orglet' | 'crew' = 'orglet') {
   const seed = (await seedCatalog()).listings.find(item => item.kind === kind)!;
   let body = MARKET_SEED_BODIES[`${seed.listingId}:1`];
@@ -25,6 +50,7 @@ async function remote(kind: 'orglet' | 'crew' = 'orglet') {
   const fetcher = vi.fn(async (input: string | URL | Request) => {
     if (offline) throw new Error('offline');
     const path = new URL(String(input)).pathname;
+    if (path === '/v2/catalog') return new Response(null, { status: 404 });
     return new Response(path === '/v1/catalog' ? JSON.stringify({ listings: [listing] }) : servedBody ?? body);
   }) as unknown as typeof fetch;
   const connected = vi.fn(async () => false);
@@ -78,6 +104,23 @@ it.each(['GET', 'HEAD'])('revalidates immutable bodies with weak, listed and wil
     expect(response.headers.get('etag')).toBe(`"${listing.sha256}"`);
     if (status === 304 || method === 'HEAD') expect(await response.text()).toBe('');
   }
+});
+
+it.each([503, 200])('retains saved account pages when v2 returns a transient or malformed response (%s) despite a healthy v1 route', async status => {
+  const seed = (await seedCatalog()).listings[0];
+  const listing = { ...seed, listingId: 'fixture-account-listing', author: { displayName: 'Publisher' }, reviewDigest: 'b'.repeat(64) };
+  const saved = { catalog: { listings: [listing], nextCursor: 'page-two' }, fetchedAt: '2026-01-01T00:00:00.000Z', pages: [{ cursor: 'page-two', catalog: { listings: [], nextCursor: null }, fetchedAt: '2026-01-01T00:00:00.000Z' }] };
+  store.setSetting('marketCatalog', saved);
+  const fetcher = vi.fn(async (input: string | URL | Request) => new URL(String(input)).pathname === '/v1/catalog'
+    ? new Response(JSON.stringify({ listings: [seed] }))
+    : new Response(status === 200 ? '{}' : null, { status }));
+  const market = new Marketplace(store, () => {}, { fetch: fetcher });
+  const result = await market.catalog(true);
+  expect(result.source).toBe('cache');
+  expect(result.error).toBeTruthy();
+  expect(result.listings).toEqual([listing]);
+  expect(store.setting('marketCatalog', null)).toEqual(saved);
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
 it('opens from the bundled catalog and reports failed refresh honestly; validates cached metadata', async () => {
@@ -302,11 +345,11 @@ it('rejects a delayed older catalog after a newer refresh has committed', async 
   let requests = 0;
   const market = new Marketplace(store, () => {}, { fetch: async () => {
     requests += 1;
-    return requests === 1 ? delayed : new Response(JSON.stringify({ listings: [{ ...seed, version: 3 }] }));
+    return requests === 1 ? delayed : new Response(JSON.stringify({ listings: [{ ...seed, version: 3, author: { displayName: 'CodePawl' }, reviewDigest: 'a'.repeat(64) }], nextCursor: null }));
   } });
   const older = market.catalog(true);
   expect((await market.catalog(true)).listings[0].version).toBe(3);
-  release(new Response(JSON.stringify({ listings: [{ ...seed, version: 2 }] })));
+  release(new Response(JSON.stringify({ listings: [{ ...seed, version: 2, author: { displayName: 'CodePawl' }, reviewDigest: 'a'.repeat(64) }], nextCursor: null })));
   expect((await older).error).toBeTruthy();
   expect((await market.catalog()).listings[0].version).toBe(3);
 });

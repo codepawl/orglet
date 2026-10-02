@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ProviderId, type Worker, type Skill, type Team } from '../../shared/contracts';
-import { MARKET_BODY_LIMIT, MARKET_URL, MarketCatalog, MarketListing, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketUpdate, type MarketInstallation } from '../../shared/market';
+import { MARKET_BODY_LIMIT, MARKET_URL, MarketCatalog, MarketCatalogPageV2, MarketListing, MarketListingV2, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketUpdate, type MarketInstallation, type MarketDisplayListing } from '../../shared/market';
 import { MARKET_SEED_BODIES, seedCatalog } from '../../shared/market-seed';
 import { Store, id } from '../storage/database';
 import { KnowledgeBase } from '../context/knowledge';
@@ -11,7 +11,11 @@ import { parseMarketTemplate } from './templates';
 const Model = z.object({ provider: ProviderId, modelId: z.string().max(200).optional() }).strict();
 type Model = z.infer<typeof Model>;
 
-const CachedCatalog = z.object({ catalog: MarketCatalog, fetchedAt: z.iso.datetime() }).strict();
+const DisplayCatalog = z.object({ listings: z.array(z.union([MarketListingV2, MarketListing])).max(200), nextCursor: z.string().max(256).nullable().optional() }).strict();
+const CachedPage = z.object({ cursor: z.string().min(1).max(256), catalog: DisplayCatalog, fetchedAt: z.iso.datetime() }).strict();
+const CachedCatalog = z.object({ catalog: DisplayCatalog, fetchedAt: z.iso.datetime(), pages: z.array(CachedPage).max(9).optional() }).strict()
+  .refine(cache => cache.catalog.listings.length + (cache.pages ?? []).reduce((total, page) => total + page.catalog.listings.length, 0) <= 200);
+class UnsupportedMarketRoute extends Error {}
 
 export type MarketRuntime = {
   fetch?: typeof fetch;
@@ -23,26 +27,44 @@ export type MarketRuntime = {
 export class Marketplace {
   constructor(private store: Store, private notify: () => void, private runtime: MarketRuntime = {}) {}
 
-  async catalog(refresh = false): Promise<MarketCatalogView> {
+  async catalog(refresh = false, cursor?: string): Promise<MarketCatalogView> {
     const saved = CachedCatalog.safeParse(this.store.setting<unknown>('marketCatalog', null));
-    if (!refresh) return saved.success
-      ? { ...saved.data.catalog, fetchedAt: saved.data.fetchedAt, source: 'cache' }
-      : { ...await seedCatalog(), fetchedAt: null, source: 'bundled' };
+    if (!refresh) {
+      if (saved.success) {
+        const cachedPages = (saved.data.pages ?? []).map(page => ({ cursor: page.cursor, name: page.catalog.listings[0]?.name ?? '' }));
+        const page = cursor ? saved.data.pages?.find(page => page.cursor === cursor) : saved.data;
+        if (page) return { ...page.catalog, fetchedAt: page.fetchedAt, source: 'cache', cachedPages, ...(cursor ? { pageCursor: cursor } : {}) };
+        return { ...saved.data.catalog, fetchedAt: saved.data.fetchedAt, source: 'cache', cachedPages, error: 'Trang này không còn trong bản lưu. Đang hiển thị trang đầu.' };
+      }
+      return { ...await seedCatalog(), fetchedAt: null, source: 'bundled' };
+    }
     try {
-      const text = await this.read('/v1/catalog', 512 * 1024);
-      const catalog = MarketCatalog.parse(JSON.parse(text));
+      let catalog: z.infer<typeof DisplayCatalog>;
+      try {
+        // Twenty complete 16-KiB metadata records plus server fields fit the bounded 512-KiB page envelope.
+        const query = cursor ? `?limit=20&cursor=${encodeURIComponent(cursor)}` : '?limit=20';
+        catalog = MarketCatalogPageV2.parse(JSON.parse(await this.read(`/v2/catalog${query}`, 512 * 1024)));
+      } catch (reason) {
+        if (cursor || !(reason instanceof UnsupportedMarketRoute)) throw new Error('Không tải được trang danh mục.');
+        catalog = MarketCatalog.parse(JSON.parse(await this.read('/v1/catalog', 512 * 1024)));
+      }
       const current = CachedCatalog.safeParse(this.store.setting<unknown>('marketCatalog', null));
       if (current.success) {
         for (const listing of catalog.listings) {
-          const previous = current.data.catalog.listings.find(item => item.listingId === listing.listingId);
+          const previous = [current.data.catalog, ...(current.data.pages ?? []).map(page => page.catalog)].flatMap(page => page.listings).find(item => item.listingId === listing.listingId);
           if (previous && (listing.version < previous.version || (listing.version === previous.version && listing.sha256 !== previous.sha256))) throw new Error('Phiên bản danh mục không hợp lệ.');
         }
       }
       const fetchedAt = new Date().toISOString();
-      this.store.setSetting('marketCatalog', { catalog, fetchedAt });
-      return { ...catalog, fetchedAt, source: 'online' };
+      if (cursor && current.success) {
+        const pages = [...(current.data.pages ?? []).filter(page => page.cursor !== cursor), { cursor, catalog, fetchedAt }];
+        while (pages.length > 9 || current.data.catalog.listings.length + pages.reduce((total, page) => total + page.catalog.listings.length, 0) > 200) pages.shift();
+        this.store.setSetting('marketCatalog', { ...current.data, pages });
+      } else this.store.setSetting('marketCatalog', { catalog, fetchedAt });
+      return { ...catalog, fetchedAt, source: 'online', ...(cursor ? { pageCursor: cursor } : {}) };
     } catch {
-      return { ...await this.catalog(false), error: 'Không tải được danh mục. Đang dùng bản lưu trên máy.' };
+      const cached = await this.catalog(false, cursor);
+      return { ...cached, error: cached.error ?? 'Không tải được danh mục. Đang dùng bản lưu trên máy.' };
     }
   }
 
@@ -54,7 +76,7 @@ export class Marketplace {
       return !state[table][origin.entityId]?.deletedAt && !state[table][origin.entityId]?.archivedAt;
     }).map(origin => {
       const entity = this.store.get<Worker | Team>(origin.kind === 'orglet' ? 'workers' : 'teams', origin.entityId);
-      const latest = saved.success ? saved.data.catalog.listings.find(item => item.listingId === origin.listingId) : undefined;
+      const latest = saved.success ? [saved.data.catalog, ...(saved.data.pages ?? []).map(page => page.catalog)].flatMap(page => page.listings).find(item => item.listingId === origin.listingId) : undefined;
       return { entityId: entity.id, kind: origin.kind, listingId: origin.listingId, version: origin.version, name: entity.name, updateAvailable: !!latest && latest.version > origin.version };
     });
   }
@@ -79,7 +101,16 @@ export class Marketplace {
     const origin = this.origin(entityId);
     this.assertUpdateable(origin);
     const catalog = await this.catalog(false);
-    const listing = catalog.listings.find(item => item.listingId === origin.listingId && item.version > origin.version);
+    let listing = catalog.listings.find(item => item.listingId === origin.listingId && item.version > origin.version);
+    const curated = origin.listingId === 'research-friend' || origin.listingId === 'research-review';
+    if (!curated) {
+      try {
+        const current = MarketListingV2.parse(JSON.parse(await this.read(`/v2/listings/${origin.listingId}`, 32 * 1024)));
+        listing = current.version > origin.version ? current : undefined;
+      } catch {
+        throw new Error('Không kiểm tra được bản cập nhật hiện tại. Bản trên máy vẫn giữ nguyên.');
+      }
+    }
     if (!listing) throw new Error('Chưa có bản cập nhật cho bạn này.');
     const template = parseMarketTemplate(await this.body(listing), listing.kind);
     if (listing.kind !== origin.kind) throw new Error('Loại mẫu đã thay đổi. Thêm mẫu mới để giữ bản hiện tại.');
@@ -196,29 +227,34 @@ export class Marketplace {
     const team = origin.kind === 'crew' ? this.store.get<Team>('teams', origin.entityId) : undefined;
     return hash(JSON.stringify({ workers, skills, team }));
   }
-  private async listing(listingId: string, version: number): Promise<MarketListing> {
+  private async listing(listingId: string, version: number): Promise<MarketDisplayListing> {
     const catalog = await this.catalog(false);
-    const listing = catalog.listings.find(item => item.listingId === listingId && item.version === version);
+    const saved = CachedCatalog.safeParse(this.store.setting('marketCatalog', null));
+    const listings = [...catalog.listings, ...(saved.success ? saved.data.pages?.flatMap(page => page.catalog.listings) ?? [] : [])];
+    const listing = listings.find(item => item.listingId === listingId && item.version === version);
     if (!listing) throw new Error('Không tìm thấy phiên bản này trong danh mục đã kiểm tra.');
-    return MarketListing.parse(listing);
+    return z.union([MarketListingV2, MarketListing]).parse(listing);
   }
-  private async body(listing: MarketListing): Promise<string> {
+  private async body(listing: MarketDisplayListing): Promise<string> {
     const key = `${listing.listingId}:${listing.version}:${listing.sha256}`;
     const cached = this.store.setting<unknown>(`marketBody:${key}`, null);
+    const curated = listing.listingId === 'research-friend' || listing.listingId === 'research-review';
     let text: string;
-    if (typeof cached === 'string' && Buffer.byteLength(cached) <= MARKET_BODY_LIMIT && hash(cached) === listing.sha256) text = cached;
+    if (!curated) text = await this.read(`/v2/listings/${listing.listingId}/versions/${listing.version}`, MARKET_BODY_LIMIT);
+    else if (typeof cached === 'string' && Buffer.byteLength(cached) <= MARKET_BODY_LIMIT && hash(cached) === listing.sha256) text = cached;
     else {
       const bundled = await seedCatalog();
       const seed = bundled.listings.find(item => item.listingId === listing.listingId && item.version === listing.version && item.sha256 === listing.sha256);
-      text = seed ? MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] : await this.read(`/v1/listings/${listing.listingId}/versions/${listing.version}`, MARKET_BODY_LIMIT);
+      text = seed ? MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] : await this.read(`/${curated ? 'v1' : 'v2'}/listings/${listing.listingId}/versions/${listing.version}`, MARKET_BODY_LIMIT);
     }
     if (Buffer.byteLength(text) > MARKET_BODY_LIMIT || hash(text) !== listing.sha256) throw new Error('Nội dung mẫu không khớp SHA-256 của danh mục.');
     parseMarketTemplate(text, listing.kind);
-    this.store.setSetting(`marketBody:${key}`, text);
+    if (curated) this.store.setSetting(`marketBody:${key}`, text);
     return text;
   }
   private async read(path: string, limit: number) {
     const response = await (this.runtime.fetch ?? fetch)(`${MARKET_URL}${path}`, { redirect: 'error', signal: AbortSignal.timeout(10_000), headers: { Accept: 'application/json' } });
+    if (response.status === 404 || response.status === 501) throw new UnsupportedMarketRoute('Không tải được danh mục.');
     if (!response.ok || !response.body) throw new Error('Không tải được danh mục.');
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];

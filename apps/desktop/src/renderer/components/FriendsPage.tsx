@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Archive, ArchiveRestore, FileUp, MessageCircle, Pencil, Search, Trash, UserRoundPlus, Users } from 'lucide-react';
+import { Archive, ArchiveRestore, FileUp, MessageCircle, Pencil, Search, Trash, Upload, UserRoundPlus, Users } from 'lucide-react';
 import { Input } from '@codepawl/orglet-ui';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
@@ -20,7 +20,7 @@ export type FriendTemplate = { id: 'research-review' | 'eris-review'; name: stri
  * All and Working (the ones with a run going right now), and Add friend, which makes an orglet from a name or finds
  * one elsewhere: an archived orglet to bring back, a ready-made group, a template file. A row opens the orglet's DM.
  */
-export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage, onEdit, onArchive, onDelete, onCreate, onRestore, templates, onTemplate, onImport, onMarketAdded, busy }: {
+export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage, onEdit, onArchive, onDelete, onCreate, onRestore, templates, onTemplate, onImport, onMarketAdded, onPublish, busy }: {
   orglets: readonly Worker[];
   archived: readonly Worker[];
   working: ReadonlySet<string>;
@@ -37,6 +37,7 @@ export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage,
   onTemplate: (id: FriendTemplate['id']) => void;
   onImport: () => void;
   onMarketAdded: (result: MarketAdded) => void | Promise<void>;
+  onPublish: (worker: Worker) => void;
   busy: boolean;
 }) {
   const [query, setQuery] = useState('');
@@ -87,13 +88,14 @@ export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage,
           </li>)}
         </ul>
       </section>
-    </div></div> : <FriendsList orglets={orglets} working={working} tab={tab} query={query} onQuery={setQuery} onMessage={onMessage} onEdit={onEdit} onArchive={onArchive} onDelete={onDelete} onAdd={() => onTab('add')} />}
+    </div></div> : <FriendsList orglets={orglets} working={working} tab={tab} query={query} onQuery={setQuery} onMessage={onMessage} onEdit={onEdit} onArchive={onArchive} onDelete={onDelete} onPublish={onPublish} onAdd={() => onTab('add')} />}
   </>;
 }
 
-function FriendsList({ orglets, working, tab, query, onQuery, onMessage, onEdit, onArchive, onDelete, onAdd }: {
+function FriendsList({ orglets, working, tab, query, onQuery, onMessage, onEdit, onArchive, onDelete, onAdd, onPublish }: {
   orglets: readonly Worker[]; working: ReadonlySet<string>; tab: Exclude<FriendsTab, 'add'>; query: string; onQuery: (query: string) => void;
   onMessage: (worker: Worker) => void; onEdit: (worker: Worker) => void; onArchive: (worker: Worker) => void; onDelete: (worker: Worker) => void; onAdd: () => void;
+  onPublish: (worker: Worker) => void;
 }) {
   const shown = friendsMatching(orglets, tab, query, working);
   return <div className="page-scroll"><div className="page-body">
@@ -115,6 +117,7 @@ function FriendsList({ orglets, working, tab, query, onQuery, onMessage, onEdit,
             <Button size="icon" aria-label={t('Nhắn tin cho {0}', [worker.name])} title={t('Nhắn tin')} onClick={() => onMessage(worker)}><MessageCircle size={16} /></Button>
             <RowMenu label={t('Tùy chọn {0}', [worker.name])} items={[
               { label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => onEdit(worker) },
+              { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => onPublish(worker) },
               { label: t('Lưu trữ'), icon: Archive, onSelect: () => onArchive(worker) },
               { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => onDelete(worker), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [worker.name]), label: t('Xóa') } },
             ]} />

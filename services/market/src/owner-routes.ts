@@ -2,7 +2,7 @@ import type { Env } from '../worker-configuration';
 import { ListingId, MarketIdempotencyKey, MARKET_REQUEST_LIMIT } from '../../../apps/desktop/src/shared/market';
 import { validateMarketSubmission } from '../../../apps/desktop/src/shared/market-publishing';
 import { verifyMarketIdentity } from './auth';
-import { listingBody, ownerListings, submitListing, unpublishListing, MarketOperationError } from './listings';
+import { listingBody, ownerListings, ownerSummaries, submitListing, unpublishListing, MarketOperationError } from './listings';
 
 export type MarketEnvironment = Partial<Omit<Env, 'MARKET_WRITES_ENABLED'>> & { MARKET_WRITES_ENABLED?: string };
 
@@ -80,9 +80,10 @@ export async function ownerRoute(request: Request, environment: MarketEnvironmen
   const version = /^\/v2\/listings\/([a-z0-9][a-z0-9-]{0,79})\/versions$/.exec(url.pathname);
   const unpublish = /^\/v2\/listings\/([a-z0-9][a-z0-9-]{0,79})\/unpublish$/.exec(url.pathname);
   const ownerList = url.pathname === '/v2/me/listings';
+  const ownerSummary = url.pathname === '/v2/me/summary';
   const preview = /^\/v2\/me\/listings\/([a-z0-9][a-z0-9-]{0,79})\/versions\/([1-9][0-9]*)$/.exec(url.pathname);
-  if (!create && !version && !unpublish && !ownerList && !preview) return undefined;
-  const read = ownerList || Boolean(preview);
+  if (!create && !version && !unpublish && !ownerList && !ownerSummary && !preview) return undefined;
+  const read = ownerList || ownerSummary || Boolean(preview);
   if (read ? request.method !== 'GET' && request.method !== 'HEAD' : request.method !== 'POST') {
     return new Response(null, { status: 405, headers: { Allow: read ? 'GET, HEAD' : 'POST', 'Cache-Control': 'no-store' } });
   }
@@ -101,6 +102,7 @@ export async function ownerRoute(request: Request, environment: MarketEnvironmen
       return privateReply(request, await ownerListings(database, authentication.identity, pagination.after, pagination.limit));
     }
     if (url.search) return privateReply(request, { code: 'invalid_request' }, 400);
+    if (ownerSummary) return privateReply(request, await ownerSummaries(database, authentication.identity, environment.MARKET_WRITES_ENABLED === 'true'));
     if (preview) {
       const versionNumber = Number(preview[2]);
       if (!Number.isSafeInteger(versionNumber)) return privateReply(request, { code: 'not_found' }, 404);

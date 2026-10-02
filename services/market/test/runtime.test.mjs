@@ -88,7 +88,7 @@ test('actual owner handlers refuse anonymous requests without allocating D1 rows
   assert.equal(response.status, 401);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal((await database.prepare('SELECT count(*) AS total FROM mutation_requests').first()).total, before);
-  for (const path of ['/v2/me/listings', '/v2/me/listings/research-friend/versions/1']) {
+  for (const path of ['/v2/me/listings', '/v2/me/summary', '/v2/me/listings/research-friend/versions/1']) {
     for (const method of ['GET', 'HEAD']) {
       const refused = await runtime.dispatchFetch(`https://fixture.test${path}`, { method });
       assert.equal(refused.status, 401);
@@ -202,7 +202,7 @@ test('wrong owners and reserved curated IDs never create receipts or expose priv
   assert.equal((await database.prepare("SELECT count(*) AS total FROM mutation_requests WHERE owner_id='ownership-owner'").first()).total, 1);
 });
 
-test('pending updates leave approved pointers intact and unpublish fences late approval and exact retries', async () => {
+test('bounded owner summaries and exact public metadata keep latest pending separate from approved pointers through unpublish/republish', async () => {
   const first = await (await repository({ operation: 'submit', owner: 'visibility-owner', key: 'visibility-first' })).json();
   await database.batch([
     database.prepare("UPDATE version_reviews SET state='approved' WHERE listing_id=? AND version=1").bind(first.listingId),
@@ -218,9 +218,36 @@ test('pending updates leave approved pointers intact and unpublish fences late a
   assert.equal((await runtime.dispatchFetch(publicUrl, { headers: validators })).status, 304);
   await repository({ operation: 'submit', owner: 'visibility-owner', key: 'visibility-update', target: first.listingId,
     text: JSON.stringify({ ...submission, summary: 'Pending change' }) });
+  const currentSummary = await (await repository({ operation: 'summary', owner: 'visibility-owner' })).json();
+  assert.equal(currentSummary.publishingEnabled, false);
+  assert.equal((await (await repository({ operation: 'summary', owner: 'visibility-owner', publishingEnabled: true })).json()).publishingEnabled, true);
+  assert.equal(currentSummary.listings.length, 1);
+  assert.equal(currentSummary.listings[0].latest.listing.version, 2);
+  assert.equal(currentSummary.listings[0].latest.state, 'pending');
+  assert.equal(currentSummary.listings[0].published.version, 1);
+  assert.equal(currentSummary.listings[0].publicationEpoch, 0);
+  assert.equal(JSON.stringify(currentSummary).includes('visibility-owner'), false);
+  assert.equal((await (await repository({ operation: 'summary', owner: 'unrelated-owner' })).json()).listings.length, 0);
+  const singleUrl = `https://fixture.test/v2/listings/${first.listingId}`;
+  const single = await runtime.dispatchFetch(singleUrl);
+  assert.equal(single.status, 200);
+  assert.equal((await single.json()).version, 1);
+  assert.equal(single.headers.get('cache-control'), 'no-store');
+  const singleHead = await runtime.dispatchFetch(singleUrl, { method: 'HEAD' });
+  assert.equal(singleHead.status, 200);
+  assert.equal(await singleHead.text(), '');
+  assert.equal(singleHead.headers.get('content-type'), single.headers.get('content-type'));
   assert.equal((await repository({ operation: 'body', target: first.listingId, version: 2 })).status, 404);
   assert.equal((await (await repository({ operation: 'public' })).json()).find(listing => listing.listingId === first.listingId).summary, submission.summary);
   const unpublish = await (await repository({ operation: 'unpublish', owner: 'visibility-owner', key: 'visibility-unpublish', target: first.listingId })).json();
+  const withdrawnSummary = await (await repository({ operation: 'summary', owner: 'visibility-owner' })).json();
+  assert.equal(withdrawnSummary.listings[0].latest.listing.version, 2);
+  assert.equal(withdrawnSummary.listings[0].published, null);
+  assert.equal(withdrawnSummary.listings[0].publicationEpoch, 1);
+  assert.equal((await runtime.dispatchFetch(singleUrl)).status, 404);
+  const withdrawnHead = await runtime.dispatchFetch(singleUrl, { method: 'HEAD' });
+  assert.equal(withdrawnHead.status, 404);
+  assert.equal(await withdrawnHead.text(), '');
   assert.equal((await repository({ operation: 'body', target: first.listingId, version: 1 })).status, 404);
   for (const method of ['GET', 'HEAD']) {
     const hidden = await runtime.dispatchFetch(publicUrl, { method, headers: validators });
@@ -240,6 +267,7 @@ test('pending updates leave approved pointers intact and unpublish fences late a
   ]);
   assert.deepEqual(await (await repository({ operation: 'unpublish', owner: 'visibility-owner', key: 'visibility-unpublish', target: first.listingId })).json(), unpublish);
   assert.equal((await database.prepare('SELECT published_version FROM listings WHERE listing_id=?').bind(first.listingId).first()).published_version, 3);
+  assert.equal((await (await runtime.dispatchFetch(singleUrl)).json()).version, 3);
   const restoredHistory = await runtime.dispatchFetch(publicUrl);
   assert.equal(restoredHistory.status, 200);
   assert.equal(await restoredHistory.text(), downloaded);
@@ -257,6 +285,35 @@ test('pending updates leave approved pointers intact and unpublish fences late a
   const pendingUrl = `https://fixture.test/v2/listings/${first.listingId}/versions/4`;
   for (const method of ['GET', 'HEAD']) {
     assert.equal((await runtime.dispatchFetch(pendingUrl, { method, headers: validators })).status, 404);
+  }
+});
+
+test('ten owned identities retain twenty complete escaped latest/current metadata records without lifetime-history loading', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const authored = { ...submission, name: 'n'.repeat(80), summary: 's'.repeat(240), tags: Array(10).fill('t'.repeat(32)), changelog: '\u0001'.repeat(2000) };
+  for (let index = 0; index < 10; index += 1) {
+    const submittedAt = now - (10 - index) * 8000;
+    const firstResponse = await repository({ operation: 'submit', owner: 'summary-bound-owner', key: `summary-${index}-first`, now: submittedAt, text: JSON.stringify(authored) });
+    assert.equal(firstResponse.status, 200);
+    const first = await firstResponse.json();
+    await database.batch([
+      database.prepare("UPDATE version_reviews SET state='approved' WHERE listing_id=? AND version=1").bind(first.listingId),
+      database.prepare('UPDATE listings SET published_version=1 WHERE listing_id=?').bind(first.listingId),
+    ]);
+    assert.equal((await repository({ operation: 'submit', owner: 'summary-bound-owner', target: first.listingId, key: `summary-${index}-latest`, now: submittedAt + 1, text: JSON.stringify(authored) })).status, 200);
+  }
+  const summary = await repository({ operation: 'summary', owner: 'summary-bound-owner' });
+  assert.equal(summary.status, 200);
+  const text = await summary.text();
+  assert.ok(Buffer.byteLength(text) > 128 * 1024 && Buffer.byteLength(text) < 512 * 1024);
+  const parsed = JSON.parse(text);
+  assert.equal(parsed.listings.length, 10);
+  assert.equal(parsed.allowance.listingCount, 10);
+  assert.equal(parsed.allowance.submissionsInHour, 0);
+  for (const listing of parsed.listings) {
+    assert.equal(listing.latest.listing.version, 2);
+    assert.equal(listing.latest.state, 'pending');
+    assert.equal(listing.published.version, 1);
   }
 });
 

@@ -377,7 +377,10 @@ export class CoreService {
         this.notify();
         return;
       }
-      case 'marketCatalog': return this.market.catalog(commands.marketCatalog.parse(args).refresh);
+      case 'marketCatalog': {
+        const input = commands.marketCatalog.parse(args);
+        return this.market.catalog(input.refresh, input.cursor);
+      }
       case 'marketInstallations': commands.marketInstallations.parse(args); return this.market.installations();
       case 'marketAdd': {
         const input = commands.marketAdd.parse(args);

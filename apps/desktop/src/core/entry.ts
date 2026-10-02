@@ -1,4 +1,5 @@
 import { basename, join } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { z } from 'zod';
 import { Store } from './storage/database';
 import { CoreService, localHarnessRuntime } from './service';
@@ -24,6 +25,8 @@ import { Decisions } from './decisions/service';
 import { decisionsDirectory, filesFrom } from './decisions/manifest';
 import { workerRuntime } from './decisions/worker-runtime';
 import { runFinishedEvent, TURN_COMMANDS, turnSentEvent, turnTaskId } from './analytics-events';
+import { MarketPublishing } from './market/publishing';
+import type { PublishingRelay } from '../shared/market-desktop';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -99,6 +102,27 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
   port.postMessage({ type: 'profile', id, input });
 });
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
+const publishingCaller = new AsyncLocalStorage<string>();
+const pendingPublishing = new Map<string, (reply: unknown) => void>();
+const publishing = new MarketPublishing(store, {
+  request: (request: PublishingRelay) => new Promise((resolve, reject) => {
+    const parentId = publishingCaller.getStore();
+    if (!parentId) {
+      reject(new Error('Không có yêu cầu xuất bản được phép.'));
+      return;
+    }
+    const requestId = crypto.randomUUID();
+    const timer = setTimeout(() => {
+      pendingPublishing.delete(requestId);
+      reject(new Error('Marketplace không phản hồi.'));
+    }, 20_000);
+    pendingPublishing.set(requestId, reply => {
+      clearTimeout(timer);
+      resolve(reply);
+    });
+    port.postMessage({ type: 'marketPublishing', id: requestId, parentId, request });
+  }),
+});
 const runtimePaths = z.object({ sandboxExecutable: z.string(), helperPath: z.string(), integrationExecutable: z.string(), gitExecutable: z.string() })
   .strict().parse(JSON.parse(process.argv[3]));
 const workspaceDirectory = join(process.argv[2], 'workspaces');
@@ -185,6 +209,12 @@ port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);
   if (!envelope.success) return;
   const { id, command, args } = envelope.data;
+  if (command === 'marketPublishingReply') {
+    const complete = pendingPublishing.get(id);
+    pendingPublishing.delete(id);
+    complete?.(args);
+    return;
+  }
   if (command === 'profileReply') { pendingProfiles.get(id)?.(args); return; }
   if (command === 'overlayShown') { overlayShown.get(String(args))?.(); return; }
   if (command === 'browserReply') {
@@ -203,7 +233,9 @@ port.on('message', async ({ data }) => {
     return;
   }
   try {
-    const value = command === 'importSources'
+    const value = command === 'marketPublishing'
+      ? await publishingCaller.run(id, () => publishing.execute(args))
+      : command === 'importSources'
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))
       : command === 'sourcePath' ? core.sourcePath(args)

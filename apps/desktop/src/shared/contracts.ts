@@ -306,7 +306,7 @@ export type Connections = Record<ApiProvider, boolean> & { custom: Record<string
 export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false, custom: {}, search: { exa: false } });
 
 export const commands = {
-  marketCatalog: z.object({ refresh: z.boolean().optional() }).strict(),
+  marketCatalog: z.object({ refresh: z.boolean().optional(), cursor: z.string().min(1).max(256).optional() }).strict(),
   marketAdd: MarketTarget,
   marketInstallations: z.object({}).strict(),
   marketPreviewUpdate: MarketUpdateTarget,
@@ -530,6 +530,8 @@ export interface Bridge {
   restore(): Promise<boolean>;
   /** Versions and install facts of the running build, as the main process reports them (COD-176). */
   about(): Promise<AboutInfo>;
+  /** Explicit person-owned publishing surface; never part of worker/CLI command authority. */
+  marketPublishing(action: import('./market-desktop').PublishingAction): Promise<import('./market-desktop').PublishingResult>;
   /** The CodePawl account on this computer (COD-337): who and which plan, never a token. */
   accountState(): Promise<import('./account').AccountState>;
   /** Opens the browser to sign in; settles when the sign-in finishes, is cancelled or fails (a translated reason). */
