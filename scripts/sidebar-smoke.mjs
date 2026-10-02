@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openChannels, openHome } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 // Sidebar: worker click opens chat, press-and-hold reorder, keyboard reorder, persistence across restarts.
@@ -17,9 +17,11 @@ try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
   await useVietnamese(page);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).waitFor();
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
   await page.getByRole('button', { name: '#Eris Review', exact: true }).waitFor();
+  await openHome(page);
 
   // Clicking a worker name opens that worker's chat. There is no task-list disclosure.
   const researcher = page.getByRole('button', { name: 'Researcher', exact: true });
@@ -63,9 +65,11 @@ try {
   assert.equal(await page.locator('.tree-item.dragging').count(), 0);
 
   // Channels have no reorder (COD-369): a crew is a channel now, and the list is newest first.
+  await openChannels(page);
   const channelRows = page.locator('.channel-row > .worker-row > button.worker');
   assert.equal(await channelRows.count(), 2, 'both template crews are channels');
   assert.equal(await channelRows.first().getAttribute('aria-label'), '#Eris Review', 'the newest channel is listed first');
+  await openHome(page);
 
   // Dragging the handle resizes the sidebar, and the width survives a restart.
   const sidebarWidth = () => page.locator('.sidebar').evaluate(element => Math.round(element.getBoundingClientRect().width));

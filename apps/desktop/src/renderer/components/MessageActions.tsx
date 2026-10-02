@@ -1,4 +1,4 @@
-import { Forward, Reply, SmilePlus } from 'lucide-react';
+import { Bookmark, BookmarkCheck, Forward, Reply, SmilePlus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { MessageReaction, Reaction } from '../../shared/message-interactions';
 import type { Run } from '../../shared/contracts';
@@ -7,6 +7,7 @@ import { t } from '../i18n';
 import { Button } from './ui';
 import { pickReaction, reactionEmoji, reactionGroups, reactionMeanings, reactionOrder, replyToAnswer, userReactionOn } from './messageMarks';
 import { ReactionBadges, ReactionBar } from './ReactionBar';
+import { saveMessage, unsaveMessage, useSavedMessages, savedKey } from '../saved';
 
 /** The bridge call and the props every reaction control shares: which message, whose marks, and how to run a command. */
 type ReactionProps = {
@@ -44,11 +45,15 @@ export function MessageActions({ taskId, messageId, author, text, reactions, act
   onForward?: () => void;
 }) {
   const { current, pick } = useReactionPick({ taskId, messageId, reactions, action });
+  // Save for later (COD-366): the message goes to Activity's Saved view, and the same button takes it off again.
+  const isSaved = useSavedMessages().some(item => savedKey(item.taskId, item.messageId) === savedKey(taskId, messageId));
+  const toggleSaved = () => isSaved ? unsaveMessage(taskId, messageId) : saveMessage({ taskId, messageId, author, text });
   return <div className="message-actions" role="group" aria-label={t('Thao tác với tin nhắn')}>
     {leading}
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
     {onForward && <Button size="icon" aria-label={t('Chuyển tiếp tin này')} title={t('Chuyển tiếp tin này')} onClick={onForward}><Forward size={15} /></Button>}
     <ReactionBar options={reactionOptions()} picked={current} onPick={pick} label={t('Thả react')} icon={<SmilePlus size={15} />} />
+    <Button size="icon" aria-label={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} title={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} aria-pressed={isSaved} onClick={toggleSaved}>{isSaved ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}</Button>
   </div>;
 }
 

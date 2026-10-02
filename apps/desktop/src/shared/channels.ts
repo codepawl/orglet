@@ -16,6 +16,8 @@ import { z } from 'zod';
 export const CHANNEL_NAME_LIMIT = 80;
 export const CHANNEL_TOPIC_LIMIT = 250;
 export const MAX_CHANNEL_MEMBERS = 50;
+/** The longest name of a category (COD-366): the group a channel is listed under in the Channels area, like Discord's. */
+export const CHANNEL_CATEGORY_LIMIT = 40;
 
 export const ChannelMember = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('orglet'), id: z.uuid() }).strict(),
@@ -41,6 +43,8 @@ export const Channel = z.object({
   id: z.uuid(),
   name: ChannelName,
   topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(),
+  /** The category the channel is listed under (COD-366); none lists it above the categories. */
+  category: z.string().trim().min(1).max(CHANNEL_CATEGORY_LIMIT).optional(),
   members: ChannelMembers,
   /**
    * Set when the lead splits the work (COD-369): the crew record that holds the lead, the workflow, the budget and the
@@ -66,6 +70,8 @@ export type EmptyChannel = z.infer<typeof EmptyChannel>;
 export const ChannelFields = z.object({
   name: ChannelName,
   topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT),
+  /** Left out keeps the channel's category; an empty one takes it out of its category. */
+  category: z.string().trim().max(CHANNEL_CATEGORY_LIMIT).optional(),
   members: ChannelMembers,
   mode: ChannelMode.optional(),
 }).strict();

@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-revision-'));
 const env = { ...process.env, APPDATA: directory, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
@@ -16,6 +16,7 @@ try {
   await writeFile(original, 'id,label\n1,old\n'); await writeFile(added, 'id,label\n2,new\n3,new\n');
   await app.evaluate(({ dialog }, path) => { globalThis.originalOpen = dialog.showOpenDialog; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, original);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
+  await openChannels(page);
   await page.getByRole('button', { name: '#Eris Review', exact: true }).first().waitFor();
   const id = await page.evaluate(async () => {
     const sources = await window.orglet.pickSources(); const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');

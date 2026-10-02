@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openChannels, openHome } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 // Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
@@ -40,7 +40,9 @@ try {
   // The starters themselves come from the orglet's role, so this checks the one stable row in that list.
   await page.getByRole('button', { name: 'Schedule this message', exact: true }).waitFor();
   assert.ok(await page.locator('.suggestions button').count() > 1, 'the empty chat offers starters');
-  for (const name of ['Create channel', 'New orglet']) await page.getByRole('button', { name, exact: true }).first().waitFor();
+  await page.getByRole('button', { name: 'New orglet', exact: true }).first().waitFor();
+  await openChannels(page);
+  await page.getByRole('button', { name: 'Create channel', exact: true }).first().waitFor();
   assert.equal(await page.getByRole('button', { name: 'New task', exact: true }).count(), 0);
   assert.equal(await page.getByRole('navigation', { name: 'All tasks' }).count(), 0);
   await page.getByRole('button', { name: /^Schedules/ }).click();
@@ -68,6 +70,7 @@ try {
   await page.keyboard.press('Escape');
   // A UK check needs a word the two spellings differ on. The starters under the greeting come from the orglet's
   // role and none of them carry one, so this uses the avatar picker's Customise, which is always there.
+  await openHome(page);
   await page.getByRole('button', { name: 'New orglet', exact: true }).first().click();
   await page.getByRole('button', { name: 'Customise', exact: true }).waitFor();
   await page.keyboard.press('Escape');

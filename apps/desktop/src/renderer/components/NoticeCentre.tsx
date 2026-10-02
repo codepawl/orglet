@@ -1,25 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, CircleAlert, CircleCheck, Info, RotateCw, Trash } from 'lucide-react';
-import { Button, Drawer } from './ui';
+import { Button } from './ui';
 import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoticesFirst, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, restartNoticeId, useNotices, type NoticeKind, type NoticeRow } from './notifications';
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
 
 const kindIcons: Record<NoticeKind, typeof Info> = { error: CircleAlert, done: CircleCheck, info: Info };
 
-/**
- * Everything the app has said, after the toast has gone. Opened from the sidebar, filtered by what kind of thing
- * it was, newest first and grouped by day. A toast is the right shape for a message you are looking at, and the
- * wrong one for a failure that arrived while you were somewhere else (user, 2026-09-20).
- *
- * Each row says what happened and what it was about, and a run of identical notices is one row with a count
- * (COD-174): the owner opened this to twelve rows reading "Saved" and "Command not allowed." and nothing else.
+/*
+ * A toast is the right shape for a message you are looking at, and the wrong one for a failure that arrived while you
+ * were somewhere else (user, 2026-09-20), so every one is kept here, newest first. Each row says what happened and what
+ * it was about, and a run of identical notices is one row with a count (COD-174): the owner opened this to twelve rows
+ * reading "Saved" and "Command not allowed." and nothing else.
  */
-export function NoticeCentre({ open, onClose, onOpenChat, chatExists, updateReady, onRestartUpdate }: { open: boolean; onClose: () => void;
+type NoticeLinks = {
   /** Opens the chat a notice points at, such as a schedule's run (COD-258). */ onOpenChat: (taskId: string) => void;
   /** A chat deleted since leaves its notice as plain text. */ chatExists: (taskId: string) => boolean;
   /** A downloaded update waits for a restart: its notice carries the restart (COD-304). */ updateReady: boolean;
-  onRestartUpdate: () => void }) {
+  onRestartUpdate: () => void;
+};
+
+/**
+ * Everything the app has said, after the toast has gone, filtered and grouped by day. The Activity area shows it in its
+ * Done view (COD-366); `open` says the list is on screen, which is when it counts as seen.
+ */
+export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestartUpdate }: { open: boolean } & NoticeLinks) {
   const notices = useNotices();
   const restartId = restartNoticeId(notices, updateReady);
   const [kind, setKind] = useState<NoticeKind | 'all'>('all');
@@ -46,14 +51,13 @@ export function NoticeCentre({ open, onClose, onOpenChat, chatExists, updateRead
     return total;
   }, [notices]);
 
-  if (!open) return null;
-  return <Drawer open onClose={onClose} title={t('Thông báo')} description={t('Mọi thông báo đã hiện, giữ lại ở đây.')}
-    actions={notices.length > 0 ? <Button variant="outline" onClick={() => clearNotices()}><Trash size={15} />{t('Xóa hết')}</Button> : undefined}>
+  return <>
     <div className="notice-filters" role="group" aria-label={t('Lọc thông báo')}>
       {(['all', ...noticeKinds] as const).map(name => <button key={name} type="button" className={kind === name ? 'notice-filter on' : 'notice-filter'}
         aria-pressed={kind === name} onClick={() => setKind(name)}>
         {name === 'all' ? t('Tất cả') : noticeKindNames[name]}<span>{counts[name] ?? 0}</span>
       </button>)}
+      {notices.length > 0 && <Button variant="ghost" className="notice-clear" onClick={() => clearNotices()}><Trash size={15} />{t('Xóa hết')}</Button>}
     </div>
     {rows.length === 0
       ? <p className="muted notice-empty">{notices.length === 0 ? t('Chưa có thông báo nào.') : t('Không có thông báo nào thuộc mục này.')}</p>
@@ -69,7 +73,7 @@ export function NoticeCentre({ open, onClose, onOpenChat, chatExists, updateRead
           </li>;
         })}
       </ol>}
-  </Drawer>;
+  </>;
 }
 
 /**
