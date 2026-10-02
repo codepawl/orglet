@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { KEY_PREFIXES, TELEMETRY_BEARER as BEARER, JWT } from './secrets';
 
 /**
  * Usage analytics for a signed-in CodePawl account (COD-344). This file is the pure part: the whitelist of events and
@@ -149,9 +150,6 @@ export type ScrubContext = {
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 /** A query string or fragment after a URL's path; the address stays, what follows `?` or `#` goes. */
 const URL_QUERY = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]*)[?#][^\s"'<>)]*/gi;
-const KEY_PREFIXES = /\b(?:sk|pk|rk|ghp|gho|ghu|ghs|ghr|github_pat|xox[abprs]|glpat|AKIA|AIza|ya29)[-_][A-Za-z0-9_\-]{8,}/g;
-const BEARER = /\b(Bearer|Basic|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi;
-const JWT = /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g;
 const LONG_HEX = /\b[0-9a-f]{32,}\b/gi;
 /**
  * A long unbroken run of base64 or base64url characters holding a digit, an upper and a lower case letter, so words and
