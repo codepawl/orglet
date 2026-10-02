@@ -31,6 +31,7 @@ export type ChatActionClient = {
   react: (to: string, emoji: Reaction, active: boolean, message?: string) => Promise<ReactValue>;
   forward: (to: string, targets: string[], message?: string) => Promise<ForwardValue>;
   control: (to: string, action: ChatControl, signal: AbortSignal) => Promise<ControlValue>;
+  revise?: (to: string, message: string, text: string, signal: AbortSignal) => Promise<ControlValue>;
   answer: (to: string, answer: string, signal: AbortSignal) => Promise<ControlValue>;
   chats: (archived: boolean) => Promise<ChatsValue>;
   side: (to: string, message: string, signal: AbortSignal) => Promise<SendValue>;
@@ -94,6 +95,7 @@ export function appChatClient(userData: string, executable: string | undefined):
       react: (to, emoji, active, message) => request<ReactValue>({ op: 'react', ...chatFields(to), emoji, active, ...(message ? { message } : {}) }),
       forward: (to, targets, message) => request<ForwardValue>({ op: 'forward', ...chatFields(to), targets, ...(message ? { message } : {}) }),
       control: (to, action, signal) => request<ControlValue>({ op: 'control', ...chatFields(to), action, ...WAIT }, signal),
+      revise: (to, message, text, signal) => request<ControlValue>({ op: 'revise', ...chatFields(to), message, text, ...WAIT }, signal),
       answer: (to, answer, signal) => request<ControlValue>({ op: 'answer', ...chatFields(to), answer, ...WAIT }, signal),
       chats: archived => request<ChatsValue>({ op: 'chats', archived }),
       side: (to, message, signal) => request<SendValue>({ op: 'side-thread', ...chatFields(to), message, ...WAIT }, signal),

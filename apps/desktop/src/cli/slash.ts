@@ -1,5 +1,5 @@
 import { t } from './text';
-import { MessageRef, type ChatControl } from './protocol';
+import { MessageRef, UserMessageRef, type ChatControl } from './protocol';
 import { Reaction } from '../shared/message-interactions';
 /** The commands of `orglet chat` that start with a slash, and their Tab completion (COD-236, COD-354). */
 
@@ -14,6 +14,7 @@ export type SlashCommand =
   | { kind: 'details' }
   | { kind: 'agents' }
   | { kind: 'history'; count?: number }
+  | { kind: 'revise'; ref: string; text: string }
   | { kind: 'reply'; ref: string; message: string }
   | { kind: 'react'; emoji: Reaction; active: boolean; ref?: string }
   | { kind: 'forward'; targets: string[]; ref?: string }
@@ -45,7 +46,7 @@ export type SlashCommand =
 
 /** In the order `/help` lists them. */
 export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
-  '/history', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
+  '/history', '/revise', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
   '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
   '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme',
   '/new', '/edit', '/delete', '/help', '/exit'] as const;
@@ -65,6 +66,7 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/details', 'Expand or collapse steps and answers (Ctrl+O)'],
   ['/agents', 'Show or hide agent context (Ctrl+G)'],
   ['/history [n]', t("Tải các lượt cũ hơn của chat này (PgUp ở đầu cũng vậy)")],
+  ['/revise <#n> <text>', t('Sửa tin nhắn của bạn và chạy lượt mới; giữ nguyên lịch sử')],
   ['/reply <#n> <message>', t("Trả lời một tin nhắn theo số của nó, như #3 hoặc #3.1")],
   ['/react <emoji> [#n]', t("Thả cảm xúc lên câu trả lời mới nhất hoặc tin #n")],
   ['/unreact <emoji> [#n]', t("Gỡ cảm xúc đó")],
@@ -120,6 +122,7 @@ export function parseSlash(line: string): SlashCommand {
     case '/details': return { kind: 'details' };
     case '/agents': return { kind: 'agents' };
     case '/history': return parseHistory(rest);
+    case '/revise': return parseRevise(rest);
     case '/reply': return parseReply(rest);
     case '/react':
     case '/unreact': return parseReact(rest, command === '/react');
@@ -161,6 +164,14 @@ function parseHistory(rest: string): SlashCommand {
   const count = Number(rest);
   if (!Number.isInteger(count) || count < 1 || count > 50) return { kind: 'usage', message: t("Gõ /history hoặc /history <số từ 1 đến 50>.") };
   return { kind: 'history', count };
+}
+
+function parseRevise(rest: string): SlashCommand {
+  const space = rest.search(/\s/);
+  const ref = space === -1 ? rest : rest.slice(0, space);
+  const text = space === -1 ? '' : rest.slice(space).trim();
+  if (!UserMessageRef.safeParse(ref).success || !text) return { kind: 'usage', message: t('Gõ /revise #3 rồi chữ đã sửa. /history cho xem số của tin nhắn của bạn.') };
+  return { kind: 'revise', ref, text };
 }
 
 function parseReply(rest: string): SlashCommand {
