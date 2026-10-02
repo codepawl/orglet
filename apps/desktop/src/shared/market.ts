@@ -23,6 +23,18 @@ export const MarketCatalog = z.object({ listings: z.array(MarketListing).max(200
   'Mục trong danh mục bị trùng.',
 );
 export type MarketCatalog = z.infer<typeof MarketCatalog>;
+/** V2 display metadata has no account identity, email, claims or credentials. V1 stays literal CodePawl. */
+export const MarketPublicAuthor = z.object({ displayName: z.string().trim().min(1).max(80) }).strict();
+export const MarketListingV2 = MarketListing.omit({ author: true }).extend({
+  author: MarketPublicAuthor,
+  reviewDigest: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict();
+export type MarketListingV2 = z.infer<typeof MarketListingV2>;
+export const MarketCatalogPageV2 = z.object({
+  listings: z.array(MarketListingV2).max(100),
+  nextCursor: z.string().max(256).nullable(),
+}).strict().refine(page => new Set(page.listings.map(listing => listing.listingId)).size === page.listings.length);
+export type MarketCatalogPageV2 = z.infer<typeof MarketCatalogPageV2>;
 /** Origin links are local metadata and may travel in a workspace backup, never in a marketplace listing. */
 export const MarketOrigin = z.object({
   entityId: z.string().uuid(), listingId: ListingId, version: MarketVersion, kind: z.enum(['orglet', 'crew']),

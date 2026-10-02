@@ -1,14 +1,6 @@
-import { z } from 'zod';
-import { WorkerInput, SkillInput } from '../../shared/contracts';
-import { SkillPackage } from '../../shared/skill-package';
+import { WorkerTemplate } from '../../shared/templates';
 import { MARKET_BODY_LIMIT } from '../../shared/market';
 import { parseTeamTemplate } from '../storage/templates';
-
-const WorkerTemplate = z.object({
-  format: z.literal('orglet-worker-template'), version: z.literal(1),
-  worker: WorkerInput.omit({ id: true, skillId: true, autoApplyProposals: true, mcpServerIds: true }).strict(),
-  skill: SkillInput.omit({ id: true }).extend({ package: SkillPackage.optional() }).strict(),
-}).strict();
 
 /** Normalize both existing strict import shapes; no privileged fields are added here. */
 export function parseMarketTemplate(text: string, kind: 'orglet' | 'crew') {

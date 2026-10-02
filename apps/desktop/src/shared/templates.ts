@@ -4,6 +4,11 @@ import { SkillPackage } from './skill-package';
 import { KnowledgeInput } from './knowledge';
 
 const Key = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
+export const WorkerTemplate = z.object({
+  format: z.literal('orglet-worker-template'), version: z.literal(1),
+  worker: WorkerInput.omit({ id: true, skillId: true, autoApplyProposals: true, mcpServerIds: true }).strict(),
+  skill: SkillInput.omit({ id: true }).extend({ package: SkillPackage.optional() }).strict(),
+}).strict();
 export const TeamTemplate = z.object({
   format: z.literal('orglet-team-template'), version: z.literal(1),
   team: TeamInput.omit({ id: true, memberIds: true, synthesizerId: true }).extend({ memberKeys: z.array(Key).min(1).max(MAX_CREW_MEMBERS), synthesizerKey: Key }).strict(),
@@ -12,3 +17,23 @@ export const TeamTemplate = z.object({
   skills: z.array(SkillInput.omit({ id: true }).extend({ key: Key, package: SkillPackage.optional() }).strict()).min(1).max(5),
   knowledge: z.array(KnowledgeInput.pick({ title: true, content: true, tags: true, pinned: true }).strict()).max(50).optional(),
 }).strict();
+
+/** Reference integrity is the same for local imports and public crew content. */
+export function validateTemplateReferences(template: {
+  workers: { key: string; skillKey: string }[];
+  skills: { key: string }[];
+  team: { memberKeys: string[]; synthesizerKey: string };
+}): void {
+  const workerKeys = new Set(template.workers.map(worker => worker.key));
+  const skillKeys = new Set(template.skills.map(skill => skill.key));
+  const usedWorkers = new Set([...template.team.memberKeys, template.team.synthesizerKey]);
+  const usedSkills = new Set(template.workers.map(worker => worker.skillKey));
+  if (
+    workerKeys.size !== template.workers.length || skillKeys.size !== template.skills.length ||
+    new Set(template.team.memberKeys).size !== template.team.memberKeys.length ||
+    usedWorkers.size !== template.workers.length || usedSkills.size !== template.skills.length ||
+    [...usedWorkers].some(key => !workerKeys.has(key)) || [...usedSkills].some(key => !skillKeys.has(key))
+  ) {
+    throw new Error('Template có key trùng, thiếu hoặc không được sử dụng.');
+  }
+}

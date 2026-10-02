@@ -1,10 +1,25 @@
 import { MARKET_SEED_BODIES, seedCatalog } from '../../../apps/desktop/src/shared/market-seed';
+import { catalogPageV2 } from './catalog-v2';
 
 /** Curated phase one: immutable versions ship in Git; publishing has no route. */
 export default {
   async fetch(request: Request): Promise<Response> {
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
+    if (path === '/v2/catalog') {
+      const errorHeaders = { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
+      try {
+        const page = await catalogPageV2(url.searchParams);
+        const status = page === undefined ? 400 : 200;
+        console.log(JSON.stringify({ operation: 'catalog-v2', method: request.method, status }));
+        if (page === undefined) return new Response(request.method === 'HEAD' ? null : 'Tham số danh mục không hợp lệ.', { status, headers: errorHeaders });
+        return reply(request, page, 'public, max-age=300');
+      } catch {
+        console.log(JSON.stringify({ operation: 'catalog-v2', method: request.method, status: 500 }));
+        return new Response(request.method === 'HEAD' ? null : 'Không thể đọc danh mục.', { status: 500, headers: errorHeaders });
+      }
+    }
     const catalog = await seedCatalog();
     if (path === '/v1/catalog') return reply(request, JSON.stringify(catalog), 'public, max-age=300');
     const match = /^\/v1\/listings\/([a-z0-9-]+)\/versions\/([1-9][0-9]*)$/.exec(path);

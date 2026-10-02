@@ -1,4 +1,4 @@
-import { TeamTemplate as Template } from '../../shared/templates';
+import { TeamTemplate as Template, validateTemplateReferences } from '../../shared/templates';
 import { type Worker, type Skill, type Team } from '../../shared/contracts';
 import { Store, id } from './database';
 import { packageForImport } from '../skill-package';
@@ -48,10 +48,6 @@ export function parseTeamTemplate(text: string) {
   let input: unknown;
   try { input = JSON.parse(text); } catch { throw new Error('Tệp template không phải JSON hợp lệ.'); }
   const template = Template.parse(input);
-  const workersByKey = new Map(template.workers.map(worker => [worker.key, worker]));
-  const skillsByKey = new Map(template.skills.map(skill => [skill.key, skill]));
-  const usedWorkers = new Set([...template.team.memberKeys, template.team.synthesizerKey]);
-  const usedSkills = new Set(template.workers.map(worker => worker.skillKey));
-  if (workersByKey.size !== template.workers.length || skillsByKey.size !== template.skills.length || new Set(template.team.memberKeys).size !== template.team.memberKeys.length || usedWorkers.size !== template.workers.length || usedSkills.size !== template.skills.length || [...usedWorkers].some(key => !workersByKey.has(key)) || [...usedSkills].some(key => !skillsByKey.has(key))) throw new Error('Template có key trùng, thiếu hoặc không được sử dụng.');
+  validateTemplateReferences(template);
   return template;
 }

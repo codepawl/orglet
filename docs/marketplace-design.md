@@ -48,7 +48,7 @@ From an orglet's or crew's menu: **Publish to the marketplace**. Core builds the
 
 Before upload, on the computer and again on the server:
 
-- A secret scan over every text field (key and token patterns, the same masking rules as error reports). A hit blocks publishing and points at the line.
+- A credential scan over authored text and decoded package files. It shares key and JWT recognizers with error reports, but does not use telemetry's broader masking of prose, paths and digests. A hit blocks publishing and points at a logical field or file index and line; diagnostics never repeat the matching value or filename. This detects recognizable credentials, not arbitrary confidential prose.
 - Size caps: 2 MB per listing like templates. Listings are text only; avatar data uses the existing emoji, mascot and color fields. There are no image uploads or screenshot fields.
 - The schema check above, so nothing outside the allowed fields leaves.
 
@@ -59,7 +59,7 @@ Unpublishing hides the listing from the catalog. People who already added it kee
 Listings are instructions and text, never code, so the worst a bad listing can do is give an orglet bad instructions. That is the same risk as a template file someone sends today, and it runs under the same permissions the person sets. Still:
 
 - **Phase 1 is curated.** Only CodePawl publishes, so the first catalog is ready-made friends we wrote and tested.
-- **Phase 2 opens publishing** to any verified account, with a **Report** button, a review queue, a per-account publishing rate limit, and listings from new accounts held for review before they appear.
+- **Phase 2 opens publishing** to verified accounts, with a **Report** button, a review queue and a per-account publishing rate limit. Every submitted version waits for review before it appears.
 - Instructions that tell an orglet to send data somewhere, or to ask for keys, are review-queue reasons.
 
 ## How it rides on sync
@@ -91,3 +91,13 @@ Each Add is one transaction for skills, orglets, the optional crew and its propo
 Origin metadata lives in SQLite settings independently of editable worker inputs, so editing an orglet keeps its marketplace link. The profile refreshes the catalog and offers **Update available**; Discover also lists updates for installed orglets and crews. The card shows the changelog, current and incoming instructions, names, descriptions, avatar data, skill/package metadata and crew settings and roster. It marks a customized copy. Applying explicitly replaces template content, keeps existing connection choices and local privilege switches, creates new worker/crew revisions, reuses unchanged skills, and copies changed skills to avoid changing unrelated orglets. Removed crew members remain local friends. Existing channel membership follows the revised crew; in-flight run snapshots and earlier revisions remain intact. Edits, archive or deletion after review invalidate the card before the transaction writes any entity.
 
 The API and deployment setup are in [services/market](../services/market/README.md). Public publishing and sync remain later phases. Cached catalogs and origin metadata are local application data; full Data erase clears them. Workspace backups carry validated origin links with their local entity IDs, but no catalog or downloaded body cache. Additive restore keeps an existing local origin with its existing entity rows and adds missing links; dangling references or conflicting listing identities are rejected.
+
+## Public content contract
+
+COD-377 adds a strict content-only submission validator and a seeded `GET`/`HEAD /v2/catalog` route. The desktop continues to read v1. V1 catalog authors remain the literal `CodePawl`, and its immutable template URLs, bytes and hashes remain unchanged. V2 authors contain only a bounded public display name; pagination accepts limits from 1 to 100 and rejects invalid or stale cursors with 400. Curated listing IDs are reserved and cannot be claimed by future account listings.
+
+A submission contains kind, name, summary, tags, language, license, changelog and a matching orglet or crew template. Public fields are explicitly selected rather than inherited from local settings. Provider/model and semantic thinking effort are suggestions. Custom connection IDs, native effort resolutions, capability metadata, local IDs, review receipts and grants are refused. Ownership, listing/version IDs and review state belong to the later authenticated handler, which is not implemented here.
+
+Packages use canonical base64, bounded decoded sizes, fatal UTF-8 and no NUL bytes. All published package files must be text. Public frontmatter refuses aliases and explicit YAML tags. Case-insensitive collisions and file/directory conflicts are rejected, and SKILL.md name/content must match the preview. Manifest checks preserve existing supported report schemas and tool/permission blockers. Desktop imports retain their synchronous hashes and still require local review before use. Resources are files; validation and import never execute them.
+
+The template-body SHA proves import byte integrity. A separate canonical complete-content digest covers every authored metadata field plus the template, so changing only a summary, tag or changelog requires a new review. Package review identity includes `orglet.json`; its own `version_hash` excludes that manifest, as before. Neither hash is a client-supplied approval. Credential diagnostics stop at a bounded count while still refusing the entire submission. No authenticated write route, moderation storage, desktop publishing UI or sync ships in this step; local tests and a Worker dry run do not establish deployment.

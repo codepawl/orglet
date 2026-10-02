@@ -1510,6 +1510,7 @@ export const en: Dictionary = {
   'Nội dung hướng dẫn cần từ 1 đến 16.000 ký tự.': 'Instructions must be 1 to 16,000 characters.',
   'Nội dung skill không khớp gói đã nhập.': 'The skill content does not match the imported package.',
   'Nội dung tệp skill không hợp lệ.': 'Invalid skill file content.',
+  'Nội dung xuất bản không hợp lệ. Kiểm tra trường và quy tắc được chỉ ra.': 'Invalid publishing content. Check the indicated field and rule.',
   'Nội dung {0}': 'Contents of {0}',
   'OS credential storage không khả dụng.': 'OS credential storage is unavailable.',
   'Orglet không thể khởi động': 'Orglet could not start',
