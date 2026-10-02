@@ -71,6 +71,8 @@ Account addresses a CLI or its plan reading reports (such as the Claude Code or 
 
 While a run works, a tab docks onto the top of the prompt bar, its lower corners curving into the bar so the two read as one surface. It carries the faces of the workers actually running, a sentence naming who is doing what ("Researcher is thinking…", or how many are working in a team; a long name shortens before the action does), and above it one grey line for the last step that finished. The faces carry the state in the same motions as the byline — turning while thinking, eyes sweeping a line while reading, following the line while writing — rather than a coloured mark to learn. The tab rises out of the bar when a run starts and, when it ends, its content fades first and the shape is drawn flat back into the bar. It says only what the core observed. Claude Code streams its steps (`apps/desktop/src/core/harness/claudeStream.ts`), so reads and searches are named; Codex streams reasoning and the answer only, and an API provider reports nothing finer than planning, combining and waiting, so those runs get an island with fewer states and no receipt line. The step list, the elapsed time and the worker's notes sit behind one folded control above the streaming text, the same trace the finished answer keeps above its text (COD-220: the memories used, the notes loaded and every step the core saw, in order), so nothing sits under text that already reads as complete (COD-212); the control counts what happened ("Used 1 memory · Read 2 files"), or says **Chi tiết** when only notes are there to open, and a run with neither shows the elapsed time as one plain line instead. With `prefers-reduced-motion` every change is a cut and the tab simply appears and disappears. The words the island and the step line use for each kind of action, what is kept after a run, and the diff of what a run changed in its working copy (the **Đã thay đổi 3 tệp · +42 −7** line under the answer, read through the `workspaceDiff` command) are decided in [worker-actions.md](worker-actions.md). Once no run is on, the same tab offers the chat's knowledge suggestions waiting for review (a lightbulb, "3 knowledge suggestions", **Review** and a dismiss): Review opens the one note, or **Thư viện → Knowledge** when there are several, and dismiss only hides the offer for that set of suggestions, so a new suggestion brings it back and the notes stay in the library either way. A working run always takes the tab first; the offer returns when the run ends.
 
+Source-only Codex runs keep the strict `{ payload: string }` CLI envelope. The prompt includes the canonical inner answer schema generated from the frozen run and its allowed proposals, memories and reactions, so a requested report has the same fields and enums the core accepts. Decoding still passes through the existing answer and report validators, citation checks and hand-in gates. This guidance grants no tools or permissions; channel runs retain their tool-loop protocol.
+
 ### Accounts
 
 A harness row runs with one account, picked on the row itself. **Tài khoản mặc định** is the sign-in the CLI already has on this machine — what Orglet used before accounts existed, and what a fresh install shows.
@@ -430,6 +432,25 @@ The limit is 100 files, 200 directory entries, eight path components, 256 KB per
 Workers can read UTF-8 files from the reviewed package's `references/` and `assets/` through `read_skill_resource`. These are guidance, not source evidence. Binary assets and scripts remain available for inspection/export but are not executed or sent as resources. Package instructions and requested text resources can be sent to the task's approved provider. Tool declarations never grant extra permissions.
 
 Export creates a new named directory and refuses to overwrite an existing one. It adds `orglet.json` when absent, containing `input_schema`, `output_schema`, `required_permissions`, `evaluator` and `version_hash`. This extension is specific to Orglet; unsupported schemas, evaluators and permissions block activation. Backups and team templates retain package files, but review approval stays on the current machine. A team template including packages must still fit its 2 MB limit.
+
+A skill written in the app exports its first non-heading paragraph as `description`, up to 1,024 characters, rather than repeating its name. Write that paragraph as a concrete trigger: what work the skill handles and when to use it. If the instructions contain only headings, export uses a short fallback naming the skill. Editing its instructions creates a new revision and changes the next export's description. An imported package keeps its original frontmatter and resources unchanged; its description is not regenerated.
+
+For a new skill directory, start with this shape and replace each example with the actual task. Include Gotchas for recurring mistakes or real limits, and leave it out when there are none. References already load on demand through `read_skill_resource`.
+
+```markdown
+---
+name: evidence-review
+description: Review attached dataset evidence when checking a submission or verifying a claim.
+---
+
+Use when checking a dataset submission or a claim against attached evidence.
+
+## Steps
+Read the supplied evidence, run the relevant checks, and report what each check establishes.
+
+## Gotchas
+A planned check is not a passed check. If run logs are missing, say which log is needed; do not infer stability.
+```
 
 ## Checks and packaging
 

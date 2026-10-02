@@ -230,6 +230,12 @@ Before a chat run starts, the core counts the feedback its worker keeps getting 
 
 Each job hydrates a bounded prompt: compiled instructions, approved knowledge, an extractive rolling summary of older turns (≤ 8 KB), up to four keyword snippets from this thread only (≤ 8 KB), then the last 10 verbatim turns. If compacting still cannot fit 200 KB, the send is refused with no reservation. Frozen on `run.snapshot.context.manifest` (`verbatimTurns`, `summaryChars`, `retrievedSnippets`). Tests: `tests/integration/thread-context.test.ts`. Policy: [team-chat-context.md](team-chat-context.md).
 
+## Worker policy and skill exports (COD-360)
+
+The platform policy defines completion as delivered work with the required checks actually performed, asks workers to continue within their grants until done or blocked, and names missing prerequisites in the report's existing limitations. One trust boundary covers external evidence and quoted context while preserving platform, worker and reviewed skill instructions. Exhausted structured runs retain their partial-work limitation, including a blocked hand-in later applied by the person. Plain skill exports derive a bounded trigger description from their instruction text; imported metadata remains byte-preserved across revisions.
+
+Source-only Codex dispatch includes the canonical inner answer schema alongside its unchanged strict envelope and validators. Deterministic integration fixtures cover malicious sources, blocked and exhausted work, recovery, metadata roundtrips and actual Codex dispatch composition. These fixtures prove prompt assembly and core gates, not model adherence or packaged isolation. Separate read-only Codex text probes are recorded as supplemental evidence, not live-provider or packaged-app acceptance.
+
 ## Model list fetch and cache (COD-31)
 
 Core command `modelList({ provider, refresh? })` loads each connection's models from that provider's own API or CLI, stores them in `settings.modelLists` (24h TTL, stale-while-revalidate, excluded from backup), and always sets `customIdOk`. OpenAI `shutdown_date` and Codex `upgrade` are stored for the picker chip. Tests: `tests/integration/model-list.test.ts`. Plan: [model-list-fetch.md](model-list-fetch.md).

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { PackageInput, SkillMetadata, SkillPackage, SKILL_PACKAGE_LIMIT, SKILL_FILE_LIMIT } from '../shared/skill-package';
 import { StructuredReport, Finding, type Skill } from '../shared/contracts';
 import type { Store } from './storage/database';
+import { skillSummary } from '../shared/skill-summary';
 
 const supportedTools = new Set(['read_source', 'profile_dataset', 'audit_run_log', 'submit_report', 'reply', 'read_skill_resource']);
 const Manifest = z.object({
@@ -98,9 +99,10 @@ export function packageForImport(raw: unknown): Pick<Skill, 'name' | 'content' |
 
 export function packageForExport(skill: Skill): PackageInput {
   const name = skill.name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64).replace(/-$/, '') || 'orglet-skill';
+  const description = (skillSummary(skill.content) || `Use ${skill.name} when the task calls for this skill's instructions.`).slice(0, 1024);
   const initial = skill.package ? inspectPackage(skill.package).input : {
     directoryName: name,
-    files: [{ path: 'SKILL.md', base64: Buffer.from(`---\nname: ${name}\ndescription: ${JSON.stringify(skill.name)}\n---\n\n${skill.content}\n`).toString('base64') }],
+    files: [{ path: 'SKILL.md', base64: Buffer.from(`---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n${skill.content}\n`).toString('base64') }],
   };
   if (initial.files.some(file => file.path === 'orglet.json')) return initial;
   const inspected = inspectPackage(initial);

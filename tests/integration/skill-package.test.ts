@@ -25,6 +25,31 @@ it('parses YAML, preserves every file and exports a verifiable separate Orglet m
   const plain = packageForExport(store.all<Skill>('skills')[0]); expect(inspectPackage(plain).metadata.name).toBe(plain.directoryName);
 });
 
+it('exports a plain skill with its trigger paragraph and follows content revisions without a new metadata field', async () => {
+  const content = '# Evidence review\n\nUse when reviewing a dataset submission or checking a claim against attached evidence.\n\n## Gotchas\nNever call an unread source verified.';
+  const skill = await core.command('saveSkill', { name: 'Evidence review', content }) as Skill;
+  const exported = core.exportSkill(skill.id);
+  expect(inspectPackage(exported).metadata.description).toBe('Use when reviewing a dataset submission or checking a claim against attached evidence.');
+  const imported = core.importSkill(exported);
+  expect(imported.content).toBe(content);
+  expect(inspectPackage(core.exportSkill(imported.id)).metadata.description).toBe(inspectPackage(exported).metadata.description);
+  const updated = await core.command('saveSkill', { id: skill.id, name: skill.name, content: '# Evidence review\n\nUse when auditing run logs.\n\n## Gotchas\nMissing runs are not proof of stability.' }) as Skill;
+  expect(updated.revision).toBe(skill.revision + 1);
+  expect(inspectPackage(core.exportSkill(skill.id)).metadata.description).toBe('Use when auditing run logs.');
+  expect(inspectPackage(exported).metadata.description).toContain('dataset submission');
+});
+
+it('bounds plain descriptions and preserves imported multiline trigger metadata exactly', () => {
+  const plain = store.all<Skill>('skills')[0];
+  expect(inspectPackage(packageForExport({ ...plain, content: 'A'.repeat(1500) })).metadata.description).toHaveLength(1024);
+  const input = sample();
+  const imported = core.importSkill(input);
+  const exported = core.exportSkill(imported.id);
+  expect(exported.files.find(item => item.path === 'SKILL.md')).toEqual(input.files.find(item => item.path === 'SKILL.md'));
+  expect(inspectPackage(exported).metadata.description).toBe('Review selected evidence.');
+  expect(inspectPackage(packageForExport({ ...plain, name: 'Headers only', content: '# Purpose\n\n## Gotchas' })).metadata.description).toContain('Use Headers only when');
+});
+
 it('rejects malformed metadata, aliases, duplicate keys, unsupported tags and mismatched directory names', () => {
   for (const extra of ['name: duplicate\n', 'license: &a test\ncompatibility: *a\n', 'license: !!js/function x\n', 'unknown: true\n', 'metadata: {version: 1}\n']) expect(() => inspectPackage(sample(extra))).toThrow();
   expect(() => inspectPackage({ ...sample(), directoryName: 'other' })).toThrow('trùng');
