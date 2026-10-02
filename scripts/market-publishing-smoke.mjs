@@ -117,10 +117,15 @@ async function appearance(page, nextLanguage, theme) {
   language = nextLanguage;
   const workspace = await call(page, 'workspace');
   await call(page, 'settings', { language, theme, connectionLimitMicros: workspace.connectionLimitMicros });
-  await page.waitForFunction(value => document.documentElement.dataset.theme === value, theme);
+  await page.waitForFunction(({ theme, language }) => document.documentElement.dataset.theme === theme && document.documentElement.lang === language, { theme, language });
+  await page.locator(`.area-tile[title="${label('Bạn bè và tin nhắn')}"]`).waitFor();
 }
 
 async function friends(page) {
+  // Resize restores the saved full sidebar asynchronously. Wait for that real state before inspecting its opener.
+  await page.waitForFunction(() => matchMedia('(max-width: 780px)').matches
+    ? document.querySelector('.app.sidebar-hidden') !== null
+    : document.querySelector('.app:not(.sidebar-hidden)') !== null);
   const opener = page.getByRole('button', { name: label('Mở sidebar'), exact: true });
   if (await opener.isVisible()) await opener.click();
   const home = page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first();
