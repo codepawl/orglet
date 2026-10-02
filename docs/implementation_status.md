@@ -27,6 +27,9 @@ The original workspace contained only `plans/orglet_mvp_plan_vi.md` and its codi
 
 ## Validation completed locally
 
+- COD-359: optional orglet effort and frozen run resolution are implemented across API and both harness dispatch routes, revisions, backups, templates and app proposals. Focused tests cover transport payloads, native metadata, explicit/contextual precedence, exact model and effort resumes, legacy omission, signed thinking replay and marketplace local-choice preservation. The native read-only Codex trial accepted `gpt-6-sol` at `ultra` and returned the fixture answer; no Claude or live API execution was used. Full-suite checks and packaged UI verification are not part of this local milestone.
+
+
 - Latest finding milestone: 90 tests across 14 files and strict typecheck passed. Core-assigned provenance, checker scope validation, backup tamper rejection, Markdown preservation and legacy exported skill-schema compatibility are covered. New findings carry category, recommendation and checker IDs; old reports remain readable without invented IDs.
 - Packaged finding E2E passed exact source/checker focus, automatic eligible text preview, checker expansion, provenance and narrow layout. Native computer use separately observed the two-line source preview and linked CSV checker with 1 row and 2 columns. This UI report is a labelled synthetic fixture. General desktop smoke passed with persisted artifact and no renderer errors. Forge ZIP/Setup make completed; test window/process closed. See docs/finding-ui-review.md.
 

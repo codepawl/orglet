@@ -118,6 +118,7 @@ export function showChangeValue(field: string, value: string, context: ProposalC
   if (moneyFields.has(field) && /^\d+$/.test(value)) return formatMoney(Number(value));
   if (value === 'true') return t('Bật');
   if (value === 'false') return t('Tắt');
+  if (field === 'effort') return ({ auto: t('Tự động'), low: t('Thấp'), medium: t('Vừa'), high: t('Cao'), max: t('Tối đa') } as Record<string, string>)[value] ?? value;
   if (field === 'provider') return modelLabel(value, undefined);
   if (field === 'skillId') return skillName(value, context);
   if (field === 'workflow') return workflowName(value);

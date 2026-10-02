@@ -366,3 +366,30 @@ it.each(['archivedAt', 'deletedAt'] as const)('rejects a crew update if a member
   expect(store.all<Worker>('workers')).toEqual(workers);
   await expect(market.previewUpdate(added.entityId)).rejects.toThrow(/lưu trữ hoặc xóa/);
 });
+
+it('preserves a local effort override and its deliberate absence across catalog updates', async () => {
+  const server = await remote();
+  await server.publish(template => {
+    template.worker.effort = 'max';
+  });
+  const added = await server.market.add('research-friend', 2);
+  const initial = store.get<Worker>('workers', added.entityId);
+  expect(initial.effort).toBe('max');
+  const core = new CoreService(store, () => {}, async () => {
+    throw Error('No provider call');
+  });
+  await core.command('saveWorker', { ...initial, effort: 'low' });
+  await server.publish(template => {
+    template.worker.effort = 'high';
+  });
+  const first = await server.market.previewUpdate(added.entityId);
+  await server.market.applyUpdate(added.entityId, first.token);
+  expect(store.get<Worker>('workers', added.entityId).effort).toBe('low');
+  await core.command('saveWorker', { ...store.get<Worker>('workers', added.entityId), effort: undefined });
+  await server.publish(template => {
+    template.worker.effort = 'max';
+  });
+  const next = await server.market.previewUpdate(added.entityId);
+  await server.market.applyUpdate(added.entityId, next.token);
+  expect(store.get<Worker>('workers', added.entityId).effort).toBeUndefined();
+});

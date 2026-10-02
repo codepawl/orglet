@@ -6,11 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
-import { acceptCustomModelId, hiddenOpenAIModel, MODEL_LIST_CACHE_VERSION, MODEL_LISTS_SETTING } from '../../apps/desktop/src/shared/models';
-import { canStoreModelListRow } from '../../apps/desktop/src/core/models/cache';
+import { CATALOG_HINT_IDS, acceptCustomModelId, hiddenOpenAIModel, MODEL_LIST_CACHE_VERSION, MODEL_LISTS_SETTING } from '../../apps/desktop/src/shared/models';
+import { EFFORT_METADATA_REFRESH_AT, canStoreModelListRow, readModelListCache } from '../../apps/desktop/src/core/models/cache';
 import { catalogHint, parseCodexModels, parseCursorModels, parseOllamaTags, parseOpenAIModels, parseOpenRouterModels } from '../../apps/desktop/src/core/models/fetch';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
 import { harnessNames, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
+import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { ModelListResult } from '../../apps/desktop/src/shared/models';
 import type { Probe } from '../../apps/desktop/src/core/harness/detect';
 
@@ -148,7 +149,7 @@ describe('model list fetch adapters', () => {
 
   it('lists local Ollama tags without a billed key', async () => {
     const server = await listen((request, response) => {
-      expect(request.url).toBe('/api/tags');
+      expect(['/api/tags', '/api/show']).toContain(request.url);
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ models: [{ name: 'llama3.2:latest' }, { name: 'qwen2.5:7b' }] }));
     });
@@ -571,4 +572,58 @@ describe('model list cache TTL and invalidation', () => {
     const hits = files.filter(file => banned.test(readFileSync(file, 'utf8')));
     expect(hits).toEqual([]);
   });
+});
+
+it('refreshes selected Ollama thinking metadata through the production CoreService options', async () => {
+  const database = store();
+  const requests: { path: string; method: string; model?: string }[] = [];
+  const fakeFetch: typeof fetch = async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    const model = init?.body ? (JSON.parse(String(init.body)) as { model: string }).model : undefined;
+    requests.push({ path, method: init?.method ?? 'GET', ...(model ? { model } : {}) });
+    if (path === '/api/tags') return new Response(JSON.stringify({ models: [{ name: 'held:latest' }, { name: CATALOG_HINT_IDS.ollama + ':latest' }, { name: 'not-selected:latest' }] }));
+    if (path === '/api/show' && model === 'held:latest') return new Response(JSON.stringify({ thinking: { values: ['low', 'medium', 'high', 'ultra'], default: 'medium' } }));
+    if (path === '/api/show' && model === CATALOG_HINT_IDS.ollama + ':latest') return new Response(JSON.stringify({ thinking: { values: ['low', 'high'], default: 'low' } }));
+    throw Error('Unexpected metadata request');
+  };
+  const core = coreFor(database, { readKey: async () => 'ollama-local', fetch: fakeFetch });
+  const firstWorker = database.all<Worker>('workers')[0];
+  await core.command('saveWorker', { ...firstWorker, provider: 'ollama', modelId: 'held:latest' });
+  await core.command('saveWorker', { name: 'Default local', instructions: 'Review', provider: 'ollama', skillId: firstWorker.skillId });
+  const list = await core.modelList({ provider: 'ollama', refresh: true });
+  expect(requests).toEqual([{ path: '/api/tags', method: 'GET' }, { path: '/api/show', method: 'POST', model: 'held:latest' }, { path: '/api/show', method: 'POST', model: CATALOG_HINT_IDS.ollama + ':latest' }]);
+  expect(list.models.find(model => model.id === 'held:latest')?.effort).toEqual({ levels: ['low', 'medium', 'high', 'ultra'] });
+  expect(list.models.find(model => model.id === CATALOG_HINT_IDS.ollama + ':latest')?.effort).toEqual({ levels: ['low', 'high'] });
+  expect(list.models.find(model => model.id === 'not-selected:latest')?.effort).toBeUndefined();
+  const cached = database.setting<any>(MODEL_LISTS_SETTING, null);
+  expect(cached.byProvider.ollama.models.find((model: { id: string }) => model.id === 'held:latest').effort).toEqual({ levels: ['low', 'medium', 'high', 'ultra'] });
+});
+
+it('preserves effort from the primary Codex app-server response through CoreService', async () => {
+  let appServerCalls = 0;
+  const core = coreFor(store(), { appServer: async () => {
+    appServerCalls++;
+    return [{ data: [{ id: 'gpt-6-sol', model: 'gpt-6-sol', isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'high' }, { reasoningEffort: 'ultra' }, { reasoningEffort: 'invented' }] }] }];
+  }, probe: async () => {
+    throw Error('Debug fallback must not be used');
+  } }, undefined, { detect: async () => [signedIn('codex', 'fixture.exe')], execute: async () => {
+    throw Error('No execution');
+  } });
+  const list = await core.modelList({ provider: 'codex', refresh: true });
+  expect(appServerCalls).toBe(1);
+  expect(list.models[0].effort).toEqual({ levels: ['low', 'high', 'ultra'] });
+});
+
+it('strictly migrates pre-effort rows without discarding verified prices', async () => {
+  const database = store();
+  const saved = { version: 2, byProvider: { openrouter: { fetchedAt: new Date().toISOString(), source: 'native', models: [{ provider: 'openrouter', id: 'vendor/model', source: 'native', inputTenths: 10, outputTenths: 20 }] }, codex: { fetchedAt: new Date().toISOString(), source: 'native', models: [{ provider: 'codex', id: 'gpt-6-sol', source: 'native', isDefault: true }] } } };
+  database.setSetting(MODEL_LISTS_SETTING, saved);
+  const migrated = readModelListCache(database);
+  expect(migrated.version).toBe(MODEL_LIST_CACHE_VERSION);
+  expect(migrated.byProvider.openrouter?.models[0]).toMatchObject({ inputTenths: 10, outputTenths: 20 });
+  expect(migrated.byProvider.codex?.retryAfter).toBe(EFFORT_METADATA_REFRESH_AT);
+  database.setSetting(MODEL_LISTS_SETTING, { ...saved, unexpected: true });
+  expect(readModelListCache(database).byProvider).toEqual({});
+  database.setSetting(MODEL_LISTS_SETTING, { ...saved, version: 999 });
+  expect(readModelListCache(database).byProvider).toEqual({});
 });

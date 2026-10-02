@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Effort } from './effort';
 import { FormatPreference, Id, LogoColor, MAX_CREW_MEMBERS, ProviderId } from './contracts';
 import { CustomModelId } from './models';
 import { FontFamily } from './fonts';
@@ -32,6 +33,7 @@ export const ProposeOrglet = z.object({
   instructions: Text(16000).nullable(),
   provider: ProviderId.nullable(),
   modelId: CustomModelId.nullable(),
+  effort: z.union([Effort, z.literal('auto')]).nullable(),
   skillId: Id.nullable(),
   skillRef: ProposalRef.nullable(),
   taskBudgetMicros: Budget.nullable(),

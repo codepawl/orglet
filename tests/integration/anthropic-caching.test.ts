@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -7,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { AnthropicAdapter, acceptsForcedToolChoice } from '../../apps/desktop/src/core/adapters/anthropic';
 import { ANTHROPIC_MAX_OUTPUT_TOKENS } from '../../apps/desktop/src/core/adapters/catalog';
+import type { NativeEffortSetting } from '../../apps/desktop/src/shared/effort';
 import type { ModelReply, RunMessage } from '../../apps/desktop/src/core/adapters/openai';
 import { BudgetLedger, affordableOutputTokens, cost, holdFor } from '../../apps/desktop/src/core/budgets/ledger';
 import { resolveWorkerModel } from '../../apps/desktop/src/core/models/resolve';
@@ -63,7 +65,7 @@ async function fakeAnthropic(script: Scripted[]) {
   const address = server.address() as { port: number };
   return {
     bodies,
-    adapter: (model?: string) => new AnthropicAdapter('fixture-not-real', `http://127.0.0.1:${address.port}`, model),
+    adapter: (model?: string, effort?: NativeEffortSetting) => new AnthropicAdapter('fixture-not-real', `http://127.0.0.1:${address.port}`, model, effort),
     close: () => { server.closeAllConnections(); server.close(); },
   };
 }
@@ -339,4 +341,43 @@ describe('Anthropic runs in the runner (COD-358)', () => {
     expect(noteAt(third)).toBeGreaterThan(third.findIndex(message => message.cacheBreak));
     expect(third.findIndex(message => message.cacheBreak)).toBe(breakAt + 2);
   });
+});
+
+it('binds thinking, tool choice and output effort to signed replay, keeping caps and parallel calls off', async () => {
+  const fake = await fakeAnthropic([
+    { blocks: [{ type: 'thinking', thinking: 'Read first.', signature: 'signed' }, { type: 'tool_use', id: 'read', name: 'read_source', input: { sourceId: 'a' } }], stopReason: 'tool_use' },
+    callReply(), callReply(), callReply(),
+  ]);
+  try {
+    const start: RunMessage[] = [{ role: 'system', content: 'S' }, { role: 'user', content: 'Read' }];
+    const active = { transport: 'anthropic' as const, level: 'medium' as const, adaptive: true as const };
+    const first = await fake.adapter('claude-sonnet-4-6', active).request(start, [readTool, replyTool], signal(), () => {});
+    const next: RunMessage[] = [...start, { role: 'assistant', tool_calls: [{ id: 'read', type: 'function', function: { name: 'read_source', arguments: '{"sourceId":"a"}' } }], anthropicTurn: first.anthropicTurn }, { role: 'tool', tool_call_id: 'read', content: 'Text' }];
+    await fake.adapter('claude-sonnet-4-6', active).request(next, [readTool, replyTool], signal(), () => {});
+    await fake.adapter('claude-sonnet-4-6', { ...active, level: 'high' }).request(next, [readTool, replyTool], signal(), () => {});
+    await fake.adapter('claude-sonnet-4-6').request(next, [readTool, replyTool], signal(), () => {});
+    expect(fake.bodies[0]).toMatchObject({ thinking: { type: 'adaptive' }, output_config: { effort: 'medium' }, tool_choice: { type: 'auto', disable_parallel_tool_use: true }, max_tokens: ANTHROPIC_MAX_OUTPUT_TOKENS });
+    expect(JSON.stringify((fake.bodies[1].messages as SentMessage[])[1])).toContain('signed');
+    expect(JSON.stringify((fake.bodies[2].messages as SentMessage[])[1])).not.toContain('signed');
+    expect(JSON.stringify((fake.bodies[3].messages as SentMessage[])[1])).not.toContain('signed');
+    expect(fake.bodies[3]).not.toHaveProperty('thinking');
+    expect(fake.bodies[3]).not.toHaveProperty('output_config');
+  } finally {
+    fake.close();
+  }
+});
+
+it('preserves a pre-effort signed prefix when a legacy request omits effort', async () => {
+  const fake = await fakeAnthropic([callReply()]);
+  try {
+    const hash = createHash('sha256').update(JSON.stringify({ system: 'S', tools: [{ name: 'read_source', input_schema: readTool.type === 'function' ? readTool.function.parameters : {} }, { name: 'reply', input_schema: replyTool.type === 'function' ? replyTool.function.parameters : {} }] }));
+    hash.update(JSON.stringify({ role: 'user', content: 'Read' }));
+    const messages: RunMessage[] = [{ role: 'system', content: 'S' }, { role: 'user', content: 'Read' }, { role: 'assistant', tool_calls: [{ id: 'read', type: 'function', function: { name: 'read_source', arguments: '{"sourceId":"a"}' } }], anthropicTurn: { boundTo: hash.digest('hex'), blocks: [{ type: 'thinking', thinking: 'Original reasoning', signature: 'legacy-signed' }] } }, { role: 'tool', tool_call_id: 'read', content: 'Text' }];
+    await fake.adapter('claude-sonnet-4-6').request(messages, [readTool, replyTool], signal(), () => {});
+    expect(JSON.stringify(fake.bodies[0].messages)).toContain('legacy-signed');
+    expect(fake.bodies[0]).not.toHaveProperty('thinking');
+    expect(fake.bodies[0]).not.toHaveProperty('output_config');
+  } finally {
+    fake.close();
+  }
 });

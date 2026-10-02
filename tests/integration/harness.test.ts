@@ -490,6 +490,10 @@ describe('runner integration', () => {
         const output = await reply(request);
         return { output: request.harness === 'codex' ? { payload: JSON.stringify(output) } : output, costUsd: 0.003, ...(reportedContext ? { context: reportedContext } : {}) };
       },
+    }, undefined, {
+      // Fake harness execution also owns metadata: never consult an installed CLI or this machine's model defaults.
+      appServer: async () => [{ data: [] }],
+      probe: async () => ({ code: 0, stdout: JSON.stringify({ models: [] }), stderr: '' }),
     });
     const note = join(directory, 'note.txt'); await writeFile(note, 'line one\nline two: the answer is 42');
     sources = await core.sources.import([note]);

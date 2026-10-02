@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EffortCapability } from './effort';
 import { CustomProviderId } from './custom-connections';
 
 export const BuiltInModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
@@ -29,6 +30,7 @@ export const ModelEntry = z.object({
   isDefault: z.literal(true).optional(),
   /** The model an alias stands for right now, as the CLI itself reported it (Claude Code; COD-332). */
   resolvedId: CustomModelId.optional(),
+  effort: EffortCapability.optional(),
   source: ModelSource,
 }).strict();
 export type ModelEntry = z.infer<typeof ModelEntry>;
@@ -46,10 +48,10 @@ export const ModelListRow = z.object({
 }).strict();
 export type ModelListRow = z.infer<typeof ModelListRow>;
 
-export const MODEL_LIST_CACHE_VERSION = 2;
+export const MODEL_LIST_CACHE_VERSION = 3;
 
 export const ModelListCache = z.object({
-  // Version 2 (COD-332) added versioned names and the CLI's default, so a list kept from before is fetched again.
+  // Version 3 (COD-359) adds native effort metadata; v2 prices and rows are retained with metadata due for refresh.
   version: z.literal(MODEL_LIST_CACHE_VERSION),
   // One row per connection; a key that is neither a built-in list nor `custom:<id>` fails the whole cache.
   byProvider: z.partialRecord(ModelListProvider, ModelListRow),

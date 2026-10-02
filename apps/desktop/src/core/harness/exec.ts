@@ -1,3 +1,4 @@
+import type { NativeEffortSetting } from '../../shared/effort';
 import { spawn, execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -24,6 +25,7 @@ export type HarnessRequest = {
   maxBudgetUsd?: number;
   /** Exact `--model` / `-m` slug. Omitted so the CLI keeps its own default. */
   model?: string;
+  effort?: NativeEffortSetting;
   /** Tool selection is returned as JSON; native file tools must not bypass core authorization. */
   coreToolsOnly?: boolean;
   /** Credential folder of the account this run signs in as; absent runs the CLI as installed. */
@@ -110,16 +112,17 @@ function codexImageFlags(images: string[] | undefined) {
   return (images ?? []).map(path => `--image=${path}`);
 }
 
-export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images'>): string[] {
+export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images' | 'effort'>): string[] {
   if (request.harness === 'gemini') return geminiArgs(request.model);
   const model = modelFlag(request.harness, request.model);
+  const effort = request.effort?.transport === request.harness ? request.effort.level : undefined;
   if (request.harness === 'claude-code') {
-    return ['-p', ...model, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', ...claudeBudgetArgs(request.maxBudgetUsd)];
+    return ['-p', ...model, ...(effort ? ['--effort', effort] : []), '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', ...claudeBudgetArgs(request.maxBudgetUsd)];
   }
   if (request.harness === 'cursor') {
     return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
   }
-  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
+  return ['exec', ...model, ...(effort ? ['-c', 'model_reasoning_effort=' + effort] : []), '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
 }
 
 const authHint = (harness: HarnessId) => {
@@ -327,10 +330,10 @@ export async function killTree(pid: number | undefined): Promise<void> {
   }
 }
 
-export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly'>) {
+export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly' | 'model' | 'effort'>) {
   // Gemini CLI gets no tools of its own on any run, so its lockdown is written for one-shot answers too.
   if (request.harness === 'gemini') {
-    await writeGeminiLockdown(request.cwd);
+    await writeGeminiLockdown(request.cwd, request.model, request.effort);
     return;
   }
   if (request.harness !== 'cursor' || !request.coreToolsOnly) return;

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Store } from '../storage/database';
 import {
   emptyModelListCache,
@@ -13,10 +14,21 @@ import {
   type ModelListRow,
 } from '../../shared/models';
 
+/** Sentinel used only for native metadata missing from a pre-effort cache. */
+export const EFFORT_METADATA_REFRESH_AT = '1970-01-01T00:00:00.000Z';
+const PreviousModelListCache = ModelListCache.extend({ version: z.literal(2) });
 export function readModelListCache(store: Store): ModelListCache {
-  const parsed = ModelListCache.safeParse(store.setting(MODEL_LISTS_SETTING, null));
-  if (!parsed.success || parsed.data.version !== MODEL_LIST_CACHE_VERSION) return emptyModelListCache();
-  return parsed.data;
+  const raw = store.setting(MODEL_LISTS_SETTING, null);
+  const parsed = ModelListCache.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  const previous = PreviousModelListCache.safeParse(raw);
+  if (!previous.success) return emptyModelListCache();
+  const byProvider = { ...previous.data.byProvider };
+  for (const provider of ['codex', 'openrouter', 'ollama'] as const) {
+    const row = byProvider[provider];
+    if (row) byProvider[provider] = { ...row, retryAfter: EFFORT_METADATA_REFRESH_AT };
+  }
+  return { version: MODEL_LIST_CACHE_VERSION, byProvider };
 }
 
 /** The context window a provider's list gives for a model, by id or alias; undefined when the list does not say (COD-326). */

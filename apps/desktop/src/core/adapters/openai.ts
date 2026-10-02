@@ -1,3 +1,4 @@
+import type { NativeEffortSetting } from '../../shared/effort';
 import OpenAI from 'openai';
 import type { ChatCompletionContentPartImage, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { modelCatalog, OPENAI_MAX_OUTPUT_TOKENS, type CatalogProvider } from './catalog';
@@ -91,8 +92,10 @@ export function chatCompletionMessages(messages: RunMessage[]): ChatCompletionMe
 export class OpenAIAdapter implements ModelAdapter {
   private client: OpenAI;
   private model: string;
-  constructor(key: string, options: { baseURL?: string; provider?: CatalogProvider; model?: string; defaultHeaders?: Record<string, string>; omitAuthorization?: boolean } = {}) {
+  private effort?: NativeEffortSetting;
+  constructor(key: string, options: { baseURL?: string; provider?: CatalogProvider; model?: string; defaultHeaders?: Record<string, string>; omitAuthorization?: boolean; effort?: NativeEffortSetting } = {}) {
     const provider = options.provider ?? 'openai';
+    this.effort = options.effort;
     this.model = options.model || modelCatalog[provider].model;
     // A null header is the SDK's way to leave it out; a keyless local server then gets no bearer token at all.
     const defaultHeaders: Record<string, string | null> | undefined = options.omitAuthorization
@@ -105,7 +108,12 @@ export class OpenAIAdapter implements ModelAdapter {
     });
   }
   async request(messages: RunMessage[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
+    // Ollama accepts named values from /api/show beyond the OpenAI SDK's effort enum.
+    const localControls: Record<string, unknown> = this.effort?.transport === 'ollama' ? { reasoning_effort: this.effort.level } : {};
     const stream = await this.client.chat.completions.create({
+      ...localControls,
+      ...(this.effort?.transport === 'reasoning_effort' ? { reasoning_effort: this.effort.level } : {}),
+      ...(this.effort?.transport === 'openrouter' ? { reasoning: { effort: this.effort.level } } : {}),
       model: this.model, messages: chatCompletionMessages(messages), tools, tool_choice: 'required',
       parallel_tool_calls: false, max_completion_tokens: OPENAI_MAX_OUTPUT_TOKENS,
       stream: true, stream_options: { include_usage: true },
