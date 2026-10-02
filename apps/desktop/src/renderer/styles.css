@@ -2199,24 +2199,23 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .archive-age.fresh { --tone:var(--success); }
 .archive-age.aging { --tone:var(--warning); }
 .archive-age.expiring { --tone:var(--error); }
-.archived-tasks { margin-top:6px; }
-.archived-tasks summary { display:flex; align-items:center; gap:8px; min-height:34px; padding:6px 12px; border-radius:10px; color:var(--muted); font-size:13px; cursor:default; list-style:none; }
-.archived-tasks summary::-webkit-details-marker { display:none; }
-.archived-tasks summary:hover { background:var(--row-hover); color:var(--text); }
-.archived-tasks[open] summary { margin-bottom:4px; }
-.archived-row .history-item .avatar { margin-right:1px; }
-.archived-row .history-item { cursor:default; }
-.archived-row .row-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-/* Like the orglet rows: the menu floats over the end and takes room only while it shows, so the name and its
-   days-left pill get the whole row. */
-.archived-row { position:relative; }
-.archived-row > .org-row-menu { position:absolute; top:50%; right:0; transform:translateY(-50%); }
-.archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
-/* While the menu shows, it takes the pill's place instead of squeezing the name past it: an archived chat's name is
-   longer than an orglet's, and beside a group's two faces, the pill and the menu it kept four letters (COD-286). The
-   days left stay in the row's tooltip. */
-@media (hover:hover) { .archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .archive-age { display:none; } }
-@media (hover:none) { .archived-row .history-item { padding-right:36px; } }
+/* Settings → Lưu trữ (COD-375). Groups sit apart by spacing alone; a row is the mark's 26px slot, the name over a quiet
+   second line, the days-left pill, Khôi phục and the menu with Xóa vĩnh viễn, all on one centre line. Settings has the
+   room the sidebar lacked, so nothing gives way on hover. */
+.archive-group { margin-top:6px; }
+.archive-group + .archive-group { margin-top:14px; }
+.archive-count { margin-left:8px; font-weight:400; font-variant-numeric:tabular-nums; }
+.archive-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.archive-row { display:flex; align-items:center; gap:12px; min-height:48px; padding:6px 0; }
+.archive-mark { flex:0 0 26px; display:flex; align-items:center; justify-content:center; }
+.archive-row .setting-text { gap:1px; }
+.archive-name { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.archive-whose { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.35; }
+.archive-row .archive-age { margin-left:0; }
+.archive-row .org-button:not(.row-action) { flex-shrink:0; min-height:30px; padding:4px 11px; font-size:13px; }
+.archive-row .row-action { margin-right:0; color:var(--muted); }
+.archive-row .row-action:hover:not(:disabled),.archive-row .row-action:focus-visible,.archive-row .row-action[aria-expanded=true] { color:var(--text); }
+.archive-empty { margin:14px 0 0; color:var(--muted); font-size:13px; line-height:1.45; }
 .model-picker { display:flex; align-items:center; gap:8px; }
 .model-picker-field { position:relative; flex:1; min-width:0; }
 .model-picker-field input { padding-right:32px; }

@@ -25,7 +25,7 @@ Editing an orglet creates a new revision. A run that is already working keeps th
 
 ### Talk to one
 
-Click the orglet. Each orglet has one live chat: a new message is a turn, not a new task. Archive the chat (**⋯** next to **Details → Archive**) to start over. Archived chats can delete themselves after a while if you turn that on in **Settings → Chat**.
+Click the orglet. Each orglet has one live chat: a new message is a turn, not a new task. Archive the chat (**⋯** next to **Details → Archive**) to start over. Archived chats are kept in **Settings → Archive**, and can delete themselves after a while if you turn that on there.
 
 Write the way you would to a coworker. A list you end with "…", "etc." or "v.v." is read as the first few of a longer list: the orglet looks for the rest of that kind too. An example ("for example", "ví dụ như") shows what you want, and the orglet makes its own in that style instead of copying it, unless you ask for that exact text.
 
@@ -35,9 +35,9 @@ You can send a changed request while the orglet is still working. Orglet saves i
 
 Open the row's menu (right-click, or the **⋯** on the row) to edit, archive or delete an orglet. To act on several, click the pencil next to the section title and tick rows, or Ctrl-click (Cmd on macOS) and Shift-click. A bar above the footer then offers **Archive** and **Delete**; delete asks first and names the count.
 
-After you archive something, the toast has **Undo**. An orglet that a channel's lead gives work to cannot be archived or deleted: the toast names the channel and has a button that opens its settings, so you can take the orglet out. The same goes for a schedule that still runs it.
+After you archive something, the toast has **Undo**, and the archived item's line in Notifications has **Open archive**. An orglet that a channel's lead gives work to cannot be archived or deleted: the toast names the channel and has a button that opens its settings, so you can take the orglet out. The same goes for a schedule that still runs it.
 
-Archived orglets are listed at the end of their section under **Archived**. Archived chats are listed just below, under **Archived chats**: side threads and schedule runs with the orglets, channels with the channels. When archived items delete themselves after a while (**Settings → Chat**), each row shows the days it has left. Its menu has **Restore** and **Delete permanently**.
+Archived things do not sit in the sidebar. They are in **Settings → Archive**, in three groups: orglets, channels (a crew archived before crews became channels is listed here too) and chats (main chats, side threads and schedule runs, each saying whose it was). A group with nothing in it is not shown, and an empty archive says so. When archived items delete themselves after a while (the **Delete archived items** setting at the top of that tab), each row shows the days it has left. **Restore** puts the item back in its sidebar section; **⋯ → Delete permanently** asks first.
 
 ## Channels
 

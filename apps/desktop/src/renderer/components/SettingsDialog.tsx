@@ -1,6 +1,6 @@
 import { TabbedDialog } from '@codepawl/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut, CircleUserRound } from 'lucide-react';
+import { Archive, Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut, CircleUserRound } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
@@ -42,6 +42,7 @@ import { chatHeadline } from '../../shared/forward';
 import { forgetAllDrafts } from '../drafts';
 import { TacetSetup } from './TacetSetup';
 import { AccountSettings } from './AccountSettings';
+import { ArchiveGroups, type ArchiveSection } from './ArchiveSettings';
 import type { AccountState } from '../../shared/account';
 import { maskEmail, maskEmailsIn } from '../../shared/pii';
 
@@ -57,13 +58,15 @@ const accentSwatches = avatarPalette.map(color => currentAccentColor(color));
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
 
-export type SettingsTab = 'general' | 'chat' | 'connections' | 'search' | 'harness' | 'mcp' | 'browser' | 'usage' | 'data' | 'account' | 'about';
+export type SettingsTab = 'general' | 'chat' | 'archive' | 'connections' | 'search' | 'harness' | 'mcp' | 'browser' | 'usage' | 'data' | 'account' | 'about';
 // Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   // The optional CodePawl account (COD-337); nothing syncs yet. First, as Account (owner, 2026-09-30).
   { id: 'account', label: 'Tài khoản', icon: <CircleUserRound size={16} /> },
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
+  // Archived orglets, channels and chats live here, not in the sidebar (COD-375).
+  { id: 'archive', label: 'Lưu trữ', icon: <Archive size={16} /> },
   { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
   // Where web_search sends a query, and Exa's optional key (COD-266).
   { id: 'search', label: 'Tìm kiếm web', icon: <Globe size={16} /> },
@@ -87,6 +90,7 @@ const settingNames = translated({
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
+  archive: 'Khôi phục để đưa lại về chỗ cũ trong sidebar.',
   connections: 'Key được mã hóa trên máy này và không vào bản sao lưu.',
   search: 'Tí chỉ gửi câu tìm kiếm đi, không gửi nội dung chat hay tệp.',
   harness: 'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.',
@@ -496,7 +500,8 @@ function useSignInEndings(harnesses: HarnessInfo[] | undefined, onHarnesses: (ne
 }
 
 /** `harnesses` is undefined until the first detection lands, which runs each CLI and takes seconds on a cold start. */
-type Props = { open: boolean; tab: SettingsTab; onTab: (tab: SettingsTab) => void; onClose: () => void; workspace: Workspace; connections: Connections; onConnections: (next: Connections) => void; harnesses: HarnessInfo[] | undefined; onHarnesses: (next: HarnessInfo[]) => void; account: AccountState | undefined };
+type Props = { open: boolean; tab: SettingsTab; onTab: (tab: SettingsTab) => void; onClose: () => void; workspace: Workspace; connections: Connections; onConnections: (next: Connections) => void; harnesses: HarnessInfo[] | undefined; onHarnesses: (next: HarnessInfo[]) => void; account: AccountState | undefined;
+  /** What is archived, grouped and worded by the app, which owns the commands behind Restore and Delete (COD-375). */ archive: ArchiveSection[] };
 
 /** The shape of the three harness rows before detection has said what they are: never "not found" while it is still looking. */
 function HarnessRowShapes() {
@@ -511,7 +516,7 @@ function HarnessRowShapes() {
   </SkeletonGroup>;
 }
 
-export function SettingsDialog({ open, tab, onTab, onClose, workspace, connections, onConnections, harnesses, onHarnesses, account }: Props) {
+export function SettingsDialog({ open, tab, onTab, onClose, workspace, connections, onConnections, harnesses, onHarnesses, account, archive }: Props) {
   const [busy, setBusy] = useState(false);
   // Dò lại keeps the last rows on screen and says it is looking again beside the button, rather than clearing them.
   const [detecting, setDetecting] = useState(false);
@@ -714,14 +719,19 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Định dạng khi tải xuống')} description={t('Bấm là tải, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi tải xuống')} className="setting-select" value={workspace.downloadFormat} disabled={busy} onChange={value => void save({ downloadFormat: value as Workspace['downloadFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản (.txt)') }, { value: 'markdown', label: 'Markdown (.md)' }]} />
               </Row>
-              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, kênh; giữ số liệu chi phí.')}>
-                <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
-              </Row>
               <Row title={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
                 ? `${t('Quá mức thì chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
                 : t('Quá mức thì chờ, chưa trừ ngân sách.')}>
                 <Select ariaLabel={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: value === 1 ? t('1 yêu cầu') : t('{0} yêu cầu', [value]), detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
+            </>}
+
+            {tab === 'archive' && <>
+              {/* The one place the auto-delete rule lives; it used to sit on the Chat tab. */}
+              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, kênh; giữ số liệu chi phí.')}>
+                <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
+              </Row>
+              <ArchiveGroups sections={archive} />
             </>}
 
             {tab === 'connections' && <>

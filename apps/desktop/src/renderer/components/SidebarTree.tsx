@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { Hash, Settings2 } from 'lucide-react';
-import { GripVertical, Archive, ArchiveRestore, CalendarClock, EllipsisVertical, Pencil, Trash } from './icons';
+import { GripVertical, Archive, CalendarClock, EllipsisVertical, Pencil, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
 import { Checkbox } from './Checkbox';
@@ -248,29 +248,6 @@ function RenameField({ name, label, onSave, onDone }: { name: string; label: str
   };
   return <input className="row-rename" aria-label={label} value={value} maxLength={120} autoFocus
     onChange={event => setValue(event.target.value)} onKeyDown={onKeyDown} onBlur={() => finish(true)} onFocus={event => event.currentTarget.select()} />;
-}
-
-export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 'expiring' };
-
-/**
- * An archived worker, team or chat: its mark, name and days left, with Khôi phục and Xóa vĩnh viễn in its menu.
- * `title` is the tooltip (a chat's whole name and whose it is); `deleteQuestion` replaces the worker and team wording,
- * which promises old chats keep their history and so does not fit a chat.
- */
-export function ArchivedRow({ name, mark, archive, title, deleteQuestion, onRestore, onDelete }: { name: string; mark: ReactNode; archive: ArchiveState; title?: string; deleteQuestion?: string; onRestore: () => void; onDelete: () => void }) {
-  const deletesIn = archive.daysLeft !== null ? archive.daysLeft === 1 ? t('Tự xóa sau 1 ngày') : archive.daysLeft === 1 ? t('Tự xóa sau 1 ngày') : t('Tự xóa sau {0} ngày', [archive.daysLeft]) : undefined;
-  // The pill gives way to the menu on hover, so the row's own tooltip also says when it deletes itself.
-  const tooltip = [title ?? name, deletesIn].filter(Boolean).join('\n');
-  return <div className="task-row archived-row" title={tooltip}>
-    <span className="history-item">{mark}<span className="row-name">{name}</span>{deletesIn && <span className={`archive-age ${archive.tone}`}>{t('{0} ngày', [archive.daysLeft])}</span>}</span>
-    <RowMenu label={t('Tùy chọn {0}', [name])} icon={EllipsisVertical} items={[{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: onRestore }, { label: t('Xóa vĩnh viễn'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: deleteQuestion ?? t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
-  </div>;
-}
-
-/** Collapsible "Đã lưu trữ (N)" list at the end of a sidebar section; `label` names another kind of list, such as archived chats. */
-export function ArchivedList({ count, label, children }: { count: number; label?: string; children: ReactNode }) {
-  if (!count) return null;
-  return <details className="archived-tasks"><summary><Archive size={15} aria-hidden="true" />{label ?? t('Đã lưu trữ ({0})', [count])}</summary>{children}</details>;
 }
 
 /** Scrolls a sidebar row into view once it becomes the chat on screen, such as a chat opened from search. */
