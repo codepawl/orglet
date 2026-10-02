@@ -3077,3 +3077,30 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
   text-overflow: clip;
   overflow-wrap: anywhere;
 }
+
+/* Publishing keeps the complete escaped snapshot in one readable, wrapping column. */
+.market-publishing { display: grid; gap: 16px; min-width: 0; }
+.market-publishing .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.market-publishing .org-checkbox-text { display: block; }
+.market-public-preview { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%; margin: 0; }
+.market-publishing .error { white-space: pre-wrap; }
+.market-publishing .org-textarea { min-height: 76px; }
+.market-publishing .sticky-actions { margin-inline: 0; padding-inline: 0; }
+.market-publishing .field-grid { gap: 16px; }
+.market-publishing-target { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; }
+.market-publishing-options, .market-own-content { display: grid; gap: 16px; padding-block-start: 14px; }
+.market-publishing-disclosure { min-width: 0; }
+.market-publishing-disclosure > summary { display: flex; align-items: center; gap: 8px; min-height: 30px; cursor: pointer; list-style: none; font-size: 13px; }
+.market-publishing-disclosure > summary::-webkit-details-marker { display: none; }
+.market-publishing-disclosure > summary:focus-visible { outline-offset: 3px; }
+.market-publishing-disclosure[open] > summary > svg { transform: rotate(90deg); }
+.market-publishing-disclosure > .market-public-preview { margin-block-start: 12px; font-size: 12px; line-height: 1.6; }
+.market-content-preview { display: grid; gap: 20px; min-width: 0; }
+.market-content-preview section { display: grid; gap: 6px; }
+.market-content-preview :is(h3, p), .market-own-content p { margin: 0; }
+.market-content-preview h3 { font-size: 14px; font-weight: 600; }
+.market-content-preview .market-preview-summary h3 { font-size: 17px; }
+.market-public-prose { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; font-size: 13px; line-height: 1.6; }
+.market-own > summary h2 { margin: 0; }
+.marketplace-pagination { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 560px) { .market-publishing-target { grid-template-columns: minmax(0, 1fr); } }

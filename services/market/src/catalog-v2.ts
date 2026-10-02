@@ -4,7 +4,7 @@ import { MARKET_SEED_BODIES, seedCatalog } from '../../../apps/desktop/src/share
 import { validateMarketSubmission, canonicalMarketContent } from '../../../apps/desktop/src/shared/market-publishing';
 import { approvedListings } from './listings';
 
-async function catalogSnapshot(): Promise<{ listings: MarketListingV2[]; snapshot: string }> {
+export async function seedCatalogV2(): Promise<{ listings: MarketListingV2[]; snapshot: string }> {
   const seed = await seedCatalog();
   const listings = await Promise.all(seed.listings.map(async listing => {
     const { listingId, version, sha256, author: _author, ...metadata } = listing;
@@ -27,7 +27,7 @@ export async function catalogPageV2(search: URLSearchParams, database?: D1Databa
   if (!/^[1-9][0-9]{0,2}$/.test(requestedLimit)) return undefined;
   const limit = Number(requestedLimit);
   if (limit > 100) return undefined;
-  const { listings, snapshot } = await catalogSnapshot();
+  const { listings, snapshot } = await seedCatalogV2();
   if (database) {
     let after = '';
     const cursor = search.get('cursor');

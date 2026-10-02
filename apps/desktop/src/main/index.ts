@@ -52,6 +52,8 @@ import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
 import { AccountFile, AccountService, accountPayload } from './account';
+import { MarketPublishingTransport, publishingRelayAllowed } from './market-publishing';
+import { PublishingAction, PublishingRelay, PublishingResult, type PublishingAction as PublishingRequest } from '../shared/market-desktop';
 import { AnalyticsClient } from './analytics';
 import { AnalyticsFeature, FLUSH_INTERVAL_MS, RendererErrorReport, analyticsAllowedHere, featureForCommand, settingChanges, settingsSnapshot, type ErrorKind } from '../shared/analytics';
 
@@ -72,6 +74,9 @@ if (process.env.ORGLET_DATA_DIR && !app.isPackaged) app.setPath('userData', proc
 // scripts/dev.ps1 points USERPROFILE at a flag folder for Forge; give the app and its child CLIs the real home back.
 if (process.env.ORGLET_USERPROFILE && !app.isPackaged) { process.env.USERPROFILE = process.env.ORGLET_USERPROFILE; delete process.env.ORGLET_USERPROFILE; }
 const pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
+const publishingAuthorized = new Map<string, PublishingRequest>();
+const publishingDispatched = new Set<string>();
+let publishingTransport: MarketPublishingTransport;
 let window: BrowserWindow;
 /** Concurrent `open` requests share the first renderer load. Closing the desktop still quits the app. */
 let desktopReady: Promise<void> | undefined;
@@ -131,11 +136,17 @@ function aboutInfo(): AboutInfo {
     install: installKind(updateEnvironment),
   };
 }
-function request(command: string, args: unknown): Promise<unknown> {
+function request(command: string, args: unknown, publishingAction?: PublishingRequest): Promise<unknown> {
   if (!ready) return Promise.reject(new Error('Core chưa sẵn sàng. Khởi động lại app nếu lỗi vẫn còn.'));
   return new Promise((resolve, reject) => {
     const id = randomUUID();
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error('Core không phản hồi.')); }, 30_000);
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      publishingAuthorized.delete(id);
+      publishingDispatched.delete(id);
+      reject(new Error('Core không phản hồi.'));
+    }, 30_000);
+    if (publishingAction) publishingAuthorized.set(id, publishingAction);
     pending.set(id, { resolve, reject, timer }); core.postMessage({ id, command, args });
   });
 }
@@ -519,6 +530,7 @@ async function start() {
     },
   });
   await account.load();
+  publishingTransport = new MarketPublishingTransport(account);
   analytics = new AnalyticsClient({
     directory,
     baseUrl: accountsBaseUrl(process.env.ORGLET_ACCOUNTS_URL),
@@ -551,6 +563,22 @@ async function start() {
     const timer = setTimeout(() => reject(new Error('Core startup timed out.')), 15_000);
     core.on('message', async message => {
       if (message.type === 'ready') { ready = true; clearTimeout(timer); resolve(); return; }
+      if (message.type === 'marketPublishing') {
+        const authorizedAction = typeof message.parentId === 'string' && pending.has(message.parentId) ? publishingAuthorized.get(message.parentId) : undefined;
+        const parsed = PublishingRelay.safeParse(message.request);
+        if (!parsed.success) return;
+        const permitted = publishingRelayAllowed(authorizedAction, parsed.data);
+        if (!permitted || typeof message.id !== 'string') return;
+        if (parsed.data.action === 'send') {
+          if (publishingDispatched.has(message.parentId)) return;
+          publishingDispatched.add(message.parentId);
+        }
+        const callerCurrent = () => pending.has(message.parentId) && publishingAuthorized.has(message.parentId);
+        const reply = parsed.data.action === 'context' ? await publishingTransport.context() : await publishingTransport.send(parsed.data, callerCurrent);
+        // A timed-out caller has no authority for late messages or another dispatch.
+        if (pending.has(message.parentId) && publishingAuthorized.has(message.parentId)) core.postMessage({ id: message.id, command: 'marketPublishingReply', args: reply });
+        return;
+      }
       if (message.type === 'changed') { if (window && !window.isDestroyed()) window.webContents.send('orglet:changed'); return; }
       if (message.type === 'progress' || message.type === 'cliProgress') {
         if (message.type === 'progress' && window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
@@ -612,7 +640,7 @@ async function start() {
         return;
       }
       const response = pending.get(message.id);
-      if (response) { clearTimeout(response.timer); pending.delete(message.id); if (message.ok) response.resolve(message.value); else response.reject(new Error(message.error)); }
+      if (response) { clearTimeout(response.timer); pending.delete(message.id); publishingAuthorized.delete(message.id); publishingDispatched.delete(message.id); if (message.ok) response.resolve(message.value); else response.reject(new Error(message.error)); }
     });
     core.on('exit', () => {
       // A core that died leaves its MCP servers orphaned; they are stopped here instead.
@@ -620,7 +648,10 @@ async function start() {
       mcpProcesses = [];
       ready = false; clearTimeout(timer); reject(new Error('Core exited before startup.'));
       for (const response of pending.values()) { clearTimeout(response.timer); response.reject(new Error('Core đã dừng. Lịch sử được giữ lại; khởi động lại app để phục hồi.')); }
-      pending.clear(); if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
+      pending.clear();
+      publishingAuthorized.clear();
+      publishingDispatched.clear();
+      if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
     });
   });
   const startupSettings = await request('workspace', {}).then(workspace => workspace as { language?: Language; autoUpdate?: boolean }).catch(() => ({} as { language?: Language; autoUpdate?: boolean }));
@@ -696,6 +727,10 @@ async function start() {
   // The CodePawl account (COD-337). Nothing the window sends can name an address or carry a token; what it gets back
   // is `AccountState`, parsed strictly on the way out.
   handle('orglet:account-state', async () => accountPayload(account.state()));
+  handle('orglet:market-publishing', async raw => {
+    const action = PublishingAction.parse(raw);
+    return PublishingResult.parse(await request('marketPublishing', action, action));
+  });
   handle('orglet:account-sign-in', async () => accountPayload(await account.signIn()));
   handle('orglet:account-cancel-sign-in', async () => accountPayload(account.cancelSignIn()));
   handle('orglet:account-sign-out', async () => accountPayload(await account.signOut()));

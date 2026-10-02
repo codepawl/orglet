@@ -9,7 +9,7 @@ This guide covers how Orglet runs work, connects providers and harnesses, and wh
 
 This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic, xAI (Grok), OpenRouter, OpenCode Zen and OpenCode Go connections, custom OpenAI-compatible connections, local Ollama, local Claude Code / Codex / Cursor Agent / Gemini CLI harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Custom metric recomputation beyond built-in exact-match accuracy, live API-provider acceptance (script ready, needs a key path), a clean-machine Setup install and benchmarks remain unverified. The public 0.2.x release ships Windows Setup and ZIP; macOS and Linux have separate pull-request packaging workflows for dogfooding, not public release assets.
 
-Account tokens stay in main. `AccountService.getAccessToken(resource)` accepts only the fixed sync or marketplace resource, defaults to sync, caches each audience separately and serializes persisted refresh rotations. It is not a renderer/core IPC operation or a generic authorized fetch. Saved legacy sign-ins lack marketplace authorization until an explicit browser grant upgrade. Account changes and sign-out fence responses and persistence; an unpersisted rotation cannot be reused after a cancelled sign-in. Marketplace authentication is infrastructure only; [the marketplace contract](marketplace-design.md#public-content-contract) describes its claims and remaining publishing work.
+Account tokens stay in main. `AccountService.getAccessToken(resource)` accepts only the fixed sync or marketplace resource, defaults to sync, caches each audience separately and serializes persisted refresh rotations. It is not a renderer/core IPC operation or a generic authorized fetch. Saved legacy sign-ins lack marketplace authorization until an explicit browser grant upgrade. Account changes and sign-out fence responses and persistence; an unpersisted rotation cannot be reused after a cancelled sign-in. Dedicated publishing IPC binds a human action to fixed Market routes, checks its lifetime after token refresh, and strictly validates the public reply before returning it to the renderer. Preview and owner-list actions cannot authorize mutation. [The desktop publishing contract](marketplace-design.md#desktop-publishing) covers immutable retries and the production rollout limit.
 
 ## Run
 
@@ -494,6 +494,7 @@ pnpm test:revisions
 pnpm test:knowledge
 pnpm test:harness
 pnpm test:cli
+pnpm test:market-publishing
 pnpm test:alignment
 ```
 
@@ -506,6 +507,8 @@ The harness smoke installs fixture CLIs so **Harness trên máy** always has a l
 The knowledge smoke creates a team note in the library, carries it through a template export/import as a proposal, approves it, searches it and checks the frozen context shown in **Chi tiết**. `node scripts/knowledge-smoke.mjs --inspect-ui` leaves that task open for computer use.
 
 The desktop smoke test uses a temporary data directory, an explicit demo task and a fake credential. It checks a real Electron window, renderer isolation, source access, export, keyboard behavior and history after restart. It does not call a paid provider.
+
+The publishing smoke loads the actual packaged main, core, preload and renderer with trusted in-process account and Market transport fixtures installed before their constructors. Its temporary core bootstrap supplies an anonymous catalog transport before loading the real packaged core; no product override or fake renderer bridge is added. It checks orglet and crew entry points, full escaped public content and decoded package text, source changes invalidating the preview, unrelated changes preserving it, keyboard containment and no implicit send. A simulated committed response is lost; after closing and reopening the app, the saved request stays unresolved until an explicit retry uses exactly the original bytes and idempotency key. Form and preview geometry is checked in Vietnamese and English at 1200×820 and 740×600 in light and dark themes. It also saves twelve catalog pages, restarts with the catalog transport offline, and opens a retained recent page through the UI after earlier pages have been evicted. This is a desktop transport proof; it does not prove authenticated Worker HTTP, production login or token issuance.
 
 The packaged smoke launches the actual executable with an isolated `--user-data-dir`, checks the shipped DuckDB addon, confirms team settings keep an Eris template's checklist and dataset check on save, sets the check's ID column and runs its four demo roles. It exports and restores reports, preflight and checker results into a fresh workspace. Use `node scripts/packaged-checker-smoke.mjs --inspect-ui` to leave that restored preflight task open for computer use, then close the window to finish.
 

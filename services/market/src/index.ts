@@ -1,7 +1,8 @@
 import { MARKET_SEED_BODIES, seedCatalog } from '../../../apps/desktop/src/shared/market-seed';
 import { catalogPageV2 } from './catalog-v2';
 import { ownerRoute, privateReply, type MarketEnvironment } from './owner-routes';
-import { listingBody } from './listings';
+import { listingBody, publicListingSummary } from './listings';
+import { seedCatalogV2 } from './catalog-v2';
 import { sha256 } from './content';
 
 export default {
@@ -22,6 +23,18 @@ export default {
       } catch {
         console.log(JSON.stringify({ operation: 'catalog-v2', method: request.method, status: 500 }));
         return new Response(request.method === 'HEAD' ? null : 'Không thể đọc danh mục.', { status: 500, headers: errorHeaders });
+      }
+    }
+    const publicSummary = /^\/v2\/listings\/([a-z0-9][a-z0-9-]{0,79})$/.exec(path);
+    if (publicSummary) {
+      if (url.search) return privateReply(request, { code: 'invalid_request' }, 400);
+      try {
+        const seeds = await seedCatalogV2();
+        const listing = seeds.listings.find(item => item.listingId === publicSummary[1]) ??
+          (environment.MARKET_DB ? await publicListingSummary(environment.MARKET_DB, publicSummary[1]) : undefined);
+        return listing ? privateReply(request, listing) : privateReply(request, { code: 'not_found' }, 404);
+      } catch {
+        return privateReply(request, { code: 'storage_failed' }, 500);
       }
     }
     const publicVersion = /^\/v2\/listings\/([a-z0-9][a-z0-9-]{0,79})\/versions\/([1-9][0-9]*)$/.exec(path);

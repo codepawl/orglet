@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
-import { Hash, Settings2 } from 'lucide-react';
+import { Hash, Settings2, Upload } from 'lucide-react';
 import { GripVertical, Archive, CalendarClock, EllipsisVertical, Pencil, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
@@ -154,7 +154,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
  * leaves Archive out (`onArchive` absent). One where the lead splits the work lists its schedules' runs under it, the
  * way its crew's row did (COD-369).
  */
-export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, deleteQuestion, children, childrenLabel }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; deleteQuestion: string;
+export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, onPublish, deleteQuestion, children, childrenLabel }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; onPublish?: () => void; deleteQuestion: string;
   /** Rows listed under the channel: its schedules' newest runs, when the lead splits the work (COD-369). */ children?: ReactNode;
   /** What the rows under this one are, for assistive technology. */ childrenLabel?: string }) {
   const [editing, setEditing] = useState(false);
@@ -172,6 +172,7 @@ export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRe
       {/* Wrapped like an orglet row's menu, so it floats over the row's end instead of taking the name's room. */}
       <span data-no-drag><RowMenu label={t('Tùy chọn kênh {0}', [label])} icon={EllipsisVertical} contextMenuOf=".channel-row" items={[
         { label: t('Thiết lập kênh'), icon: Settings2, onSelect: onEdit },
+        ...(onPublish ? [{ label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: onPublish }] : []),
         { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) },
         ...(onArchive ? [{ label: t('Lưu trữ'), icon: Archive, onSelect: onArchive }] : []),
         { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: deleteQuestion, label: t('Xóa') } },

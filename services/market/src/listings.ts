@@ -6,6 +6,7 @@ import {
 import { canonicalMarketContent, type MarketSubmissionResult } from '../../../apps/desktop/src/shared/market-publishing';
 import type { MarketIdentity } from './auth';
 import { bodyChunks, joinBody, sha256 } from './content';
+import { OwnerSummaries } from '../../../apps/desktop/src/shared/market-desktop';
 
 type ValidSubmission = Extract<MarketSubmissionResult, { ok: true }>;
 type ReceiptRow = {
@@ -215,4 +216,47 @@ export async function ownerListings(database: D1Database, identity: MarketIdenti
       submissionsInHour, submissionLimit: 5,
     },
   });
+}
+
+/** One bounded row per owned identity, independent of lifetime history pagination. */
+export async function ownerSummaries(database: D1Database, identity: MarketIdentity, publishingEnabled = false) {
+  const session = database.withSession('first-primary');
+  const results = await session.batch([
+    session.prepare(`
+      SELECT versions.*, reviews.state, listings.publication_epoch AS current_epoch, listings.published_version
+      FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
+        AND versions.version = (SELECT max(version) FROM listing_versions WHERE listing_id = listings.listing_id)
+      JOIN version_reviews AS reviews ON reviews.listing_id = versions.listing_id AND reviews.version = versions.version
+      WHERE listings.owner_id = ? ORDER BY listings.listing_id LIMIT 10
+    `).bind(identity.subject),
+    session.prepare(`
+      SELECT versions.* FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
+        AND versions.version = listings.published_version JOIN version_reviews AS reviews USING(listing_id, version)
+      WHERE listings.owner_id = ? AND reviews.state = 'approved' ORDER BY listings.listing_id LIMIT 10
+    `).bind(identity.subject),
+    session.prepare('SELECT count(*) AS total FROM listing_versions WHERE submitted_by = ? AND submitted_at > ?')
+      .bind(identity.subject, Math.floor(Date.now() / 1000) - 3600),
+  ]);
+  const latest = results[0].results as (VersionRow & { current_epoch: number })[];
+  const published = new Map((results[1].results as VersionRow[]).map(row => [row.listing_id, publicListing(row)]));
+  return OwnerSummaries.parse({
+    publishingEnabled,
+    listings: latest.map(row => {
+      const listing = publicListing(row);
+      return { listingId: row.listing_id, kind: listing.kind, latest: { listing, state: row.state }, published: published.get(row.listing_id) ?? null, publicationEpoch: row.current_epoch };
+    }),
+    allowance: {
+      listingLimit: identity.publishedListings, listingCount: latest.length,
+      submissionsInHour: (results[2].results as { total: number }[])[0].total, submissionLimit: 5,
+    },
+  });
+}
+
+export async function publicListingSummary(database: D1Database, listingId: string): Promise<PublicListing | undefined> {
+  const row = await database.withSession('first-primary').prepare(`
+    SELECT versions.* FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
+      AND versions.version = listings.published_version JOIN version_reviews AS reviews USING(listing_id, version)
+    WHERE listings.listing_id = ? AND reviews.state = 'approved'
+  `).bind(listingId).first<VersionRow>();
+  return row ? publicListing(row) : undefined;
 }

@@ -8,7 +8,7 @@ import { TeamTemplate } from '../../apps/desktop/src/shared/templates';
 import { Marketplace } from '../../apps/desktop/src/core/market/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { createHash } from 'node:crypto';
-import { MarketOrigin, type MarketListing } from '../../apps/desktop/src/shared/market';
+import { MarketOrigin, type MarketListingV2 } from '../../apps/desktop/src/shared/market';
 
 let store: Store;
 let core: CoreService;
@@ -33,14 +33,17 @@ function sha256(text: string) {
 // Synthetic transport fixture only: this does not change or publish a curated v1 listing.
 async function capacityMarket(template: ReturnType<typeof TeamTemplate.parse>) {
   let body = JSON.stringify(template);
-  let listing: MarketListing = {
+  let listing: MarketListingV2 = {
     listingId: 'capacity-crew', version: 1, kind: 'crew', name: 'Capacity crew',
     summary: 'Review evidence as a crew.', tags: ['review'], language: 'en',
-    author: 'CodePawl', license: 'CC-BY-4.0', changelog: 'Initial version', sha256: sha256(body),
+    author: { displayName: 'Fixture publisher' }, license: 'CC-BY-4.0', changelog: 'Initial version', sha256: sha256(body), reviewDigest: 'a'.repeat(64),
   };
   const market = new Marketplace(store, () => {}, {
-    fetch: async input => new Response(new URL(String(input)).pathname === '/v1/catalog'
-      ? JSON.stringify({ listings: [listing] }) : body),
+    fetch: async input => {
+      const path = new URL(String(input)).pathname;
+      return new Response(path === '/v2/catalog' ? JSON.stringify({ listings: [listing], nextCursor: null })
+        : path === '/v2/listings/capacity-crew' ? JSON.stringify(listing) : body);
+    },
     connected: async () => true,
   });
   await market.catalog(true);

@@ -76,11 +76,12 @@ export const MarketOrigins = z.array(MarketOrigin).max(10_000).refine(origins =>
 export const MarketTarget = z.object({ listingId: ListingId, version: MarketVersion }).strict();
 export const MarketUpdateTarget = z.object({ entityId: z.string().uuid() }).strict();
 export const MarketApplyUpdate = MarketUpdateTarget.extend({ token: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
-export type MarketCatalogView = MarketCatalog & { source: 'online' | 'cache' | 'bundled'; fetchedAt: string | null; error?: string };
+export type MarketDisplayListing = MarketListing | MarketListingV2;
+export type MarketCatalogView = { listings: MarketDisplayListing[]; nextCursor?: string | null; pageCursor?: string; cachedPages?: { cursor: string; name: string }[]; source: 'online' | 'cache' | 'bundled'; fetchedAt: string | null; error?: string };
 export type MarketAdded = { entityId: string; kind: 'orglet' | 'crew'; workerIds: string[]; fallbackNames: string[] };
 export type MarketChange = { name: string; before: string; after: string };
 export type MarketUpdate = {
-  entityId: string; listing: MarketListing; installedVersion: number; customized: boolean;
+  entityId: string; listing: MarketDisplayListing; installedVersion: number; customized: boolean;
   token: string; changes: MarketChange[];
 };
 export type MarketInstallation = { entityId: string; kind: 'orglet' | 'crew'; listingId: string; version: number; name: string; updateAvailable: boolean };
