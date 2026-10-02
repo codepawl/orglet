@@ -11,6 +11,9 @@ import { cursorAuthFile } from '../../apps/desktop/src/core/harness/usage';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { CURSOR_ONE_SIGN_IN_ON_MAC, harnessAccountsSignInApart, harnessNames, harnessReady, harnessSignInIsMachineWide, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import { MAX_CHAT_MESSAGE_CHARACTERS, type Source, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
+import { z } from 'zod';
+import { codexOutputSchema } from '../../apps/desktop/src/core/harness/codex-output';
+import { harnessAnswerSchema, memoriesAllowed, proposalsAllowed, reactionsAllowed, selfImprovementAllowed } from '../../apps/desktop/src/core/tools/catalog';
 import { invoicePdf } from './pdf-fixture';
 import { readReportedContextWindows, writeModelListCache } from '../../apps/desktop/src/core/models/cache';
 import { MODEL_LIST_CACHE_VERSION, type ModelListResult } from '../../apps/desktop/src/shared/models';
@@ -498,6 +501,25 @@ describe('runner integration', () => {
     const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Find the answer in the note', sourceIds: sources.map(source => source.id), consent: true, providerScopes: scopes, budgetMicros: 500_000 }) as string;
     await idle(); return store.detail(taskId);
   }
+
+  it('gives a source-only Codex report the canonical inner answer contract while keeping its strict envelope (COD-360)', async () => {
+    const report = { title: 'Evidence missing', summary: 'Stability cannot be assessed without run logs.', findings: [], limitations: ['Needs from you: attach ten independent run logs.'], knowledgeProposals: [],
+      review: { checks: [], recommendation: 'insufficient_evidence', draftFeedback: 'Attach the missing logs.', upstreamFindingIds: [], conflicts: [] } };
+    reply = async () => ({ message: 'The required logs are missing.', title: null, report });
+    const detail = await run('codex');
+    expect(requests).toHaveLength(1);
+    const request = requests[0];
+    expect(request.schema).toEqual(codexOutputSchema);
+    const marker = 'The JSON inside payload must match this inner JSON schema: ';
+    const guidance = request.prompt.split('\n\n').find(block => block.startsWith(marker));
+    expect(guidance).toBeDefined();
+    const actualSchema = JSON.parse(guidance!.slice(marker.length));
+    const saved = detail.runs[0];
+    const expected = z.toJSONSchema(harnessAnswerSchema(saved, proposalsAllowed(saved, detail.task), memoriesAllowed(saved, detail.task), selfImprovementAllowed(saved, detail.task), reactionsAllowed(saved, detail.task)), { target: 'draft-7' });
+    expect(actualSchema).toEqual(expected);
+    expect(detail.task.status).toBe('completed');
+    expect(detail.artifacts[0].report.limitations).toContain('Needs from you: attach ten independent run logs.');
+  });
 
   it('hands a verified source copy to the harness, validates its report and records no Orglet reservation', async () => {
     const detail = await run('claude-code');

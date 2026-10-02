@@ -18,6 +18,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TaskThread } from '../../apps/desktop/src/renderer/components/TaskThread';
 import { askToFixText } from '../../apps/desktop/src/renderer/components/BlockedHandIn';
+import { OUT_OF_STEPS_LIMITATION, stepLimit } from '../../apps/desktop/src/core/orchestration/runner';
 
 /*
  * COD-270: a hand-in refused because a command failed after the last edit keeps the orglet's answer and the command
@@ -182,6 +183,39 @@ it('applies the copy anyway through the broker, records the event and adds the l
   expect(copyRecord().state).toBe('integrated');
   // Once applied there is nothing left to apply.
   await expect(core.command('applyBlockedHandIn', { taskId: task.id, runId: run.id })).rejects.toThrow('không có thay đổi đang chờ áp dụng');
+});
+
+it.each(['submit_report', 'reply'])('keeps the exhausted solo %s marked partial after a failed command and Apply anyway (COD-360)', async answerTool => {
+  let step = 0;
+  const limit = stepLimit(run, 0);
+  const adapter: ModelAdapter = { request: async () => {
+    let call: { name: string; arguments: unknown };
+    if (step === 0) {
+      call = { name: 'workspace_write', arguments: { path: 'test/sum.test.js', expectedHash: null, content: "require('node:test');\n" } };
+    } else if (step === 1) {
+      call = { name: 'workspace_start_process', arguments: { program: 'shell', arguments: ['npm test'], timeoutMs: 10000 } };
+    } else if (step < limit) {
+      call = { name: 'workspace_list', arguments: { path: '' } };
+    } else if (answerTool === 'reply') {
+      call = { name: 'reply', arguments: { message: ANSWER, title: null, knowledgeProposals: [] } };
+    } else {
+      call = { name: 'submit_report', arguments: { title: 'Partial test work', summary: ANSWER, findings: [], limitations: ['The remaining checks are unfinished.'] } };
+    }
+    step++;
+    return { calls: [{ id: id(), name: call.name, arguments: JSON.stringify(call.arguments) }], usage: { input: 10, output: 10 } };
+  } };
+  const core = await blockedRun(adapter);
+  expect(step).toBe(limit + 1);
+  const held = savedRun();
+  expect(held.errorCode).toBe('hand_in_blocked');
+  expect(held.outOfSteps).toBe(true);
+  if (answerTool === 'submit_report') expect(held.blockedHandIn?.answer?.report.limitations).toContain(OUT_OF_STEPS_LIMITATION);
+  expect(integrated).toEqual([]);
+  await core.command('applyBlockedHandIn', { taskId: task.id, runId: run.id });
+  expect(savedRun().outOfSteps).toBe(true);
+  expect(store.detail(task.id).artifacts[0].report.limitations).toContain(ACCEPTED_LIMITATION);
+  if (answerTool === 'submit_report') expect(store.detail(task.id).artifacts[0].report.limitations).toContain(OUT_OF_STEPS_LIMITATION);
+  expect(integrated).toEqual(['test', 'test/sum.test.js']);
 });
 
 it.each([

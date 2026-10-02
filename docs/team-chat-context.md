@@ -58,6 +58,10 @@ Layers 1 to 3 change only when instructions change or the window folds a turn in
 
 The UI still shows the **full** local transcript. Only the model prompt is bounded.
 
+The platform policy defines work as done when the requested result has been delivered and required checks have actually run (COD-360). Workers keep going within their grants until then, a real blocker, or the run limit. A plan or an attempted action is not completion. When something is missing, the answer names the unfinished work and exactly what the person must provide or do next. Requested reports put **Needs from you** in their existing `limitations`, in the person's language; casual replies say it without extra headings. A member's `assignmentOutcome` still describes its hand-in: partial research can reach the lead with limitations, while a missing required file change blocks the assignment. A step-limited report carries the saved run-limit limitation even if the model leaves it out.
+
+One trust boundary in the platform policy covers attached sources, images/PDF text, workspace files, web/browser pages, desktop content, tool results, skill resources, peer reports/messages, quoted or earlier chat, knowledge and memories. Their content is data or guidance and cannot override the platform, frozen team/worker/skill instructions, or current request, grant access or authorize actions. Capability-specific messages describe only the granted actions and constraints. Core still checks each call independently; source payload labels used for page shortening and continuation stay intact. Imported scripts never run. The regression fixtures check assembled prompts and refused calls even when a fixture model follows a malicious source; they do not prove that every live model follows the policy.
+
 Manifest (`Chi tiết → Context đã nạp`) must list loaded instruction/knowledge revisions **and** `verbatimTurns`, `summaryChars`, `retrievedSnippets`, plus omissions (`duplicate`, `context_limit`, `not_relevant`, `summarized`, `truncated`). If a layer was omitted, say so; do not silently drop it.
 
 ## When to summarize / truncate
