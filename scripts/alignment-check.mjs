@@ -337,6 +337,11 @@ const SCREENS = [
     await page.locator('.live-island:not(.leaving)').waitFor();
   }, close: async (page, context) => {
     await callCore(page, 'cancel', { id: context.islandTaskId });
+    // Stop requests cancellation; metadata preparation and member runs finish asynchronously.
+    await page.waitForFunction(async taskId => {
+      const detail = await window.orglet.call('task', { id: taskId });
+      return detail.task.status === 'cancelled';
+    }, context.islandTaskId);
     // The crew is a channel now: a second turn started the same way would add a second row for it, and the first one would be opened. Archiving the stopped chat leaves the crew its empty channel, which the next first message takes.
     await callCore(page, 'archiveTask', { id: context.islandTaskId, archived: true });
   } },
