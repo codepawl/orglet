@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { MAX_CREW_MEMBERS } from './crew-limits';
+export { MAX_CREW_MEMBERS } from './crew-limits';
 import { Effort, type RunEffort } from './effort';
 import { MarketTarget, MarketUpdateTarget, MarketApplyUpdate, type MarketCatalogView, type MarketAdded, type MarketUpdate, type MarketInstallation } from './market';
 import type { DecisionRequest } from './work-decisions';
@@ -108,8 +110,6 @@ export const WorkerInput = z.object({
 });
 export type WorkerInput = z.infer<typeof WorkerInput>;
 export type WorkerAvatar = z.infer<typeof WorkerAvatar>;
-/** A crew holds up to eight orglets; a lead plans for all of them in one turn. */
-export const MAX_CREW_MEMBERS = 8;
 /** How many chats of one crew may run at once. */
 export const MAX_CREW_CONCURRENT_TASKS = 8;
 /** How many requests may be in flight to one provider at once, across the whole app. */

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_CREW_TEMPLATE_WORKERS } from './crew-limits';
 
 export const MARKET_URL = 'https://market.orglet.codepawl.com';
 export const MARKET_BODY_LIMIT = 2 * 1024 * 1024;
@@ -38,8 +39,8 @@ export type MarketCatalogPageV2 = z.infer<typeof MarketCatalogPageV2>;
 /** Origin links are local metadata and may travel in a workspace backup, never in a marketplace listing. */
 export const MarketOrigin = z.object({
   entityId: z.string().uuid(), listingId: ListingId, version: MarketVersion, kind: z.enum(['orglet', 'crew']),
-  workerIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= 8),
-  skillIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= 5),
+  workerIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= MAX_CREW_TEMPLATE_WORKERS),
+  skillIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= MAX_CREW_TEMPLATE_WORKERS),
   baseline: z.string().regex(/^[a-f0-9]{64}$/),
 }).strict();
 export type MarketOrigin = z.infer<typeof MarketOrigin>;

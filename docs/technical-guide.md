@@ -204,6 +204,8 @@ New Eris Review templates turn on a dataset check before review. Team settings n
 
 In a lead channel's settings, choose **Xuất template** to export its saved configuration, orglets and shared skills. In **Kênh mới**, choose **Nhập template** to create a separate copy with fresh IDs. Import preserves provider choices but does not run a task or grant provider/source access. Templates exclude keys, sources and task history. They use versioned JSON, with a 2 MB limit; this is separate from importing Agent Skills directories.
 
+A crew template supports eight members plus an independent lead: at most nine distinct orglets and nine distinct skills, with shared skills deduplicated. Import validates the exact member, lead and skill references before writing any rows. The version 1 format is unchanged; older clients capped at five orglets or skills reject larger templates. Imported packages still need local review, and templates never carry MCP selections or the auto-apply switch.
+
 ## Routines and work hours
 
 Choose **Lên lịch cho công việc này** after writing a brief and selecting sources, or open **Lịch chạy → Tạo lịch**. Set a daily or weekly time, a time zone from the list (every IANA zone the app knows, this computer's first, UTC last), a per-task budget and, if the runs should work in a folder, its **Working folder** and level ([routines.md](routines.md#a-working-folder-for-the-routines-runs)). Enabling a schedule requires recurring approval for its selected content and providers. A change to orglet, skill, channel, model or pricing configuration blocks automatic dispatch until you review and save the schedule again.
