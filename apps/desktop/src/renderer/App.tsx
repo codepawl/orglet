@@ -374,13 +374,6 @@ export function App() {
   const railShown = !sidebar || narrowWindow;
   const leftColumnWidth = railShown ? RAIL_WIDTH : sidebarWidth;
   const detailsWidth = detailsPaneWidth(detailsPane.width, windowWidth, leftColumnWidth);
-  const [panelMoving, setPanelMoving] = useState(false);
-  useEffect(() => {
-    setPanelMoving(true);
-    const motion = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-base')) || 170;
-    const timer = setTimeout(() => setPanelMoving(false), motion + 40);
-    return () => clearTimeout(timer);
-  }, [sidebar, sidePaneOpen]);
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
   const bootedLiveThread = useRef(false);
@@ -2038,7 +2031,7 @@ export function App() {
     { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({}) },
     { label: t('Tạo lịch chạy'), icon: LucideCalendarClock, onSelect: () => openRoutines({ editing: true }) },
   ];
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}

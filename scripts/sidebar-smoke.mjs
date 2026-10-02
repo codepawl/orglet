@@ -111,3 +111,5 @@ try {
   await waitFor(async () => (await workspace(page)).workers.some(worker => worker.id === archiveOrglet.id), 'orglet restore');
   console.log(JSON.stringify({ directory, workers: reopened.workers.map(worker => worker.name), teams: reopened.teams.map(team => team.name), result: 'passed' }));
 } finally { await app.close(); }
+
+await import('./sidebar-motion-smoke.mjs');
