@@ -114,6 +114,7 @@ try {
   await page.getByRole('button', { name: 'Thu gọn sidebar', exact: true }).focus();
   await page.keyboard.press('Enter');
   assert.equal(await page.locator('.sidebar').evaluate(element => getComputedStyle(element).visibility), 'hidden', 'reduced motion hides the sidebar immediately');
+  assert.equal(await page.locator('.sidebar').evaluate(element => getComputedStyle(element).transitionDuration), '0s', 'reduced motion also disables the collapsed selector');
   assert.equal(await page.locator('.app').evaluate(element => getComputedStyle(element).transitionDuration), '0s');
   console.log(JSON.stringify({ result: 'passed', checks: ['wide fold/open in both themes', 'fold/open with Details and members', 'rapid reversal', 'narrow overlay', 'keyboard toggles with reduced motion'] }));
 } finally {

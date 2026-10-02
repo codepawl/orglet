@@ -110,7 +110,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar { transition:transform var(--motion-base) var(--ease-out), visibility 0s linear 0s; }
 .sidebar.collapsed { transform:translateX(calc(-100% - var(--shell-gap))); pointer-events:none; visibility:hidden;
   transition:transform var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); }
-@media(prefers-reduced-motion:reduce) { .app,.sidebar { transition:none; } .details-pane { animation:none; } }
+@media(prefers-reduced-motion:reduce) { .app,.sidebar,.sidebar.collapsed { transition:none; } .details-pane { animation:none; } }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { --right-column-width:calc(var(--details-width) + var(--shell-gap)); }
 .app.with-members { --right-column-width:calc(var(--members-width) + var(--shell-gap)); }
