@@ -17,7 +17,19 @@ export default {
 };
 
 function reply(request: Request, body: string, cache: string, hash?: string) {
-  const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff', ...(hash ? { ETag: `"${hash}"` } : {}) };
-  if (hash && request.headers.get('if-none-match') === `"${hash}"`) return new Response(null, { status: 304, headers });
+  const entityTag = hash ? `"${hash}"` : undefined;
+  const headers = {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': cache,
+    'X-Content-Type-Options': 'nosniff',
+    ...(entityTag ? { ETag: entityTag } : {}),
+  };
+  const validators = request.headers.get('if-none-match');
+  // GET/HEAD use weak comparison; Cloudflare can weaken ETags when compressing responses.
+  const unchanged = entityTag && validators && (
+    validators.trim() === '*' ||
+    validators.split(',').some(validator => validator.trim().replace(/^W\//, '') === entityTag)
+  );
+  if (unchanged) return new Response(null, { status: 304, headers });
   return new Response(request.method === 'HEAD' ? null : body, { headers });
 }
