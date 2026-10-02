@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_CREW_TEMPLATE_WORKERS } from './crew-limits';
 import { BuiltInProviderId, MAX_CREW_MEMBERS, WorkerInput, SkillInput, TeamInput } from './contracts';
 import { KnowledgeInput } from './knowledge';
 import { MARKET_BODY_LIMIT } from './market';
@@ -27,8 +28,8 @@ export const PublicTeamTemplate = z.object({
     name: true, instructions: true, workflow: true, monthlyBudgetMicros: true,
     preflight: true, reviewPolicy: true, workHours: true, maxConcurrentTasks: true, taskBudgetMicros: true,
   }).extend({ memberKeys: z.array(TemplateKey).min(1).max(MAX_CREW_MEMBERS), synthesizerKey: TemplateKey }).strict(),
-  workers: z.array(PublicWorker.extend({ key: TemplateKey, skillKey: TemplateKey }).strict()).min(1).max(5),
-  skills: z.array(PublicSkill.extend({ key: TemplateKey }).strict()).min(1).max(5),
+  workers: z.array(PublicWorker.extend({ key: TemplateKey, skillKey: TemplateKey }).strict()).min(1).max(MAX_CREW_TEMPLATE_WORKERS),
+  skills: z.array(PublicSkill.extend({ key: TemplateKey }).strict()).min(1).max(MAX_CREW_TEMPLATE_WORKERS),
   knowledge: z.array(KnowledgeInput.pick({ title: true, content: true, tags: true, pinned: true }).strict()).max(50).optional(),
 }).strict();
 const SubmissionMetadata = {
