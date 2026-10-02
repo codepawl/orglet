@@ -9,6 +9,8 @@ This guide covers how Orglet runs work, connects providers and harnesses, and wh
 
 This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic, xAI (Grok), OpenRouter, OpenCode Zen and OpenCode Go connections, custom OpenAI-compatible connections, local Ollama, local Claude Code / Codex / Cursor Agent / Gemini CLI harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Custom metric recomputation beyond built-in exact-match accuracy, live API-provider acceptance (script ready, needs a key path), a clean-machine Setup install and benchmarks remain unverified. The public 0.2.x release ships Windows Setup and ZIP; macOS and Linux have separate pull-request packaging workflows for dogfooding, not public release assets.
 
+Account tokens stay in main. `AccountService.getAccessToken(resource)` accepts only the fixed sync or marketplace resource, defaults to sync, caches each audience separately and serializes persisted refresh rotations. It is not a renderer/core IPC operation or a generic authorized fetch. Saved legacy sign-ins lack marketplace authorization until an explicit browser grant upgrade. Account changes and sign-out fence responses and persistence; an unpersisted rotation cannot be reused after a cancelled sign-in. Marketplace authentication is infrastructure only; [the marketplace contract](marketplace-design.md#public-content-contract) describes its claims and remaining publishing work.
+
 ## Run
 
 Use Windows or macOS, Node 24.19 or newer and pnpm 11.19.0.

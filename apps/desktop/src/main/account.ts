@@ -6,6 +6,8 @@ import {
   ACCOUNT_CLIENT_ID,
   ACCOUNT_REDIRECT_URI,
   ACCOUNT_RESOURCE,
+  ACCOUNT_MARKET_RESOURCE,
+  AccountResource,
   ACCOUNT_SCHEME,
   ACCOUNT_SCOPES,
   AccountProfile,
@@ -32,10 +34,12 @@ export const SIGN_IN_BROWSER_FAILED = 'Không mở được trình duyệt để
 export const SIGN_IN_REPLACED = 'Đã bắt đầu một lần đăng nhập khác.';
 const SIGN_IN_EXPIRED = 'Phiên đăng nhập đã hết. Đăng nhập lại.';
 const NOT_SIGNED_IN = 'Chưa đăng nhập tài khoản CodePawl.';
+export const MARKET_SIGN_IN_REQUIRED = 'Đăng nhập lại trong trình duyệt để dùng tài khoản với marketplace.';
 
 /** What the token file holds: the profile last read, and the refresh token while the sign-in is still good. */
 const SavedAccount = z.object({
   refreshToken: z.string().min(1).max(4096).optional(),
+  resources: z.array(AccountResource).min(1).max(2).refine(resources => new Set(resources).size === resources.length).optional(),
   profile: AccountProfile,
 }).strict();
 type SavedAccount = z.infer<typeof SavedAccount>;
@@ -98,6 +102,7 @@ type TokenResponse = z.infer<typeof TokenResponse>;
 
 /** The token endpoint said no to this grant for good (RFC 6749 §5.2), as opposed to the network failing. */
 class GrantRefused extends Error {}
+class ResourceRefused extends Error {}
 
 /**
  * The registered redirect is `com.codepawl.orglet:/auth/callback`, but the service sends the browser back to
@@ -110,6 +115,7 @@ export function isCallbackPath(url: URL): boolean {
 }
 
 type PendingSignIn = {
+  generation: number;
   state: string;
   verifier: string;
   timer: ReturnType<typeof setTimeout>;
@@ -137,8 +143,12 @@ export function accountPayload(state: AccountState): AccountState {
 
 export class AccountService {
   private saved: SavedAccount | undefined;
-  private accessToken: { value: string; expiresAt: number } | undefined;
-  private refreshing: Promise<string> | undefined;
+  private accessTokens = new Map<AccountResource, { value: string; expiresAt: number }>();
+  private refreshing = new Map<AccountResource, Promise<string>>();
+  private rotationTail: Promise<void> = Promise.resolve();
+  private persistenceTail: Promise<void> = Promise.resolve();
+  private generation = 0;
+  private persistenceError: Error | undefined;
   private pending: PendingSignIn | undefined;
   private endpoints: ReturnType<typeof accountEndpoints>;
   private fetch: typeof fetch;
@@ -152,7 +162,10 @@ export class AccountService {
 
   /** Reads the saved account. A saved sign-in counts as signed in straight away; `refreshProfile` checks it later. */
   async load(): Promise<AccountState> {
-    this.saved = await this.dependencies.store.read();
+    const generation = this.generation;
+    const saved = await this.dependencies.store.read();
+    if (generation !== this.generation) return this.state();
+    this.saved = saved;
     this.announce();
     return this.state();
   }
@@ -179,6 +192,7 @@ export class AccountService {
   async signIn(): Promise<AccountState> {
     this.pending?.reject(new Error(SIGN_IN_REPLACED));
     this.clearPending();
+    const generation = this.generation;
     const { verifier, challenge } = pkcePair();
     const state = base64Url(randomBytes(16));
     const address = new URL(this.endpoints.authorize);
@@ -192,9 +206,10 @@ export class AccountService {
       code_challenge_method: 'S256',
       resource: ACCOUNT_RESOURCE,
     }).toString();
+    address.searchParams.append('resource', ACCOUNT_MARKET_RESOURCE);
     const finished = new Promise<AccountState>((resolve, reject) => {
       const timer = setTimeout(() => this.fail(state, new Error(SIGN_IN_TIMED_OUT)), this.dependencies.signInTimeoutMs ?? SIGN_IN_TIMEOUT_MS);
-      this.pending = { state, verifier, timer, resolve, reject, exchanging: false };
+      this.pending = { state, verifier, timer, resolve, reject, exchanging: false, generation };
     });
     this.announce();
     try {
@@ -246,20 +261,26 @@ export class AccountService {
   }
 
   /**
-   * An access token for the sync server (a later phase), refreshed when it is about to end. Concurrent callers share
-   * one refresh: the service rotates refresh tokens, and a rotated-out one sent again revokes every device.
+   * Main-only access to a fixed resource; sync remains the default. Refresh rotations are serialized across resources
+   * and persisted before another dispatch, because reusing a rotated token revokes the client family.
    */
-  async getAccessToken(): Promise<string> {
-    if (this.accessToken && this.accessToken.expiresAt - ACCESS_TOKEN_MARGIN_MS > this.now()) return this.accessToken.value;
-    return this.refresh();
+  async getAccessToken(resource: AccountResource = ACCOUNT_RESOURCE): Promise<string> {
+    AccountResource.parse(resource);
+    if (this.persistenceError) throw this.persistenceError;
+    const resources = this.saved?.resources ?? [ACCOUNT_RESOURCE];
+    if (!resources.includes(resource)) throw new Error(MARKET_SIGN_IN_REQUIRED);
+    const token = this.accessTokens.get(resource);
+    if (token && token.expiresAt - ACCESS_TOKEN_MARGIN_MS > this.now()) return token.value;
+    return this.refresh(resource);
   }
 
   /** Refreshes the sign-in and reads `/me` again; a network failure leaves the saved account as it is. */
   async refreshProfile(): Promise<AccountState> {
     if (!this.saved?.refreshToken) return this.state();
+    const generation = this.generation;
     try {
       const profile = await this.readProfile(await this.getAccessToken());
-      await this.keep({ ...this.saved, profile });
+      await this.keep(saved => ({ ...saved!, profile }), generation);
     } catch (error) {
       if (!(error instanceof GrantRefused)) return this.state();
     }
@@ -275,52 +296,82 @@ export class AccountService {
     const token = this.saved?.refreshToken;
     const pending = this.pending;
     this.clearPending();
+    this.nextGeneration();
     this.saved = undefined;
-    this.accessToken = undefined;
-    this.refreshing = undefined;
-    await this.dependencies.store.remove();
+    this.persistenceError = undefined;
+    await this.persist(() => this.dependencies.store.remove());
     this.announce();
     pending?.resolve(this.state());
     if (token) await this.revoke(token).catch(() => undefined);
     return this.state();
   }
 
-  private refresh(): Promise<string> {
-    this.refreshing ??= this.refreshOnce().finally(() => { this.refreshing = undefined; });
-    return this.refreshing;
+  private refresh(resource: AccountResource): Promise<string> {
+    const existing = this.refreshing.get(resource);
+    if (existing) return existing;
+    const generation = this.generation;
+    const pending = this.rotationTail.then(() => this.refreshOnce(resource, generation));
+    this.rotationTail = pending.then(() => undefined, () => undefined);
+    this.refreshing.set(resource, pending);
+    void pending.finally(() => {
+      if (this.refreshing.get(resource) === pending) this.refreshing.delete(resource);
+    }).catch(() => undefined);
+    return pending;
   }
 
-  private async refreshOnce(): Promise<string> {
+  private async refreshOnce(resource: AccountResource, generation: number): Promise<string> {
+    if (generation !== this.generation) throw new Error(NOT_SIGNED_IN);
+    if (this.persistenceError) throw this.persistenceError;
     const saved = this.saved;
     if (!saved?.refreshToken) throw new Error(saved ? SIGN_IN_EXPIRED : NOT_SIGNED_IN);
     let tokens: TokenResponse;
     try {
-      tokens = await this.tokenRequest({ grant_type: 'refresh_token', refresh_token: saved.refreshToken, client_id: ACCOUNT_CLIENT_ID, resource: ACCOUNT_RESOURCE });
+      tokens = await this.tokenRequest({ grant_type: 'refresh_token', refresh_token: saved.refreshToken, client_id: ACCOUNT_CLIENT_ID, resource });
     } catch (error) {
-      if (error instanceof GrantRefused && this.saved === saved) await this.expire(saved);
+      if (error instanceof GrantRefused && generation === this.generation) await this.expire(saved, generation);
       throw error;
     }
     // Signed out while the request was out: the account stays gone and the new token is revoked, not kept.
-    if (this.saved !== saved) {
+    if (generation !== this.generation) {
       if (tokens.refresh_token) await this.revoke(tokens.refresh_token).catch(() => undefined);
       throw new Error(NOT_SIGNED_IN);
     }
     // The new refresh token replaces the old one before anything else runs, so the old one is never sent again.
-    await this.keep({ ...saved, refreshToken: tokens.refresh_token ?? saved.refreshToken });
-    this.rememberAccessToken(tokens);
+    try {
+      await this.keep(current => ({ ...current!, refreshToken: tokens.refresh_token ?? saved.refreshToken }), generation);
+    } catch (error) {
+      if (generation === this.generation) {
+        this.persistenceError = new Error(SIGN_IN_FAILED);
+        this.saved = { ...this.saved!, refreshToken: undefined };
+        await this.persist(async () => {
+          if (generation === this.generation) await this.dependencies.store.remove();
+        }).catch(() => undefined);
+        this.announce();
+      } else if (tokens.refresh_token) {
+        await this.revoke(tokens.refresh_token).catch(() => undefined);
+      }
+      throw error;
+    }
+    if (generation !== this.generation) {
+      if (tokens.refresh_token) await this.revoke(tokens.refresh_token).catch(() => undefined);
+      throw new Error(NOT_SIGNED_IN);
+    }
+    this.rememberAccessToken(tokens, resource);
     return tokens.access_token;
   }
 
   /** The service refused the saved sign-in: the token goes, the profile stays so Settings can say whose it was. */
-  private async expire(saved: SavedAccount) {
-    this.accessToken = undefined;
+  private async expire(saved: SavedAccount, generation: number) {
+    this.accessTokens.clear();
     const { refreshToken: _refreshToken, ...rest } = saved;
-    await this.keep(rest);
+    await this.keep(rest, generation);
   }
 
   private async finishSignIn(pending: PendingSignIn, code: string) {
+    let tokens: TokenResponse | undefined;
+    let committedGeneration: number | undefined;
     try {
-      const tokens = await this.tokenRequest({
+      tokens = await this.tokenRequest({
         grant_type: 'authorization_code',
         code,
         redirect_uri: ACCOUNT_REDIRECT_URI,
@@ -331,16 +382,19 @@ export class AccountService {
       if (!tokens.refresh_token) throw new Error(SIGN_IN_FAILED);
       const profile = await this.readProfile(tokens.access_token);
       // Cancelled while the code was being exchanged: the new sign-in is thrown away at the service too.
-      if (this.pending !== pending) {
+      if (this.pending !== pending || pending.generation !== this.generation) {
         await this.revoke(tokens.refresh_token).catch(() => undefined);
         return;
       }
-      await this.keep({ refreshToken: tokens.refresh_token, profile });
-      this.rememberAccessToken(tokens);
+      const generation = await this.commitSignIn({ refreshToken: tokens.refresh_token, profile, resources: [ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE] }, pending);
+      committedGeneration = generation;
+      if (this.pending !== pending || generation !== this.generation) throw new Error(NOT_SIGNED_IN);
+      this.rememberAccessToken(tokens, ACCOUNT_RESOURCE);
       this.clearPending();
       this.announce();
       pending.resolve(this.state());
     } catch (error) {
+      if (tokens?.refresh_token && committedGeneration === undefined) await this.revoke(tokens.refresh_token).catch(() => undefined);
       this.fail(pending.state, new Error(error instanceof GrantRefused ? SIGN_IN_REFUSED : SIGN_IN_FAILED));
     }
   }
@@ -358,19 +412,78 @@ export class AccountService {
     this.pending = undefined;
   }
 
-  private rememberAccessToken(tokens: TokenResponse) {
+  private rememberAccessToken(tokens: TokenResponse, resource: AccountResource) {
     const lifetime = (tokens.expires_in ?? 900) * 1000;
-    this.accessToken = { value: tokens.access_token, expiresAt: this.now() + lifetime };
+    this.accessTokens.set(resource, { value: tokens.access_token, expiresAt: this.now() + lifetime });
   }
 
-  private async keep(account: SavedAccount) {
-    this.saved = account;
-    await this.dependencies.store.save(account);
-    this.announce();
+  private async keep(update: SavedAccount | ((saved: SavedAccount | undefined) => SavedAccount), generation: number) {
+    await this.persist(async () => {
+      if (generation !== this.generation) throw new Error(NOT_SIGNED_IN);
+      const account = typeof update === 'function' ? update(this.saved) : update;
+      await this.dependencies.store.save(account);
+      if (generation !== this.generation) {
+        await this.dependencies.store.remove();
+        throw new Error(NOT_SIGNED_IN);
+      }
+      this.saved = account;
+      this.announce();
+    });
+  }
+
+  private async commitSignIn(account: SavedAccount, pending: PendingSignIn): Promise<number> {
+    let committedGeneration = pending.generation;
+    await this.persist(async () => {
+      if (this.pending !== pending || pending.generation !== this.generation) throw new Error(NOT_SIGNED_IN);
+      await this.dependencies.store.save(account);
+      if (pending.generation !== this.generation) {
+        await this.dependencies.store.remove();
+        throw new Error(NOT_SIGNED_IN);
+      }
+      if (this.pending !== pending) {
+        // Cancellation keeps the active grant, including rotations committed before this save began.
+        try {
+          if (this.saved) await this.dependencies.store.save(this.saved);
+          else await this.dependencies.store.remove();
+        } catch (error) {
+          if (pending.generation === this.generation) {
+            this.persistenceError = new Error(SIGN_IN_FAILED);
+            if (this.saved) this.saved = { ...this.saved, refreshToken: undefined };
+          }
+          throw error;
+        }
+        throw new Error(NOT_SIGNED_IN);
+      }
+      // Commit inside the persistence queue: queued old rotations must see the new generation before writing.
+      committedGeneration = this.nextGeneration();
+      this.saved = account;
+      this.persistenceError = undefined;
+      this.announce();
+    });
+    return committedGeneration;
+  }
+
+  private persist(operation: () => Promise<void>): Promise<void> {
+    const pending = this.persistenceTail.then(operation);
+    this.persistenceTail = pending.catch(() => undefined);
+    return pending;
+  }
+
+  private nextGeneration(): number {
+    this.generation += 1;
+    this.accessTokens.clear();
+    this.refreshing.clear();
+    this.rotationTail = Promise.resolve();
+    return this.generation;
   }
 
   private announce() {
-    this.dependencies.onChange?.(this.state());
+    const state = this.state();
+    try {
+      this.dependencies.onChange?.(state);
+    } catch {
+      console.warn('Không gửi được cập nhật trạng thái tài khoản.');
+    }
   }
 
   private async tokenRequest(fields: Record<string, string>): Promise<TokenResponse> {
@@ -383,6 +496,7 @@ export class AccountService {
     if (!response.ok) {
       const refused = response.status === 400 || response.status === 401;
       const code = typeof body?.error === 'string' ? body.error : '';
+      if (refused && code === 'invalid_target') throw new ResourceRefused(MARKET_SIGN_IN_REQUIRED);
       if (refused && ['invalid_grant', 'invalid_client', 'unauthorized_client', 'invalid_request', 'invalid_token'].includes(code)) throw new GrantRefused(code);
       throw new Error(SIGN_IN_FAILED);
     }

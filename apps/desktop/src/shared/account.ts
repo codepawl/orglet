@@ -19,6 +19,9 @@ export const ACCOUNT_CLIENT_ID = 'orglet-desktop';
 export const ACCOUNT_SCOPES = 'openid profile email offline_access';
 /** The API the access token is for: the sync server, which comes in a later phase. */
 export const ACCOUNT_RESOURCE = 'https://sync.orglet.codepawl.com';
+export const ACCOUNT_MARKET_RESOURCE = 'https://market.orglet.codepawl.com';
+export const AccountResource = z.enum([ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE]);
+export type AccountResource = z.infer<typeof AccountResource>;
 
 /** Where each OAuth step lives under a base address such as `https://accounts.codepawl.com`. */
 export function accountEndpoints(baseUrl: string) {
