@@ -5,6 +5,15 @@ import type { Dictionary } from '../i18n';
  * Keep keys in sync with `node scripts/i18n-keys.cjs` (it lists missing and unused entries).
  */
 export const en: Dictionary = {
+  "Đã sửa tin nhắn và gửi lượt mới tới {0}. Đọc câu trả lời sau bằng orglet read.": "Revised the message and sent a new turn to {0}. Read the answer later with orglet read.",
+  "Cách dùng: orglet revise \"<chữ đã sửa>\" --to <tên> --message <số> [--no-wait] [--timeout <giây>] [--json]\n\nSửa tin nhắn của bạn và chạy một lượt mới với tệp gốc còn được phép dùng.\nLịch sử cũ giữ nguyên. Chờ lượt đang chạy dừng trước khi sửa. Dùng --chat <mã> để chọn chat theo mã.": "Usage: orglet revise \"<corrected text>\" --to <name> --message <number> [--no-wait] [--timeout <seconds>] [--json]\n\nCorrect your saved message and start a new turn with its original files still allowed.\nEarlier history stays unchanged. Wait for a running turn to stop before revising. Use --chat <id> to select a chat by id.",
+  "Gõ orglet revise \"chữ đã sửa\" --to Researcher --message 3. Chỉ sửa được tin nhắn của bạn.": "Type orglet revise \"corrected text\" --to Researcher --message 3. Only your own messages can be revised.",
+  "Sửa tin nhắn của bạn và chạy lượt mới; giữ nguyên lịch sử": "Correct your message and start a new turn; keep earlier history",
+  "Gõ /revise #3 rồi chữ đã sửa. /history cho xem số của tin nhắn của bạn.": "Type /revise #3 followed by corrected text. /history shows your message numbers.",
+  "App này chưa hỗ trợ sửa tin nhắn từ terminal. Cập nhật app rồi thử lại.": "This app does not support revising messages from the terminal yet. Update the app and try again.",
+  "Đợi lượt đang chạy dừng trước khi sửa tin nhắn.": "Wait for the running turn to stop before revising a message.",
+  "Không tìm thấy tin nhắn của bạn để sửa.": "Your message to revise was not found.",
+  "Tin nhắn này thiếu bản lưu đầu vào; không thể khôi phục tệp gốc để sửa.": "This message has no saved input; its original files cannot be recovered for revision.",
   // Crews become channels (COD-369).
   "Chưa lưu template. Xuất lại từ Thiết lập kênh khi cần.": "Template not saved. Export it again from Channel settings when needed.",
   "Cách làm việc": "How it works",

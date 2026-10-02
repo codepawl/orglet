@@ -307,7 +307,7 @@ export const commands = {
   task: z.object({ id: Id }),
   // The first message of a chat may ask for Plan first too (COD-367); it lands on that turn's input, never the chat row.
   createTask: TaskInput.extend({ planFirst: PlanFirst.optional() }),
-  reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, onlyWhenIdle: z.literal(true).optional(), consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   // A message sent "in a new thread" from an orglet's main chat (COD-247): a side thread of the same orglet, with the
   // main chat's permissions and never more. `taskId` is the main chat; the sources must already belong to it.
   startSideThread: RunInput.omit({ replyTo: true, forwarded: true, continueFrom: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),

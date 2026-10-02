@@ -1584,6 +1584,8 @@ export class CoreService {
     if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
     if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
     const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
+    // A terminal correction must not interrupt work submitted since main read the chat.
+    if (input.onlyWhenIdle && (active || ['queued', 'running', 'pausing'].includes(task.status))) throw new Error('Đợi lượt đang chạy dừng trước khi sửa tin nhắn.');
     if (!active && ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Task chưa dừng ở ranh giới an toàn.');
     const prepared = this.prepareTask({ ...input, workerId: task.workerId, ...(task.teamId ? { teamId: task.teamId } : {}), ...(task.assignees ? { assignees: task.assignees } : {}) });
     const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];

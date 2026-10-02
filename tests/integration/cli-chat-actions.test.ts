@@ -77,6 +77,18 @@ const token = createCliToken();
 const wait = { wait: true, timeoutSeconds: 5 };
 
 describe('orglet chat action arguments', () => {
+  it('revises only explicitly numbered user messages, with normal targeting and wait options', () => {
+    expect(parseArguments(['revise', 'corrected', '--chat', taskId, '--message', '#2', '--no-wait', '--timeout', '8', '--json'])).toEqual({ kind: 'revise', text: 'corrected', chat: taskId, message: '#2', wait: false, timeoutSeconds: 8, json: true });
+    expect(parseSlash('/revise #2 corrected words')).toEqual({ kind: 'revise', ref: '#2', text: 'corrected words' });
+    for (const message of ['last', '0', '2.1']) {
+      expect(() => parseArguments(['revise', 'corrected', '--to', 'Res', '--message', message])).toThrow(UsageError);
+      expect(parseSlash(`/revise ${message} corrected`).kind).toBe('usage');
+      expect(CliRequest.safeParse({ op: 'revise', token, to: 'Res', text: 'corrected', message, ...wait }).success).toBe(false);
+    }
+    expect(() => parseArguments(['revise', 'corrected', '--to', 'Res'])).toThrow(UsageError);
+    expect(() => parseArguments(['revise', 'corrected', '--to', 'Res', '--message', '2', '--file', 'extra.txt'])).toThrow(UsageError);
+    expect(CliRequest.safeParse({ op: 'revise', token, to: 'Res', text: 'corrected', message: '2', ...wait, providerScopes: ['openai'] }).success).toBe(false);
+  });
   it('parses history, replies, reactions, forwards, answers and controls', () => {
     expect(parseArguments(['read', '--to', 'Res', '--turns', '5'])).toEqual({ kind: 'read', to: 'Res', turns: 5, json: false });
     expect(parseArguments(['send', 'yes', '--to', 'Res', '--reply-to', '#2.1'])).toMatchObject({ kind: 'send', replyTo: '#2.1' });
@@ -130,6 +142,52 @@ describe('orglet chat history', () => {
 });
 
 describe('orglet chat actions in the app', () => {
+  it('revises from the selected saved input, keeps history and omits revoked files and forward metadata', async () => {
+    const detail = chatDetail({ sourceIds: ['original', 'revoked', 'later'] });
+    detail.runs[1].snapshot.input = { brief: 'original text', sourceIds: ['original', 'revoked'], replyTo: artifactIds[0], planFirst: true, excludedSources: [{ name: 'skipped.txt', reason: 'binary' }], forwarded: { fromTaskId: taskId, messageId: artifactIds[0], from: 'Other chat', authorKind: 'orglet', text: 'forwarded original', files: [] } } as Run['snapshot']['input'];
+    detail.sources = [{ id: 'original', revoked: false }, { id: 'revoked', revoked: true }, { id: 'later', revoked: false }] as TaskDetail['sources'];
+    const before = structuredClone(detail);
+    const core = fakeCore(() => detail);
+    expect(await core.operations.run({ op: 'revise', token, to: 'res', message: '2', text: 'corrected text', wait: false, timeoutSeconds: 5 }, core.signal)).toMatchObject({ action: 'revise', waited: false });
+    expect(core.calls.find(call => call.command === 'reviseTask')?.args).toEqual({ taskId, brief: 'corrected text', sourceIds: ['original'], excludedSources: detail.runs[1].snapshot.input!.excludedSources, replyTo: artifactIds[0], planFirst: true, consent: true, providerScopes: ['openai'], budgetMicros: 500_000, onlyWhenIdle: true });
+    expect(detail).toEqual(before);
+  });
+
+  it('refuses busy turns, missing messages and missing historical input without dispatching work', async () => {
+    for (const status of ['running', 'queued', 'pausing'] as const) {
+      const core = fakeCore(() => chatDetail({ status }));
+      await expect(core.operations.run({ op: 'revise', token, to: 'res', message: '2', text: 'corrected', ...wait }, core.signal)).rejects.toThrow('Đợi lượt');
+      expect(core.commands()).toEqual([]);
+    }
+    const detail = chatDetail();
+    detail.runs[1].snapshot.input = undefined;
+    const core = fakeCore(() => detail);
+    await expect(core.operations.run({ op: 'revise', token, to: 'res', message: '2', text: 'corrected', ...wait }, core.signal)).rejects.toThrow('thiếu bản lưu');
+    await expect(core.operations.run({ op: 'revise', token, to: 'res', message: '9', text: 'corrected', ...wait }, core.signal)).rejects.toThrow('Không tìm thấy');
+    expect(core.commands()).toEqual([]);
+  });
+
+  it('can revise an unsent-to-a-run current input, but refuses a pending start', async () => {
+    const detail = chatDetail({ inputRevision: 0, currentInput: { brief: 'first saved message', sourceIds: [] } }, []);
+    const core = fakeCore(() => detail);
+    await core.operations.run({ op: 'revise', token, to: 'res', message: '1', text: 'corrected', wait: false, timeoutSeconds: 5 }, core.signal);
+    expect(core.commands()).toEqual(['reviseTask']);
+    detail.task.pendingStart = true;
+    await expect(core.operations.run({ op: 'revise', token, to: 'res', message: '1', text: 'again', ...wait }, core.signal)).rejects.toThrow('Đợi lượt');
+    expect(core.commands()).toEqual(['reviseTask']);
+  });
+
+  it('uses the current channel roster for provider scope, including each non-Demo provider', async () => {
+    const detail = chatDetail({ assignees: 'all' });
+    const calls: { command: string; args: unknown }[] = [];
+    const operations = new CliOperations({ request: async (command, args) => {
+      calls.push({ command, args });
+      if (command === 'workspace') return { workers: [{ id: workerId, name: 'Researcher', provider: 'openai' }, { id: writerId, name: 'Writer', provider: 'anthropic' }], teams: [], tasks: [detail.task] };
+      if (command === 'task') return detail;
+    }, version: () => '1', open: () => undefined, translate: message => message });
+    await operations.run({ op: 'revise', token, chat: taskId, message: '3', text: 'corrected', wait: false, timeoutSeconds: 5 }, new AbortController().signal);
+    expect(calls.find(call => call.command === 'reviseTask')?.args).toMatchObject({ providerScopes: ['openai', 'anthropic'] });
+  });
   it('reads past turns and replies to a numbered message', async () => {
     const core = fakeCore(() => chatDetail());
     const read = await core.operations.run({ op: 'read', token, to: 'res', turns: 1 }, core.signal) as ReadValue;
@@ -215,6 +273,9 @@ describe('orglet chat actions end to end through the real pipe', () => {
     expect(errors.pop()).toBe('Which file?\n  1. notes.txt\n  2. plan.md\nAnswer with: orglet answer <number or answer> --to "Researcher"');
     expect(await runCli(['react', 'agree', '--to', 'res', '--message', '#3.1'], output, environment)).toBe(0);
     expect(printed.pop()).toBe('Reacted agree to #3.1.');
+    expect(await runCli(['revise', 'corrected text', '--to', 'res', '--message', '2', '--no-wait', '--json'], output, environment)).toBe(0);
+    expect(JSON.parse(printed.pop()!)).toMatchObject({ action: 'revise', waited: false });
+    expect(core.calls.find(call => call.command === 'reviseTask' && (call.args as { brief?: string }).brief === 'corrected text')?.args).toMatchObject({ replyTo: artifactIds[0], onlyWhenIdle: true });
   });
 });
 
@@ -268,6 +329,10 @@ function actionClient() {
     reply: async (_to, message, replyTo) => {
       calls.push(`reply ${replyTo} ${message}`);
       return turnValue('completed', { answers: [{ name: 'Researcher', text: 'Replied.', createdAt: '1' }] });
+    },
+    revise: async (_to, message, text) => {
+      calls.push(`revise ${message} ${text}`);
+      return { ...turnValue('completed', { answers: [{ name: 'Researcher', text: 'Corrected answer.', createdAt: '1' }] }), action: 'revise' };
     },
     react: async (_to, emoji, active, message) => {
       calls.push(`react ${emoji} ${active} ${message}`);
@@ -330,6 +395,12 @@ async function chatSession(script: string) {
 }
 
 describe('orglet chat session actions', () => {
+  it('runs the revised message and prints its answer', async () => {
+    const result = await chatSession('/revise #2 corrected words\n/exit\n');
+    expect(result.code).toBe(0);
+    expect(result.calls).toEqual(['revise #2 corrected words']);
+    expect(result.transcript).toContain('Corrected answer.');
+  });
   it('loads earlier turns before the first message this terminal sent', async () => {
     const result = await chatSession('hello\n/history 1\n/history 1\n/history\n/history\n/exit\n');
     expect(result.calls).toEqual(['history 1 4', 'history 1 3', 'history 10 2']);

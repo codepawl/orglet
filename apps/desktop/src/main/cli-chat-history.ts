@@ -75,6 +75,15 @@ export function turnRevisions(detail: Pick<TaskDetail, 'task' | 'runs'>): number
 
 type TurnInput = Pick<RunInput, 'brief' | 'replyTo' | 'forwarded'>;
 
+/** Exact saved input for an edit; missing historical snapshots cannot reconstruct original attachments. */
+export function savedTurnInput(detail: Pick<TaskDetail, 'task' | 'runs'>, revision: number): RunInput | undefined {
+  if (revision === (detail.task.inputRevision ?? 0)) {
+    if (detail.task.currentInput) return detail.task.currentInput;
+    if (revision === 0) return detail.task;
+  }
+  return detail.runs.find(run => (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)?.snapshot.input;
+}
+
 /** What the person sent for one revision, the way the desktop thread reads it. */
 function turnInput(detail: Pick<TaskDetail, 'task' | 'runs'>, revision: number): TurnInput {
   if (revision === (detail.task.inputRevision ?? 0)) return detail.task.currentInput ?? detail.task;
