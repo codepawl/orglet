@@ -8,6 +8,8 @@ const PUBLISHING_RULES = [
   { rule: 'credential-key', pattern: /\b(?:AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{35})\b/g },
   { rule: 'credential-jwt', pattern: JWT },
   { rule: 'credential-authorization', pattern: /\bauthorization\s*[:=]\s*["']?(?:Bearer|Basic|token)\s+[A-Za-z0-9._~+/=-]{8,}/gi },
+  // Standalone Bearer needs an opaque token shape; ordinary authentication prose remains valid.
+  { rule: 'credential-authorization', pattern: /\b[Bb][Ee][Aa][Rr][Ee][Rr]\s+(?:(?=[A-Za-z0-9._~+/=-]*[0-9=])|(?=[A-Za-z0-9._~+/=-]*[._~+/-][A-Za-z0-9])|(?=[A-Za-z0-9._~+/=-]*[a-z])(?=[A-Za-z0-9._~+/=-]*[A-Z]))[A-Za-z0-9._~+/=-]{8,}/g },
   { rule: 'credential-assignment', pattern: /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|secret)\s*[:=]\s*["']?[^\s"'`;,]{8,}/gi },
   { rule: 'credential-private-key', pattern: /-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/g },
 ] as const;

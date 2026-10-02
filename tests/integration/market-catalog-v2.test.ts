@@ -77,3 +77,29 @@ it('has no mutation facade and logs only a fixed operation, allowed method and s
     logging.mockRestore();
   }
 });
+
+it.each([400, 500])('keeps v2 GET/HEAD error headers identical for status %s and redacts failures', async status => {
+  const privateValue = 'fixture-private-failure';
+  const logging = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const digest = status === 500 ? vi.spyOn(crypto.subtle, 'digest').mockRejectedValue(new Error(privateValue)) : undefined;
+  try {
+    const url = `${origin}/v2/catalog${status === 400 ? `?cursor=${privateValue}` : ''}`;
+    const get = await marketWorker.fetch(new Request(url));
+    const head = await marketWorker.fetch(new Request(url, { method: 'HEAD' }));
+    expect(get.status).toBe(status);
+    expect(head.status).toBe(status);
+    expect(Object.fromEntries(head.headers)).toEqual(Object.fromEntries(get.headers));
+    expect(get.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(get.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(await get.text()).toBe(status === 400 ? 'Tham số danh mục không hợp lệ.' : 'Không thể đọc danh mục.');
+    expect(await head.text()).toBe('');
+    expect(logging.mock.calls).toEqual([
+      [JSON.stringify({ operation: 'catalog-v2', method: 'GET', status })],
+      [JSON.stringify({ operation: 'catalog-v2', method: 'HEAD', status })],
+    ]);
+    expect(JSON.stringify(logging.mock.calls)).not.toContain(privateValue);
+  } finally {
+    digest?.mockRestore();
+    logging.mockRestore();
+  }
+});

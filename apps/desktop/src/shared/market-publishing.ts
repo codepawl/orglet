@@ -135,7 +135,7 @@ export async function validateMarketSubmission(requestText: string, limits: Mark
   const skills = submission.kind === 'crew' ? submission.template.skills : [submission.template.skill];
   for (const [skillIndex, skill] of skills.entries()) {
     if (!skill.package) continue;
-    const path = `template.skills[${skillIndex}].package`;
+    const path = submission.kind === 'orglet' ? 'template.skill.package' : `template.skills[${skillIndex}].package`;
     try {
       const inspected = inspectPackageContent(skill.package);
       if (inspected.yamlExtensions) addDiagnostic(diagnostics, diagnostic(path, 'yaml-extension'));

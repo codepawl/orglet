@@ -139,10 +139,52 @@ describe('credential scan', () => {
   });
 
   it('accepts ordinary technical prose, model slugs, digests and emoji while preserving broad telemetry masking', async () => {
-    const text = `token introspection; Basic authentication; gpt-6-sol; ${'a'.repeat(64)}; 🔎`;
+    const text = `Bearer authentication; Bearer authentication. Basic authentication; token introspection; gpt-6-sol; ${'a'.repeat(64)}; 🔎`;
     expect(credentialLocations(text)).toEqual([]);
     expect((await validate({ ...submission(), changelog: text })).ok).toBe(true);
     expect(scrubText('token introspection Basic authentication', {})).toBe('token [masked] Basic [masked]');
+  });
+
+  it.each(['fixtureCredential123', 'opaqueMixedToken', 'opaque_token_value'])('blocks standalone opaque Bearer token %s deterministically in metadata and decoded files', async token => {
+    const credential = `Bearer ${token}`;
+    const metadata = { ...submission(), changelog: `Safe\n${credential}` };
+    const packaged = withPackage();
+    const packageInput = packaged.template.skill.package;
+    packageInput.files = packageInput.files.filter((file: { path: string }) => file.path !== 'orglet.json');
+    packageInput.files.push(packageFile('references/notes.md', `Safe\n${credential}`));
+    packageInput.hash = inspectPackage(packageInput).hash;
+    for (const published of [metadata, packaged]) {
+      const first = await validate(published);
+      const second = await validate(published);
+      expect(first).toEqual(second);
+      expect(first).toMatchObject({ ok: false, diagnostics: [{ rule: 'credential-authorization', line: 2 }] });
+      expect(JSON.stringify(first)).not.toContain(token);
+    }
+  });
+
+  it.each(['orglet', 'crew'] as const)('reports exact %s metadata/file/package paths without echoing private values', async kind => {
+    const credential = 'Bearer fixtureCredential123';
+    const published = kind === 'orglet' ? withPackage() : submission('crew');
+    if (kind === 'crew') {
+      const packaged = withPackage();
+      published.template.skills[0] = { ...packaged.template.skill, key: published.template.skills[0].key };
+    }
+    const skill = kind === 'orglet' ? published.template.skill : published.template.skills[0];
+    const packageInput = skill.package;
+    packageInput.files = packageInput.files.filter((file: { path: string }) => file.path !== 'orglet.json');
+    packageInput.files.push(packageFile('references/private-fixture.md', `Safe\n${credential}`));
+    packageInput.hash = '0'.repeat(64);
+    published.summary = credential;
+    const result = await validate(published);
+    if (result.ok) throw Error('Credential fixture was accepted');
+    const packagePath = kind === 'orglet' ? 'template.skill.package' : 'template.skills[0].package';
+    expect(result.diagnostics.map(({ path, rule, line }) => ({ path, rule, line }))).toEqual([
+      { path: 'request.summary', rule: 'credential-authorization', line: 1 },
+      { path: `${packagePath}.files[1]`, rule: 'credential-authorization', line: 2 },
+      { path: packagePath, rule: 'package-agreement', line: 1 },
+    ]);
+    expect(JSON.stringify(result)).not.toContain('fixtureCredential123');
+    expect(JSON.stringify(result)).not.toContain('private-fixture.md');
   });
 
   it('scans instructions, crew notes, frontmatter/resources and credential-shaped paths with safe file indexes', async () => {
