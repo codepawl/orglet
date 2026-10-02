@@ -32,6 +32,7 @@ Run these locally before every pull request:
 |---|---|
 | `pnpm typecheck` | `tsc --noEmit` over the whole repo |
 | `pnpm test` | The vitest integration suite in `tests/integration`, and the UI kit's own tests in `packages/orglet-ui/test`; the files that start a real Chrome run one at a time (`vitest.config.ts`) |
+| `pnpm --config.verify-deps-before-run=false --dir services/market install --frozen-lockfile`, then service `typecheck` and `test` with the same prefix | Required for Market service changes: pinned tooling, tracked local D1 migrations, actual Worker repository/anonymous-handler tests. Install the root workspace first. Windows, macOS and Linux CI run these separately from the root suite. |
 | `pnpm --filter @codepawl/orglet-ui build`, then `pnpm --filter @codepawl/orglet-ui check:package` | Builds the UI kit and checks the package someone would install: publint for its `package.json`, Are the Types Wrong for its types. Run it when you touch `packages/orglet-ui`. |
 | `pnpm i18n:keys` | Lists English translations that are missing or unused. Run it whenever you touch UI text. |
 

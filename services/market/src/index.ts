@@ -1,23 +1,42 @@
 import { MARKET_SEED_BODIES, seedCatalog } from '../../../apps/desktop/src/shared/market-seed';
 import { catalogPageV2 } from './catalog-v2';
+import { ownerRoute, privateReply, type MarketEnvironment } from './owner-routes';
+import { listingBody } from './listings';
+import { sha256 } from './content';
 
-/** Curated phase one: immutable versions ship in Git; publishing has no route. */
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, environment: MarketEnvironment = {}): Promise<Response> {
+    const owned = await ownerRoute(request, environment);
+    if (owned) return owned;
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     const url = new URL(request.url);
     const path = url.pathname;
     if (path === '/v2/catalog') {
-      const errorHeaders = { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff' };
+      const errorHeaders = { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
       try {
-        const page = await catalogPageV2(url.searchParams);
+        const page = await catalogPageV2(url.searchParams, environment.MARKET_DB);
         const status = page === undefined ? 400 : 200;
         console.log(JSON.stringify({ operation: 'catalog-v2', method: request.method, status }));
         if (page === undefined) return new Response(request.method === 'HEAD' ? null : 'Tham số danh mục không hợp lệ.', { status, headers: errorHeaders });
-        return reply(request, page, 'public, max-age=300');
+        return reply(request, page, environment.MARKET_DB ? 'no-store' : 'public, max-age=300');
       } catch {
         console.log(JSON.stringify({ operation: 'catalog-v2', method: request.method, status: 500 }));
         return new Response(request.method === 'HEAD' ? null : 'Không thể đọc danh mục.', { status: 500, headers: errorHeaders });
+      }
+    }
+    const publicVersion = /^\/v2\/listings\/([a-z0-9][a-z0-9-]{0,79})\/versions\/([1-9][0-9]*)$/.exec(path);
+    if (publicVersion) {
+      const version = Number(publicVersion[2]);
+      if (url.search || !Number.isSafeInteger(version)) return privateReply(request, { code: 'not_found' }, 404);
+      const curatedBody = MARKET_SEED_BODIES[`${publicVersion[1]}:${version}`];
+      if (curatedBody) return reply(request, curatedBody, 'public, max-age=31536000, immutable', await sha256(new TextEncoder().encode(curatedBody)));
+      if (!environment.MARKET_DB) return privateReply(request, { code: 'not_found' }, 404);
+      try {
+        const body = await listingBody(environment.MARKET_DB, publicVersion[1], version);
+        if (!body) return privateReply(request, { code: 'not_found' }, 404);
+        return reply(request, body.bytes, 'no-store', body.hash);
+      } catch {
+        return privateReply(request, { code: 'storage_failed' }, 500);
       }
     }
     const catalog = await seedCatalog();
@@ -31,7 +50,7 @@ export default {
   },
 };
 
-function reply(request: Request, body: string, cache: string, hash?: string) {
+function reply(request: Request, body: string | Uint8Array<ArrayBuffer>, cache: string, hash?: string) {
   const entityTag = hash ? `"${hash}"` : undefined;
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',

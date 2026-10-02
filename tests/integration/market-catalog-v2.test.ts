@@ -60,7 +60,7 @@ it('keeps exact v1 catalog/immutable bytes and HEAD/weak conditional behavior', 
   }
 });
 
-it('has no mutation facade and logs only a fixed operation, allowed method and status', async () => {
+it('keeps public routes read-only and logs only a fixed operation, allowed method and status', async () => {
   const logging = vi.spyOn(console, 'log').mockImplementation(() => {});
   try {
     const secretQuery = 'sk-fixturesecret12345';
