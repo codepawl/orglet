@@ -248,11 +248,11 @@ describe('the picker list', () => {
     ],
   };
 
-  it('puts the chats last opened first, then every orglet and crew with their faces', () => {
+  it('puts the chats last opened first, then every orglet and crew, named as its channel (COD-369), with their faces', () => {
     expect(recentChats(workspace).map(item => item.id)).toEqual(['seen', 'new', 'crew']);
     const options = sendToOptions(workspace);
     expect(options.map(option => `${option.group}:${option.name}`)).toEqual([
-      'recent:Invoices', 'recent:brief new', 'recent:brief crew', 'orglets:Researcher', 'orglets:Kế toán', 'crews:Review crew',
+      'recent:Invoices', 'recent:brief new', 'recent:brief crew', 'orglets:Researcher', 'orglets:Kế toán', 'crews:#Review crew',
     ]);
     expect(options.find(option => option.group === 'crews')?.faces.map(worker => worker.id)).toEqual(['w1', 'w2']);
     expect(options.find(option => option.name === 'brief crew')?.target).toEqual({ kind: 'task', id: 'crew' });
@@ -273,6 +273,6 @@ describe('the picker list', () => {
 
   it('narrows by name without regard to case or accents', () => {
     const options = sendToOptions(workspace);
-    expect(filterOptions(options, 'ke toan').map(option => option.name)).toEqual(['Kế toán', 'Review crew']);
+    expect(filterOptions(options, 'ke toan').map(option => option.name)).toEqual(['Kế toán', '#Review crew']);
   });
 });

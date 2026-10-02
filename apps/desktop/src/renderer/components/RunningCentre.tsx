@@ -4,13 +4,12 @@ import type { Task, Team } from '../../shared/contracts';
 import type { RunningItem } from '../../shared/running';
 import { Avatar } from './Avatar';
 import { ProviderMark } from './ProviderMark';
-import { Button, Drawer } from './ui';
+import { Button } from './ui';
 import { toast } from './toast';
 import { orglet } from '../api';
 import { t } from '../i18n';
 import { useAllRunProgress } from '../runProgress';
-import { footerCount, runningChatName, runningControls, runningGroups, runningMeta, runningStatusLine, type RunningGroupId } from '../runningList';
-import { Pause as PauseBars } from './icons';
+import { runningChatName, runningControls, runningGroups, runningMeta, runningStatusLine, type RunningGroupId } from '../runningList';
 
 const groupTitles: Record<RunningGroupId, () => string> = {
   running: () => t('Đang chạy'),
@@ -29,43 +28,16 @@ function useNow() {
 }
 
 /**
- * Everything running across all chats, and the line waiting behind it (COD-244). Opened from the sidebar footer
- * beside Notifications and Schedules. The core sends the list with every workspace refresh, so it follows the
- * same `changed` events as the sidebar's status marks; the step each run is on comes from live progress.
+ * Everything running across all chats, and the line waiting behind it (COD-244), as the sections the Activity area's
+ * Needs you and Running views show (COD-366). The core sends the list with every workspace refresh, so it follows the
+ * same `changed` events as the sidebar's status marks; the step each run is on comes from live progress. The sections
+ * share one clock and one progress subscription.
  */
-export function RunningCentre({ open, items, tasks, teams, onClose, onOpenChat }: {
-  open: boolean;
-  items: readonly RunningItem[];
-  tasks: readonly Task[];
-  teams: readonly Team[];
-  onClose: () => void;
-  onOpenChat: (taskId: string) => void;
-}) {
-  if (!open) return null;
-  return <Drawer open onClose={onClose} title={t('Đang chạy')} description={t('Mọi lượt đang chạy hoặc đang chờ, ở mọi chat.')}>
-    <RunningGroups items={items} tasks={tasks} teams={teams} onOpenChat={onOpenChat} />
-  </Drawer>;
-}
-
-/**
- * The counts on the footer's Running button (COD-287): a quiet count of what is under way or in line, and beside it,
- * in the accent with the pause bars, what waits for the person, so a paused crew or an unanswered question shows on
- * the button instead of hiding behind it. The button's own label says both for a screen reader.
- */
-export function RunningCounts({ running, waiting }: { running: number; waiting: number }) {
-  if (running === 0 && waiting === 0) return null;
-  return <span className="running-counts" aria-hidden="true">
-    {running > 0 && <span className="badge running-count" title={t('{0} đang chạy hoặc chờ lượt', [running])}>{footerCount(running)}</span>}
-    {waiting > 0 && <span className="badge running-waiting" title={t('{0} chờ bạn', [waiting])}><PauseBars size={12} strokeWidth={2.4} />{footerCount(waiting)}</span>}
-  </span>;
-}
-
-/** The sections, with one clock and one progress subscription shared by every row. */
-function RunningGroups({ items, tasks, teams, onOpenChat }: { items: readonly RunningItem[]; tasks: readonly Task[]; teams: readonly Team[]; onOpenChat: (taskId: string) => void }) {
+export function RunningGroups({ items, tasks, teams, onOpenChat, emptyLine }: { items: readonly RunningItem[]; tasks: readonly Task[]; teams: readonly Team[]; onOpenChat: (taskId: string) => void; emptyLine?: string }) {
   const progressByRun = useAllRunProgress();
   const now = useNow();
   const groups = runningGroups(items);
-  if (groups.length === 0) return <p className="muted running-empty">{t('Không có gì đang chạy.')}</p>;
+  if (groups.length === 0) return <p className="muted running-empty">{emptyLine ?? t('Không có gì đang chạy.')}</p>;
   return <div className="running-groups">
     {groups.map(group => <section key={group.id} className="running-group" aria-labelledby={`running-group-${group.id}`}>
       <h3 id={`running-group-${group.id}`} className="running-group-title">{groupTitles[group.id]()}<span>{group.items.length}</span></h3>

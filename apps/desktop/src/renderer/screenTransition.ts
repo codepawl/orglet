@@ -24,6 +24,9 @@ export function swapScreen(update: () => void): void {
   root.classList.add(SWAP_CLASS);
   // The new screen must be in the DOM when the callback returns, or the transition snapshots the old one twice.
   const transition = document.startViewTransition(() => flushSync(update));
+  // A swap the browser skips (a second swap starting, a hidden window) rejects `ready`; the update has still run, so
+  // the skip is not an error, and left unhandled it surfaced as a page error in the desktop smoke.
+  void transition.ready.catch(() => undefined);
   void transition.finished.finally(() => root.classList.remove(SWAP_CLASS));
 }
 

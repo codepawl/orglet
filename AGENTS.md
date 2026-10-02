@@ -18,7 +18,7 @@ Read, in this order, only what the task needs:
 
 [docs/implementation_status.md](docs/implementation_status.md) is the ship/verify record. [docs/handoff.md](docs/handoff.md) and `.agents/plans/` are **historical session notes**, not current contracts — prefer `docs/product.md` and the code.
 
-Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, grouped into **crews**) on the user's computer. Chats, orglets and files live in SQLite, and no Orglet server holds them. An optional CodePawl account exists (COD-337, [docs/account.md](docs/account.md)): main signs in through the system browser and keeps the tokens, and nothing syncs yet. Sync follows [docs/account-sync-design.md](docs/account-sync-design.md) (COD-329); the app must keep working fully without an account. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
+Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, who work together in **channels**) on the user's computer. Chats, orglets and files live in SQLite, and no Orglet server holds them. An optional CodePawl account exists (COD-337, [docs/account.md](docs/account.md)): main signs in through the system browser and keeps the tokens, and nothing syncs yet. Sync follows [docs/account-sync-design.md](docs/account-sync-design.md) (COD-329); the app must keep working fully without an account. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
 
 ```
 apps/desktop/src/
@@ -28,7 +28,7 @@ apps/desktop/src/
   core/           business logic in a utility process
     adapters/     OpenAI / Anthropic / xAI / OpenRouter / OpenCode / Ollama
     harness/      Claude Code / Codex / Cursor Agent CLIs
-    orchestration/  runs, crews, routines, checkpoints, app proposals, self-improvement
+    orchestration/  runs, channels and their lead turns, routines, checkpoints, app proposals, self-improvement
     tools/        the tool catalog, workspace files, commands, web, diff
     storage/      SQLite, backup, erase, templates
     context/      knowledge, memory, thread compilation
@@ -46,7 +46,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 
 | Feature | Page | Code entry |
 |---|---|---|
-| Orglet and crew chat, side threads, channels (named chats of orglets and crews, COD-361), `@` tags, replies, reactions | [docs/team-chat.md](docs/team-chat.md) | `core/orchestration/team.ts`, `shared/live-task.ts`, `shared/channels.ts`, `core/storage/channels.ts`, `shared/message-interactions.ts` |
+| Orglet chat, side threads, channels (named chats of orglets, where they take turns or a lead splits the work; crews are channels, COD-361 and COD-369), `@` tags, replies, reactions | [docs/team-chat.md](docs/team-chat.md) | `core/orchestration/team.ts`, `shared/live-task.ts`, `shared/channels.ts`, `core/storage/channels.ts`, `shared/message-interactions.ts` |
 | Permissions, working folder, commands, web tools, app-change proposals | [docs/agent-tools.md](docs/agent-tools.md) | `core/tools/catalog.ts`, `core/orchestration/app-proposals.ts` |
 | MCP servers, per-orglet choice, approving calls, secrets in main | [docs/mcp.md](docs/mcp.md) | `core/tools/mcp.ts`, `shared/mcp.ts`, `main/mcp-secrets.ts` |
 | Orglet's browser: reading pages, profiles, site lists, the journal | [docs/browser.md](docs/browser.md) | `core/tools/browser-tools.ts`, `core/tools/browser-policy.ts`, `browser/` (host process), `main/browser-*.ts` |
@@ -58,7 +58,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 | Schedules | [docs/routines.md](docs/routines.md) | `core/orchestration/routines.ts` |
 | Tacet on the device: the download, the ONNX worker, quiet-run announcements, permission hints, group-chat routing, notes that fit a message, a second opinion on browser and desktop steps | [docs/decisions.md](docs/decisions.md), [docs/memory.md](docs/memory.md#which-notes-load-and-why), [docs/browser.md](docs/browser.md#a-second-opinion-from-tacet) | `core/decisions/` (`knowledge-fit.ts`, `action-risk.ts` for COD-306), `core/orchestration/quiet-runs.ts`, `core/orchestration/permission-suggestions.ts`, `core/orchestration/turn-routing.ts`, `renderer/components/TacetSetup.tsx`, `renderer/permissionHints.tsx` |
 | Connections, harnesses, model lists, limits, updater, erase | [docs/technical-guide.md](docs/technical-guide.md), [docs/capabilities.md](docs/capabilities.md), [docs/model-list-fetch.md](docs/model-list-fetch.md) | `core/harness/`, `core/adapters/`, `main/` |
-| The shell: the rail, the Open list and Ctrl+Tab (UI chrome, never a `tasks` row), the views of a chat (Chat, Files, Changes, Schedules, Memory), the right panel's width | [docs/chat-guide.md](docs/chat-guide.md#open-chats-and-the-rail), [docs/technical-guide.md](docs/technical-guide.md#shell-rail-tabs-and-the-right-panel) | `renderer/openChats.ts`, `renderer/chatViews.ts`, `renderer/components/OpenChats.tsx`, `renderer/components/ChatViews.tsx`, `renderer/components/ChangesView.tsx`, `renderer/components/SidebarRail.tsx` |
+| The shell: the area rail (Home with Friends and DMs, Channels in categories with a member column, Activity with Saved), the user panel, the Open list and Ctrl+Tab (UI chrome, never a `tasks` row), the views of a chat (Chat, Files, Changes, Schedules, Memory), the right panel's width (COD-366) | [docs/chat-guide.md](docs/chat-guide.md#the-area-rail-and-the-sidebar), [docs/technical-guide.md](docs/technical-guide.md#shell-areas-tabs-and-the-right-panel) | `renderer/areas.ts`, `renderer/saved.ts`, `renderer/openChats.ts`, `renderer/chatViews.ts`, `renderer/components/AreaRail.tsx`, `renderer/components/UserPanel.tsx`, `renderer/components/FriendsPage.tsx`, `renderer/components/ActivityPage.tsx`, `renderer/components/MemberColumn.tsx`, `renderer/components/OpenChats.tsx`, `renderer/components/ChatViews.tsx`, `renderer/components/ChangesView.tsx` |
 | Notifications | [docs/chat-guide.md](docs/chat-guide.md#notifications) | `renderer/components/notifications.tsx` |
 | The Running view: every run and the queue across chats | [docs/chat-guide.md](docs/chat-guide.md#what-is-running), [docs/technical-guide.md](docs/technical-guide.md#what-is-running-and-the-queue) | `core/orchestration/running.ts`, `core/orchestration/slots.ts`, `renderer/components/RunningCentre.tsx` |
 | The `orglet` terminal command, its pipe and the PATH shim | [docs/cli.md](docs/cli.md) | `cli/`, `main/cli-server.ts`, `main/cli-operations.ts`, `main/cli-path.ts` |
@@ -106,21 +106,21 @@ Process detail is [CONTRIBUTING.md](CONTRIBUTING.md). Fill [.github/pull_request
 
 ## Coding conventions
 
-**UI text.** Source strings are Vietnamese (`t('...')`). English lives in `apps/desktop/src/shared/locales/en.ts` (US default; UK in the same module). Add both in the same change. Core/main errors are Vietnamese too so `tMessage` can translate them. On screen, workers are **orglets** and teams are **crews**; older docs and code names still say worker and team.
+**UI text.** Source strings are Vietnamese (`t('...')`). English lives in `apps/desktop/src/shared/locales/en.ts` (US default; UK in the same module). Add both in the same change. Core/main errors are Vietnamese too so `tMessage` can translate them. On screen, workers are **orglets** and teams are **channels** (a channel where a lead splits the work was a **crew**); older docs and code names still say worker, team and crew.
 
 **UI feel.** Quiet ChatGPT-like shell: sidebar, one main column, composer at the bottom, details on demand. Use tokens in `apps/desktop/src/renderer/styles.css` and the components in `packages/orglet-ui`. No neon, gradients-as-brand, org charts, or extra marketing chrome. Tight spacing already landed; do not inflate it. No spinners after the first frame: waits show the shape of what is coming ([technical guide → Loading](docs/technical-guide.md#loading)).
 
 **Trust boundaries.** `contextIsolation` on, `nodeIntegration` off, renderer sandboxed. Keys use Electron `safeStorage` in main; the renderer never reads a saved key back. Backups, templates and logs must not grow secrets. Workers read only files attached to that chat or inside its granted folder, and edit a private copy. Do not execute imported skill scripts. Do not add `--force` / `--yolo` to the Cursor harness or loosen the restricted flags of any harness. Do not silently fall back to Demo when a harness is logged out. Workspace commands have no network, not even loopback; do not add an exemption.
 
-**Data.** Zod at the IPC and storage edge. Integer money (micros), atomic budget reservation. Orglet, crew, skill and instruction edits create a new revision; in-flight runs keep the snapshot they started with. Missing evidence, unknown usage and partial failure stay visible — do not paint them as success.
+**Data.** Zod at the IPC and storage edge. Integer money (micros), atomic budget reservation. Orglet, channel, skill and instruction edits create a new revision; in-flight runs keep the snapshot they started with. Missing evidence, unknown usage and partial failure stay visible — do not paint them as success.
 
 **Proposals, not actions.** An orglet asked to set the app up proposes a card the person applies; it never creates, deletes or grants anything itself, and keys, connections, permissions, folders, backups and deletions cannot be proposed at all. Self-improvement changes one sentence of the orglet's own instructions and always waits for a click.
 
-**Chats.** Clicking an orglet or a crew opens **its main chat** (one live `tasks` row keyed by `workerId` or `teamId`, found by `liveWorkerTask` / `liveTeamTask`). A user message is a turn, not a new task row. An orglet's main chat can also start **side threads** (COD-247): separate rows marked `sideOf`, listed under the orglet, which the live lookups never return. A side thread starts with a copy of the main chat's permissions, folder grant and MCP grants, is never wider, and loses at once whatever the main chat loses; bringing its answer into the main chat adds a quote and never starts a run. Crews and channels have no side threads. See [docs/team-chat.md](docs/team-chat.md#side-threads). A **channel** (COD-361, formerly a group chat) is a row with `assignees` and a `channel` record whose members are orglets and crews; see [docs/team-chat.md](docs/team-chat.md#channels).
+**Chats.** Clicking an orglet or a channel opens **its main chat** (one live `tasks` row keyed by `workerId`, or, for a channel where a lead splits the work, by its crew record's `teamId`, found by `liveWorkerTask` / `liveTeamTask`). A user message is a turn, not a new task row. An orglet's main chat can also start **side threads** (COD-247): separate rows marked `sideOf`, listed under the orglet, which the live lookups never return. A side thread starts with a copy of the main chat's permissions, folder grant and MCP grants, is never wider, and loses at once whatever the main chat loses; bringing its answer into the main chat adds a quote and never starts a run. Channels have no side threads. See [docs/team-chat.md](docs/team-chat.md#side-threads). A **channel** (COD-361, formerly a group chat; COD-369 folded crews into it) is a row with a `channel` record whose members are orglets, and either `assignees` (take turns) or a `teamId` (a lead splits the work); see [docs/team-chat.md](docs/team-chat.md#channels) and [Crews are channels](docs/team-chat.md#crews-are-channels).
 
 ## Do not
 
-- Expand into product.md **Not now** (a cloud runner, account code ahead of the COD-329 design, org-chart company sim, skill marketplace, scraping model lists).
+- Expand into product.md **Not now** (a cloud runner, account code ahead of the COD-329 design, org-chart company sim, running downloaded scripts, scraping model lists). The marketplace is in scope since 2026-10-01: [docs/marketplace-design.md](docs/marketplace-design.md) (COD-373).
 - Commit `.env`, keys, certificates, or SQLite databases.
 - Claim you tested a live provider, installer, updater or notarized build unless you actually did.
 - "Clean up" unrelated files, regenerate lockfiles without a dependency change, or rephrase docs that are already clear.

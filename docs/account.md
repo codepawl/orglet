@@ -1,13 +1,13 @@
 # CodePawl account
 
-Orglet works fully without an account. You can also sign in to a free CodePawl account. Syncing your orglets, crews and chats between computers comes next; **today nothing syncs**. Signing in changes nothing about where your chats and files live: they stay on this computer. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
+Orglet works fully without an account. You can also sign in to a free CodePawl account. Syncing your orglets, channels and chats between computers comes next; **today nothing syncs**. Signing in changes nothing about where your chats and files live: they stay on this computer. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
 
 Part of the [user guide](user-guide.md). The design behind it is [account-sync-design.md](account-sync-design.md).
 
 ## What an account gives you
 
 - **Today:** it is free, and it is one CodePawl account for every CodePawl product.
-- **Next:** syncing your orglets, crews, chats and settings between your computers.
+- **Next:** syncing your orglets, channels, chats and settings between your computers.
 - **Later:** Orglet on your phone.
 - Your usage statistics show CodePawl how Orglet is used, so it gets better where it matters to you.
 
@@ -53,14 +53,14 @@ While you are signed in, Orglet sends usage statistics and error reports to Code
 What is sent:
 
 - **When Orglet starts**: the version, the operating system and processor type, the app language and how Orglet was installed, and the old and new version after an update.
-- **When you send a message**: the kind of chat (one orglet, a crew, a group chat, a side thread or a schedule), the kind of connection (Demo, API, local harness or a custom connection) and, except for a custom connection, the provider and model id.
+- **When you send a message**: the kind of chat (one orglet, a channel, a side thread or a schedule), the kind of connection (Demo, API, local harness or a custom connection) and, except for a custom connection, the provider and model id.
 - **When a run ends**: how it ended (done, partly done, failed, stopped, interrupted), roughly how long it took and roughly how many steps it made.
 - **Features you use**, counted once per session: tabs, the rail, side threads, schedules, the browser, desktop apps, MCP, the file viewer, editing a file, forwarding, the `orglet` command, Send to and Tacet.
 - **Settings you change**: which setting, and its new value only when it is a fixed choice such as the theme or an on/off switch.
 - **Errors**: the kind of error, its message and where in Orglet's code it happened. Before anything is kept, your home folder and user name become `~`, emails and the part of a web address after `?` are removed, and anything that looks like a key or token is masked. A failed run is sent as its error code only.
 - A random install id, so reports from one computer can be told apart.
 
-What is never sent: the text of your chats, prompts and answers, file names and contents, folder paths, the names and instructions of your orglets and crews, API keys and tokens, and your email.
+What is never sent: the text of your chats, prompts and answers, file names and contents, folder paths, the names and instructions of your orglets and channels, API keys and tokens, and your email.
 
 CodePawl keeps these reports for **180 days**, and deletes them when you delete your account. Orglet sends them every 5 minutes and when it closes; if the service cannot be reached, they wait on this computer (at most 500 events and 50 errors, the oldest dropped first).
 

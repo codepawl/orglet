@@ -16,14 +16,21 @@ export type DockedIsland =
   | { kind: 'knowledge'; /** The set of suggestions, so a new set is a new view. */ key: string; count: number; review: () => void; dismiss: () => void }
   | { kind: 'account'; /** The run that ran out, so a later one is a new view. */ key: string; harnessName: string; target?: { label: string; usedPercent: number }; resetsAt?: string; switchAccount: () => void; dismiss: () => void };
 
-let docked: DockedIsland | undefined;
+/**
+ * Which prompt bar a view belongs to. The main chat's bar is `MAIN_DOCK`; a side thread open in the right panel
+ * (COD-365) has its own bar and docks under its task id, so the two islands never take each other's place.
+ */
+export const MAIN_DOCK = 'main';
+
+const docked = new Map<string, DockedIsland>();
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
-/** Sets what the island on the prompt bar shows, or clears it once there is nothing to show. Same view, no change. */
-export function dockIsland(view: DockedIsland | undefined) {
-  if (sameView(docked, view)) return;
-  docked = view;
+/** Sets what the island on a prompt bar shows, or clears it once there is nothing to show. Same view, no change. */
+export function dockIsland(view: DockedIsland | undefined, dock: string = MAIN_DOCK) {
+  if (sameView(docked.get(dock), view)) return;
+  if (view) docked.set(dock, view);
+  else docked.delete(dock);
   for (const listener of listeners) listener();
 }
 
@@ -44,8 +51,8 @@ function sameWorkers(a: IslandView, b: IslandView) {
   return a.workers.every((worker, index) => worker.id === b.workers[index].id);
 }
 
-export function useDockedIsland() {
-  return useSyncExternalStore(subscribe, () => docked, () => undefined);
+export function useDockedIsland(dock: string = MAIN_DOCK) {
+  return useSyncExternalStore(subscribe, () => docked.get(dock), () => undefined);
 }
 
 /**
@@ -61,8 +68,8 @@ const EXIT_MS = 240;
  * changing its contents in place. Under `prefers-reduced-motion` the exit is a cut: the island is removed before
  * the next paint, so nothing waits on an animation the stylesheet has switched off.
  */
-export function IslandDock() {
-  const view = useDockedIsland();
+export function IslandDock({ dock = MAIN_DOCK }: { dock?: string }) {
+  const view = useDockedIsland(dock);
   const lastView = useRef<DockedIsland>(undefined);
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const handingOver = view !== undefined && lastView.current !== undefined && lastView.current.kind !== view.kind;

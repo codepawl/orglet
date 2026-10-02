@@ -16,17 +16,16 @@ export type ArchivedChatKind = 'main' | 'side' | 'schedule' | 'channel';
 
 export type ArchivedChat<T extends ChatRow> = { task: T; kind: ArchivedChatKind };
 
-/** Where the chat's own row sat: its crew, the Channels section, or its one orglet. */
+/** Where the chat's own row sat: the Channels section (a crew's chat too, since COD-369), or its one orglet. */
 export function archivedChatSection(task: ChatRow): ArchivedChatSection {
-  if (task.teamId) return 'teams';
-  if (task.assignees) return 'channels';
+  if (task.teamId || task.assignees) return 'channels';
   return 'workers';
 }
 
 export function archivedChatKind(task: ChatRow): ArchivedChatKind {
   if (task.sideOf) return 'side';
   if (task.routineId) return 'schedule';
-  if (!task.teamId && task.assignees) return 'channel';
+  if (task.teamId || task.assignees) return 'channel';
   return 'main';
 }
 

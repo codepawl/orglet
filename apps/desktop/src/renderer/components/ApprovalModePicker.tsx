@@ -131,7 +131,7 @@ export type ModeChange = { capabilities?: ToolCapability[]; folder?: Exclude<Fol
 function modeLock(input: { item: Exclude<ApprovalMode, 'plan'>; current: Exclude<ApprovalMode, 'plan'>; sideThread: boolean; appliesAtOnce: boolean }): string | undefined {
   if (input.item === input.current) return undefined;
   if (input.sideThread) return t('Chat phụ dùng quyền của chat chính. Đổi ở chat chính.');
-  if (input.appliesAtOnce) return t('Hội và kênh áp dụng thay đổi của từng Tí ngay khi Tí đó xong.');
+  if (input.appliesAtOnce) return t('Kênh áp dụng thay đổi của từng Tí ngay khi Tí đó xong.');
   return undefined;
 }
 

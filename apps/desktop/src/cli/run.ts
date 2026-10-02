@@ -398,7 +398,7 @@ export async function runCli(argumentList: readonly string[], output: Output, en
       const client = appChatClient(resolveUserData(environment), appExecutable(environment)).management!;
       const result = await runManagementCommand(command, client, workingDirectory);
       if (command.json) printJson(output, result);
-      else output.stdout(t(result.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', result.kind === 'worker' ? 'orglet' : 'crew', result.name));
+      else output.stdout(t(result.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', result.kind === 'worker' ? 'orglet' : 'channel', result.name));
       return EXIT_CODES.ok;
     } catch (error) {
       if (error instanceof AppRefusal) return reportFailure({ ok: false, code: error.code, error: error.message }, command.json, output);

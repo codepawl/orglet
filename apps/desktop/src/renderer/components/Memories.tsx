@@ -41,7 +41,7 @@ export function MemoryList({ memories, workspace, showScope, onOpenChat }: { mem
   const scopeName = (item: Knowledge) => {
     const scope = item.scope;
     if (scope.type === 'workspace') return t('Toàn workspace');
-    if (scope.type === 'team') return workspace.teams.find(team => team.id === scope.id)?.name ?? t('Hội');
+    if (scope.type === 'team') return workspace.teams.find(team => team.id === scope.id)?.name ?? t('Kênh');
     return workspace.workers.find(worker => worker.id === scope.id)?.name ?? t('Tí');
   };
   if (!memories.length) return <p className="muted memory-empty">{t('Chưa ghi nhớ gì từ các cuộc trò chuyện.')}</p>;

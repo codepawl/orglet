@@ -165,7 +165,7 @@ describe('the remember tool', () => {
     const worker = await chatWorker();
     replies.push(remember('Everyone in the crew writes in Vietnamese.', 'team'), remember('The user writes in Vietnamese.', 'workspace'), answer());
     await chat(worker.id, 'Note my language');
-    expect(toolResults()[0]).toEqual({ error: 'Lượt chạy này không thuộc hội nào; ghi nhớ cho Tí hoặc toàn workspace.' });
+    expect(toolResults()[0]).toEqual({ error: 'Lượt chạy này không thuộc kênh nào; ghi nhớ cho Tí hoặc toàn workspace.' });
     expect(memories()).toEqual([expect.objectContaining({ scope: { type: 'workspace' }, status: 'approved' })]);
 
     const other = await core.command('saveWorker', { ...worker, id: undefined, name: 'Other' }) as Worker;
@@ -369,7 +369,7 @@ describe('one-shot harness answers', () => {
     expect(requests[0].prompt).toContain('put what you would remember in memories');
     expect(harnessMemories().map(item => [item.content, item.scope.type, item.status])).toEqual([['Thích trả lời ngắn.', 'worker', 'approved'], ['Viết tiếng Việt.', 'workspace', 'approved']]);
     expect(harnessStore.detail(taskId).artifacts[0].report.limitations).toEqual([
-      'Ghi nhớ thứ 3 bị từ chối: Lượt chạy này không thuộc hội nào; ghi nhớ cho Tí hoặc toàn workspace.',
+      'Ghi nhớ thứ 3 bị từ chối: Lượt chạy này không thuộc kênh nào; ghi nhớ cho Tí hoặc toàn workspace.',
       'Ghi nhớ thứ 4 bị từ chối: Mỗi ghi nhớ cần text và scope.',
     ]);
 

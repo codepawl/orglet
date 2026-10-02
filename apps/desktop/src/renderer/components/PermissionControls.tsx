@@ -225,7 +225,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
     </div>}
     {/* Proposing is not doing: the switch lets the worker store a card, and the card still waits for Apply (COD-199). */}
     <SwitchField checked={state.propose} disabled={disabled} onChange={enabled => onCapability('app.propose', enabled)}
-      description={t('Đề xuất Tí, hội, skill và cài đặt mới.')}>
+      description={t('Đề xuất Tí, kênh, skill và cài đặt mới.')}>
       <Lightbulb size={15} aria-hidden="true" />{t('Đề xuất thay đổi trong app')}
     </SwitchField>
     {extra}

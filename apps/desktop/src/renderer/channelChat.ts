@@ -46,10 +46,9 @@ export function channelFromRecipient(recipient: string): string | undefined {
   return recipient.slice(RECIPIENT_PREFIX.length) || undefined;
 }
 
-/** Orglets or crews picked in the sidebar start a new channel with them as its members; one orglet is a DM already. */
+/** Orglets picked in the sidebar start a new channel with them as its members; one orglet is a DM already. */
 export function channelMembersFromSelection(selection: SidebarSelection): ChannelMember[] | undefined {
   if (selection.section === 'workers' && selection.ids.length >= 2) return selection.ids.map(id => ({ kind: 'orglet', id }));
-  if (selection.section === 'teams' && selection.ids.length >= 1) return selection.ids.map(id => ({ kind: 'crew', id }));
   return undefined;
 }
 

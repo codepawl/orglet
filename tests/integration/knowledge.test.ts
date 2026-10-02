@@ -215,7 +215,7 @@ it('backs up knowledge with frozen run context, rejects dangling scope and carri
   item.scope.id = crypto.randomUUID();
   envelope.payload.knowledgeRevisions.filter((row: { id: string }) => row.id === item.id).forEach((row: { data: { scope: { id: string } } }) => { row.data.scope.id = item.scope.id; });
   envelope.checksum = (await import('node:crypto')).createHash('sha256').update(JSON.stringify(envelope.payload)).digest('hex');
-  expect(() => core.backups.preview(JSON.stringify(envelope))).toThrow('hội/Tí');
+  expect(() => core.backups.preview(JSON.stringify(envelope))).toThrow('kênh/Tí');
 
   const template = JSON.parse(core.templates.export(team.id));
   expect(template.knowledge).toEqual([{ title: 'Team note', content: 'Team specific review note.', tags: ['team'], pinned: true }]);

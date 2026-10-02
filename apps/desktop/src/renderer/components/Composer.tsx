@@ -377,7 +377,9 @@ export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean };
  * would; the next message runs on it. `workers` answer in the chat, and `runs` are the chat's (none in an empty chat),
  * for the context window of the model each orglet will use next.
  */
-export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, openSettings }: {
+export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, openSettings, dock }: {
+  /** The bar whose island is read: the main chat's, or a side thread's in the right panel (COD-365). */
+  dock?: string;
   workers: readonly ContextWorker[];
   harnesses: readonly HarnessInfo[] | undefined;
   running: boolean;
@@ -387,7 +389,7 @@ export function usePlanUsageBar({ workers, harnesses, running, runs = [], action
 }): UsageFoot {
   const providers = workers.map(worker => worker.provider);
   const { view: usage, loading } = useComposerUsage(providers, harnesses, running);
-  const island = useDockedIsland();
+  const island = useDockedIsland(dock);
   const listed = [...new Set(providers.filter(provider => provider !== 'demo'))];
   const lists = useCachedEach(modelLists, listed);
   const context = chatContextFor(workers, Object.fromEntries(listed.map(provider => [provider, lists[provider]?.models])), runs);
@@ -421,7 +423,7 @@ export function ComposerFoot({ children }: { children?: ReactNode }) {
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
  * across restarts (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
-export function FollowUpComposer({ detail, workspace, harnesses, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint, modePicker }: { detail: TaskDetail; workspace: Workspace; /** Which account each harness runs, for the plan usage by the bar (COD-326). */ harnesses?: readonly HarnessInfo[]; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls; /** The approval mode beside the add button (COD-367, `ChatModePicker`). */ modePicker?: ReactNode }) {
+export function FollowUpComposer({ detail, workspace, harnesses, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint, modePicker, islandDock }: { detail: TaskDetail; /** Where this bar's island is docked: the main chat's bar by default, a side thread's in the right panel (COD-365). */ islandDock?: string; workspace: Workspace; /** Which account each harness runs, for the plan usage by the bar (COD-326). */ harnesses?: readonly HarnessInfo[]; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls; /** The approval mode beside the add button (COD-367, `ChatModePicker`). */ modePicker?: ReactNode }) {
   const draftKey = taskDraftKey(detail.task.id);
   const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
@@ -450,7 +452,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0 || Boolean(readOnly);
-  const planUsage = usePlanUsageBar({ workers, harnesses, running: busy, runs: detail.runs, action, openSettings: () => openSettings('harness') });
+  const planUsage = usePlanUsageBar({ workers, harnesses, running: busy, runs: detail.runs, action, openSettings: () => openSettings('harness'), dock: islandDock });
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
   /**
@@ -551,7 +553,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   const sendOptions = sideThreads ? <RowMenu className="composer-send-options" label={t('Tùy chọn gửi')} icon={ChevronUp} disabled={!text.trim() || blocked || submitting}
     items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
   return <div className="thread-composer">
-    <IslandDock />
+    <IslandDock dock={islandDock} />
     <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} usage={planUsage.ring} label={t('Tin nhắn')} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(readOnly)} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}

@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-knowledge-'));
@@ -15,7 +15,8 @@ try {
   const page = await app.firstWindow();
   await useVietnamese(page);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Research Review', exact: true }).first().waitFor();
+  await openChannels(page);
+  await page.getByRole('button', { name: '#Research Review', exact: true }).first().waitFor();
   const team = (await workspace(page)).teams.find(item => item.name === 'Research Review');
 
   // Author a team note through the library UI.
@@ -25,7 +26,7 @@ try {
   await page.getByRole('textbox', { name: 'Tiêu đề', exact: true }).fill('Evidence limits');
   await page.getByRole('textbox', { name: 'Nội dung', exact: true }).fill('State which claims lack a cited source before summarizing.');
   await page.getByRole('textbox', { name: 'Thẻ', exact: true }).fill('evidence, review');
-  await page.getByRole('combobox', { name: 'Phạm vi', exact: true }).click(); await page.getByRole('option', { name: team.name, exact: true }).click();
+  await page.getByRole('combobox', { name: 'Phạm vi', exact: true }).click(); await page.getByRole('option', { name: `#${team.name}`, exact: true }).click();
   await page.getByRole('switch', { name: /Luôn nạp/ }).click();
   await page.getByRole('button', { name: 'Lưu knowledge', exact: true }).click();
   // Opened from the Library, the editor leads back there on its own; the sidebar assertions below need it closed.
@@ -44,7 +45,7 @@ try {
   await page.getByRole('button', { name: /Thư viện/ }).click();
   await page.getByRole('region', { name: 'Chờ duyệt' }).getByRole('button', { name: /Evidence limits/ }).click();
   // The header names where the note came from and still waits for review (COD-203).
-  await page.locator('.knowledge-author').filter({ hasText: 'Template hội' }).filter({ hasText: 'nhập từ template · v1' }).filter({ hasText: 'Chờ duyệt' }).waitFor();
+  await page.locator('.knowledge-author').filter({ hasText: 'Template kênh' }).filter({ hasText: 'nhập từ template · v1' }).filter({ hasText: 'Chờ duyệt' }).waitFor();
   await page.getByRole('button', { name: 'Duyệt', exact: true }).click();
   await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).waitFor();
   await page.keyboard.press('Escape');

@@ -9,19 +9,21 @@ import { Skeleton, SkeletonGroup, SkeletonText } from '../../packages/orglet-ui/
 const kitCss = readFileSync(join(__dirname, '../../packages/orglet-ui/src/components/Skeleton.css'), 'utf8');
 const appCss = readFileSync(join(__dirname, '../../apps/desktop/src/renderer/styles.css'), 'utf8');
 
-it('draws the whole shell before any workspace exists: sidebar, sections, footer, main column and prompt bar', () => {
+it('draws the whole shell before any workspace exists: area rail, sidebar, user panel, main column and prompt bar', () => {
   const html = renderToStaticMarkup(createElement(Startup, { sidebarWidth: 300 }));
   expect(html).toContain('class="app startup"');
   expect(html).toContain('--sidebar-width:300px');
   expect(html).toContain('<aside class="sidebar"');
   expect(html).toContain('<main class="main-pane"');
-  // The two sections are there with the shape of their rows, and their names, not an empty list.
-  expect(html).toContain('Crews');
-  expect(html).toContain('Orglets');
-  expect(html.match(/class="row-shape"/g)).toHaveLength(4);
+  // The direct messages are there with the shape of their rows, and their name, not an empty list.
+  expect(html).toContain('DMs');
+  expect(html.match(/class="row-shape"/g)).toHaveLength(3);
   expect(html).toContain('Opening the orglet list…');
-  // The footer keeps its four entries in place; the prompt bar is there and asleep until the workspace lands.
-  for (const label of ['Notifications', 'Schedules', 'Library', 'Settings']) expect(html).toContain(label);
+  // The area rail keeps its places with disabled tiles and the user panel its Settings button (COD-366); the prompt bar
+  // is there and asleep until the workspace lands.
+  expect(html).toContain('class="area-rail"');
+  expect(html).toContain('class="user-panel"');
+  for (const label of ['Friends and direct messages', 'Channels', 'Activity', 'Library', 'Schedules', 'Settings']) expect(html).toContain(label);
   expect(html).toContain('<form class="composer"');
   expect(html).toMatch(/<textarea[^>]*disabled/);
   // The face does the waiting where the chat's face will be, and the copy says what is happening.

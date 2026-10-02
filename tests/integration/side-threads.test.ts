@@ -237,7 +237,7 @@ describe('side threads', () => {
     const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
     const crewTaskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Crew work', ...scope }) as string;
     await settled(crewTaskId);
-    await expect(core.command('startSideThread', { taskId: crewTaskId, brief: 'Side', ...scope })).rejects.toThrow('hội');
+    await expect(core.command('startSideThread', { taskId: crewTaskId, brief: 'Side', ...scope })).rejects.toThrow('Kênh chưa có chat phụ');
 
     const { id: _id, ...draft } = worker;
     const second = await core.command('saveWorker', { ...draft, name: 'Second' }) as Worker;

@@ -122,7 +122,7 @@ function dollars(micros: number) {
 /** What the chat says when the CLI stopped at the task's cap: the amount, and where that cap lives for this chat. */
 function harnessBudgetMessage(run: Run, budgetMicros: number) {
   const name = harnessNames[run.snapshot.worker.provider as HarnessId] ?? providerNames[run.snapshot.worker.provider] ?? run.snapshot.worker.provider;
-  if (run.snapshot.team) return `${name} dừng vì chạm giới hạn mỗi task của chat này (${dollars(budgetMicros)}). Nâng Giới hạn mỗi task trong Thiết lập hội → Giới hạn & ca, rồi thử lại.`;
+  if (run.snapshot.team) return `${name} dừng vì chạm giới hạn mỗi task của chat này (${dollars(budgetMicros)}). Nâng Giới hạn mỗi task trong Thiết lập kênh → Giới hạn & ca, rồi thử lại.`;
   return `${name} dừng vì chạm giới hạn mỗi task của chat này (${dollars(budgetMicros)}). Nâng Giới hạn mỗi task trong Thiết lập Tí, rồi thử lại.`;
 }
 
@@ -236,7 +236,7 @@ function memoryEventLine(result: RememberResult, workerName: string) {
   if (result.status === 'proposed') return 'Đã ghi một ghi nhớ từ nội dung chưa được kiểm chứng; chờ bạn duyệt trong Thư viện.';
   if (result.merged) return 'Đã gộp vào một ghi nhớ đã có.';
   if (result.scope === 'workspace') return 'Đã ghi nhớ một điều cho mọi Tí.';
-  if (result.scope === 'team') return 'Đã ghi nhớ một điều cho cả hội.';
+  if (result.scope === 'team') return 'Đã ghi nhớ một điều cho cả kênh.';
   if (result.scope === 'worker') return `Đã ghi nhớ một điều cho riêng ${workerName}.`;
   return 'Đã ghi nhớ một điều cho các cuộc trò chuyện sau.';
 }
@@ -948,7 +948,7 @@ export class Runner {
         signal.throwIfAborted();
         if (control.paused || !this.canDispatch(task)) throw new Paused();
         if (run.stage === 'plan') {
-          if (!run.snapshot.team) throw new Error('Phân việc cần snapshot hội.');
+          if (!run.snapshot.team) throw new Error('Phân việc cần snapshot kênh.');
           this.event(run.id, 'Demo: đang phân việc, không gọi model.');
           this.completePlan(run, defaultTeamPlan(run.snapshot.team, input.brief, run.snapshot.team.memberIds.map(id => this.store.get<Worker>('workers', id)), ownWords(input)));
           return;
@@ -1644,7 +1644,7 @@ export class Runner {
           continue;
         }
         if (call.name === 'reply') {
-          if (needsReport(run)) throw new Error('Hội có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
+          if (needsReport(run)) throw new Error('Kênh có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));
           for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
           const answer: HeldAnswer = { report: { ...chatReport(message), limitations: this.crewLimitations(run, options) },
@@ -2323,7 +2323,7 @@ export class Runner {
   /** Saves orchestrator routing on the plan run. No user-facing artifact — members and synthesis remain the reports. */
   private completePlan(run: Run, plan: unknown) {
     const team = run.snapshot.team;
-    if (!team) throw new Error('Phân việc cần snapshot hội.');
+    if (!team) throw new Error('Phân việc cần snapshot kênh.');
     const { plan: parsed, folded } = foldCombiningAssignment(team, assertTeamPlan(team, plan));
     this.store.transaction(() => {
       this.store.put('runs', { ...run, status: 'completed', error: null, snapshot: { ...run.snapshot, plan: parsed } }, { column: 'task_id', value: run.taskId });

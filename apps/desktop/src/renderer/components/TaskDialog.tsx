@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { SlidersHorizontal, Type, UserRound, Users, UsersRound, Wallet } from 'lucide-react';
+import { Hash, SlidersHorizontal, Type, UserRound, UsersRound, Wallet } from 'lucide-react';
+import { channelLabel } from '../../shared/channels';
 import type { Task, Workspace } from '../../shared/contracts';
 import { FieldLabel, MoneyInput } from './ui';
 import { Select } from './Select';
@@ -61,7 +62,8 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={mode} onChange={value => { setMode(value); if (invalid === 'assignees') clearError(); }} invalid={invalid === 'assignees'} flash={flash} options={[
         { value: 'all', label: t('Toàn bộ Tí'), detail: workspace.workers.length === 1 ? t('1 Tí, gồm cả người thêm sau') : t('{0} Tí, gồm cả người thêm sau', [workspace.workers.length]), icon: <UsersRound size={16} /> },
         { value: 'workers', label: t('Chọn Tí'), detail: t('Một hoặc nhiều người'), icon: <UserRound size={16} /> },
-        ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })),
+        // A crew's chat from before crews became channels keeps its crew; no other chat can be given one (COD-369).
+        ...workspace.teams.filter(team => team.id === task.teamId).map(team => ({ value: `team:${team.id}`, label: channelLabel(team.name), group: t('Kênh'), icon: <Hash size={16} /> })),
       ]} />
       {mode === 'workers' && <fieldset className="assignee-list"><legend className="visually-hidden">{t('Chọn Tí')}</legend>
         {workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} checked={chosen.includes(worker.id)} onChange={event => { setChosen(current => event.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'assignees') clearError(); }} {...fieldInvalid(invalid === 'assignees', flash)}>

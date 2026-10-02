@@ -8,17 +8,19 @@ import { holdForSmile, swapScreen } from '../../apps/desktop/src/renderer/screen
  * swap, or the main pane would stay its own stacking context.
  */
 
-type FakeTransition = { finished: Promise<void> };
+/** The parts of a ViewTransition the swap uses: eady rejects when the browser skips the transition. */
+type FakeTransition = { ready: Promise<void>; finished: Promise<void> };
 
 function setReducedMotion(reduced: boolean) {
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: reduced && query.includes('reduce'), media: query }));
 }
 
-function installViewTransitions() {
+function installViewTransitions({ skipped = false }: { skipped?: boolean } = {}) {
   let finish: () => void = () => undefined;
   const start = vi.fn((callback: () => void): FakeTransition => {
     callback();
-    return { finished: new Promise<void>(resolve => { finish = resolve; }) };
+    const ready = skipped ? Promise.reject(new DOMException('Transition was skipped', 'AbortError')) : Promise.resolve();
+    return { ready, finished: new Promise<void>(resolve => { finish = resolve; }) };
   });
   Object.defineProperty(document, 'startViewTransition', { value: start, configurable: true });
   return { start, finish: () => finish() };
@@ -44,6 +46,23 @@ it('runs the swap as a view transition and drops the naming class once it has fi
   expect(document.documentElement.classList.contains('screen-swap')).toBe(false);
 });
 
+it('treats a skipped transition as done, not as an error', async () => {
+  setReducedMotion(false);
+  const unhandled = vi.fn();
+  process.on('unhandledRejection', unhandled);
+  try {
+    const transitions = installViewTransitions({ skipped: true });
+    const update = vi.fn();
+    swapScreen(update);
+    expect(update).toHaveBeenCalledTimes(1);
+    transitions.finish();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(document.documentElement.classList.contains('screen-swap')).toBe(false);
+  } finally {
+    process.off('unhandledRejection', unhandled);
+  }
+});
 it('cuts straight to the new screen under reduced motion', () => {
   setReducedMotion(true);
   const transitions = installViewTransitions();

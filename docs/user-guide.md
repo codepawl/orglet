@@ -1,6 +1,6 @@
 # User guide
 
-Orglet is a desktop app where you keep a small team of AI workers, called **orglets**, and give them work in a normal chat. Orglets can be grouped into **crews**. Chats, orglets and files stay on this computer, with no Orglet server in between; a free CodePawl account is optional and syncs nothing yet ([CodePawl account](account.md)), and each orglet runs on a connection you choose, such as the Claude Code or Codex account you are already signed in to, an API key, or a local Ollama.
+Orglet is a desktop app where you keep a small team of AI workers, called **orglets**, and give them work in a normal chat. Orglets work together in **channels**. Chats, orglets and files stay on this computer, with no Orglet server in between; a free CodePawl account is optional and syncs nothing yet ([CodePawl account](account.md)), and each orglet runs on a connection you choose, such as the Claude Code or Codex account you are already signed in to, an API key, or a local Ollama.
 
 This page is the front door. It covers what Orglet is, how to install it, and your first chat, then points at one short page per part of the app.
 
@@ -10,7 +10,7 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 
 | Page | What it covers |
 |---|---|
-| [Orglets and crews](orglets-and-crews.md) | Creating an orglet, crews and how a crew turn runs, group chats, `@` tags, replies, reactions |
+| [Orglets and channels](orglets-and-crews.md) | Creating an orglet and a channel, how a lead splits the work, `@` tags, replies, reactions |
 | [Connections](connections.md) | Claude Code, Codex, Cursor Agent and Gemini CLI on this computer; API keys; Ollama; Demo; model IDs; cost limits |
 | [In a chat](chat-guide.md) | Attaching files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, notifications |
 | [Permissions and learning](permissions-and-learning.md) | The permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
@@ -22,7 +22,7 @@ The step-by-step first walk-through with screenshots is [Getting started](gettin
 
 ## What Orglet is
 
-- **A team with roles.** Each orglet has a name, a face, instructions and a skill. You talk to one orglet, a few of them, or a crew.
+- **A team with roles.** Each orglet has a name, a face, instructions and a skill. You talk to one orglet, or to a few of them in a channel.
 - **Your existing AI plan.** An orglet can run through Claude Code, Codex, Cursor Agent or Gemini CLI using the account you are already logged in to. An API key is optional.
 - **Private by default.** No account needed, no server. The optional CodePawl account syncs nothing yet. An orglet reads only the files you attach to that chat or the folder you grant it.
 - **Repeat work runs itself.** Schedules send the same request daily, on weekdays, weekly or every few hours while the app is open.
@@ -66,12 +66,12 @@ A build run from source does not update itself. How to run the checks: [CONTRIBU
 3. Type a short message and send it. Demo answers with a labelled sample reply; it calls no model and reads no files.
 4. To get real answers, connect a model: [Connections](connections.md). Then open the orglet's settings and set **Model** to that connection.
 
-Every orglet and every crew has **one live chat**. A new message is a turn in that chat, not a new item in the sidebar. To start over, open **⋯** next to **Details** and choose **Archive**; search (Ctrl+K) still finds the old chat.
+Every orglet and every channel has **one live chat**. A new message is a turn in that chat, not a new item in the sidebar. To start over, open **⋯** next to **Details** and choose **Archive**; search (Ctrl+K) still finds the old chat.
 
 ## The window
 
-- The **rail** on the left shows each crew and orglet as a face; click one to open that chat. **Open sidebar** at its top switches to the full **sidebar**, which lists **Orglets** and **Crews** by name. **+** next to a section creates one; the pencil turns on select mode for archiving, deleting or starting a group chat. Orglet remembers which of the two you use. In a window narrower than 780 px the rail stays and the sidebar opens over the chat.
-- **Open**, at the top of the sidebar (and as faces under the roster on the rail), appears when you open a chat that has no row of its own, such as an older schedule run found through search, so every chat is listed once. **Ctrl+Tab** goes back to the chat you used before. [Open chats and the rail](chat-guide.md#open-chats-and-the-rail).
+- The **area rail** at the far left picks what the sidebar lists: **Home** (your orglets as friends, with a DM each), **Channels** (grouped in categories), **Activity** (what needs you, what runs, what is done, what you saved), then **Library** and **Schedules**, and one **+** that creates an orglet, a channel or a schedule. **Settings** and a few words on what Orglet is doing sit in your panel at the bottom left. The pencil next to a section turns on select mode for archiving, deleting or starting a channel. In a window narrower than 780 px the sidebar opens over the chat.
+- **Open**, at the top of Home in the sidebar, appears when you open a chat that has no row of its own, such as an older schedule run found through search, so every chat is listed once. **Ctrl+Tab** goes back to the chat you used before. [The area rail and the sidebar](chat-guide.md#the-area-rail-and-the-sidebar).
 - The **tabs** beside a chat's name show its **Chat**, **Files**, **Changes**, **Schedules** and **Memory**, each only when the chat has something there.
 - The **main column** is the conversation. **Details** opens the panel with the chat's permissions, cost, internal jobs and recovery controls.
 - The **footer** has **Notifications**, **Schedules**, **Library** and **Settings**. A dot on a button means something waits for you there.

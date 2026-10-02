@@ -9,7 +9,7 @@ Orglet is a desktop app. You keep a few AI workers, each with a name and a role,
 
 This page is the first walk-through. The [user guide](user-guide.md) is the map of everything else, one short page per part of the app. How teams work in detail: [team-chat.md](team-chat.md). How to run tests and connect providers in depth: [technical-guide.md](technical-guide.md).
 
-In the app, workers are called **orglets** and teams are called **crews**. This page uses both words.
+In the app, workers are called **orglets** and a team chat is a **channel**. Older pages and builds called channels crews.
 
 Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
 
@@ -53,13 +53,13 @@ The Researcher worker starts on **Demo**, so you can try the app without any acc
 
 On first launch the window is US English. A **Researcher** worker is already there, on **Demo**. The app uses your system's usual interface font.
 
-- The **rail** on the left shows each crew and orglet as a face. There is no task list. Click a face to open that chat; hover it for the name. **Open sidebar** at the top switches to the full **sidebar**, which lists them by name.
+- The **rail** on the left shows each orglet as a face, with your channels behind a **#** button. There is no task list. Click a face to open that chat; hover it for the name. **Open sidebar** at the top switches to the full **sidebar**, which lists them by name.
 - Once you open a second chat, the chats you have open sit as **tabs** across the top.
 - The **main column** is the conversation, headed **Chatting with …**. The message box sits at the bottom.
 - The foot of the rail has **Notifications**, **Running**, **Schedules**, **Library** and **Settings**.
 
 <p align="center">
-  <img src="images/new-task.png" alt="Empty Researcher chat. The rail on the left shows orglets and crews as faces, not tasks." width="720">
+  <img src="images/new-task.png" alt="Empty Researcher chat. The rail on the left shows orglets as faces, not tasks." width="720">
 </p>
 
 To change language: **Settings** → **General** → **Language** (English (US), English (UK), or Tiếng Việt). To switch light or dark: **Settings** → **General** → **Appearance**.
@@ -79,7 +79,7 @@ You get a labelled sample reply. Demo does not call a model and does not read fi
 
 Check the **Model** and **Model ID** fields and choose **Save orglet**. The chat header shows the new connection at once.
 
-The orglet's settings are also in the chat's **⋯** menu, as **Orglet settings** (**Crew settings** in a crew's chat). **Chat settings** in the same menu renames the chat, changes who answers it and sets its cost limit.
+The orglet's settings are also in the chat's **⋯** menu, as **Orglet settings** (**Channel settings** in a channel). **Chat settings** in the same menu renames the chat, changes who answers it and sets its cost limit.
 
 To start a new conversation later, open **⋯** next to **Details** and choose **Archive**. The next message on that worker starts a fresh chat. Search still finds the old one.
 
@@ -139,4 +139,4 @@ Demo cannot analyze files. Switch **Model** off Demo first. Reports can open lik
 
 ## What this page does not cover
 
-Everything else is one short page each in the [user guide](user-guide.md): crews and group chats, connections, permissions and the working folder, memory and knowledge, schedules, notifications, settings, backup, and troubleshooting. Product fit and the **Not now** list stay in [product.md](product.md).
+Everything else is one short page each in the [user guide](user-guide.md): channels, connections, permissions and the working folder, memory and knowledge, schedules, notifications, settings, backup, and troubleshooting. Product fit and the **Not now** list stay in [product.md](product.md).

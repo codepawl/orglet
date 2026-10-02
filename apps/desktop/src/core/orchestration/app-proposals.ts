@@ -61,7 +61,7 @@ type RefKind = Extract<AppProposalKind, 'orglet' | 'crew' | 'skill'>;
  */
 function missingRefMessage(kind: RefKind, ref: string) {
   if (kind === 'orglet') return `Không có Tí nào được đề xuất với ref "${ref}" trong lượt này.`;
-  if (kind === 'crew') return `Không có hội nào được đề xuất với ref "${ref}" trong lượt này.`;
+  if (kind === 'crew') return `Không có kênh nào được đề xuất với ref "${ref}" trong lượt này.`;
   return `Không có skill nào được đề xuất với ref "${ref}" trong lượt này.`;
 }
 
@@ -230,7 +230,7 @@ export class AppProposals {
         const members: MemberReference[] | undefined = memberIds.length || memberRefs.length
           ? [...memberIds.map(memberId => ({ id: memberId })), ...memberRefs.map(ref => ({ ref }))] : undefined;
         const memberNames = members?.map(member => 'id' in member ? this.liveWorker(member.id).name : `ref:${refOf(member.ref, 'orglet')!.ref}`);
-        if (members && members.length > MAX_CREW_MEMBERS) throw new ProposalError(`Một hội có tối đa ${MAX_CREW_MEMBERS} Tí.`);
+        if (members && members.length > MAX_CREW_MEMBERS) throw new ProposalError(`Khi Tí trưởng chia việc, kênh có tối đa ${MAX_CREW_MEMBERS} Tí.`);
         const leadId = given(args.leadId);
         const leadRef = refOf(args.leadRef, 'orglet');
         const lead: MemberReference | undefined = leadId ? { id: leadId } : leadRef ? { ref: leadRef.ref } : undefined;
@@ -244,14 +244,14 @@ export class AppProposals {
           const current = this.liveTeam(targetId);
           const currentView = { ...teamFields(current), memberIds: current.memberIds.map(memberId => this.workerName(memberId)), synthesizerId: this.workerName(current.synthesizerId) };
           const changes = editChanges(currentView, { ...chosen, memberIds: memberNames, synthesizerId: leadName });
-          if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở hội này.');
+          if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở kênh này.');
           const raised = (chosen.monthlyBudgetMicros !== undefined && chosen.monthlyBudgetMicros > current.monthlyBudgetMicros)
             || (chosen.taskBudgetMicros !== undefined && chosen.taskBudgetMicros > (current.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS));
           const payload: CrewPayload = { fields: chosen, ...(members ? { members } : {}), ...(lead ? { lead } : {}) };
           return { kind: 'crew', action: 'edit', ref: given(args.ref), title: chosen.name ?? current.name, changes, payload: { ...payload, targetId }, hold: raised ? 'budget' : null };
         }
-        if (!chosen.name || !chosen.instructions) throw new ProposalError('Tạo hội mới cần name và instructions.');
-        if (!members) throw new ProposalError('Tạo hội mới cần ít nhất một thành viên (memberIds hoặc memberRefs).');
+        if (!chosen.name || !chosen.instructions) throw new ProposalError('Tạo kênh mới cần name và instructions.');
+        if (!members) throw new ProposalError('Tạo kênh mới cần ít nhất một thành viên (memberIds hoặc memberRefs).');
         const fields: CrewPayload['fields'] = { ...chosen, workflow: chosen.workflow ?? 'parallel', monthlyBudgetMicros: chosen.monthlyBudgetMicros ?? DEFAULT_TEAM_MONTHLY_BUDGET_MICROS };
         const changes = creationChanges({ ...fields, memberIds: memberNames, synthesizerId: leadName ?? memberNames![0] });
         const raised = (chosen.monthlyBudgetMicros !== undefined && chosen.monthlyBudgetMicros > DEFAULT_TEAM_MONTHLY_BUDGET_MICROS)
@@ -263,7 +263,7 @@ export class AppProposals {
         const args = ProposeCrewTemplate.partial().parse(rawArguments);
         const teamId = given(args.teamId);
         const teamRef = refOf(args.teamRef, 'crew');
-        if (!teamId && !teamRef) throw new ProposalError('Cần teamId của hội có sẵn hoặc teamRef của hội vừa đề xuất.');
+        if (!teamId && !teamRef) throw new ProposalError('Cần teamId của kênh có sẵn hoặc teamRef của kênh vừa đề xuất.');
         const title = teamId ? this.liveTeam(teamId).name : teamRef!.title;
         const payload: TemplatePayload = { team: teamId ? { id: teamId } : { ref: teamRef!.ref } };
         return { kind: 'crew_template', action: 'export', title, changes: [{ field: 'team', before: null, after: title }], payload, hold: 'template' };
@@ -288,7 +288,7 @@ export class AppProposals {
         const workerRef = refOf(args.workerRef, 'orglet');
         const teamId = given(args.teamId);
         const teamRef = refOf(args.teamRef, 'crew');
-        if ([workerId, workerRef, teamId, teamRef].filter(Boolean).length > 1) throw new ProposalError('Một lịch chạy cho đúng một Tí hoặc một hội.');
+        if ([workerId, workerRef, teamId, teamRef].filter(Boolean).length > 1) throw new ProposalError('Một lịch chạy cho đúng một Tí hoặc một kênh.');
         const target: SchedulePayload['fields']['target'] = workerId ? { worker: { id: workerId } } : workerRef ? { worker: { ref: workerRef.ref } }
           : teamId ? { team: { id: teamId } } : teamRef ? { team: { ref: teamRef.ref } } : undefined;
         const targetName = workerId ? this.liveWorker(workerId).name : workerRef ? `ref:${workerRef.ref}` : teamId ? this.liveTeam(teamId).name : teamRef ? `ref:${teamRef.ref}` : undefined;
@@ -530,7 +530,7 @@ export class AppProposals {
 
   private liveTeam(teamId: string): Team {
     const team = this.store.workspace().teams.find(candidate => candidate.id === teamId);
-    if (!team) throw new ProposalError(`Không có hội nào với id ${teamId} đang hoạt động.`);
+    if (!team) throw new ProposalError(`Không có kênh nào với id ${teamId} đang hoạt động.`);
     return team;
   }
 
