@@ -60,6 +60,26 @@ it('serves public metadata and immutable hashed orglet and crew bodies; mutation
   expect((await marketWorker.fetch(new Request('https://market.orglet.codepawl.com/v1/listings/missing/versions/1'))).status).toBe(404);
 });
 
+it.each(['GET', 'HEAD'])('revalidates immutable bodies with weak, listed and wildcard validators for %s', async method => {
+  const catalogResponse = await marketWorker.fetch(new Request('https://market.orglet.codepawl.com/v1/catalog'));
+  const catalog = await catalogResponse.json() as { listings: MarketListing[] };
+  const listing = catalog.listings[0];
+  const url = `https://market.orglet.codepawl.com/v1/listings/${listing.listingId}/versions/${listing.version}`;
+  const validators: [string, number][] = [
+    [`W/"${listing.sha256}"`, 304],
+    [`"other", W/"${listing.sha256}"`, 304],
+    [` "${listing.sha256}" , "other" `, 304],
+    ['*', 304],
+    ['W/"other"', 200],
+  ];
+  for (const [validator, status] of validators) {
+    const response = await marketWorker.fetch(new Request(url, { method, headers: { 'If-None-Match': validator } }));
+    expect(response.status).toBe(status);
+    expect(response.headers.get('etag')).toBe(`"${listing.sha256}"`);
+    if (status === 304 || method === 'HEAD') expect(await response.text()).toBe('');
+  }
+});
+
 it('opens from the bundled catalog and reports failed refresh honestly; validates cached metadata', async () => {
   const market = new Marketplace(store, () => {}, { fetch: async () => { throw new Error('offline'); } });
   expect((await market.catalog()).source).toBe('bundled');
