@@ -18,7 +18,6 @@ it('defaults the shell to SF Pro, with the bundled font and the platform sans be
 it('lets a quiet sidebar row give its name the width the hidden menu used to reserve', () => {
   expect(css).toContain('.worker-row > [data-no-drag]:has(> .org-row-menu) { position:absolute;');
   expect(css).toContain('.worker-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .worker { padding-right:36px; }');
-  expect(css).toContain('.archived-row > .org-row-menu { position:absolute;');
 });
 
 it('gives an orglet\'s side threads the same air under them as over them (dogfood, 2026-09-26)', () => {

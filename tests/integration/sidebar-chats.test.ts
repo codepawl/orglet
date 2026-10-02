@@ -1,42 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { archivedChatKind, archivedChatSection, archivedChatsIn, hidesActive } from '../../apps/desktop/src/renderer/sidebarChats';
+import { archivedChatKind, hidesActive } from '../../apps/desktop/src/renderer/sidebarChats';
 
 type Row = { id: string; archivedAt?: string; deletedAt?: string; teamId?: string; assignees?: 'all' | string[]; routineId?: string; sideOf?: string; workerId: string };
 const chat = (id: string, fields: Partial<Row> = {}): Row => ({ id, workerId: 'scout', ...fields });
 
-describe('archived chats in the sidebar (COD-286)', () => {
-  const tasks: Row[] = [
-    chat('open-thread', { sideOf: 'main' }),
-    chat('old-thread', { sideOf: 'main', archivedAt: '2026-09-20T08:00:00Z' }),
-    chat('new-thread', { sideOf: 'main', archivedAt: '2026-09-25T08:00:00Z' }),
-    chat('main', { archivedAt: '2026-09-22T08:00:00Z' }),
-    chat('scout-run', { routineId: 'daily', archivedAt: '2026-09-21T08:00:00Z' }),
-    chat('crew-chat', { teamId: 'launch', archivedAt: '2026-09-23T08:00:00Z' }),
-    chat('crew-run', { teamId: 'launch', routineId: 'weekly', archivedAt: '2026-09-24T08:00:00Z' }),
-    chat('group', { assignees: ['scout', 'writer'], archivedAt: '2026-09-19T08:00:00Z' }),
-    chat('everyone', { assignees: 'all', archivedAt: '2026-09-18T08:00:00Z' }),
-    chat('deleted', { sideOf: 'main', archivedAt: '2026-09-26T08:00:00Z', deletedAt: '2026-09-26T09:00:00Z' }),
-  ];
-
-  it('lists each archived chat at the end of the section its row came from, most recently archived first', () => {
-    expect(archivedChatsIn(tasks, 'workers').map(item => [item.task.id, item.kind])).toEqual([
-      ['new-thread', 'side'], ['main', 'main'], ['scout-run', 'schedule'], ['old-thread', 'side'],
-    ]);
-    // A crew is a channel since COD-369, so its chats and runs wait with the channels.
-    expect(archivedChatsIn(tasks, 'teams')).toEqual([]);
-    expect(archivedChatsIn(tasks, 'channels').map(item => [item.task.id, item.kind])).toEqual([['crew-run', 'schedule'], ['crew-chat', 'channel'], ['group', 'channel'], ['everyone', 'channel']]);
+describe('what an archived chat was (COD-286)', () => {
+  it('names a main chat, a side thread, a schedule run and a channel', () => {
+    expect(archivedChatKind(chat('main'))).toBe('main');
+    expect(archivedChatKind(chat('thread', { sideOf: 'main' }))).toBe('side');
+    expect(archivedChatKind(chat('run', { routineId: 'daily' }))).toBe('schedule');
+    expect(archivedChatKind(chat('crew-chat', { teamId: 'launch' }))).toBe('channel');
+    expect(archivedChatKind(chat('group', { assignees: ['scout', 'writer'] }))).toBe('channel');
   });
 
-  it('never lists an open or a deleted chat', () => {
-    const listed = [...archivedChatsIn(tasks, 'workers'), ...archivedChatsIn(tasks, 'teams'), ...archivedChatsIn(tasks, 'channels')].map(item => item.task.id);
-    expect(listed).not.toContain('open-thread');
-    expect(listed).not.toContain('deleted');
-  });
-
-  it('keeps a schedule run of several orglets with the channels, named as a run', () => {
-    const run = chat('group-run', { assignees: ['scout', 'writer'], routineId: 'daily', archivedAt: '2026-09-25T08:00:00Z' });
-    expect(archivedChatSection(run)).toBe('channels');
-    expect(archivedChatKind(run)).toBe('schedule');
+  it('keeps a schedule run of several orglets named as a run', () => {
+    expect(archivedChatKind(chat('group-run', { assignees: ['scout', 'writer'], routineId: 'daily' }))).toBe('schedule');
   });
 });
 

@@ -20,7 +20,6 @@ import { FormatPreferences } from './components/FormatAction';
 import { assigneeLabel, taskWorkers, teamRoster } from './assignees';
 import { liveChatOf as mainChatOf, liveChatToAdopt, liveTeamTask, liveWorkerTask, newChatKey } from '../shared/live-task';
 import type { OpenChatTarget } from '../shared/cli';
-import { ArchivedList, ArchivedRow, type ArchiveState } from './components/SidebarTree';
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
@@ -62,7 +61,9 @@ import { RowMenu } from './components/RowMenu';
 import { Select } from './components/Select';
 import { setDisplayCurrency, formatMoney } from './components/money';
 import { Toaster, toast, type ToastAction } from './components/toast';
-import { archivedChatsIn, type ArchivedChat, type ArchivedChatSection } from './sidebarChats';
+import { archiveGroups } from './archive';
+import type { ArchivedChatKind } from './sidebarChats';
+import { type ArchiveSection, type ArchiveState } from './components/ArchiveSettings';
 import { removalBlocker } from '../shared/removal';
 import { watchRunProgress } from './runProgress';
 import { runningCount, waitingForPersonCount, waitsForPerson } from '../shared/running';
@@ -1392,7 +1393,7 @@ export function App() {
     }
     const done = ids.length;
     // Archiving is the step back from deleting, so it can be taken back at once, like a single row's archive.
-    const undo = verb === 'archive' ? { action: { label: t('Hoàn tác'), onSelect: () => restoreEntities(kind, ids) } } : {};
+    const undo = verb === 'archive' ? { action: { label: t('Hoàn tác'), onSelect: () => restoreEntities(kind, ids) }, archive: true } : {};
     toast(bulkDoneMessage(verb, done), 'success', undefined, undo);
   };
   const restoreEntities = (kind: 'worker' | 'team', ids: readonly string[]) => rowAction(async () => {
@@ -1446,7 +1447,7 @@ export function App() {
     await orglet.call('archiveTask', { id: taskId, archived });
     if (archived && wasOpen) { hideTaskLocally(taskId, 'archivedAt'); leaveClosedChat(closed); }
     if (archived) {
-      toast(t('Đã lưu trữ cuộc trò chuyện'), 'success', name, { action: { label: t('Hoàn tác'), onSelect: () => restoreTask(taskId, wasOpen) } });
+      toast(t('Đã lưu trữ cuộc trò chuyện'), 'success', name, { action: { label: t('Hoàn tác'), onSelect: () => restoreTask(taskId, wasOpen) }, archive: true });
       return;
     }
     toast(t('Đã khôi phục cuộc trò chuyện'), 'success', name, { action: { label: t('Mở'), onSelect: () => openTask(taskId) } });
@@ -1532,7 +1533,7 @@ export function App() {
   const archiveOrRestoreEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => rowAction(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('archiveEntity', { kind, id: entityId, archived });
-    const undo = archived ? { action: { label: t('Hoàn tác'), onSelect: () => archiveEntity(kind, entityId, false) } } : {};
+    const undo = archived ? { action: { label: t('Hoàn tác'), onSelect: () => archiveEntity(kind, entityId, false) }, archive: true } : {};
     toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục'), 'success', name, undo);
   }, entityName(kind, entityId), () => removalWayOut(kind, entityId));
   const deleteEntity = (kind: 'worker' | 'team', entityId: string) => {
@@ -1588,14 +1589,12 @@ export function App() {
   /** A channel where the lead splits the work lists its schedules' newest runs under it, as its crew did (COD-369). */
   const channelRowsUnder = (crewId: string | undefined, channelName: string) => crewId ? rowsUnder({ teamId: crewId }, channelLabel(channelName)) : {};
   /**
-   * The "Archived chats (N)" list at the end of a sidebar section (COD-286), beside the section's archived orglets or
-   * crews: each chat with the face of whose it was, its days left, Restore and Delete permanently.
+   * What Settings → Lưu trữ lists (COD-375): the archived orglets, channels and chats that used to hang off the sidebar,
+   * grouped by `archive.ts`. A chat shows the face of whose it was, a channel its `#`; Restore returns the item to the
+   * sidebar section it came from, and Delete permanently asks that kind's own question first.
    */
-  const archivedChatList = (section: ArchivedChatSection) => {
-    const chats = archivedChatsIn(workspace.tasks, section);
-    return <ArchivedList count={chats.length} label={t('Chat đã lưu trữ ({0})', [chats.length])}>{chats.map(archivedChatRow)}</ArchivedList>;
-  };
-  const archivedChatRow = ({ task, kind }: ArchivedChat<Task>) => {
+  const archivedChannelMark = <span className="archived-channel-mark" aria-hidden="true"><Hash size={14} /></span>;
+  const archivedChatRow = (task: Task, kind: ArchivedChatKind): ArchiveSection['rows'][number] => {
     const routine = kind === 'schedule' ? workspace.routines.find(item => item.id === task.routineId) : undefined;
     const name = routine?.name ?? taskName(task.id) ?? task.brief;
     const { ownerName, mark } = archivedChatOwner(task, name);
@@ -1607,26 +1606,42 @@ export function App() {
       : kind === 'schedule' ? t('Xóa lần chạy này? Không thể hoàn tác.')
       : kind === 'channel' ? t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.')
       : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.');
-    return <ArchivedRow key={task.id} name={name} mark={mark} archive={archiveState(task)!} title={`${name}\n${whose}`} deleteQuestion={deleteQuestion}
-      onRestore={() => archiveTask(task.id, false)} onDelete={() => deleteTask(task.id)} />;
+    return { key: `chat:${task.id}`, name, mark, whose, archive: archiveState(task)!, deleteQuestion, onRestore: () => archiveTask(task.id, false), onDelete: () => deleteTask(task.id) };
   };
-  /** Whose an archived chat was, named and drawn the way that orglet, crew or channel is in its own row. */
+  /** Whose an archived chat was, named and drawn the way that orglet or channel is in its own row. */
   const archivedChatOwner = (task: Task, chatName: string): { ownerName: string; mark: ReactNode } => {
     // A crew's chat from before crews became channels reads as that channel (COD-369).
     if (task.teamId && !task.channel) {
       const crew = [...workspace.teams, ...workspace.archivedTeams].find(item => item.id === task.teamId);
       const ownerName = channelLabel(crew?.name ?? task.teamSnapshot?.name ?? t('Kênh đã xóa'));
-      return { ownerName, mark: <span className="archived-channel-mark" aria-hidden="true"><Hash size={14} /></span> };
+      return { ownerName, mark: archivedChannelMark };
     }
     if (task.assignees || task.channel) {
       const members = taskWorkers(task, workspace);
       const ownerName = channelLabel(channelNameOf(task, members.map(member => member.name)));
-      return { ownerName, mark: <span className="archived-channel-mark" aria-hidden="true"><Hash size={14} /></span> };
+      return { ownerName, mark: archivedChannelMark };
     }
     const owner = [...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === task.workerId);
     if (!owner) return { ownerName: t('Tí đã xóa'), mark: <Avatar name={chatName} seed={task.id} size="xs" /> };
     return { ownerName: owner.name, mark: <Avatar name={owner.name} seed={owner.id} mascot={owner.avatar?.mascot} defaultMascot hint={owner.description} color={owner.avatar?.color} size="xs" /> };
   };
+  const archiveSections: ArchiveSection[] = archiveGroups({ workers: workspace.archivedWorkers, teams: workspace.archivedTeams, tasks: workspace.tasks }).map(group => ({
+    id: group.id,
+    rows: group.entries.map(entry => {
+      if (entry.type === 'worker') {
+        const { worker } = entry;
+        return { key: `worker:${worker.id}`, name: worker.name, archive: archiveState(worker)!,
+          mark: <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />,
+          onRestore: () => archiveEntity('worker', worker.id, false), onDelete: () => deleteEntity('worker', worker.id) };
+      }
+      if (entry.type === 'team') {
+        const { team } = entry;
+        return { key: `team:${team.id}`, name: channelLabel(team.name), archive: archiveState(team)!, mark: archivedChannelMark,
+          onRestore: () => archiveEntity('team', team.id, false), onDelete: () => deleteEntity('team', team.id) };
+      }
+      return archivedChatRow(entry.task, entry.kind);
+    }),
+  }));
 
   const workerStatus = (id: string): StatusMarkState => {
     const live = liveWorkerTask(activeTasks, id);
@@ -1989,7 +2004,7 @@ export function App() {
     ? <ActivityPage tab={activityTab} onTab={setActivityTab} running={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} saved={savedMessages}
       pendingSchedules={pendingRoutines} notesToReview={knowledgeToReview} onOpenChat={taskId => { setPanel(null); openTask(taskId); }} onOpenMessage={(taskId, messageId) => { setPanel(null); openChatAt(taskId, messageId); }}
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
-      onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
+      onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     : area === 'home' && friendsOpen
       ? <FriendsPage orglets={orderedWorkers} archived={workspace.archivedWorkers} working={workingIds} tab={friendsTab} onTab={setFriendsTab} busy={friendsBusy}
         onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
@@ -2044,8 +2059,6 @@ export function App() {
         {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
-        <ArchivedList count={workspace.archivedWorkers.length}>{workspace.archivedWorkers.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('worker', item.id, false)} onDelete={() => deleteEntity('worker', item.id)} />)}</ArchivedList>
-        {archivedChatList('workers')}
       </SidebarSection>
       </>}
       {area === 'channels' && <>
@@ -2056,9 +2069,6 @@ export function App() {
             action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [group.name])} title={t('Tạo kênh trong {0}', [group.name])} onClick={() => setChannelDraft({ category: group.name })}><Plus size={16} /></Button>}>
             {group.entries.map(renderChannelEntry)}
           </SidebarSection>)}
-        {/* A crew archived before crews became channels comes back as its channel when restored (COD-369). */}
-        <ArchivedList count={workspace.archivedTeams.length} label={t('Kênh đã lưu trữ ({0})', [workspace.archivedTeams.length])}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={channelLabel(item.name)} mark={<span className="archived-channel-mark" aria-hidden="true"><Hash size={14} /></span>} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
-        {archivedChatList('channels')}
       </>}
       {area === 'activity' && <nav className="sidebar-nav" aria-label={t('Hoạt động')}>
         {activityTabs.map(tab => <button key={tab} type="button" className={`sidebar-nav-item${activityTab === tab ? ' active' : ''}`} aria-current={activityTab === tab ? 'page' : undefined} onClick={() => setActivityTab(tab)}>
@@ -2223,6 +2233,6 @@ export function App() {
     <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} workspace={workspace} onOpenChat={openChatAt} onOpenOrglet={openWorker} onOpenCrew={openTeam} onDwellTask={dwellChat} />
     <ForwardPicker request={forwarding} options={forwarding ? forwardOptions(workspace, forwarding.taskId, workers => recipientReady(workers.map(item => item.provider))) : []} sending={forwardSending} onSend={choice => void sendForward(choice)} onClose={() => setForwarding(undefined)} />
     <SendToPicker open={Boolean(sentFiles)} count={sentFiles?.count ?? 0} names={sentFiles?.names ?? []} options={sentFiles ? sendToOptions(workspace) : []} onChoose={option => void sendFilesTo(option)} onClose={closeSendTo} />
-    <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses} onHarnesses={setHarnesses} account={account} />
+    <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses} onHarnesses={setHarnesses} account={account} archive={archiveSections} />
   </div>;
 }

@@ -95,6 +95,20 @@ try {
   assert.deepEqual(reopened.workers.map(worker => worker.id), saved.workers.map(worker => worker.id));
   assert.deepEqual(reopened.teams.map(team => team.id), saved.teams.map(team => team.id));
   assert.equal(reopened.tasks[0].title, 'Review dataset');
+  // An archive notice in Activity must still open Settings after the area rail replaces Notifications.
+  const archiveOrglet = await page.evaluate(skillId => window.orglet.call('saveWorker', {
+    name: 'Archive smoke', description: 'Checks the archive link', instructions: 'Answer briefly.', provider: 'demo', skillId,
+  }), reopened.workers[0].skillId);
+  await openHome(page);
+  await page.getByRole('button', { name: 'Tùy chọn Archive smoke', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
+  await waitFor(async () => (await workspace(page)).archivedWorkers.some(worker => worker.id === archiveOrglet.id), 'orglet archive');
+  await page.locator('.area-tile[title="Hoạt động"]').click();
+  await page.getByRole('tab', { name: 'Xong', exact: true }).click();
+  await page.getByRole('button', { name: 'Mở mục lưu trữ', exact: true }).click();
+  await page.getByRole('tab', { name: 'Lưu trữ', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Khôi phục Archive smoke', exact: true }).click();
+  await waitFor(async () => (await workspace(page)).workers.some(worker => worker.id === archiveOrglet.id), 'orglet restore');
   console.log(JSON.stringify({ directory, workers: reopened.workers.map(worker => worker.name), teams: reopened.teams.map(team => team.name), result: 'passed' }));
 } finally { await app.close(); }
 

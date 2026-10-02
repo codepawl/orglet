@@ -30,7 +30,7 @@ export function activityTabLabel(tab: ActivityTab): string {
  * to review. Running: what works or waits in line. Done: what the app told you after its toast was gone. Saved: the
  * messages saved for later with "Lưu để xem sau".
  */
-export function ActivityPage({ tab, onTab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, updateReady, onRestartUpdate }: {
+export function ActivityPage({ tab, onTab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, onOpenArchive, updateReady, onRestartUpdate }: {
   tab: ActivityTab;
   onTab: (tab: ActivityTab) => void;
   running: readonly RunningItem[];
@@ -44,6 +44,7 @@ export function ActivityPage({ tab, onTab, running, tasks, teams, saved, pending
   chatExists: (taskId: string) => boolean;
   onOpenSchedules: () => void;
   onOpenLibrary: () => void;
+  onOpenArchive: () => void;
   updateReady: boolean;
   onRestartUpdate: () => void;
 }) {
@@ -62,7 +63,7 @@ export function ActivityPage({ tab, onTab, running, tasks, teams, saved, pending
         <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={pendingSchedules + notesToReview > 0 ? undefined : t('Không có gì đang chờ bạn.')} />
       </>}
       {tab === 'running' && <RunningGroups items={working} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={t('Không có gì đang chạy.')} />}
-      {tab === 'done' && <NoticeList open onOpenChat={onOpenChat} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} />}
+      {tab === 'done' && <NoticeList open onOpenChat={onOpenChat} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} />}
       {tab === 'saved' && <SavedList saved={saved} chatExists={chatExists} onOpen={onOpenMessage} />}
     </div></div>
   </>;
