@@ -25,6 +25,7 @@
     "test:knowledge": "node scripts/knowledge-smoke.mjs",
     "test:harness": "node scripts/harness-smoke.mjs",
     "test:sidebar": "node scripts/sidebar-smoke.mjs",
+    "test:marketplace": "node scripts/marketplace-smoke.mjs",
     "test:i18n": "node scripts/i18n-smoke.mjs",
     "test:cli": "node scripts/cli-smoke.mjs",
     "test:custom-connections": "node scripts/custom-connection-smoke.mjs",

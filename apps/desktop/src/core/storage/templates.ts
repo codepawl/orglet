@@ -1,20 +1,9 @@
-import { z } from 'zod';
-import { MAX_CREW_MEMBERS, WorkerInput, SkillInput, TeamInput, type Worker, type Skill, type Team } from '../../shared/contracts';
+import { TeamTemplate as Template } from '../../shared/templates';
+import { type Worker, type Skill, type Team } from '../../shared/contracts';
 import { Store, id } from './database';
-import { SkillPackage } from '../../shared/skill-package';
 import { packageForImport } from '../skill-package';
-import { isMemory, KnowledgeInput, type Knowledge } from '../../shared/knowledge';
+import { isMemory, type Knowledge } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
-
-const Key = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
-const Template = z.object({
-  format: z.literal('orglet-team-template'), version: z.literal(1),
-  team: TeamInput.omit({ id: true, memberIds: true, synthesizerId: true }).extend({ memberKeys: z.array(Key).min(1).max(MAX_CREW_MEMBERS), synthesizerKey: Key }).strict(),
-  // A template never carries the auto-apply switch or the MCP servers: both are this computer's, not the crew's (COD-199, COD-241).
-  workers: z.array(WorkerInput.omit({ id: true, skillId: true, autoApplyProposals: true, mcpServerIds: true }).extend({ key: Key, skillKey: Key }).strict()).min(1).max(5),
-  skills: z.array(SkillInput.omit({ id: true }).extend({ key: Key, package: SkillPackage.optional() }).strict()).min(1).max(5),
-  knowledge: z.array(KnowledgeInput.pick({ title: true, content: true, tags: true, pinned: true }).strict()).max(50).optional(),
-}).strict();
 
 export class TeamTemplates {
   constructor(private store: Store, private notify: () => void) {}
@@ -38,15 +27,7 @@ export class TeamTemplates {
     return text;
   }
   import(text: string): Team {
-    if (Buffer.byteLength(text) > 2 * 1024 * 1024) throw new Error('Template vượt giới hạn 2 MB.');
-    let input: unknown;
-    try { input = JSON.parse(text); } catch { throw new Error('Tệp template không phải JSON hợp lệ.'); }
-    const template = Template.parse(input);
-    const workersByKey = new Map(template.workers.map(worker => [worker.key, worker]));
-    const skillsByKey = new Map(template.skills.map(skill => [skill.key, skill]));
-    const usedWorkers = new Set([...template.team.memberKeys, template.team.synthesizerKey]);
-    const usedSkills = new Set(template.workers.map(worker => worker.skillKey));
-    if (workersByKey.size !== template.workers.length || skillsByKey.size !== template.skills.length || new Set(template.team.memberKeys).size !== template.team.memberKeys.length || usedWorkers.size !== template.workers.length || usedSkills.size !== template.skills.length || [...usedWorkers].some(key => !workersByKey.has(key)) || [...usedSkills].some(key => !skillsByKey.has(key))) throw new Error('Template có key trùng, thiếu hoặc không được sử dụng.');
+    const template = parseTeamTemplate(text);
     const skillIds = new Map(template.skills.map(skill => [skill.key, id()]));
     const workerIds = new Map(template.workers.map(worker => [worker.key, id()]));
     const skills: Skill[] = template.skills.map(({ key, ...skill }) => ({ ...skill, ...(skill.package ? packageForImport(skill.package) : {}), id: skillIds.get(key)!, revision: 1 }));
@@ -59,4 +40,18 @@ export class TeamTemplates {
     });
     this.notify(); return team;
   }
+}
+
+
+export function parseTeamTemplate(text: string) {
+  if (Buffer.byteLength(text) > 2 * 1024 * 1024) throw new Error('Template vượt giới hạn 2 MB.');
+  let input: unknown;
+  try { input = JSON.parse(text); } catch { throw new Error('Tệp template không phải JSON hợp lệ.'); }
+  const template = Template.parse(input);
+  const workersByKey = new Map(template.workers.map(worker => [worker.key, worker]));
+  const skillsByKey = new Map(template.skills.map(skill => [skill.key, skill]));
+  const usedWorkers = new Set([...template.team.memberKeys, template.team.synthesizerKey]);
+  const usedSkills = new Set(template.workers.map(worker => worker.skillKey));
+  if (workersByKey.size !== template.workers.length || skillsByKey.size !== template.skills.length || new Set(template.team.memberKeys).size !== template.team.memberKeys.length || usedWorkers.size !== template.workers.length || usedSkills.size !== template.skills.length || [...usedWorkers].some(key => !workersByKey.has(key)) || [...usedSkills].some(key => !skillsByKey.has(key))) throw new Error('Template có key trùng, thiếu hoặc không được sử dụng.');
+  return template;
 }

@@ -2002,7 +2002,7 @@ export function App() {
         onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
         onArchive={member => archiveEntity('worker', member.id, true)} onDelete={member => deleteEntityNow('worker', member.id)}
         onCreate={name => { setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }} onRestore={member => archiveEntity('worker', member.id, false)}
-        templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
+        onMarketAdded={result => { void refresh(); clearSelection(); if (result.kind === 'orglet') openWorker(result.entityId); else openTeam(result.entityId); }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
       : null;
   const areaEntries: AreaRailEntry[] = [
     { key: 'home', icon: <span className="orglet-mark small" aria-hidden="true">o</span>, label: t('Bạn bè và tin nhắn'), active: area === 'home', onSelect: () => {

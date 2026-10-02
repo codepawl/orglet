@@ -9,6 +9,8 @@ import { Button } from './ui';
 import { RowMenu } from './RowMenu';
 import { ChatHeader } from './ChatViews';
 import { PageTabs } from './PageTabs';
+import { Marketplace } from './Marketplace';
+import type { MarketAdded } from '../../shared/market';
 
 /** A ready-made group of orglets with its channel, offered under Add friend (COD-366). */
 export type FriendTemplate = { id: 'research-review' | 'eris-review'; name: string; description: string; orglets: number };
@@ -18,7 +20,7 @@ export type FriendTemplate = { id: 'research-review' | 'eris-review'; name: stri
  * All and Working (the ones with a run going right now), and Add friend, which makes an orglet from a name or finds
  * one elsewhere: an archived orglet to bring back, a ready-made group, a template file. A row opens the orglet's DM.
  */
-export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage, onEdit, onArchive, onDelete, onCreate, onRestore, templates, onTemplate, onImport, busy }: {
+export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage, onEdit, onArchive, onDelete, onCreate, onRestore, templates, onTemplate, onImport, onMarketAdded, busy }: {
   orglets: readonly Worker[];
   archived: readonly Worker[];
   working: ReadonlySet<string>;
@@ -34,6 +36,7 @@ export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage,
   templates: readonly FriendTemplate[];
   onTemplate: (id: FriendTemplate['id']) => void;
   onImport: () => void;
+  onMarketAdded: (result: MarketAdded) => void;
   busy: boolean;
 }) {
   const [query, setQuery] = useState('');
@@ -64,6 +67,7 @@ export function FriendsPage({ orglets, archived, working, tab, onTab, onMessage,
           <Button type="submit" disabled={!name.trim()}><UserRoundPlus size={16} />{t('Tạo Tí')}</Button>
         </form>
       </section>
+      <Marketplace onAdded={onMarketAdded} />
       <section className="page-section" aria-labelledby="friends-other-title">
         <h2 id="friends-other-title">{t('Những nơi khác để tìm bạn')}</h2>
         <p className="muted">{t('Không muốn tự tạo? Đưa về một Tí đã lưu trữ, chọn một nhóm làm sẵn hoặc nhập mẫu từ tệp.')}</p>
