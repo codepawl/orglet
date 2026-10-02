@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openChannels, openHome } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 // Sidebar: worker click opens chat, press-and-hold reorder, keyboard reorder, persistence across restarts.
@@ -17,9 +17,11 @@ try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
   await useVietnamese(page);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).waitFor();
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
   await page.getByRole('button', { name: '#Eris Review', exact: true }).waitFor();
+  await openHome(page);
 
   // Clicking a worker name opens that worker's chat. There is no task-list disclosure.
   const researcher = page.getByRole('button', { name: 'Researcher', exact: true });
@@ -63,9 +65,11 @@ try {
   assert.equal(await page.locator('.tree-item.dragging').count(), 0);
 
   // Channels have no reorder (COD-369): a crew is a channel now, and the list is newest first.
+  await openChannels(page);
   const channelRows = page.locator('.channel-row > .worker-row > button.worker');
   assert.equal(await channelRows.count(), 2, 'both template crews are channels');
   assert.equal(await channelRows.first().getAttribute('aria-label'), '#Eris Review', 'the newest channel is listed first');
+  await openHome(page);
 
   // Dragging the handle resizes the sidebar, and the width survives a restart.
   const sidebarWidth = () => page.locator('.sidebar').evaluate(element => Math.round(element.getBoundingClientRect().width));
@@ -91,5 +95,19 @@ try {
   assert.deepEqual(reopened.workers.map(worker => worker.id), saved.workers.map(worker => worker.id));
   assert.deepEqual(reopened.teams.map(team => team.id), saved.teams.map(team => team.id));
   assert.equal(reopened.tasks[0].title, 'Review dataset');
+  // An archive notice in Activity must still open Settings after the area rail replaces Notifications.
+  const archiveOrglet = await page.evaluate(skillId => window.orglet.call('saveWorker', {
+    name: 'Archive smoke', description: 'Checks the archive link', instructions: 'Answer briefly.', provider: 'demo', skillId,
+  }), reopened.workers[0].skillId);
+  await openHome(page);
+  await page.getByRole('button', { name: 'Tùy chọn Archive smoke', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
+  await waitFor(async () => (await workspace(page)).archivedWorkers.some(worker => worker.id === archiveOrglet.id), 'orglet archive');
+  await page.locator('.area-tile').filter({ has: page.locator('[aria-label^="Hoạt động"]') }).click();
+  await page.getByRole('tab', { name: 'Xong', exact: true }).click();
+  await page.getByRole('button', { name: 'Mở mục lưu trữ', exact: true }).click();
+  await page.getByRole('tab', { name: 'Lưu trữ', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Khôi phục Archive smoke', exact: true }).click();
+  await waitFor(async () => (await workspace(page)).workers.some(worker => worker.id === archiveOrglet.id), 'orglet restore');
   console.log(JSON.stringify({ directory, workers: reopened.workers.map(worker => worker.name), teams: reopened.teams.map(team => team.name), result: 'passed' }));
 } finally { await app.close(); }

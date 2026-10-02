@@ -255,7 +255,7 @@ export class Channels {
     const members = this.listedOrglets(fields.members);
     const orgletIds = answeringOrglets(this.store, members);
     const crew = fields.mode === 'lead' ? this.crews.save(crewForChannel(fields.name, orgletIds, fields.lead)) : undefined;
-    const record = this.recordOf(randomUUID(), { ...fields, members }, crew?.id);
+    const record = this.recordOf(randomUUID(), { ...fields, members }, crew?.id, undefined);
     const channel = EmptyChannel.parse({ ...record, createdAt: this.clock().toISOString() });
     saveEmptyChannels(this.store, [...emptyChannels(this.store), channel]);
     return channel.id;
@@ -275,7 +275,7 @@ export class Channels {
     const existingCrew = current.crewId ? this.store.get<Team>('teams', current.crewId) : undefined;
     if (mode === 'turns' && existingCrew && this.onlyChannelOf(existingCrew.id, channelId)) this.crews.retire(existingCrew.id);
     const crew = mode === 'lead' ? this.crews.save(crewForChannel(fields.name, orgletIds, fields.lead, existingCrew)) : undefined;
-    const record = Channel.parse(this.recordOf(channelId, { ...fields, members }, crew?.id));
+    const record = Channel.parse(this.recordOf(channelId, { ...fields, members }, crew?.id, current));
     const waiting = emptyChannels(this.store);
     const empty = waiting.find(channel => channel.id === channelId);
     if (empty) {
@@ -371,9 +371,10 @@ export class Channels {
     return !onRows && !waiting;
   }
 
-  private recordOf(channelId: string, fields: ChannelFields, crewId: string | undefined): Channel {
+  private recordOf(channelId: string, fields: ChannelFields, crewId: string | undefined, current: Channel | undefined): Channel {
     const topic = fields.topic.trim();
-    return Channel.parse({ id: channelId, name: fields.name, ...(topic ? { topic } : {}), members: fields.members, ...(crewId ? { crewId } : {}) });
+    const category = fields.category === undefined ? current?.category : fields.category.trim();
+    return Channel.parse({ id: channelId, name: fields.name, ...(topic ? { topic } : {}), ...(category ? { category } : {}), members: fields.members, ...(crewId ? { crewId } : {}) });
   }
 
   /** The members as listed orglets: a crew joins as its orglets, and one that left the workspace is refused. */
