@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
-import { Activity, Bell, BookOpen, CalendarClock, PanelLeft, Plus, Settings } from './icons';
+import { Bell, BookOpen, CalendarClock, PanelLeft, Plus, Settings } from './icons';
+import { Hash } from 'lucide-react';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
@@ -27,11 +28,13 @@ const FACE_SEED = 29;
 const SLOW_AFTER_SECONDS = 3;
 const STUCK_AFTER_SECONDS = 15;
 // How many rows each sidebar section shows the shape of before the workspace says how many there are.
-const TEAM_ROW_SHAPES = 1;
 const WORKER_ROW_SHAPES = 3;
 const DEFAULT_SIDEBAR_WIDTH = 228;
 
+const areaIcons = [<span key="home" className="orglet-mark small" aria-hidden="true">o</span>, <Hash key="channels" size={20} />, <Bell key="activity" size={20} />, <BookOpen key="library" size={20} />, <CalendarClock key="schedules" size={20} />];
+
 type Wait = 'opening' | 'slow' | 'stuck';
+const areaLabels = () => [t('Bạn bè và tin nhắn'), t('Kênh'), t('Hoạt động'), t('Thư viện'), t('Lịch chạy')];
 type Cue = { kind: Moment; count: number };
 
 const nextCue = (kind: Moment) => (previous: Cue | undefined): Cue => ({ kind, count: (previous?.count ?? 0) + 1 });
@@ -64,32 +67,24 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
     setCheer(count => count + 1);
   };
   const waiting = wait === 'stuck' ? t('Mở lâu hơn bình thường. Nếu vẫn không xong, đóng rồi mở lại Orglet.') : wait === 'slow' ? t('Vẫn đang mở, chờ chút…') : t('Đang mở workspace…');
-  const footer = [
-    { icon: <Bell size={18} />, label: t('Thông báo') },
-    { icon: <Activity size={18} />, label: t('Đang chạy') },
-    { icon: <CalendarClock size={18} />, label: t('Lịch chạy') },
-    { icon: <BookOpen size={18} />, label: t('Thư viện') },
-    { icon: <Settings size={18} />, label: t('Cài đặt') },
-  ];
   return <div className={`app startup${sidebar ? '' : ' sidebar-hidden'}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} onPointerDown={tap}>
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
-      <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong></div>
+      <div className="sidebar-head"><strong className="sidebar-title">Orglet</strong></div>
       <div className="sidebar-scroll">
-        <SidebarSection id="workers" title={t('Tí')}><RowShapes count={WORKER_ROW_SHAPES} label={t('Đang mở danh sách Tí…')} /></SidebarSection>
-        <SidebarSection id="channels" title={t('Kênh')}><RowShapes count={TEAM_ROW_SHAPES} label={t('Đang mở danh sách kênh…')} /></SidebarSection>
+        <SidebarSection id="workers" title={t('Tin riêng')}><RowShapes count={WORKER_ROW_SHAPES} label={t('Đang mở danh sách Tí…')} /></SidebarSection>
       </div>
-      <div className="sidebar-footer">{footer.map(item => <Button key={item.label} disabled>{item.icon}{item.label}</Button>)}</div>
     </aside>
-    {/* Folded, the column is the rail (COD-340): the shape of a few faces between its disabled top and foot. */}
-    {!sidebar && <nav className="rail" aria-label={t('Điều hướng')}>
-      <div className="rail-top"><Button size="icon" aria-label={t('Mở sidebar')} disabled><PanelLeft size={18} /></Button></div>
-      <div className="rail-roster">
-        <SkeletonGroup label={t('Đang mở danh sách Tí…')}>
-          {Array.from({ length: WORKER_ROW_SHAPES }, (_, index) => <div key={index} className="rail-face"><Skeleton shape="circle" className="row-shape-face" delay={index * 0.06} /></div>)}
-        </SkeletonGroup>
-      </div>
-      <div className="rail-foot">{footer.map(item => <Button key={item.label} size="icon" aria-label={item.label} disabled>{item.icon}</Button>)}</div>
-    </nav>}
+    {/* The area rail and the user panel hold their places with disabled controls while the workspace opens (COD-366). */}
+    <nav className="area-rail" aria-label={t('Khu vực')}>
+      {!sidebar && <Button size="icon" className="area-rail-fold" aria-label={t('Mở sidebar')} disabled><PanelLeft size={18} /></Button>}
+      <ul className="area-rail-list">
+        {areaIcons.map((icon, index) => <li key={index}><button type="button" className="area-tile" aria-label={areaLabels()[index]} disabled>{icon}</button></li>)}
+      </ul>
+    </nav>
+    <div className={`user-panel${sidebar ? '' : ' compact'}`}>
+      <span className="user-panel-face"><Skeleton shape="circle" className="row-shape-face" /></span>
+      {sidebar && <Button size="icon" aria-label={t('Cài đặt')} disabled><Settings size={18} /></Button>}
+    </div>
     <main className="main-pane" id="main-content" tabIndex={-1}>
       <header className="topbar"><div /></header>
       <div className="team-chat team-chat-fresh">

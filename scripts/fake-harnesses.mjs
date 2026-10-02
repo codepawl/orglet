@@ -44,8 +44,10 @@ export async function fakeHarnessPath(directory) {
 // A packaged app launched with this environment never reads this machine's sign-ins or asks a vendor for plan usage.
 // The fake CLIs go first on PATH, but a real executable found anywhere outranks a .cmd shim (COD-170), so every CLI's
 // own config folder also points at an empty one: a real CLI still found under the home folder reports itself signed
-// out. APPDATA and LOCALAPPDATA hide the npm installs, the CLIs the Claude, Codex and Cursor apps bundle, and Cursor
-// Agent's sign-in. USERPROFILE stays real: Electron cannot start without it.
+// out. Cursor Agent keeps its sign-in in %APPDATA%\Cursor\auth.json, which CURSOR_CONFIG_DIR does not move, so its
+// credential store is set to memory: neither the CLI nor Orglet's plan-usage reading then opens that file.
+// USERPROFILE, HOME, APPDATA and LOCALAPPDATA stay real: Electron started without them pops a "Failed to get 'appData'
+// path" dialog on the desktop, so the caller isolates the app's own data with --user-data-dir instead.
 export async function isolatedHarnessEnvironment(directory) {
   const bin = await fakeHarnessPath(directory);
   const emptyFolder = async name => {
@@ -56,8 +58,6 @@ export async function isolatedHarnessEnvironment(directory) {
   const pathValue = `${bin}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
   const env = {
     ...process.env,
-    APPDATA: directory,
-    LOCALAPPDATA: await emptyFolder('local-app-data'),
     PATH: pathValue,
     Path: pathValue,
     GEMINI_CLI_HOME: await emptyFolder('gemini-home'),
@@ -65,6 +65,7 @@ export async function isolatedHarnessEnvironment(directory) {
     CLAUDE_CONFIG_DIR: await emptyFolder('claude-config'),
     CURSOR_CONFIG_DIR: await emptyFolder('cursor-config'),
     XDG_CONFIG_HOME: await emptyFolder('xdg-config'),
+    AGENT_CLI_CREDENTIAL_STORE: 'memory',
     // The empty profile counts as a local install, so the first-run account question does not cover the app (COD-337).
     ORGLET_SKIP_ACCOUNT_CHOICE: '1',
   };

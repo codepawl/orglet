@@ -8,11 +8,33 @@ In an orglet's chat, the model picker in the row under the message box shows the
 
 The row marked **Default** is the model that runs when you have not picked one. Choosing it saves no model, so the orglet follows the CLI if its default changes later. The newest model of each family is listed first. Older ones, and models only reachable by their full ID, are under **More models**. The same list appears in the orglet's settings under **Model**, where you can still type any model ID.
 
-## Open chats and the rail
+## The area rail and the sidebar
 
-The left side picks the chat. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
+Orglet's shell follows Discord's. A narrow **area rail** at the far left picks an area, the **sidebar** beside it lists that area, and the main card shows what you picked. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
 
-**The sidebar.** It lists your orglets, each with its side threads and schedule runs under it, and your channels under **Channels**: each a **#** and its name, newest first, the empty ones included. A channel where a lead splits the work (what used to be a crew) lists its schedule runs under it. An orglet's row opens your DM with it, a channel's row opens the channel ([Channels](orglets-and-crews.md#channels)). Click a row to open that chat. A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top. With nothing like that open, there is no **Open** section. Each row shows a face, the name and one mark:
+**The area rail.** From the top: **Home**, **Channels**, **Activity**, **Library** and **Schedules**, then one **+** that creates an orglet, a channel or a schedule. Each button is named by its tooltip and carries a count when something waits there. Home, Channels and Activity are areas, so the sidebar changes with them. Library and Schedules open their own panel. The area you left open comes back when Orglet starts. Folding the sidebar (the button in its head) leaves only the rail, which then starts with **Open sidebar**. In a window narrower than 780 px the sidebar lies over the chat, beside the rail, until you pick something. On Home the **Home** button opens Friends; from another area it brings you back to the DM you had open.
+
+**The user panel.** At the bottom left, across the rail and the sidebar: you, a few words on what Orglet is doing (what is running, or whether you are signed in to a CodePawl account), and **Settings**. A dot says whether any connection can run a model, and a ready update shows its restart button here. With the sidebar folded it shrinks to your face, which opens Settings.
+
+**Home.** Under the search box ("Find or start a conversation"), **Friends** opens the Friends page and **Direct messages** lists your orglets, each with its side threads and schedule runs under it. An orglet's row opens your DM with it. The Friends page is Discord's, for orglets:
+
+- **All** lists every orglet, **Working** only the ones with a run going right now. Each row has its face, its name, its description (or **Working**), a message button and a menu to edit, archive or delete it. The box above searches names and descriptions, ignoring case and accents.
+- **Add friend** makes an orglet from a name: type it, choose **Create orglet**, and the new-orglet dialog opens with the name filled in. Under **Other places to find friends** you can bring back an archived orglet, add a ready-made group (Research Review, Eris Review: each adds its orglets and a channel, on Demo until you connect a model) or import a template file.
+
+**Channels.** The sidebar lists your channels the way Discord's server list does: those with no category first, then one collapsible group per category. A category's **+** starts a channel in it. A channel's category is set in its settings, under **Category**. Each channel is a **#** and its name with its status mark; the rest is under [Channels](orglets-and-crews.md#channels). Open channels show a **member column** at the right with each orglet's face and whether it is working, and the lead marked when the lead splits the work. A row opens that orglet's DM. The header's member button hides or shows the column, Details takes its place while open, and a window narrower than 1100 px has no column.
+
+**Activity.** Four views, in the sidebar and as tabs on the page:
+
+| View | What it holds |
+|---|---|
+| **Needs you** | Runs stopped for a question or an approval, schedules that did not run, and notes waiting for review, each with the way to open it. |
+| **Running** | Every run under way or in line, with pause, resume, stop and the chat it works for ([technical guide](technical-guide.md#what-is-running-and-the-queue)). |
+| **Done** | Everything the app told you after its toast was gone, grouped by day, filtered by kind. Opening it marks the news as read. |
+| **Saved** | Messages you saved with **Save for later** under a message. A row opens the chat at that message; the bookmark takes it off again. |
+
+The Activity button on the rail carries what waits for you, in the accent, or the unread news.
+
+**Marks.** Each chat row shows a face (or a **#**), the name and one mark:
 
 | Mark | Meaning |
 |---|---|
@@ -24,19 +46,7 @@ The left side picks the chat. The tabs at the top of a chat pick what you see of
 
 A schedule's run has a calendar before its name. Hover a row to see whose chat it is.
 
-To take a chat off **Open**, hover it and click **×**, or click it with the middle mouse button. This only takes it off the list. The chat and its messages stay, and it comes back when you open it again. When you close the chat you are in, the chat you used before it opens. A chat you archive or delete leaves the list. Orglet keeps the list when it restarts.
-
-**The rail.** On a new install the left side is a narrow rail. From the top:
-
-1. **Open sidebar** switches to the full sidebar, with its sections, names and row menus. **Collapse sidebar** at its top brings the rail back. Orglet remembers which one you picked, and the full sidebar keeps the width you dragged it to. In a window narrower than 780 px the rail stays, and **Open sidebar** lays the full sidebar over the chat until you pick something.
-2. The magnifier opens search (**Ctrl+K**).
-3. **+** offers **New orglet** and **New channel**.
-4. One face per orglet, in the sidebar's order. Click a face to open that chat. Hover it to see the name. A small mark on the corner shows the chat's state, the same as in the sidebar.
-5. When you have channels, one **#** button lists them. Click one to open it.
-6. Under those, the faces of the chats on **Open**, the same ones the sidebar lists there. Hover one to see its name and whose chat it is, and click the small **×** on its corner to close it. Side threads and schedule runs are reached through their orglet's face, as before.
-7. At the foot: Notifications, Running, Schedules, Library and Settings, each with a count when something is waiting.
-
-If you used Orglet before the rail arrived, it opens with the full sidebar, as before. Fold it once to use the rail.
+**Open.** A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top of Home. With nothing like that open, there is no **Open** section. To take a chat off **Open**, hover it and click **×**, or click it with the middle mouse button. This only takes it off the list. The chat and its messages stay, and it comes back when you open it again. When you close the chat you are in, the chat you used before it opens. A chat you archive or delete leaves the list. Orglet keeps the list when it restarts.
 
 **The tabs at the top of a chat.** Beside the chat's name, a few tabs show the parts of that chat. When the chat is narrow, for example with **Details** open, they move to a line under the name. **Chat** is always first and is where every chat opens. The others appear only when the chat has something for them, with a count:
 
@@ -50,6 +60,12 @@ If you used Orglet before the rail arrived, it opens with the full sidebar, as b
 With nothing but the messages, there are no tabs. Use the arrow keys to move between tabs once one has focus. Orglet remembers the tab each chat was on until it closes.
 
 **Details** is remembered per chat while Orglet is open: a chat you had open with Details opens with Details again. The panel holds what is not a tab: who the chat is with, what it cost, its permissions, MCP, browser and desktop settings, and the working copies to recover. You can drag its edge. It never pushes the chat narrower than 480 px.
+
+## Messages
+
+Every message starts at the left: a face, the name and the time, then the text. Your own messages look the same, with **You** as the name. When the same person or orglet writes several messages within five minutes, only the first shows the face and name; point at a later one to see its time at the left.
+
+Point at a message, or move to it with Tab, to see its buttons at its top right: copy and download for an answer, then **Reply**, **Forward** and **React**. Reactions show in a row under the message. Small faces at the end of that row show which orglets read up to here but have not answered yet.
 
 ## Attach files
 
@@ -105,7 +121,9 @@ Each orglet has one main chat. Clicking the orglet always opens it. When you wan
 
 1. Type the message in the orglet's main chat.
 2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow in the row under the message box and choose **Send in a new thread**.
-3. You stay in the main chat. A short message says the side thread started; click **Open** to go there, or open it later.
+3. You stay in the main chat. A short message says the side thread started; click **Open** to see it, or open it later.
+
+A side thread opens in the panel on the right, next to its main chat, so you can read both at once. It has its own message box at the bottom of the panel. Close it with the **×** at the top of the panel or Esc. The panel is the one **Details** uses: opening Details closes the thread, and opening a thread closes Details. In a narrow window, where there is no room for the panel, the thread opens in place of the main chat instead, with **Open main chat** at the top.
 
 Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).
 
@@ -116,7 +134,7 @@ What a side thread knows and can do:
 - It has the main chat's permissions: the same switches, the same working folder at the same level, and the same MCP tools allowed. It never gets more. If you turn something off in the main chat, its side threads lose it at once. A side thread that was working with a switch or the folder you turned off stops; an MCP tool you took back asks again the next time it is used. To change permissions, change them in the main chat. An MCP tool that asks in a side thread can only be allowed once there.
 - It counts as its own chat for the **Limit per task**, and it shares the orglet's connection and slots with the main chat.
 
-To use an answer in the main chat, click **Bring into main chat** (the quote icon under the answer). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
+To use an answer in the main chat, point at it and click **Bring into main chat** (the quote icon in its toolbar). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
 
 Side threads are for single orglets. A channel does not have them yet.
 
@@ -129,7 +147,7 @@ You can pass a message on to another orglet, a channel or another chat, the way 
 3. If the message had files, tick the ones to send along. Files you leave unticked go by name only.
 4. Add a note if you like, then click **Send** (Ctrl+Enter in the note works too).
 
-Each chat you picked gets the message as yours, so the orglet or channel there answers it, the same as if you had typed it. It shows as a grey bubble headed **Forwarded from Researcher** (click it to open the chat it came from), with your note under it. It costs what any message there costs and uses that chat's own permissions and limit.
+Each chat you picked gets the message as yours, so the orglet or channel there answers it, the same as if you had typed it. It shows as a grey card headed **Forwarded from Researcher** (click it to open the chat it came from), with your note under it. It costs what any message there costs and uses that chat's own permissions and limit.
 
 A few things to know:
 

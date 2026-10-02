@@ -1,5 +1,19 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
+
+/**
+ * The files that start a real Chrome or Edge. They run one at a time, in a project of their own: on a 4-core CI runner
+ * each running at once with the rest of the suite made Chrome's start take 7 s with two of them going and 23 s with
+ * four (measured for COD-374), and a click that takes half a second took 4 s. A step that slow ran into the 40 s limit
+ * of an acting step and failed browser-act-loop, browser-window and, starved alongside them, thread-context.
+ */
+const REAL_BROWSER_TESTS = [
+  'tests/integration/browser-act-loop.test.ts',
+  'tests/integration/browser-live.test.ts',
+  'tests/integration/browser-policy.test.ts',
+  'tests/integration/browser-tool-loop.test.ts',
+  'tests/integration/browser-window.test.ts',
+];
 
 export default defineConfig({
   // The same source alias the renderer build uses, so a test can render an app component that imports the kit.
@@ -17,7 +31,17 @@ export default defineConfig({
         test: {
           name: 'app',
           include: ['tests/integration/**/*.test.ts', 'tests/live/**/*.test.ts'],
+          exclude: [...configDefaults.exclude, ...REAL_BROWSER_TESTS],
           environment: 'node',
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'real-browser',
+          include: REAL_BROWSER_TESTS,
+          environment: 'node',
+          fileParallelism: false,
         },
       },
       // The kit's own tests, in a browser-like environment, from its own config.

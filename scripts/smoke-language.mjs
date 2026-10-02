@@ -24,12 +24,27 @@ export async function useFullSidebar(page) {
   if (wide && await opener.isVisible()) await opener.click();
 }
 
+/**
+ * The area rail (COD-366) picks what the sidebar lists: Home has the orglets, Channels the channels. A smoke that works
+ * with channels opens that area first, and one that goes back to an orglet's row opens Home.
+ */
+export async function openChannels(page) {
+  await page.locator('.area-tile[title="Kênh"], .area-tile[title="Channels"]').first().click();
+}
+
+export async function openHome(page) {
+  const home = page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first();
+  // On Home already, the button opens Friends and would hide the chat the smoke is in.
+  if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
+}
+
 /** Open a specific under-the-hood task by its brief via search (sidebar no longer lists task rows). */
 export async function openThreadByBrief(page, brief) {
   if (await page.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) {
     await page.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
   }
-  await page.getByRole('button', { name: /Tìm cuộc trò chuyện/ }).first().click();
+  // Home has its search box ("Find or start a chat"); the other areas have the magnifier in the sidebar's head (COD-366).
+  await page.getByRole('button', { name: /Tìm cuộc trò chuyện|Tìm hoặc bắt đầu trò chuyện/ }).first().click();
   await page.getByRole('combobox', { name: 'Tìm cuộc trò chuyện' }).fill(brief);
   await page.getByRole('option').filter({ hasText: brief }).first().click();
 }

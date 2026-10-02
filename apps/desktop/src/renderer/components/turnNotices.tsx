@@ -18,8 +18,6 @@ export type TurnNoticeSlots = {
   changes?: ReactNode[];
   /** The app-change and self-improvement cards (COD-199, COD-162). */
   proposals?: ReactNode;
-  /** Copy, download, reply and react (COD-160): always the last thing under a message. */
-  actions?: ReactNode;
 };
 
 /**
@@ -28,8 +26,8 @@ export type TurnNoticeSlots = {
  *
  * Before the answer, what was loaded or decided before writing, as one trace control (COD-220) whose rows are in
  * that order themselves: the memories used, the notes loaded, then the steps the run took. Then the answer. After
- * it, what came out of the answer: that it was cut short by the step limit (COD-257), that it is a Plan first plan (COD-367), why its changes were held back (COD-270), the files it changed, the app changes it
- * proposed (self-improvements included), and last the message actions row. A future notice goes into the slot
+ * it, what came out of the answer: that it was cut short by the step limit (COD-257), that it is a Plan first plan (COD-367), why its changes were held back (COD-270), the files it changed, and the app changes it
+ * proposed (self-improvements included). The message's toolbar is not a notice: it floats on the message (COD-365). A future notice goes into the slot
  * matching when it happened, never straight into JSX.
  *
  * `before` and `after` are already wrapped in their groups, so a caller renders `{before}{answer}{after}`.
@@ -38,7 +36,7 @@ export function turnNotices(slots: TurnNoticeSlots): { before: ReactNode; after:
   const before = [slots.trace ?? null].filter(Boolean);
   const handIn = slots.handIn ?? [];
   const changes = slots.changes ?? [];
-  const after = [slots.outOfSteps ?? null, slots.plan ?? null, ...handIn, ...changes, slots.proposals ?? null, slots.actions ?? null].filter(Boolean);
+  const after = [slots.outOfSteps ?? null, slots.plan ?? null, ...handIn, ...changes, slots.proposals ?? null].filter(Boolean);
   return {
     before: before.length > 0 ? <div className="turn-before">{before}</div> : null,
     after: after.length > 0 ? <div className="turn-after">{after}</div> : null,
