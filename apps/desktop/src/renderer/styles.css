@@ -2993,7 +2993,6 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-count { position:absolute; top:-3px; right:-3px; display:grid; place-items:center; min-width:16px; height:16px; padding:0 4px; border-radius:999px; font-size:10px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; box-shadow:0 0 0 2px var(--window); }
 .area-count.accent { background:var(--accent); color:var(--accent-ink); }
 .area-count.quiet { background:var(--surface); color:var(--text); }
-.area-tile .orglet-mark { margin:0; }
 
 /* The sidebar's head and the lists the areas put in it (COD-366): a title with its buttons, Home's search box and Friends
    item, Activity's views, and the channels without a category, which sit above the categories. */
