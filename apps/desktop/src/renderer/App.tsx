@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, Bookmark, BellRing, ChevronRight, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
+import { ArrowLeft, Bookmark, BellRing, ChevronRight, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
@@ -2031,7 +2031,7 @@ export function App() {
         }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
       : null;
   const areaEntries: AreaRailEntry[] = [
-    { key: 'home', icon: <span className="orglet-mark small" aria-hidden="true">o</span>, label: t('Bạn bè và tin nhắn'), active: area === 'home', onSelect: () => {
+    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: area === 'home', onSelect: () => {
       clearSelection();
       // From another area Home comes back to the DM that was open; on Home itself the button is the way to Friends.
       const openTaskRow = selectedRef.current ? workspaceRef.current?.tasks.find(task => task.id === selectedRef.current) : undefined;
