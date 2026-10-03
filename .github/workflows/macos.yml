@@ -35,6 +35,10 @@ jobs:
       - run: pnpm --config.verify-deps-before-run=false --dir services/market install --frozen-lockfile
       - run: pnpm --config.verify-deps-before-run=false --dir services/market typecheck
       - run: pnpm --config.verify-deps-before-run=false --dir services/market test
+      - run: pnpm --config.verify-deps-before-run=false --dir services/sync install --frozen-lockfile
+      - run: pnpm --config.verify-deps-before-run=false --dir services/sync typecheck
+      - run: pnpm --config.verify-deps-before-run=false --dir services/sync test
+      - run: pnpm --config.verify-deps-before-run=false --dir services/sync check:deploy
       - name: Import Developer ID certificate
         id: signing
         env:

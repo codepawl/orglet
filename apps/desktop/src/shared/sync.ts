@@ -6,6 +6,19 @@ export const SyncRevisionId = z.uuid().refine(value => value === value.toLowerCa
 export const SyncClock = z.object({ wallMs: Integer, counter: Integer, deviceId: SyncDeviceId }).strict();
 export type SyncClock = z.infer<typeof SyncClock>;
 
+/** UUID layout shared by local synchronous SHA-256 and Worker WebCrypto SHA-256. */
+export function syncUuidFromDigest(digest: Uint8Array): string {
+  if (digest.length < 16) throw new Error('Digest đồng bộ không hợp lệ.');
+  const bytes = digest.slice(0, 16);
+  bytes[6] = (bytes[6] & 15) | 128;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+export function syncScopeNamespace(root: { kind: 'worker' | 'task'; id: string }): string {
+  return `orglet-sync-scope:${root.kind}:${root.id}`;
+}
+
 export function compareSyncClock(first: SyncClock, second: SyncClock): number {
   return first.wallMs - second.wallMs || first.counter - second.counter ||
     (first.deviceId < second.deviceId ? -1 : first.deviceId > second.deviceId ? 1 : 0);

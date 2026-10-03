@@ -4123,6 +4123,7 @@ export const en: Dictionary = {
   "Nội dung revision đồng bộ đã đổi.": "The synced revision has conflicting contents.",
   "Nội dung tin nhắn hiện tại không khớp lượt.": "The current message does not match its turn.",
   "Nội dung đồng bộ không hợp lệ.": "The sync contents are invalid.",
+  "Digest đồng bộ không hợp lệ.": "The sync digest is invalid.",
   "Phiên bản đồng bộ không hợp lệ.": "The sync version is invalid.",
   "Revision và clock phải cùng transaction.": "The revision and clock must share a transaction.",
   "Revision đã có nội dung khác.": "This revision already has different contents.",

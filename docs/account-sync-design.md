@@ -1,6 +1,6 @@
 # Orglet account and sync: technical design
 
-**Status: account sign-in and local replication foundation implemented; network sync not connected** ([COD-329](https://linear.app/codepawl/issue/COD-329), [local foundation](https://github.com/codepawl/orglet/issues/480)). The product decisions are in [product.md](product.md) point 3. The sections below distinguish the local implementation from the remaining service and transport design.
+**Status: account sign-in, local replication foundation and sync server implemented; desktop network transport not connected** ([COD-329](https://linear.app/codepawl/issue/COD-329), [local foundation](https://github.com/codepawl/orglet/issues/480), [server](https://github.com/codepawl/orglet/issues/481)). The product decisions are in [product.md](product.md) point 3. The sections below distinguish implemented pieces from the remaining transport and deployment design.
 
 ### Local replication foundation
 
@@ -17,6 +17,14 @@ Explicit backup recovery can still restore local chat history, including paid ch
 Received records cannot grant permissions, start runs or enable schedules. File metadata has no local path and a received file is marked unavailable on this device. Keys, account credentials, grants, operation journals, reviewed-skill approvals, browser profiles and caches are excluded by explicit schemas. Backup version 2 retains public revision identities, durable turns, privacy choices and permanent deletion IDs; version 1 remains accepted. Device clocks, account context, scope epochs, private receipt fences, outboxes and inboxes are not included.
 
 Prices and versions were read from the vendors' own pages on 2026-09-29. Cost figures are estimates built on the assumptions listed with them.
+
+### Sync server implementation
+
+`services/sync` implements authenticated push, incremental pull, pinned snapshot pages, device release and cursor-only WebSocket hints. One SQLite Durable Object belongs to the exact issuer and subject. Strict public projections exclude machine authority; frozen crew participants and team-scoped notes inherit privacy. Permanent entity and record barriers survive payload deletion and reject changed-envelope resurrection. Entire batches commit with receipts, quotas and sequence advancement in one native transaction.
+
+The service keeps encrypted row bodies behind a random per-account key, a versioned master-key wrapper and account/generation/record/sequence authenticated context. History retention applies to incremental logs; live historical records are not silently removed. A bounded account size and record count protect materialization even when a signed entitlement is larger. Device slots bind to verified grant families, and a replacement grant can release an occupied slot before registering itself. Snapshot consumers must stage all pages and apply only a complete, unchanged snapshot.
+
+The checked-in configuration is disabled, has no public route and provisions nothing during local checks. Desktop transport, R2 file bytes and the account-deletion integration remain follow-up work. Native SQLite fixtures test persistence, atomic failure, privacy, quotas, device release and WebSocket behavior; separate actual JWT tests cover identity verification. These fixtures do not prove positive authenticated production HTTP or forced hibernation eviction. See the [service contract and rollout requirements](../services/sync/README.md).
 
 ## What we are building
 
@@ -100,7 +108,7 @@ The server can read synced data (decided in COD-329; the web app, search and the
 3. **Everything synced is encrypted again at rest with the account's own key.**
    - Each account has a random 256-bit data key, wrapped with a master key that lives only as a Worker secret, and stored next to the account.
    - Each row's `data` and each R2 blob is AES-GCM encrypted with the data key, using WebCrypto in the Worker.
-   - **Deleting an account deletes its wrapped key**, so its remaining ciphertext and backups can never be read again.
+   - **Deleting an account deletes its live wrapped key and leaves a permanent deletion marker.** This stops existing tokens from recreating the live account. Durable Object point-in-time recovery can retain an earlier wrapped key; destroying the live key alone does not prove historical ciphertext or backups are irrecoverable. A stronger historical-key lifecycle is required before making that promise.
    - A `keyVersion` field lets the master key rotate by re-wrapping the data keys.
 
 The per-account key is random, not derived from the master key (the research note suggested HKDF derivation). A derived key can always be derived again, and the promise that deleting the account destroys its key needs a key that exists nowhere else.
