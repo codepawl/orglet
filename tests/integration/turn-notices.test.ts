@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { TaskThread } from '../../apps/desktop/src/renderer/components/TaskThread';
 import { LiveRun } from '../../apps/desktop/src/renderer/components/LiveRun';
 import { turnNotices } from '../../apps/desktop/src/renderer/components/turnNotices';
+import { unfinishedWork } from '../../apps/desktop/src/renderer/unfinishedWork';
 import type { AppProposal } from '../../apps/desktop/src/shared/app-proposals';
 import type { Artifact, Run, Skill, Task, TaskDetail, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { WorkspaceRecoveryView } from '../../apps/desktop/src/shared/workspace-recovery';
@@ -107,20 +108,31 @@ it('keeps the read faces under the answer, the toolbar on it, and states a membe
   const bubble = html.indexOf(`id="message-${artifactId}"`, answerStart);
   const actions = html.indexOf('class="message-actions"', answerStart);
   const receipts = html.indexOf('class="read-receipts"', answerStart);
-  const limitations = html.indexOf('Incomplete work and limitations', answerStart);
-  // COD-365: the limitations note follows the text, the read faces end the line under it, and the toolbar that
-  // floats on the message comes last in the markup.
-  expect(bubble).toBeLessThan(limitations);
-  expect(limitations).toBeLessThan(receipts);
+  // COD-365: the read faces end the line under the text, and the toolbar that floats on the message comes last in
+  // the markup.
+  expect(bubble).toBeLessThan(receipts);
   expect(receipts).toBeLessThan(actions);
   expect(html.slice(actions)).toMatch(/^class="message-actions" role="group" aria-label="Message actions"/);
-  const note = html.slice(limitations);
-  const noteEnd = note.indexOf('class="read-receipts"');
-  const box = noteEnd === -1 ? note : note.slice(0, noteEnd);
-  expect(box.indexOf('Incomplete work and limitations')).toBeLessThan(box.indexOf('Unfinished roles: Listener:'));
-  expect(box.indexOf('Unfinished roles: Listener:')).toBeLessThan(box.indexOf('Retry with current settings'));
-  expect(box).not.toContain('<ul');
-  expect(html.match(/An assessed check needs sources provided to the run\./g)).toHaveLength(1);
+  // While the chat can still be retried, what is unfinished is the prompt bar's to show with Retry, not the thread's.
+  expect(html).not.toContain('Incomplete work and limitations');
+  expect(html).not.toContain('Retry with current settings');
+  expect(unfinishedWork(detail)?.limitations).toEqual([`Role chưa hoàn tất: Listener: ${error}`]);
+  // Once the chat is finished, the note is a record and stays with its answer, after the text and before the faces.
+  const finished: TaskDetail = { ...detail, task: { ...detail.task, status: 'completed' } };
+  expect(unfinishedWork(finished)).toBeUndefined();
+  const finishedHtml = renderToStaticMarkup(createElement(TaskThread, {
+    detail: finished, workspace: { workers: [worker, listener], skills: [skill], tasks: [finished.task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
+    proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
+  }));
+  const note = finishedHtml.indexOf('Incomplete work and limitations');
+  expect(finishedHtml.indexOf(`id="message-${artifactId}"`)).toBeLessThan(note);
+  expect(note).toBeLessThan(finishedHtml.indexOf('Unfinished roles: Listener:'));
+  expect(finishedHtml.indexOf('Unfinished roles: Listener:')).toBeLessThan(finishedHtml.indexOf('class="read-receipts"', note));
+  expect(finishedHtml).not.toContain('Retry with current settings');
+  // The failure is said once on screen: on the bar while it can be retried, with the answer afterwards. No second card.
+  expect(html).not.toContain("An assessed check needs sources provided to the run.");
+  expect(finishedHtml.match(/An assessed check needs sources provided to the run./g)).toHaveLength(1);
   expect(html).not.toContain('Needs attention');
   expect(html).toContain('aria-label="React"');
 });

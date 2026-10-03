@@ -335,7 +335,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
    * named, while the author's own line is not; the same runs give a crew answer its handoff rows in the trace
    * (COD-220). `proposals` are the cards this answer's run proposed.
    */
-  const answer = (artifact: Artifact, author: Run | undefined, runs: readonly Run[], proposals: AppProposal[], latest: boolean, retry?: ReactNode, receipts?: ReactNode) => {
+  const answer = (artifact: Artifact, author: Run | undefined, runs: readonly Run[], proposals: AppProposal[], latest: boolean, limitationsOnBar: boolean, receipts?: ReactNode) => {
     const authorName = author?.snapshot.worker.name ?? 'Orglet';
     const chat = artifact.report.format === 'chat';
     // A source id the model copied into its message reads as the file's name, here and in what is copied (COD-257).
@@ -367,7 +367,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     // The reactions sit under the answer, whichever shape it takes (COD-219, COD-365).
     const badges = badgesFor(artifact.id);
     return chat
-      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} receipts={receipts} toolbar={toolbar} retry={retry} />
+      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} receipts={receipts} toolbar={toolbar} limitationsOnBar={limitationsOnBar} />
       : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} toolbar={toolbar} />;
   };
   /**
@@ -549,7 +549,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
               onForward={forward ? () => forward({ taskId: detail.task.id, messageId: personMessageId, author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />}
           </Message>
           {turn.replies.map((reply, replyIndex) => <Message key={reply.run.id} className="assistant-message" label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])} header={replyHeads[replyIndex]} at={reply.artifact.createdAt}>
-            {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}
+            {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest, false)}
           </Message>)}
           {sectionShown && <Message className={latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'} label={t('Trả lời của {0}', [waitingAuthor?.snapshot.worker.name ?? 'Orglet'])} header={sectionHeader} at={sectionAt}>
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
@@ -607,7 +607,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 the latest turn's pause already says so in its own line. */}
             {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
             {answered
-              ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest, retryButton && turn.artifact!.report.format === 'chat' && turn.artifact!.report.limitations.length > 0 ? retryButton : undefined, turn.artifact!.report.format === 'chat' ? receiptsFor(turn.revision) : undefined)
+              ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest, Boolean(retryButton) && turn.artifact!.report.format === 'chat' && turn.artifact!.report.limitations.length > 0, turn.artifact!.report.format === 'chat' ? receiptsFor(turn.revision) : undefined)
               : heldRun
                 ? heldAnswer(heldRun, remainingProposals)
                 /* No answer of its own to hang them on (still running, failed, or a group turn whose replies carry
@@ -765,16 +765,17 @@ function MessageFoot({ badges, receipts }: { badges?: ReactNode; receipts?: Reac
 /**
  * A normal chat answer: the text, what came out of it, its limitations, then its reactions and read faces.
  * Notices stay in their order (COD-217): what was loaded before writing above the text, what came out of it below.
+ * While the chat still waits on the unfinished parts they are on the prompt bar with Retry (`unfinishedWork`), not
+ * here: that is the chat's state, and inside the thread it read as part of what the orglet said.
  */
-function ChatReply({ artifact, text, notices, badges, receipts, toolbar, retry }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; retry?: ReactNode }) {
+function ChatReply({ artifact, text, notices, badges, receipts, toolbar, limitationsOnBar }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; limitationsOnBar: boolean }) {
   return <div className="chat-reply">
     {notices.before}
     <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} /></div>
     {notices.after}
-    {artifact.report.limitations.length > 0 && <div className="chat-limitations">
+    {artifact.report.limitations.length > 0 && !limitationsOnBar && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       {artifact.report.limitations.map((limitation, index) => <p key={index}>{tMessage(limitation)}</p>)}
-      {retry}
     </div>}
     <MessageFoot badges={badges} receipts={receipts} />
     {toolbar}

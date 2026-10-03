@@ -2019,8 +2019,15 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-limitations { --limit-wash:color-mix(in srgb, var(--working) 14%, var(--bg)); --limit-ink:color-mix(in srgb, var(--working) 68%, var(--text)); margin-top:12px; padding:12px 14px 13px; border-radius:14px; background:var(--limit-wash); overflow-wrap:anywhere; }
 .chat-limitations strong { display:block; font-size:13px; font-weight:600; color:var(--limit-ink); }
 .chat-limitations p { margin:6px 0 0; font-size:13px; line-height:1.5; }
-.chat-limitations .limit-retry { margin-top:10px; background:var(--primary); color:var(--primary-text); }
-.chat-limitations .limit-retry:hover:not(:disabled) { background:var(--primary); color:var(--primary-text); opacity:.85; }
+/* The same wash on the prompt bar (`UnfinishedWork` in Composer.tsx): the mark, the text, then Retry centred on them. */
+.unfinished-work { --limit-wash:color-mix(in srgb, var(--working) 14%, var(--bg)); --limit-ink:color-mix(in srgb, var(--working) 68%, var(--text)); display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:10px 12px 10px 14px; border-radius:14px; background:var(--limit-wash); }
+.unfinished-work-mark { flex-shrink:0; color:var(--limit-ink); }
+.unfinished-work-text { flex:1; min-width:0; max-height:96px; overflow-y:auto; overflow-wrap:anywhere; }
+.unfinished-work-text strong { display:block; font-size:13px; font-weight:600; color:var(--limit-ink); }
+.unfinished-work-text p { margin:2px 0 0; font-size:13px; line-height:1.5; }
+.unfinished-work .limit-retry { flex-shrink:0; background:var(--primary); color:var(--primary-text); }
+.unfinished-work .limit-retry:hover:not(:disabled) { background:var(--primary); color:var(--primary-text); opacity:.85; }
+@container (max-width:520px) { .unfinished-work { flex-wrap:wrap; } .unfinished-work .limit-retry { margin-left:30px; } }
 /* Unfinished crew jobs under the byline (team-chat.md). The name and the state share one line; the brief is a
    short line under them, cut with an ellipsis, until the row opens. Indented with the working line, so both sit
    under the name rather than running back to the face. */
