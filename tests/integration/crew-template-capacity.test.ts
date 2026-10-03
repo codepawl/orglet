@@ -86,7 +86,8 @@ it('adds and updates nine distinct packaged skills with local choices, revisions
   next.workers[0].effort = 'max';
   await server.publish(next);
   const preview = await server.market.previewUpdate(added.entityId);
-  expect(preview.customized).toBe(true);
+  // The connection, effort, auto-apply and MCP choices belong to this computer; the installed content is untouched.
+  expect(preview.customization).toBe('unchanged');
   await server.market.applyUpdate(added.entityId, preview.token);
   expect(store.get<Worker>('workers', firstWorker.id)).toMatchObject({
     revision: customized.revision + 1, instructions: next.workers[0].instructions,

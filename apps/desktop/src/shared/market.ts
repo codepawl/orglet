@@ -70,8 +70,17 @@ export const MarketOrigin = z.object({
   workerIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= MAX_CREW_TEMPLATE_WORKERS),
   skillIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= MAX_CREW_TEMPLATE_WORKERS),
   baseline: z.string().regex(/^[a-f0-9]{64}$/),
+  /**
+   * What `baseline` is a digest of. `authoring-v1` covers only the content an update replaces (names, instructions,
+   * skills, crew settings, members by their template keys), so every computer of an account computes the same value
+   * (GH-479). An origin without the tag is from before: its baseline hashed whole rows of the computer that added
+   * it, local revision numbers included, and proves nothing on another computer.
+   */
+  baselineKind: z.literal('authoring-v1').optional(),
 }).strict();
 export type MarketOrigin = z.infer<typeof MarketOrigin>;
+/** Whether an installed copy still matches what was installed; `unknown` when an old baseline cannot say. */
+export type MarketCustomization = 'unchanged' | 'customized' | 'unknown';
 export const MarketOrigins = z.array(MarketOrigin).max(10_000).refine(origins => new Set(origins.map(origin => origin.entityId)).size === origins.length);
 export const MarketTarget = z.object({ listingId: ListingId, version: MarketVersion }).strict();
 export const MarketUpdateTarget = z.object({ entityId: z.string().uuid() }).strict();
@@ -81,7 +90,7 @@ export type MarketCatalogView = { listings: MarketDisplayListing[]; nextCursor?:
 export type MarketAdded = { entityId: string; kind: 'orglet' | 'crew'; workerIds: string[]; fallbackNames: string[] };
 export type MarketChange = { name: string; before: string; after: string };
 export type MarketUpdate = {
-  entityId: string; listing: MarketDisplayListing; installedVersion: number; customized: boolean;
+  entityId: string; listing: MarketDisplayListing; installedVersion: number; customization: MarketCustomization;
   token: string; changes: MarketChange[];
 };
 export type MarketInstallation = { entityId: string; kind: 'orglet' | 'crew'; listingId: string; version: number; name: string; updateAvailable: boolean };
