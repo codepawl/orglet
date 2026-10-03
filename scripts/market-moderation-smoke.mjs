@@ -147,6 +147,14 @@ async function openReview(page) {
   await page.getByRole('button', { name: label('Xem để duyệt'), exact: true }).click();
   await page.getByRole('dialog').getByText('Version 2: inspect the supplied evidence.', { exact: false }).first().waitFor();
 }
+const listingMenuLabel = () => label('Tùy chọn {0}').replace('{0}', 'Review fixture');
+async function openReport(page) {
+  await page.locator('.marketplace-listing').filter({ hasText: 'Review fixture' }).getByRole('button', { name: listingMenuLabel(), exact: true }).click();
+  await page.waitForFunction(text => document.activeElement?.getAttribute('role') === 'menuitem' && document.activeElement.textContent.trim() === text, label('Report'));
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
+}
 try {
   let page = await app.firstWindow();
   await page.waitForFunction(() => window.orglet !== undefined);
@@ -160,7 +168,7 @@ try {
     await explore(page);
     await page.getByRole('button', { name: label('Duyệt marketplace'), exact: true }).waitFor();
     for (const size of [{ width: 1200, height: 820 }, { width: 740, height: 600 }]) await photograph(page, 'catalog', size);
-    await page.getByRole('button', { name: label('Report'), exact: true }).click();
+    await openReport(page);
     await page.getByRole('textbox', { name: label('Giải thích ngắn'), exact: true }).fill('Please inspect the exact public version.');
     await page.keyboard.press('Enter');
     assert.equal(await app.evaluate(() => global.__moderationFixture.requests.length), 0, 'Enter in explanation does not send a report');
@@ -170,6 +178,7 @@ try {
     }
     for (const size of [{ width: 1200, height: 820 }, { width: 740, height: 600 }]) await photograph(page, 'report', size);
     await close(page);
+    await page.waitForFunction(text => document.activeElement?.getAttribute('aria-label') === text, listingMenuLabel());
     await openReview(page);
     await page.locator('.market-review-reports').getByText(new RegExp(label('Riêng tư'))).waitFor();
     assert.match(await page.getByRole('dialog').innerText(), /<script>window.__marketExecuted = true<\/script>/);
@@ -185,7 +194,7 @@ try {
   const workspace = await call(page, 'workspace');
   await call(page, 'settings', { language, theme: 'light', connectionLimitMicros: workspace.connectionLimitMicros });
   await page.waitForFunction(() => document.documentElement.lang === 'vi');
-  await page.getByRole('button', { name: 'Report', exact: true }).click();
+  await openReport(page);
   await page.getByRole('textbox', { name: 'Giải thích ngắn', exact: true }).fill('Please inspect this public version.');
   await app.evaluate(() => { global.__moderationFixture.failNext = true; });
   await page.getByRole('button', { name: 'Gửi report', exact: true }).click();
@@ -255,7 +264,7 @@ try {
   await close(page); await close(page);
   await app.evaluate(() => { global.__moderationFixture.paused = true; });
   await page.locator('.marketplace').getByRole('button', {name:'Làm mới',exact:true}).click();
-  await page.getByRole('button', {name:'Report',exact:true}).click();
+  await openReport(page);
   await page.getByText('Dịch vụ duyệt và report chưa sẵn sàng. Hãy thử lại sau.', {exact:true}).waitFor();
   assert.equal(await page.getByText('Đăng nhập tài khoản đã xác minh để tiếp tục.', {exact:true}).count(),0);
   assert.equal(await page.getByRole('button', {name:'Gửi report',exact:true}).isDisabled(),true);
@@ -264,7 +273,7 @@ try {
   await app.evaluate(() => { global.__moderationFixture.reviewer = false; });
   await page.locator('.marketplace').getByRole('button', {name:'Làm mới',exact:true}).click();
   await page.waitForFunction(() => ![...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Duyệt marketplace'));
-  await page.getByRole('button', {name:'Report',exact:true}).click();
+  await openReport(page);
   await page.evaluate(() => window.orglet.accountSignOut());
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   assert.equal(await page.getByRole('button', { name: 'Duyệt marketplace', exact: true }).count(), 0);

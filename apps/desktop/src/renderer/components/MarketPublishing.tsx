@@ -228,21 +228,25 @@ export function MarketOwnListings() {
       setSaved(undefined);
       setError('');
       setBusy(false);
+      void run({ action: 'listOwn' });
     });
+    void run({ action: 'listOwn' });
     return () => {
       unsubscribe();
       accountGeneration.current += 1;
     };
   }, []);
-  return <section className="page-section" aria-labelledby="market-own-title">
-    <details className="market-publishing-disclosure market-own"><summary><ChevronRight size={14} aria-hidden="true" /><h2 id="market-own-title">{t('Mục của tôi')}</h2></summary><div className="market-own-content">
+  return <section className="market-own" aria-label={t('Mục của tôi')}>
+    <div className="market-own-content">
+    <p className="muted">{t('Để chia sẻ mẫu, mở menu của một Tí hoặc crew rồi chọn Xuất bản lên marketplace. Bạn luôn xem trước nội dung trước khi gửi.')}</p>
     <Button type="button" variant="outline" disabled={busy} onClick={() => void run({ action: 'listOwn' })}><RefreshCw size={16} />{t('Làm mới mục của tôi')}</Button>
+    {!view && busy && <div className="marketplace-loading" aria-label={t('Đang tải mục của tôi')}><div /><div /></div>}
     {error && <p className="error" role="alert">{error}</p>}
     {view?.capability.status !== undefined && view.capability.status !== 'available' && <p className="muted">{capabilityLabel(view.capability.status)}</p>}
     {view?.summaries && <p className="muted">{t('{0}/{1} mục; {2}/5 lần gửi trong giờ qua.', [view.summaries.allowance.listingCount, view.summaries.allowance.listingLimit, view.summaries.allowance.submissionsInHour])}</p>}
     {view?.summaries?.listings.length === 0 && view.operations.length === 0 && <p className="muted">{t('Chưa có mục xuất bản. Mở menu của một Tí hoặc crew để xem trước và gửi mẫu.')}</p>}
-    {view?.summaries?.listings.map(item => <div className="friend-source" key={item.listingId}>
-      <span className="friend-source-text"><span className="friend-name">{item.latest.listing.name}</span><span className="friend-status">{t('Phiên bản mới nhất')} · v{item.latest.listing.version} · {item.latest.state === 'pending' ? t('Đang chờ duyệt') : item.latest.state === 'approved' ? t('Đã duyệt') : t('Đã từ chối')}</span><span className="friend-status">{item.published ? `${t('Đang công khai')} · v${item.published.version}` : t('Hiện không công khai')}</span>{item.latest.reason && <span className="friend-status">{item.latest.reason}</span>}{item.hidden && <span className="friend-status">{t('Mục đã bị ẩn. Gửi phiên bản mới không mở lại mục.')} {item.hiddenReason}</span>}</span>
+    {view?.summaries?.listings.map(item => <div className="friend-source market-own-listing" key={item.listingId}>
+      <span className="friend-source-text"><span className="friend-name">{item.latest.listing.name}</span><span className="friend-status">{t('Phiên bản mới nhất')} · v{item.latest.listing.version} · {item.latest.state === 'pending' ? t('Đang chờ duyệt') : item.latest.state === 'approved' ? t('Đã duyệt') : t('Đã từ chối')}</span><span className="friend-status">{item.published ? `${t('Đang công khai')} · v${item.published.version}` : item.hidden ? t('Đã bị ẩn') : item.publicationEpoch > 0 ? t('Đã ngừng xuất bản') : t('Hiện không công khai')}</span>{item.latest.reason && <span className="friend-status">{item.latest.reason}</span>}{item.hidden && <span className="friend-status">{t('Mục đã bị ẩn. Gửi phiên bản mới không mở lại mục.')} {item.hiddenReason}</span>}</span>
       {item.published && <Button type="button" variant="outline" disabled={busy || view.capability.status !== 'available'} onClick={() => void confirmAction({ title: t('Ngừng xuất bản {0}?', [item.latest.listing.name]), description: t('Các bản đã thêm trên máy vẫn giữ nguyên. Đây là thao tác cho toàn bộ mục, không chỉ phiên bản đang xem.'), confirmLabel: t('Ngừng xuất bản') }).then(confirmed => {
         if (confirmed) void run({ action: 'unpublish', listingId: item.listingId, confirmation: view.confirmations[item.listingId] });
       })}><X size={16} />{t('Ngừng xuất bản')}</Button>}
@@ -251,6 +255,6 @@ export function MarketOwnListings() {
     {saved && <Drawer open title={saved.operation.name} description={operationLabel(saved.operation)} onClose={() => setSaved(undefined)}>
       <div className="market-publishing form">{saved.operation.operation === 'unpublish' ? <pre className="market-public-preview">{saved.requestText}</pre> : <PublicContentPreview requestText={saved.requestText} />}{view?.capability.status !== 'available' && <p className="muted" role="status">{capabilityLabel(view?.capability.status ?? 'unavailable')}</p>}<div className="actions sticky-actions"><Button type="button" disabled={busy || view?.capability.status !== 'available'} onClick={() => void run({ action: 'retry', operationId: saved.operation.id })}><RefreshCw size={16} />{t('Thử lại nội dung đã gửi')}</Button></div></div>
     </Drawer>}
-    </div></details>
+    </div>
   </section>;
 }

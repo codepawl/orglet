@@ -3059,8 +3059,21 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .notice-filters .notice-clear { margin-left:auto; }
 
 /* Curated friends and explicit template updates. */
-.marketplace-source { margin: 4px 0 12px; font-size: 12px; }
-.marketplace-listing { align-items: center; }
+.marketplace-source { margin: 0; font-size: 12px; }
+.marketplace-discover { display: grid; gap: 12px; min-width: 0; }
+.marketplace-listing { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
+.marketplace-listing .friend-source-text { gap: 6px; }
+.marketplace-listing .friend-name, .market-own .friend-name { margin: 0; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: 14px; }
+.market-listing-summary { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.market-listing-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; }
+.market-listing-meta > span { white-space: nowrap; }
+.market-listing-meta > .market-listing-author { white-space: normal; overflow-wrap: anywhere; }
+.market-listing-installed { margin: 0; font-size: 12px; color: var(--muted); }
+.marketplace-empty { padding: 12px 10px; }
+.marketplace-updates { display: grid; gap: 8px; }
+.marketplace-updates h3, .market-own h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.market-own .friend-status { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.market-own-content > .org-button { justify-self: start; }
 .marketplace-loading { display: grid; gap: 12px; }
 .marketplace-loading > div { height: 68px; border-radius: var(--radius); background: var(--row-hover); }
 .marketplace-profile { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -3089,6 +3102,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-publishing .field-grid { gap: 16px; }
 .market-publishing-target { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; }
 .market-publishing-options, .market-own-content { display: grid; gap: 16px; padding-block-start: 14px; }
+.market-own-content { padding-block-start: 0; }
 .market-publishing-disclosure { min-width: 0; }
 .market-publishing-disclosure > summary { display: flex; align-items: center; gap: 8px; min-height: 30px; cursor: pointer; list-style: none; font-size: 13px; }
 .market-publishing-disclosure > summary::-webkit-details-marker { display: none; }
@@ -3101,16 +3115,15 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-content-preview h3 { font-size: 14px; font-weight: 600; }
 .market-content-preview .market-preview-summary h3 { font-size: 17px; }
 .market-public-prose { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; font-size: 13px; line-height: 1.6; }
-.market-own > summary h2 { margin: 0; }
 .marketplace-pagination { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.market-listing-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: wrap; flex-shrink: 0; }
+.market-listing-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
 .market-review-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; width: 100%; }
 .market-review-footer > :first-child { margin-inline-end: auto; }
 .market-review-reports { display: grid; gap: 12px; margin-block: 20px; min-width: 0; }
 .market-review-reports h3 { margin: 0; font-size: 14px; }
 .market-review-report { border-block-start: 1px solid var(--border); padding-block-start: 12px; min-width: 0; }
 .market-review-report > p { margin-block: 0 6px; }
-@media (max-width: 560px) { .market-listing-actions { justify-content: flex-start; width: 100%; } }
+@media (max-width: 560px) { .marketplace-listing { grid-template-columns: minmax(0, 1fr); gap: 10px; } .market-listing-actions { justify-content: flex-start; } .market-own-listing { flex-wrap: wrap; } }
 @media (max-width: 560px) { .market-publishing-target { grid-template-columns: minmax(0, 1fr); } }
 
 /* One inherited setting does not need the editor's full-height panel. */

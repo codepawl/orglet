@@ -47,18 +47,36 @@ it('returns from the next discovery page through a cached read without requiring
   expect(button('Trang tiếp theo').disabled).toBe(false);
 });
 
-it('keeps discovery navigation disabled until the initial delayed refresh finishes', async () => {
+it('allows cached navigation during a delayed refresh and keeps the chosen page when that refresh arrives', async () => {
   let complete!: (value: unknown) => void;
   const first = { listings: [], source: 'cache', fetchedAt: null, nextCursor: 'page-two' };
-  fixture.call.mockImplementation(async (command, input) => command === 'marketInstallations' ? [] : input.refresh ? new Promise(resolve => { complete = resolve; }) : first);
+  const second = { ...first, nextCursor: null, pageCursor: 'page-two', source: 'online' };
+  fixture.call.mockImplementation(async (command, input) => command === 'marketInstallations' ? [] : input.cursor === 'page-two' ? second : input.refresh ? new Promise(resolve => { complete = resolve; }) : first);
   await render(createElement(Marketplace, { onAdded: () => {} }));
   const next = [...document.querySelectorAll('button')].find(item => item.textContent?.includes(t('Trang tiếp theo')))!;
-  expect(next.disabled).toBe(true);
-  const before = fixture.call.mock.calls.length;
-  await act(async () => next.click());
-  expect(fixture.call.mock.calls).toHaveLength(before);
-  await act(async () => complete({ ...first, source: 'online' }));
   expect(next.disabled).toBe(false);
+  const previous = [...document.querySelectorAll('button')].find(item => item.textContent?.includes(t('Trang trước')))!;
+  expect(previous.disabled).toBe(true);
+  await act(async () => next.click());
+  expect(fixture.call.mock.calls.at(-1)).toEqual(['marketCatalog', { refresh: true, cursor: 'page-two' }]);
+  expect(previous.disabled).toBe(false);
+  expect(next.disabled).toBe(true);
+  await act(async () => complete({ ...first, source: 'online' }));
+  expect(previous.disabled).toBe(false);
+  expect(next.disabled).toBe(true);
+});
+
+it('waits for saved origins before offering an existing listing as a new friend', async () => {
+  let origins!: (value: unknown) => void;
+  const listing = { listingId: 'fixture-friend', version: 1, kind: 'orglet', name: 'Public friend', summary: 'Public instructions', author: 'CodePawl', language: 'en', license: 'CC-BY-4.0', tags: [], changelog: '', sha256: 'a'.repeat(64) };
+  fixture.call.mockImplementation(async command => command === 'marketInstallations' ? new Promise(resolve => { origins = resolve; }) : { listings: [listing], source: 'cache', fetchedAt: null });
+  await render(createElement(Marketplace, { onAdded: () => {} }));
+  expect(document.querySelector('.marketplace-loading')).not.toBeNull();
+  expect(document.querySelector('.marketplace-listing')).toBeNull();
+  await act(async () => origins([{ entityId: 'c6639dce-1304-4f39-9b7d-a9d3b9f5aa60', listingId: listing.listingId, version: 1, kind: 'orglet', name: 'My edited friend', updateAvailable: false }]));
+  expect(document.querySelector('.marketplace-listing')?.textContent).toContain(t('Đã thêm'));
+  expect(document.querySelector('.marketplace-listing button')?.textContent).toContain(t('Thêm bản nữa'));
+  expect(fixture.execute).not.toHaveBeenCalled();
 });
 
 it('opens a retained recent page after an offline restart even when the intervening page was evicted', async () => {
@@ -102,6 +120,7 @@ it('keeps owner reads and inspection available while a closed write gate disable
     summaries: { publishingEnabled: false, listings: [{ listingId: listing.listingId, kind: 'orglet', publicationEpoch: 0, published: listing, latest: { listing, state: 'approved' } }], allowance: { listingCount: 1, listingLimit: 10, submissionLimit: 5, submissionsInHour: 0 } },
   } });
   await render(createElement(MarketOwnListings));
+  expect(fixture.execute.mock.calls.map(([action]) => action.action)).toEqual(['listOwn']);
   const button = (label: string) => [...document.querySelectorAll('button')].find(item => item.textContent?.includes(t(label)))!;
   await act(async () => button('Làm mới mục của tôi').click());
   expect(document.body.textContent).toContain(listing.name);
@@ -110,7 +129,7 @@ it('keeps owner reads and inspection available while a closed write gate disable
   await act(async () => button('Xem nội dung đã gửi').click());
   expect(button('Thử lại nội dung đã gửi').disabled).toBe(true);
   expect(document.querySelector('[role=dialog]')?.textContent).toContain(t('Dịch vụ xuất bản chưa sẵn sàng. Nội dung trên máy vẫn giữ nguyên.'));
-  expect(fixture.execute.mock.calls.map(([action]) => action.action)).toEqual(['listOwn', 'inspect']);
+  expect(fixture.execute.mock.calls.map(([action]) => action.action)).toEqual(['listOwn', 'listOwn', 'inspect']);
 });
 
 it.each([
@@ -118,8 +137,8 @@ it.each([
   { surface: 'owner', changed: false }, { surface: 'dialog', changed: false },
 ])('fences owner results in $surface when account changed=$changed', async ({ surface, changed }) => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  let complete!: (value: PublishingResult) => void;
-  fixture.execute.mockImplementation(() => new Promise<PublishingResult>(resolve => { complete = resolve; }));
+  const completions: ((value: PublishingResult) => void)[] = [];
+  fixture.execute.mockImplementation(() => new Promise<PublishingResult>(resolve => { completions.push(resolve); }));
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -127,13 +146,15 @@ it.each([
   const refresh = [...document.querySelectorAll('button')].find(button => /Làm mới mục của tôi|Refresh my listings/.test(button.textContent ?? ''))!;
   await act(async () => refresh.click());
   await act(async () => { for (const listener of fixture.listeners) listener(changed ? { status: 'local' } : { status: 'signed_in', email: 'fixture@example.test', name: 'Fixture publisher' }); });
-  await act(async () => complete({ kind: 'own', view: {
+  expect(completions).toHaveLength(surface === 'owner' && changed ? 2 : 1);
+  await act(async () => completions[0]({ kind: 'own', view: {
     capability: { status: 'available' }, confirmations: {},
     operations: [{ id: 'c6639dce-1304-4f39-9b7d-a9d3b9f5aa60', name: 'Previous account private listing', operation: 'create', target: null, state: 'unknown' }],
     summaries: { publishingEnabled: true, listings: [{ listingId: 'private-fixture', kind: 'orglet', publicationEpoch: 0, published: null, hidden: false, hiddenReason: '', latest: { state: 'pending', reason: '', listing: {
       listingId: 'private-fixture', kind: 'orglet', version: 1, name: 'Previous account private listing', summary: 'Fixture', tags: [], language: 'en', license: 'CC-BY-4.0', changelog: '', author: { displayName: 'Fixture' }, sha256: 'a'.repeat(64), reviewDigest: 'b'.repeat(64),
     } } }], allowance: { listingCount: 1, listingLimit: 10, submissionLimit: 5, submissionsInHour: 0 } },
   } }));
+  if (surface === 'owner' && changed) await act(async () => completions[1]({ kind: 'own', view: { capability: { status: 'local' }, confirmations: {}, operations: [] } }));
   if (surface === 'dialog') {
     const target = [...document.querySelectorAll<HTMLElement>('[role=combobox]')].at(-1)!;
     await act(async () => target.click());

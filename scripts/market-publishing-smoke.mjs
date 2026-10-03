@@ -1,6 +1,6 @@
 import { _electron as electron } from 'playwright';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, readFile, unlink } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
@@ -24,6 +24,8 @@ const main = join(application, '.vite/build/main.js');
 const bootstrap = join(directory, 'publishing-bootstrap.cjs');
 const coreBootstrap = join(directory, 'publishing-core-bootstrap.cjs');
 const publicCatalogState = join(directory, 'public-catalog.json');
+const catalogHold = join(directory, 'hold-catalog');
+const catalogHeld = join(directory, 'catalog-held');
 const serverState = join(directory, 'fake-market.json');
 const skillDirectory = join(directory, 'public-research');
 await mkdir(join(skillDirectory, 'references'), { recursive: true });
@@ -36,12 +38,24 @@ global.fetch = async address => {
   if (url.origin !== 'https://market.orglet.codepawl.com') throw new Error('Unexpected fake core network route');
   if (!fs.existsSync(${JSON.stringify(publicCatalogState)})) return Response.json({}, { status: 404 });
   const catalog = JSON.parse(fs.readFileSync(${JSON.stringify(publicCatalogState)}, 'utf8'));
+  if (fs.existsSync(${JSON.stringify(catalogHold)})) {
+    fs.writeFileSync(${JSON.stringify(catalogHeld)}, 'held');
+    const deadline = Date.now() + 30000;
+    while (fs.existsSync(${JSON.stringify(catalogHold)})) {
+      if (Date.now() > deadline) throw new Error('Catalog fixture was not released');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
   if (!catalog.online) throw new Error('Synthetic offline catalog');
   if (url.pathname !== '/v2/catalog') return Response.json({}, { status: 404 });
+  if (catalog.empty) return Response.json({ listings: [], nextCursor: null });
   const page = Number(url.searchParams.get('cursor') || 1);
   return Response.json({ listings: Array.from({ length: 20 }, (_, index) => ({
     ...catalog.seed[0], listingId: 'fixture-page-' + page + '-' + index,
     name: 'Saved ' + page + ' item ' + index, author: { displayName: 'Fixture catalog' }, reviewDigest: 'b'.repeat(64),
+    ...(catalog.longContent && index === 0 ? { name: 'Research notes with complete sources and a carefully explained conclusion',
+      summary: 'Compare the supplied sources, separate evidence from assumptions, and explain the result in complete sentences. Keep the original references so the reader can check each claim and revise their own local copy.',
+      author: { displayName: 'A community publisher with a complete public display name' } } : {}),
   })), nextCursor: String(page + 1) });
 };
 require(${JSON.stringify(join(application, '.vite/build/core.js'))});
@@ -75,7 +89,8 @@ global.fetch = async (address, options = {}) => {
   }
   if (url.origin !== 'https://market.orglet.codepawl.com') throw new Error('Unexpected fake network route');
   if (url.pathname === '/v2/me/summary') {
-    const listings = fixture.records.filter(record => record.receipt.operation !== 'unpublish').map(record => ({
+    if (fixture.holdOwn) await new Promise(resolve => { fixture.releaseOwn = resolve; });
+    let listings = fixture.records.filter(record => record.receipt.operation !== 'unpublish').map(record => ({
       listingId: record.receipt.listingId, kind: record.submission.kind,
       latest: { state: 'pending', listing: {
         listingId: record.receipt.listingId, version: record.receipt.version, kind: record.submission.kind,
@@ -84,6 +99,17 @@ global.fetch = async (address, options = {}) => {
         author: { displayName: 'Fixture publisher' }, sha256: 'a'.repeat(64), reviewDigest: 'b'.repeat(64),
       } }, published: null, publicationEpoch: 0,
     }));
+    if (fixture.ownerStates && listings.length) {
+      const original = listings[0];
+      listings = ['pending', 'approved', 'rejected', 'unpublished', 'hidden'].map(state => {
+        const listingId = 'fixture-owner-' + state;
+        const listing = { ...original.latest.listing, listingId, version: 2, name: 'Owner ' + state + ' fixture' };
+        return { ...original, listingId, latest: { listing, state: state === 'pending' || state === 'rejected' ? state : 'approved', reason: state === 'rejected' ? 'Please explain the public instructions and source references more clearly.' : '' },
+          published: state === 'pending' || state === 'approved' ? { ...listing, version: state === 'pending' ? 1 : 2 } : null,
+          publicationEpoch: state === 'unpublished' ? 1 : 0,
+          hidden: state === 'hidden', hiddenReason: state === 'hidden' ? 'The published instructions contained a private reference.' : '' };
+      });
+    }
     return Response.json({ publishingEnabled: true, listings, allowance: { listingLimit: 10, listingCount: listings.length, submissionsInHour: listings.length, submissionLimit: 5 } });
   }
   if (options.method !== 'POST') return Response.json({}, { status: 404 });
@@ -237,7 +263,7 @@ try {
   assert.equal(saved.requestText, initialRequests[0].text);
   await friends(page);
   await page.getByRole('tab', { name: 'Thêm bạn', exact: true }).click();
-  await page.locator('.market-own > summary').click();
+  await page.getByRole('tab', { name: 'Mục của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Làm mới mục của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Xem nội dung đã gửi', exact: true }).click();
   await page.getByRole('dialog').locator('.market-publishing-disclosure > summary').filter({ hasText: 'references/evidence.txt' }).click();
@@ -279,8 +305,92 @@ try {
     await page.screenshot({ path: join(output, `vi-light-${size.width}-saved-pages.png`) });
   }
   await writeFile(join(output, 'cached-page-geometry.json'), JSON.stringify(cachedPageReports, null, 2));
+  // Hold the actual anonymous transport while navigating retained SQLite pages.
+  await app.close();
+  await writeFile(catalogHold, 'hold');
+  await writeFile(publicCatalogState, JSON.stringify({ seed: catalog.listings, online: true }));
+  app = await launch();
+  page = await app.firstWindow();
+  await page.waitForFunction(() => window.orglet !== undefined);
+  await friends(page);
+  await page.getByRole('tab', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.marketplace [role="combobox"]').waitFor();
+  const heldDeadline = Date.now() + 30_000;
+  while (!existsSync(catalogHeld) && Date.now() < heldDeadline) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(existsSync(catalogHeld), 'the background refresh reached the real core transport');
+  assert.equal(await page.locator('.marketplace-listing').first().getByRole('button', { name: 'Thêm bạn', exact: true }).isEnabled(), true, 'cached actions remain available while refreshing');
+  await page.locator('.marketplace [role="combobox"]').click();
+  await page.getByRole('option').filter({ hasText: 'Saved 12 item 0' }).click();
+  await page.locator('.marketplace-listing').filter({ hasText: 'Saved 12 item 0' }).waitFor();
+  await unlink(catalogHold);
+  await page.locator('.marketplace').getByRole('button', { name: 'Làm mới', exact: true }).waitFor();
+  assert.match(await page.locator('.marketplace [role="combobox"]').innerText(), /Saved 12 item 0/, 'late refresh does not replace the selected cached page');
+  assert.equal(await page.locator('.marketplace-listing').filter({ hasText: 'Saved 1 item 0' }).count(), 0);
+  const uxReports = [];
+  async function photographSurface(stage, size, bottom = false) {
+    await page.setViewportSize(size);
+    if (bottom) await page.locator('.market-own-listing').last().scrollIntoViewIfNeeded();
+    else await page.locator('.marketplace').evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await page.evaluate(() => Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined))));
+    await page.evaluate(`${measuringSource}\nwindow.__publishingAlignment = { measurePage };`);
+    const findings = await page.evaluate(tolerances => window.__publishingAlignment.measurePage(tolerances), rules.DEFAULT_TOLERANCES);
+    assert.equal(findings.length, 0, `${stage} fits the actual marketplace`);
+    assert.equal(await page.locator('.marketplace').evaluate(element => element.scrollWidth > element.clientWidth), false);
+    const theme = await page.evaluate(() => document.documentElement.dataset.theme);
+    await page.screenshot({ path: join(output, `${language}-${theme}-${size.width}-${stage}.png`) });
+    uxReports.push({ stage, language, theme, size, findings });
+  }
+  const sizes = [{ width: 1200, height: 820 }, { width: 740, height: 600 }];
+  async function appearances(stage, bottom = false) {
+    for (language of ['vi', 'en']) for (const theme of ['light', 'dark']) {
+      const state = await call(page, 'workspace');
+      await call(page, 'settings', { language, theme, connectionLimitMicros: state.connectionLimitMicros });
+      await page.waitForFunction(({ language, theme }) => document.documentElement.lang === language && document.documentElement.dataset.theme === theme, { language, theme });
+      for (const size of sizes) {
+        await photographSurface(stage, size);
+        if (bottom) {
+          await photographSurface(`${stage}-bottom`, size, true);
+        }
+      }
+    }
+  }
+  await appearances('cached-page-after-refresh');
+  await writeFile(publicCatalogState, JSON.stringify({ seed: catalog.listings, online: true, empty: true }));
+  await page.locator('.marketplace').getByRole('button', { name: label('Làm mới'), exact: true }).click();
+  await page.locator('.marketplace-empty').waitFor();
+  assert.equal(await page.locator('.marketplace-listing').count(), 0);
+  await appearances('catalog-empty');
+  await writeFile(publicCatalogState, JSON.stringify({ seed: catalog.listings, online: true, longContent: true }));
+  await page.locator('.marketplace').getByRole('button', { name: label('Làm mới'), exact: true }).click();
+  await page.locator('.market-listing-summary').filter({ hasText: 'Keep the original references' }).waitFor();
+  await appearances('catalog-long-text');
+  await writeFile(publicCatalogState, JSON.stringify({ seed: catalog.listings, online: false }));
+  await page.locator('.marketplace').getByRole('button', { name: label('Làm mới'), exact: true }).click();
+  await page.locator('.marketplace-source').getByText(label('Danh mục đã lưu trên máy'), { exact: false }).waitFor();
+  await appearances('catalog-offline');
+  await app.evaluate(() => { global.__publishingFixture.ownerStates = true; global.__publishingFixture.holdOwn = true; });
+  const ownTab = page.getByRole('tab', { name: label('Mục của tôi'), exact: true });
+  await page.getByRole('tab', { name: label('Khám phá'), exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await ownTab.getAttribute('aria-selected'), 'true', 'arrow keys open My listings');
+  await page.locator('.market-own .marketplace-loading').waitFor();
+  await appearances('owner-loading');
+  await app.evaluate(() => { global.__publishingFixture.holdOwn = false; global.__publishingFixture.releaseOwn(); });
+  await page.locator('.market-own-listing').last().waitFor();
+  assert.equal(await page.locator('.market-own-listing').count(), 5);
+  assert.match(await page.locator('.market-own-listing').filter({ hasText: 'Owner pending fixture' }).innerText(), /v2[\s\S]*v1/);
+  await page.getByText(label('Đã ngừng xuất bản'), { exact: true }).waitFor();
+  await page.getByText(label('Đã bị ẩn'), { exact: true }).waitFor();
+  assert.match(await page.locator('.market-own-listing').filter({ hasText: 'Owner rejected fixture' }).innerText(), /Please explain the public instructions/);
+  await appearances('owner-states', true);
+  await page.evaluate(() => window.orglet.accountSignOut());
+  await page.getByText(label('Đăng nhập để gửi; bạn vẫn có thể xem trước trên máy.'), { exact: true }).waitFor();
+  assert.equal(await page.locator('.market-own-listing').count(), 0, 'sign-out clears owner metadata');
+  await writeFile(join(output, 'ux-geometry.json'), JSON.stringify(uxReports, null, 2));
   await writeFile(join(output, 'geometry.json'), JSON.stringify(reports, null, 2));
-  console.log(JSON.stringify({ proof: 'trusted-main-real-electron', screenshots: reports.length * 2 + cachedPageReports.length, findings: reports.reduce((total, report) => total + report.findings.length, 0), immutableRestartRetry: true, ownerUiRetry: true, offlineRestartPageSelection: true }));
+  console.log(JSON.stringify({ proof: 'trusted-main-real-electron', screenshots: reports.length * 2 + cachedPageReports.length + uxReports.length, findings: reports.reduce((total, report) => total + report.findings.length, 0), immutableRestartRetry: true, ownerUiRetry: true, offlineRestartPageSelection: true, cachedNavigationDuringRefresh: true, lateRefreshKeepsSelectedPage: true, ownerStatesAndKeyboardTabs: true, signOutClearsOwnerMetadata: true }));
 } finally {
+  if (existsSync(catalogHold)) await unlink(catalogHold);
+  await app.evaluate(() => { global.__publishingFixture.holdOwn = false; global.__publishingFixture.releaseOwn?.(); }).catch(() => {});
   await app.close();
 }

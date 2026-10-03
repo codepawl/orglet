@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
-import { useVietnamese, openHome } from './smoke-language.mjs';
+import { useVietnamese, useFullSidebar, openHome } from './smoke-language.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-marketplace-'));
 const { env } = await isolatedHarnessEnvironment(directory);
@@ -39,6 +39,8 @@ try {
   assert.equal(orglet.mcpServerIds, undefined);
   assert.equal((await workspace(page)).tasks.length, 0, 'Add never sends a message or creates a chat row');
   await openDiscover(page);
+  await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByText('Đã thêm', { exact: true }).waitFor();
+  assert.equal(await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByRole('button', { name: 'Thêm bản nữa', exact: true }).isEnabled(), true);
   await page.locator('.marketplace-listing').filter({ hasText: 'Research and review' }).getByRole('button', { name: 'Thêm bạn', exact: true }).click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research and review', exact: true }).waitFor();
   const crew = (await workspace(page)).teams.find(team => team.name === 'Research and review');
@@ -131,6 +133,20 @@ try {
   const updated = (await workspace(page)).workers.find(worker => worker.id === orglet.id);
   assert.equal(updated.revision, 3);
   assert.match(updated.instructions, /Research updated questions/);
+  await page.setViewportSize({ width: 1200, height: 820 });
+  await useFullSidebar(page);
+  await openDiscover(page);
+  await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByRole('button', { name: 'Thêm bản nữa', exact: true }).click();
+  await page.getByRole('heading', { name: 'Đang nhắn với Research friend', exact: true }).waitFor();
+  // The crew also contains a friend with that display name; count copies by their listing origin.
+  const copies = (await page.evaluate(() => window.orglet.call('marketInstallations', {}))).filter(item => item.listingId === 'research-friend' && item.kind === 'orglet');
+  assert.equal(copies.length, 2, 'Add another copy creates a separate local friend');
+  assert.equal(new Set(copies.map(copy => copy.entityId)).size, 2);
+  assert.equal((await workspace(page)).workers.find(worker => worker.id === orglet.id).revision, 3, 'repeated Add preserves the edited original');
+  assert.equal((await workspace(page)).tasks.length, 0, 'repeated Add also creates no chat or turn');
+  await openDiscover(page);
+  await page.getByText('Đã thêm 2 bản trên máy', { exact: true }).waitFor();
+  await page.screenshot({ path: 'test-results/marketplace-installed-copies.png' });
   console.log('Packaged marketplace smoke passed: Discover, orglet and crew Add, safe defaults, no chat side effects, narrow layouts, persisted origins, customized update comparison and revision.');
 } finally {
   await app.close().catch(() => undefined);
