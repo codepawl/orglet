@@ -67,6 +67,21 @@ const CONTEXT_CHANGED = 'Phiên đồng bộ đã đổi.';
 export const SYNC_NOT_ON = 'Đồng bộ đang tắt trên máy này.';
 export const NOTHING_TO_CHOOSE = 'Máy này không còn gì phải chọn cho đồng bộ.';
 export const PREVIEW_FAILED = 'Không đọc được tài khoản. Kiểm tra kết nối rồi thử lại.';
+export const PREVIEW_SIGN_IN = 'Máy chủ đồng bộ không nhận phiên đăng nhập này. Đăng xuất rồi đăng nhập lại.';
+export const PREVIEW_SERVER = 'Máy chủ đồng bộ đang gặp lỗi. Thử lại sau.';
+export const PREVIEW_BUSY = 'Tài khoản vừa gửi quá nhiều yêu cầu. Chờ vài phút rồi thử lại.';
+export const PREVIEW_DEVICES = 'Tài khoản đã đủ số máy được đồng bộ.';
+export const PREVIEW_DELETED = 'Tài khoản này đã bị xóa trên máy chủ. Dữ liệu trên máy này vẫn còn.';
+
+/** Why the account could not be read, in the person's words; a lost connection is the only case left unnamed. */
+function previewFailure(error: unknown): string {
+  if (!(error instanceof SyncRefused)) return PREVIEW_FAILED;
+  if (error.code === 'device_limit') return PREVIEW_DEVICES;
+  if (error.code === 'account_deleted' || error.code === 'account_mismatch') return PREVIEW_DELETED;
+  if (error.code === 'rate_limited') return PREVIEW_BUSY;
+  if (error.status === 401 || error.status === 403) return PREVIEW_SIGN_IN;
+  return PREVIEW_SERVER;
+}
 export const FILE_NOT_SYNCED = 'Tệp này chưa được đồng bộ; nó chỉ có trên máy đã đính kèm.';
 export const FILE_DOWNLOAD_FAILED = 'Không tải được tệp. Kiểm tra kết nối rồi thử lại.';
 /** Refusals of one file that sending it again cannot change. */
@@ -258,7 +273,7 @@ export class SyncTransport {
       return SyncPreview.parse({ local: { orglets: local.orglets, chats: local.chats }, account: { orglets: orglets.size, chats }, localOnly: local.localOnly });
     } catch (error) {
       if (error instanceof ReplicaFailed) throw new Error(error.message);
-      throw new Error(PREVIEW_FAILED);
+      throw new Error(previewFailure(error));
     }
   }
 

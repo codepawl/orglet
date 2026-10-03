@@ -222,3 +222,27 @@ it('opens the hint socket with the bearer token and device in headers, never in 
   await new Promise<void>(resolvePromise => server.close(() => resolvePromise()));
   expect(seen).toEqual({ url: '/v1/connect', authorization: 'Bearer header-token', device: 'device-id' });
 });
+
+it.each([
+  [401, 'invalid_token', 'Máy chủ đồng bộ không nhận phiên đăng nhập này. Đăng xuất rồi đăng nhập lại.'],
+  [503, 'sync_unavailable', 'Máy chủ đồng bộ đang gặp lỗi. Thử lại sau.'],
+  [429, 'rate_limited', 'Tài khoản vừa gửi quá nhiều yêu cầu. Chờ vài phút rồi thử lại.'],
+  [403, 'device_limit', 'Tài khoản đã đủ số máy được đồng bộ.'],
+  [410, 'account_deleted', 'Tài khoản này đã bị xóa trên máy chủ. Dữ liệu trên máy này vẫn còn.'],
+] as const)('says why the account could not be read before joining: %s %s', async (status, code, message) => {
+  const { store, transport } = setup(() => ({ status, body: { code } }));
+  chat(store);
+  await transport.refresh();
+  await transport.settled();
+  expect(transport.state()).toEqual({ state: 'link_required' });
+  await expect(transport.preview()).rejects.toThrow(message);
+  expect(transport.state()).toEqual({ state: 'link_required' });
+});
+
+it('blames the connection only when there was no answer at all', async () => {
+  const { store, transport } = setup(() => 'network');
+  chat(store);
+  await transport.refresh();
+  await transport.settled();
+  await expect(transport.preview()).rejects.toThrow('Không đọc được tài khoản. Kiểm tra kết nối rồi thử lại.');
+});
