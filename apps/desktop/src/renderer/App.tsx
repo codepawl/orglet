@@ -107,7 +107,7 @@ import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry } from './components/AreaRail';
 import { UserPanel } from './components/UserPanel';
-import { CircleUserRound, Database, Info, LogIn, Plug } from 'lucide-react';
+import { CircleUserRound, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
@@ -2073,6 +2073,8 @@ export function App() {
     { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
     { key: 'schedules', icon: <CalendarClock size={20} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
   ];
+  // What the sidebar lists: the open page's own rows, else the area's.
+  const sidebarFor = !pagePanelOpen ? area : panel === 'routines' ? 'schedules' : 'library';
   const createItems = [
     { label: t('Thêm bạn (tạo Tí)'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
     { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({}) },
@@ -2084,14 +2086,14 @@ export function App() {
     {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
       <div className="sidebar-head">
-        <strong className="sidebar-title">{area === 'home' ? t('Orglet') : area === 'channels' ? t('Kênh') : t('Hoạt động')}</strong>
-        {area === 'channels' && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={18} /></Button>}
-        {area !== 'home' && <Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button>}
+        <strong className="sidebar-title">{sidebarFor === 'home' ? t('Orglet') : sidebarFor === 'channels' ? t('Kênh') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
+        {sidebarFor === 'channels' && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={18} /></Button>}
+        {(sidebarFor === 'channels' || sidebarFor === 'activity') && <Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button>}
         <Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={closeSidebar}><PanelLeft size={18} /></Button>
       </div>
-      {area === 'home' && <button type="button" className="sidebar-search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={16} aria-hidden="true" /><span>{t('Tìm hoặc bắt đầu trò chuyện')}</span></button>}
+      {sidebarFor === 'home' && <button type="button" className="sidebar-search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={16} aria-hidden="true" /><span>{t('Tìm hoặc bắt đầu trò chuyện')}</span></button>}
       <div className="sidebar-scroll">
-      {area === 'home' && <>
+      {sidebarFor === 'home' && <>
       <nav className="sidebar-nav" aria-label={t('Bạn bè')}>
         <button type="button" className={`sidebar-nav-item${friendsOpen ? ' active' : ''}`} aria-current={friendsOpen ? 'page' : undefined} onClick={() => { clearSelection(); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
           <Users size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Bạn bè')}</span><span className="sidebar-nav-count" aria-hidden="true">{workspace.workers.length}</span>
@@ -2108,7 +2110,7 @@ export function App() {
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
       </>}
-      {area === 'channels' && <>
+      {sidebarFor === 'channels' && <>
         {channelGroupList.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({})}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
         {channelGroupList.map(group => group.name === undefined
           ? <div key="uncategorized" className="channel-uncategorized">{group.entries.map(renderChannelEntry)}</div>
@@ -2117,7 +2119,26 @@ export function App() {
             {group.entries.map(renderChannelEntry)}
           </SidebarSection>)}
       </>}
-      {area === 'activity' && <nav className="sidebar-nav" aria-label={t('Hoạt động')}>
+      {/* A page's own list: the sidebar always belongs to what the main panel shows, never to the area left behind. */}
+      {sidebarFor === 'library' && <nav className="sidebar-nav" aria-label={t('Thư viện')}>
+        {(['skills', 'knowledge'] as const).map(tab => <button key={tab} type="button" className={`sidebar-nav-item${libraryTab === tab ? ' active' : ''}`} aria-current={libraryTab === tab ? 'page' : undefined} onClick={() => { setLibraryTab(tab); setPanel('library'); }}>
+          {tab === 'skills' ? <Sparkles size={18} aria-hidden="true" /> : <NotebookText size={18} aria-hidden="true" />}
+          <span className="sidebar-nav-name">{tab === 'skills' ? 'Skills' : 'Knowledge'}</span>
+          <span className="sidebar-nav-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span>
+        </button>)}
+      </nav>}
+      {sidebarFor === 'schedules' && <nav className="sidebar-nav" aria-label={t('Lịch chạy')}>
+        <button type="button" className={`sidebar-nav-item${routineView.editing ? '' : ' active'}`} aria-current={routineView.editing ? undefined : 'page'} onClick={() => void leaveRoutine(() => openRoutines())}>
+          <LucideCalendarClock size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Tất cả lịch')}</span><span className="sidebar-nav-count" aria-hidden="true">{workspace.routines.length}</span>
+        </button>
+        {workspace.routines.map(routine => {
+          const open = routineView.editing && routineView.routine?.id === routine.id;
+          return <button key={routine.id} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => void leaveRoutine(() => openRoutines({ editing: true, routine }))}>
+            <Clock size={18} aria-hidden="true" /><span className="sidebar-nav-name">{routine.name}</span>
+          </button>;
+        })}
+      </nav>}
+      {sidebarFor === 'activity' && <nav className="sidebar-nav" aria-label={t('Hoạt động')}>
         {activityTabs.map(tab => <button key={tab} type="button" className={`sidebar-nav-item${activityTab === tab ? ' active' : ''}`} aria-current={activityTab === tab ? 'page' : undefined} onClick={() => setActivityTab(tab)}>
           {tab === 'needs' ? <BellRing size={18} aria-hidden="true" /> : tab === 'running' ? <Activity size={18} aria-hidden="true" /> : tab === 'done' ? <CircleCheck size={18} aria-hidden="true" /> : <Bookmark size={18} aria-hidden="true" />}
           <span className="sidebar-nav-name">{activityTabLabel(tab)}</span>
