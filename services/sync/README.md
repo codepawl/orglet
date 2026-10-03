@@ -57,7 +57,7 @@ pnpm typecheck
 pnpm test
 ```
 
-The service pins the same Wrangler/Miniflare versions as Market. Node tests verify actual JWT signatures with ephemeral keys. Native runtime tests use a separate test-only entry with trusted synthetic account identities to call the real object through RPC, inspect actual SQLite ciphertext and restart on persistent storage. The production entry exports no inspection, mutation-fault or fixture routes. Anonymous production handlers are tested separately. These tests do not prove positive authenticated Worker HTTP, a real account login or a live deployment.
+The service pins the same Wrangler/Miniflare versions as Market. Node tests verify actual JWT signatures with ephemeral keys. Native runtime tests use a separate test-only entry with trusted synthetic account identities to call the real object through RPC, inspect actual SQLite ciphertext and restart on persistent storage. The production entry exports no inspection, mutation-fault or fixture routes. Anonymous production handlers are tested separately. The repository's `tests/integration/sync-production-entry.test.ts` runs this production entry over loopback HTTP with signed tokens and a stand-in JWKS. None of these prove a real account login or a live deployment.
 
 ## Self-hosting and deployment
 
