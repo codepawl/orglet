@@ -823,6 +823,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
    the end of the form nothing stays under it; the note's six-row box keeps Scope clear of it when a note opens
    (COD-250). Inside the bar the secondary action is plain text, so there is no box inside the glass. */
 .org-drawer-scroll:has(> .floating-form) { display:flex; padding:0; overflow:hidden; }
+.page-scroll:has(.panel-page > .floating-form) { display:flex; overflow:hidden; }
+.panel-page:has(> .floating-form) { flex:0 1 auto; min-height:0; padding:0; gap:0; }
+/* The pinned Save row was cut for the drawer's 24px padding; on a page it ends at the column's own edges. */
+.panel-page .form .sticky-actions { bottom:0; margin:0; padding-inline:0; border-radius:0; }
 .form.floating-form { position:relative; flex:1; min-width:0; min-height:0; gap:0; }
 .floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 84px; overflow:auto; overscroll-behavior:contain; }
 /* A scope note reads as the Scope field's own line, not a field of its own. */
@@ -1690,6 +1694,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Required fields: a small red asterisk after the label. */
 /* Breadcrumb in a dialog title: back arrow, parent link, current page. */
 .breadcrumb { display:inline-flex; align-items:center; gap:6px; min-width:0; margin-left:-10px; }
+.topbar-name > .breadcrumb { margin-left:0; }
+.panel-page-description { margin:0; text-wrap:pretty; }
 .breadcrumb-link { border:0; background:transparent; padding:2px 4px; border-radius:6px; color:var(--muted); font:inherit; font-weight:500; }
 .breadcrumb-link:hover { color:var(--text); }
 .breadcrumb-separator { color:var(--muted); flex-shrink:0; }
