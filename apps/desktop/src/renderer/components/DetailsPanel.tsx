@@ -1,3 +1,4 @@
+import { chatTurnRevisions, chatTurnInput, chatTurnMessageId } from '../../shared/chat-turns';
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
 import { t, currentLocale, tMessage, withNodes, NODE_MARKERS } from '../i18n';
@@ -23,7 +24,6 @@ import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile, type R
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { focusMessage, reactionGroups } from './messageMarks';
-import { turnMessageId } from '../../shared/message-interactions';
 import { approvalAnswerLabels, McpChatGrants } from './McpApproval';
 import { McpApprovalChoice } from '../../shared/mcp';
 import { BrowserChatSettings, BrowserSteps, browserProfileName, useBrowserState } from './BrowserSettings';
@@ -150,11 +150,9 @@ function messageExcerpt(detail: TaskDetail, messageId: string): string | undefin
   if (artifact) return artifact.report.summary;
   const teamMessage = detail.events.find(item => item.id === messageId)?.teamMessage;
   if (teamMessage) return teamMessage.body;
-  const latestRevision = detail.task.inputRevision ?? 0;
-  for (let revision = 0; revision <= latestRevision; revision++) {
-    if (turnMessageId(detail.task.id, revision) !== messageId) continue;
-    if (revision === latestRevision) return detail.task.currentInput?.brief ?? detail.task.brief;
-    return detail.runs.find(run => (run.snapshot.inputRevision ?? 0) === revision)?.snapshot.input?.brief;
+  for (const revision of chatTurnRevisions(detail)) {
+    if (chatTurnMessageId(detail, revision) !== messageId) continue;
+    return chatTurnInput(detail, revision)?.brief;
   }
   return undefined;
 }

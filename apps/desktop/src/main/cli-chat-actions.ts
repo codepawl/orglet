@@ -3,7 +3,7 @@ import type { ForwardResult, ForwardTarget } from '../shared/forward';
 import { canContinueRun } from '../shared/out-of-steps';
 import type { CliChat, CliRequest, ControlValue, ForwardValue, ReactValue } from '../cli/protocol';
 import { chatsOf, CliFailure, matchChat, targetChat, taskRunners } from './cli-chats';
-import { isTurnRunning, pendingDecision, resolveMessage, savedTurnInput, turnArtifacts, turnRevisions } from './cli-chat-history';
+import { isTurnRunning, pendingDecision, resolveMessage, savedTurnInput, turnArtifacts, turnRevisionAt } from './cli-chat-history';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 /**
@@ -33,8 +33,8 @@ export class CliChatActions {
     const { chat, task } = targetChat(workspace, request);
     const detail = await this.detail(task.id);
     if (isTurnRunning(detail.task)) throw new CliFailure('failed', 'Đợi lượt đang chạy dừng trước khi sửa tin nhắn.');
-    const revision = Number(request.message.replace(/^#/, '')) - 1;
-    if (!turnRevisions(detail).includes(revision)) throw new CliFailure('not_found', 'Không tìm thấy tin nhắn của bạn để sửa.');
+    const revision = turnRevisionAt(detail, Number(request.message.replace(/^#/, '')));
+    if (revision === undefined) throw new CliFailure('not_found', 'Không tìm thấy tin nhắn của bạn để sửa.');
     const input = savedTurnInput(detail, revision);
     if (!input) throw new CliFailure('failed', 'Tin nhắn này thiếu bản lưu đầu vào; không thể khôi phục tệp gốc để sửa.');
     const sourceIds = input.sourceIds.filter(sourceId => detail.sources.some(source => source.id === sourceId && !source.revoked));

@@ -65,13 +65,16 @@ it.each(['completed', 'running-process'] as const)('rejects retirement of %s eve
     command: { program: 'node', arguments: ['check.cjs'], timeoutMs: 1000 },
     state: state === 'running-process' ? 'running' : 'exited', exitCode: state === 'completed' ? 0 : null,
     stdout: '', stderr: '' };
+  const savedRun = store.get<Run>('runs', run.id);
+  expect(savedRun.originDeviceId).toBe(store.sync.revisions.clock.read().deviceId);
+  expect(savedRun.snapshot.turnId).toBe(task.id);
   store.put('workspace_processes', process, { column: 'run_id', value: run.id });
   const recovery = new WorkspaceRecovery(store);
   const review = recovery.view(task.id).attempts[0];
   expect(() => recovery.retire({ taskId: task.id, runId: run.id, reviewToken: review.reviewToken,
     keepCurrentFiles: true }, () => false)).toThrow('Dừng công việc');
   expect(store.setting(`workspace-retired:${run.id}`, null)).toBeNull();
-  expect(store.get<Run>('runs', run.id)).toEqual(run);
+  expect(store.get<Run>('runs', run.id)).toEqual(savedRun);
   expect(store.get<WorkspaceProcess>('workspace_processes', process.id)).toEqual(process);
 });
 

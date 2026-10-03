@@ -172,6 +172,7 @@ jobs:
       - run: pnpm test:sidebar
       - run: pnpm test:market-publishing
       - run: pnpm test:market-moderation
+      - run: pnpm test:sync-privacy
       - run: pnpm test:i18n
       - run: pnpm test:alignment
   # Branch protection requires this exact check name. It is green only when both

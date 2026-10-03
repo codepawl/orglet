@@ -28,6 +28,7 @@
     "test:marketplace": "node scripts/marketplace-smoke.mjs",
     "test:market-publishing": "node scripts/market-publishing-smoke.mjs",
     "test:market-moderation": "node scripts/market-moderation-smoke.mjs",
+    "test:sync-privacy": "node scripts/local-sync-privacy-smoke.mjs",
     "test:i18n": "node scripts/i18n-smoke.mjs",
     "test:cli": "node scripts/cli-smoke.mjs",
     "test:custom-connections": "node scripts/custom-connection-smoke.mjs",

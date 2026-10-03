@@ -7,7 +7,7 @@ import { TeamMessage, TeamReassignment } from '../../shared/team-messages';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store, now, id, seedSkill, seedWorker } from './database';
-import { deletedRunSnapshot } from './deleted-chat';
+import { DELETED_CHAT_TEXT, deletedRunSnapshot } from './deleted-chat';
 import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, RunContextUse, TeamPlan, PlanAssignment } from '../../shared/contracts';
 import { DatasetProfile, DataFormat } from '../../shared/profiles';
 import { PreflightRecord } from '../../shared/preflight';
@@ -37,6 +37,8 @@ import { MAX_TURN_ROUTES, TurnRoute } from '../../shared/turn-routing';
 import { Channel } from '../../shared/channels';
 import { migrateCrews, migrateGroupChats } from './channels';
 import { MarketOrigins } from '../../shared/market';
+import { SyncChat, SyncTurn } from '../../shared/sync-records';
+import { SyncRevisionIdentity } from '../../shared/sync-revisions';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -45,8 +47,8 @@ const Worker = WorkerInput.extend({ id: Id, revision: Revision }).strict();
 const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPackage.optional() }).strict();
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
-const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), routineName: z.string().trim().min(1).max(80).optional(), routineDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), attention: RunAttention.optional(), routedTurns: z.array(TurnRoute).max(MAX_TURN_ROUTES).optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(400).optional(), mcpGrants: z.array(McpGrant).max(200).optional(), sideOf: SideOf.optional(), quotes: z.array(ChatQuote).max(MAX_CHAT_QUOTES).optional(), channel: Channel.optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
-const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), effort: RunEffort.optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional(), improvement: ImprovementSignals.optional(), mcpTools: z.array(McpRunTool).max(20 * 64).optional(), browser: z.object({ profileId: BrowserProfileId }).strict().optional(), desktop: z.object({ programs: z.array(z.string().max(120)).max(MAX_DESKTOP_APPS) }).strict().optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable(), errorCode: z.enum(['unresolved_attempt', 'report_rejected', 'plan_limit', 'hand_in_blocked']).optional(), blockedHandIn: BlockedHandIn.optional(), outOfSteps: z.literal(true).optional(), contextUse: RunContextUse.optional() }).strict();
+const Task = TaskInput.extend({ assignees: SyncChat.shape.assignees, budgetMicros: z.number().int().min(0).max(100_000_000), title: z.string().max(200).optional(), currentTurnId: Id.optional(), currentTurnCreatedAt: z.iso.datetime().optional(), turnIds: z.record(z.string().regex(/^\d+$/), Id).optional(), id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), routineName: z.string().trim().min(1).max(80).optional(), routineDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), attention: RunAttention.optional(), routedTurns: z.array(TurnRoute).max(MAX_TURN_ROUTES).optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(400).optional(), mcpGrants: z.array(McpGrant).max(200).optional(), sideOf: SideOf.optional(), quotes: z.array(ChatQuote).max(MAX_CHAT_QUOTES).optional(), channel: Channel.optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
+const Run = z.object({ originDeviceId: Id.optional(), id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ turnId: Id.optional(), workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), effort: RunEffort.optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional(), improvement: ImprovementSignals.optional(), mcpTools: z.array(McpRunTool).max(20 * 64).optional(), browser: z.object({ profileId: BrowserProfileId }).strict().optional(), desktop: z.object({ programs: z.array(z.string().max(120)).max(MAX_DESKTOP_APPS) }).strict().optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable(), errorCode: z.enum(['unresolved_attempt', 'report_rejected', 'plan_limit', 'hand_in_blocked']).optional(), blockedHandIn: BlockedHandIn.optional(), outOfSteps: z.literal(true).optional(), contextUse: RunContextUse.optional() }).strict();
 /**
  * Every field a run or its snapshot can carry must be in the schema above, or exporting a workspace that has one fails
  * (it happened twice: COD-270's blockedHandIn, and nearly COD-257's outOfSteps). A new field on `Run` makes this fail
@@ -57,9 +59,9 @@ type SnapshotFieldsMissingFromBackup = Exclude<keyof import('../../shared/contra
 const everyRunFieldBackedUp: Record<RunFieldsMissingFromBackup | SnapshotFieldsMissingFromBackup, never> = {};
 void everyRunFieldBackedUp;
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
-const UsedMemory = z.object({ id: Id, revision: z.number().int().positive(), text: z.string().min(1).max(500) }).strict();
+const UsedMemory = z.object({ syncRevisionId: Id.optional(), unavailable: z.boolean().optional(), id: Id, revision: z.number().int().positive(), text: z.string().min(1).max(500) }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime(), replyTo: Id.optional(), usedMemories: z.array(UsedMemory).max(60).optional() }).strict();
-const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional(), media: z.enum(['image', 'video', 'audio', 'pdf']).optional(), editedFrom: Id.optional() }).strict();
+const Source = z.object({ availability: z.literal('other-device').optional(), id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional(), media: z.enum(['image', 'video', 'audio', 'pdf']).optional(), editedFrom: Id.optional() }).strict();
 const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
 const manualScoreAvailable = (profile: z.infer<typeof Profile>, run: z.infer<typeof Run>) => !profile.runId && !!profile.result.exactMatch && profile.createdAt <= run.startedAt
   && !!run.snapshot.scoreProfileIds?.includes(profile.id) && Object.keys(profile.sourceHashes).every(sourceId => run.snapshot.input?.sourceIds.includes(sourceId));
@@ -73,7 +75,12 @@ const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), connecti
 const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge }).strict();
 const EntityStateEntry = z.object({ archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
 const EntityStates = z.object({ workers: z.record(Id, EntityStateEntry), teams: z.record(Id, EntityStateEntry) }).strict();
+const PermanentDeletion = z.object({ kind: z.enum(['worker', 'task', 'knowledge', 'team', 'skill', 'source', 'routine']), id: Id }).strict();
 const Payload = z.object({
+  permanentDeletions: z.array(PermanentDeletion).max(100_000).optional(),
+  savedTurns: z.array(SyncTurn.extend({ localRevision: Integer }).strict()).max(100_000).optional(),
+  syncIdentities: z.array(SyncRevisionIdentity).max(100_000).optional(),
+  localOnly: z.object({ workers: z.array(Id).max(10_000), tasks: z.array(Id).max(100_000) }).strict().optional(),
   marketOrigins: MarketOrigins.optional(),
   // Which orglets and crews were archived or deleted when the backup was saved (COD-281). Older backups lack it.
   entityState: EntityStates.optional(),
@@ -88,12 +95,14 @@ const Payload = z.object({
   workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), workspaceEvidence: z.array(WorkspaceReadEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
-const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.literal(1), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
+const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.union([z.literal(1), z.literal(2)]), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
 export type BackupSummary = { token: string; workers: number; teams: number; tasks: number; reports: number; createdAt: string };
 const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 const fail = (message: string): never => { throw new Error(`Bản sao lưu không hợp lệ: ${message}`); };
 
 function validateRelations(data: Payload) {
+  const deletionKeys = (data.permanentDeletions ?? []).map(deletion => `${deletion.kind}:${deletion.id}`);
+  if (new Set(deletionKeys).size !== deletionKeys.length) fail('Định danh xóa vĩnh viễn bị trùng.');
   const map = <T extends { id: string }>(rows: T[]) => { const result = new Map(rows.map(row => [row.id, row])); if (result.size !== rows.length) fail('ID bị trùng.'); return result; };
   const workers = map(data.workers); const skills = map(data.skills); const teams = map(data.teams);
   for (const origin of data.marketOrigins ?? []) {
@@ -102,6 +111,57 @@ function validateRelations(data: Payload) {
     if (!targets.has(origin.entityId) || originWorkers.some(workerId => !workers.has(workerId)) || Object.values(origin.skillIds).some(skillId => !skills.has(skillId)) || new Set(originWorkers).size !== originWorkers.length || (origin.kind === 'orglet' && (originWorkers.length !== 1 || originWorkers[0] !== origin.entityId))) fail('Nguồn danh mục thiếu Tí, nhóm hoặc kỹ năng.');
   }
   const tasks = map(data.tasks); const runs = map(data.runs); const sources = map(data.sources); const artifacts = map(data.artifacts);
+  for (const deletion of data.permanentDeletions ?? []) {
+    const source = deletion.kind === 'source' ? sources.get(deletion.id) : undefined;
+    const hasLiveBody = deletion.kind === 'knowledge' ? (data.knowledge ?? []).some(item => item.id === deletion.id)
+      : deletion.kind === 'skill' ? skills.has(deletion.id)
+      : deletion.kind === 'routine' ? (data.routines ?? []).some(item => item.id === deletion.id)
+      : deletion.kind === 'team' ? teams.has(deletion.id) && !data.entityState?.teams[deletion.id]?.deletedAt
+      : source && (source.name !== 'Nguồn đã xóa' || source.hash !== '0'.repeat(64) || source.bytes !== 0 || !source.revoked || source.availability !== 'other-device');
+    if (hasLiveBody) fail('Dữ liệu còn hoạt động xung đột với định danh xóa vĩnh viễn.');
+    // Worker/chat history may be explicitly recovered locally (COD-281); its permanent barrier still excludes sync.
+  }
+  const savedTurns = map(data.savedTurns ?? []);
+  const turnAliases = new Set<string>();
+  for (const turn of savedTurns.values()) {
+    const task = tasks.get(turn.taskId);
+    const alias = `${turn.taskId}:${turn.localRevision}`;
+    if (!task || turnAliases.has(alias) || turn.input.sourceIds.some(sourceId => !task.sourceIds.includes(sourceId))) fail('Tin nhắn đã lưu thiếu task, nguồn hoặc trùng lượt.');
+    turnAliases.add(alias);
+    if (task!.turnIds?.[turn.localRevision] && task!.turnIds[turn.localRevision] !== turn.id) fail('Định danh tin nhắn không khớp lượt.');
+  }
+  for (const task of tasks.values()) {
+    for (const [alias, turnId] of Object.entries(task.turnIds ?? {})) {
+      const turn = savedTurns.get(turnId);
+      if (!turn || turn.taskId !== task.id || turn.localRevision !== Number(alias)) fail('Định danh tin nhắn thiếu lượt đã lưu.');
+    }
+    if (task.currentTurnId && task.turnIds?.[task.inputRevision ?? 0] !== task.currentTurnId) fail('Tin nhắn hiện tại không khớp lượt.');
+    const current = task.currentTurnId ? savedTurns.get(task.currentTurnId) : undefined;
+    if (current && task.currentInput && digest(current.input) !== digest(SyncTurn.shape.input.strip().parse(task.currentInput))) fail('Nội dung tin nhắn hiện tại không khớp lượt.');
+  }
+  for (const run of runs.values()) {
+    if (!run.snapshot.turnId || !data.savedTurns) continue;
+    const turn = savedTurns.get(run.snapshot.turnId);
+    if (!turn || turn.taskId !== run.taskId || turn.localRevision !== (run.snapshot.inputRevision ?? 0)) fail('Lượt chạy thiếu tin nhắn đã lưu.');
+  }
+  const identityIds = new Set<string>();
+  const identityAliases = new Set<string>();
+  const revisionContents = new Map(data.revisions.map(row => [`${row.entity_id}:${row.revision}`, row.data]));
+  const knowledgeContents = new Map((data.knowledgeRevisions ?? []).map(row => [`${row.id}:${row.revision}`, row.data]));
+  for (const identity of data.syncIdentities ?? []) {
+    const alias = `${identity.entity}:${identity.entityId}:${identity.localRevision}`;
+    const contentAlias = `${identity.entityId}:${identity.localRevision}`;
+    const row = identity.entity === 'knowledge'
+      ? knowledgeContents.get(contentAlias)
+      : revisionContents.get(contentAlias);
+    const validKind = identity.entity === 'knowledge' ? !!row && 'scope' in row
+      : identity.entity === 'worker' ? !!row && 'skillId' in row
+      : identity.entity === 'team' ? !!row && 'memberIds' in row : !!row && 'content' in row;
+    if (!validKind || row!.id !== identity.entityId || identityIds.has(identity.revisionId) || identityAliases.has(alias)) fail('Định danh revision thiếu nội dung hoặc bị trùng.');
+    identityIds.add(identity.revisionId);
+    identityAliases.add(alias);
+  }
+  if ((data.localOnly?.workers ?? []).some(workerId => !workers.has(workerId)) || (data.localOnly?.tasks ?? []).some(taskId => !tasks.has(taskId))) fail('Lựa chọn chỉ trên máy thiếu Tí hoặc chat.');
   for (const run of runs.values()) {
     const scoreIds = run.snapshot.scoreProfileIds ?? [];
     if (new Set(scoreIds).size !== scoreIds.length || scoreIds.some(id => {
@@ -259,17 +319,18 @@ function validateRelations(data: Payload) {
     if (messageScope.has(id)) fail('ID tin nhắn bị trùng.');
     messageScope.set(id, { taskId, revision, kind });
   };
-  for (const task of tasks.values()) for (let revision = 0; revision <= (task.inputRevision ?? 0); revision++) {
-    if (revision === 0 || (revision === (task.inputRevision ?? 0) && task.currentInput)
-      || [...runs.values()].some(run => run.taskId === task.id && (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)) {
-      addMessage(turnMessageId(task.id, revision), task.id, revision, 'user');
-    }
+  for (const turn of savedTurns.values()) addMessage(turn.id, turn.taskId, turn.localRevision, 'user');
+  for (const task of tasks.values()) {
+    const aliases = new Set([0]);
+    if (task.currentInput) aliases.add(task.inputRevision ?? 0);
+    for (const run of runs.values()) if (run.taskId === task.id && run.snapshot.input) aliases.add(run.snapshot.inputRevision ?? 0);
+    for (const revision of aliases) if (!turnAliases.has(`${task.id}:${revision}`)) addMessage(turnMessageId(task.id, revision, task.turnIds), task.id, revision, 'user');
   }
   for (const artifact of artifacts.values()) {
     const owner = runs.get(artifact.runId);
     if (!owner) fail('Artifact thiếu run.');
     addMessage(artifact.id, owner!.taskId, owner!.snapshot.inputRevision ?? 0, 'answer');
-    if (artifact.replyTo && (artifact.replyTo !== turnMessageId(owner!.taskId, owner!.snapshot.inputRevision ?? 0)
+    if (artifact.replyTo && (artifact.replyTo !== (owner!.snapshot.turnId ?? turnMessageId(owner!.taskId, owner!.snapshot.inputRevision ?? 0, tasks.get(owner!.taskId)?.turnIds))
       || !messageScope.has(artifact.replyTo))) fail('Câu trả lời tham chiếu sai tin người dùng.');
   }
   for (const event of data.events) if (event.teamMessage) {
@@ -416,7 +477,13 @@ function snapshot(store: Store): Payload {
     .flatMap(finding => finding.workspaceEvidenceIds ?? [])));
   const runs = store.all<z.infer<typeof Run>>('runs');
   const runIds = new Set(runs.map(run => run.id));
+  const permanentDeletions = store.sync.permanentDeletions();
+  const deletedSourceIds = new Set(permanentDeletions.filter(deletion => deletion.kind === 'source').map(deletion => deletion.id));
   return Payload.parse({
+    permanentDeletions,
+    savedTurns: store.all<import('../../shared/contracts').Task>('tasks').flatMap(task => store.sync.turns.list(task.id)),
+    syncIdentities: store.sync.revisions.identities(),
+    localOnly: { workers: store.sync.localOnlyState().workers, tasks: store.sync.localOnlyState().tasks },
     marketOrigins: MarketOrigins.parse(store.setting('marketOrigins', [])),
     entityState: store.entityState(),
     routines: store.all('routines'),
@@ -424,7 +491,10 @@ function snapshot(store: Store): Payload {
     knowledge: store.all('knowledge'),
     knowledgeRevisions: store.db.prepare('SELECT * FROM knowledge_revisions ORDER BY rowid').all().map(row => ({ id: row.id, revision: row.revision, data: JSON.parse(String(row.data)) })),
     changedFiles: changedFilesRecords(store).filter(record => runIds.has(record.runId)),
-    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs, events: store.all('events'), artifacts, sources: store.all('sources'), profiles: store.all('profiles'),
+    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs, events: store.all('events'), artifacts,
+    sources: store.all<z.infer<typeof Source>>('sources').map(source => deletedSourceIds.has(source.id)
+      ? { id: source.id, name: 'Nguồn đã xóa', bytes: 0, hash: '0'.repeat(64), revoked: true, availability: 'other-device' as const } : source),
+    profiles: store.all('profiles'),
     processEvidence: store.db.prepare('SELECT id,run_id AS runId,exit_code AS exitCode FROM process_evidence').all(),
     workspaceEvidence: store.db.prepare('SELECT data FROM workspace_read_evidence').all()
       .map(row => WorkspaceReadEvidence.parse(JSON.parse(String(row.data))))
@@ -499,15 +569,18 @@ function revivedChats(current: Payload, incoming: Payload): Set<string> {
  * A chat brought back keeps the turns asked after the backup was saved as deleted turns: their runs stay for the cost
  * they carry, so the chat goes on from the latest of them and the next message starts a turn of its own.
  */
-function withLaterDeletedTurns(restored: Payload['tasks'][number], deleted: Payload['tasks'][number], laterRuns: Payload['runs']): Payload['tasks'][number] {
+function withLaterDeletedTurns(restored: Payload['tasks'][number], deleted: Payload['tasks'][number], laterRuns: Payload['runs'], laterTurns: NonNullable<Payload['savedTurns']>): Payload['tasks'][number] {
   const revision = deleted.inputRevision ?? 0;
-  if (!laterRuns.length || revision <= (restored.inputRevision ?? 0)) return restored;
-  const latestInput = laterRuns.find(run => (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)?.snapshot.input;
+  if ((!laterRuns.length && !laterTurns.length) || revision <= (restored.inputRevision ?? 0)) return restored;
+  const latestInput = laterTurns.find(turn => turn.localRevision === revision)?.input
+    ?? laterRuns.find(run => (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)?.snapshot.input;
   const { currentInput: _olderInput, ...rest } = restored;
   return {
     ...rest,
     sourceIds: [...new Set([...restored.sourceIds, ...deleted.sourceIds])],
     inputRevision: revision,
+    currentTurnId: deleted.currentTurnId,
+    turnIds: { ...restored.turnIds, ...deleted.turnIds },
     status: ENDED_STATUSES.includes(deleted.status) ? deleted.status : 'interrupted',
     ...(latestInput ? { currentInput: latestInput } : {}),
   };
@@ -543,10 +616,11 @@ function replaceUntouchedSeed(store: Store, current: Payload, incoming: Payload)
   const incomingState = incoming.entityState?.workers ?? {};
   const bringsLiveOrglet = incoming.workers.some(item => !incomingState[item.id]?.deletedAt && !incomingState[item.id]?.archivedAt);
   if (!bringsLiveOrglet || incoming.workers.some(item => item.id === worker.id)) return current;
+  store.sync.discardFactorySeed(worker.id, skill.id);
   store.db.prepare('DELETE FROM workers WHERE id=?').run(worker.id);
   store.db.prepare('DELETE FROM skills WHERE id=?').run(skill.id);
   store.db.prepare('DELETE FROM revisions WHERE entity_id IN (?,?)').run(worker.id, skill.id);
-  return { ...current, workers: [], skills: [], revisions: [] };
+  return { ...current, workers: [], skills: [], revisions: [], syncIdentities: current.syncIdentities?.filter(identity => identity.entityId !== worker.id && identity.entityId !== skill.id) };
 }
 
 export class Backups {
@@ -555,7 +629,7 @@ export class Backups {
   export(): string {
     return this.store.transaction(() => {
       const payload = withoutBrowser(snapshot(this.store)); validateRelations(payload);
-      const text = JSON.stringify({ format: 'orglet-backup', version: 1, createdAt: now(), checksum: digest(payload), payload });
+      const text = JSON.stringify({ format: 'orglet-backup', version: 2, createdAt: now(), checksum: digest(payload), payload });
       if (Buffer.byteLength(text) > 50 * 1024 * 1024) throw new Error('Bản sao lưu vượt 50 MB.');
       return text;
     });
@@ -584,7 +658,7 @@ export class Backups {
         const task = payload.tasks.find(task => task.id === run.taskId)!;
         // The browser profile a run used never travels in a backup (COD-261), so it is not part of what must match.
         const { input, inputRevision, browser: _browser, desktop: _desktop, ...rest } = run.snapshot;
-        return { ...rest, inputRevision: inputRevision ?? 0, input: RunInput.parse(input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources }) };
+        return { ...rest, turnId: rest.turnId ?? turnMessageId(task.id, inputRevision ?? 0, task.turnIds), inputRevision: inputRevision ?? 0, input: RunInput.parse(input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources }) };
       };
       // A deleted chat kept its runs without what was asked; the backup's run must be that same run before deleting.
       const comparableSnapshot = (run: Payload['runs'][number], payload: Payload) => {
@@ -593,7 +667,7 @@ export class Backups {
       };
       for (const run of incoming.runs) {
         const existing = current.runs.find(item => item.id === run.id);
-        if (existing && (existing.taskId !== run.taskId || digest(comparableSnapshot(existing, current)) !== digest(comparableSnapshot(run, incoming)))) fail('Snapshot của run xung đột.');
+        if (existing && (existing.taskId !== run.taskId || !isDeepStrictEqual(JSON.parse(JSON.stringify(comparableSnapshot(existing, current))), JSON.parse(JSON.stringify(comparableSnapshot(run, incoming)))))) fail('Snapshot của run xung đột.');
       }
       // What is already here stays, except a deleted chat's own rows, which give way to the backup's full ones.
       const merge = <T extends { id: string }>(existing: T[], added: T[], immutable = false, replaced: ReadonlySet<string> = new Set()): T[] => {
@@ -622,7 +696,8 @@ export class Backups {
         if (!revived.has(task.id)) return restored;
         const deleted = current.tasks.find(item => item.id === task.id)!;
         const laterRuns = current.runs.filter(run => run.taskId === task.id && !incomingRunIds.has(run.id));
-        return withLaterDeletedTurns(restored, deleted, laterRuns);
+        const laterTurns = (current.savedTurns ?? []).filter(turn => turn.taskId === task.id && turn.localRevision > (restored.inputRevision ?? 0));
+        return withLaterDeletedTurns(restored, deleted, laterRuns, laterTurns);
       });
       const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: normalizedSnapshot(run, incoming),
         status: pendingDecisionRuns.has(run.id) || ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
@@ -637,7 +712,22 @@ export class Backups {
         if (reactions.length > 1000) fail('Cuộc trò chuyện vượt giới hạn tương tác.');
         return { ...task, messageReactions: reactions };
       });
+      const restoredTurns = incoming.savedTurns ?? [];
+      const replacedTurnIds = new Set<string>();
+      for (const turn of restoredTurns) {
+        const existing = current.savedTurns?.find(item => item.id === turn.id);
+        if (!existing || digest(existing) === digest(turn)) continue;
+        const { replyTo: _replyTo, ...input } = turn.input;
+        const redacted = { ...input, brief: DELETED_CHAT_TEXT };
+        const strippedRedaction = { brief: DELETED_CHAT_TEXT, sourceIds: [] };
+        const matchesRedaction = isDeepStrictEqual(existing.input, strippedRedaction) || isDeepStrictEqual(existing.input, redacted);
+        if (!revived.has(turn.taskId) || existing.taskId !== turn.taskId || existing.localRevision !== turn.localRevision || !matchesRedaction) fail('Tin nhắn bất biến xung đột với workspace.');
+        replacedTurnIds.add(turn.id);
+      }
       const merged: Payload = { ...current,
+        permanentDeletions: [...new Map([...(current.permanentDeletions ?? []), ...(incoming.permanentDeletions ?? [])]
+          .map(deletion => [`${deletion.kind}:${deletion.id}`, deletion])).values()],
+        savedTurns: merge(current.savedTurns ?? [], restoredTurns, true, replacedTurnIds),
         routines: merge(current.routines ?? [], restoredRoutines),
         workers: merge(current.workers, incoming.workers), skills: merge(current.skills, incoming.skills), teams: merge(current.teams, incoming.teams),
         tasks: mergedTasks, runs: merge(current.runs, restoredRuns, false, revivedRunIds), sources: merge(current.sources, restoredSources),
@@ -671,6 +761,13 @@ export class Backups {
       const revisions = new Map(incoming.revisions.map(row => [`${row.entity_id}:${row.revision}`, row]));
       for (const row of current.revisions) { const key = `${row.entity_id}:${row.revision}`; if (revisions.has(key) && digest(revisions.get(key)) !== digest(row)) fail('Revision xung đột.'); revisions.set(key, row); }
       merged.revisions = [...revisions.values()];
+      const identities = new Map((incoming.syncIdentities ?? []).map(identity => [identity.revisionId, identity]));
+      for (const identity of current.syncIdentities ?? []) {
+        const imported = identities.get(identity.revisionId);
+        if (imported && !isDeepStrictEqual(imported, identity)) fail('Định danh revision xung đột.');
+        identities.set(identity.revisionId, identity);
+      }
+      merged.syncIdentities = [...identities.values()];
       merged.knowledge = merge(current.knowledge ?? [], incoming.knowledge ?? []);
       const knowledgeRevisions = new Map((incoming.knowledgeRevisions ?? []).map(row => [`${row.id}:${row.revision}`, row]));
       for (const row of current.knowledgeRevisions ?? []) { const key = `${row.id}:${row.revision}`; if (knowledgeRevisions.has(key) && digest(knowledgeRevisions.get(key)) !== digest(row)) fail('Revision knowledge xung đột.'); knowledgeRevisions.set(key, row); }
@@ -692,6 +789,12 @@ export class Backups {
       this.store.setSetting('entityState', merged.entityState);
       this.store.setSetting('marketOrigins', merged.marketOrigins);
       for (const routine of merged.routines ?? []) this.store.put('routines', routine);
+      for (const turnId of replacedTurnIds) this.store.db.prepare('DELETE FROM chat_turns WHERE id=?').run(turnId);
+      for (const turn of restoredTurns) this.store.sync.turns.save(SyncTurn.strip().parse(turn), turn.localRevision);
+      // Frozen runs must find their authored identities before their capture hooks execute.
+      for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
+      for (const row of merged.knowledgeRevisions ?? []) this.store.db.prepare('INSERT OR IGNORE INTO knowledge_revisions VALUES(?,?,?)').run(row.id, row.revision, JSON.stringify(row.data));
+      this.store.sync.revisions.restoreIdentities(incoming.syncIdentities ?? []);
       for (const table of ['skills', 'workers', 'teams', 'tasks'] as const) for (const row of merged[table]) this.store.put(table, row);
       for (const source of merged.sources) {
         const path = this.store.db.prepare('SELECT path FROM sources WHERE id=?').get(source.id)?.path;
@@ -705,7 +808,6 @@ export class Backups {
       for (const evidence of merged.workspaceEvidence ?? []) this.store.db.prepare('INSERT OR IGNORE INTO workspace_read_evidence(id,run_id,call_id,data) VALUES(?,?,?,?)')
         .run(evidence.id, evidence.runId, evidence.callId, JSON.stringify(evidence));
       for (const record of merged.preflights ?? []) this.store.put('preflights', record, { column: 'task_id', value: record.taskId });
-      for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
       for (const row of merged.reservations) this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state').run(row.id, row.run_id, row.task_id, row.provider, row.month, row.amount, row.state);
       for (const row of merged.ledger) this.store.db.prepare('INSERT OR IGNORE INTO ledger (id,reservation_id,amount,input_tokens,output_tokens,pricing_version) VALUES(?,?,?,?,?,?)').run(row.id, row.reservation_id, row.amount, row.input_tokens, row.output_tokens, row.pricing_version);
       for (const row of merged.ledgerCache ?? []) this.store.db.prepare('INSERT OR IGNORE INTO ledger_cache (ledger_id,cache_read_tokens,cache_write_tokens) VALUES(?,?,?)').run(row.ledger_id, row.cache_read_tokens, row.cache_write_tokens);
@@ -714,7 +816,6 @@ export class Backups {
         ON CONFLICT(reservation_id) DO UPDATE SET actual_amount=excluded.actual_amount,
         verified_source=excluded.verified_source,resolved_at=excluded.resolved_at`)
         .run(row.reservation_id, row.reason, row.noted_at, row.actual_amount, row.verified_source, row.resolved_at);
-      for (const row of merged.knowledgeRevisions ?? []) this.store.db.prepare('INSERT OR IGNORE INTO knowledge_revisions VALUES(?,?,?)').run(row.id, row.revision, JSON.stringify(row.data));
       // A turn's files line comes back for a run whose working copy is not on this computer; one kept here stays (COD-299).
       for (const record of incoming.changedFiles ?? []) {
         const hasCopy = this.store.db.prepare('SELECT 1 FROM workspace_copies WHERE run_id=?').get(record.runId);
@@ -723,6 +824,14 @@ export class Backups {
       }
       const knowledge = new KnowledgeBase(this.store);
       for (const item of merged.knowledge ?? []) { this.store.put('knowledge', item); knowledge.index(item); }
+      this.store.sync.restorePermanentDeletions(merged.permanentDeletions ?? []);
+      for (const workerId of incoming.localOnly?.workers ?? []) {
+        if (!merged.permanentDeletions?.some(deletion => deletion.kind === 'worker' && deletion.id === workerId)) this.store.sync.setLocalOnly({ kind: 'worker', id: workerId, localOnly: true });
+      }
+      for (const taskId of incoming.localOnly?.tasks ?? []) {
+        if (!merged.permanentDeletions?.some(deletion => deletion.kind === 'task' && deletion.id === taskId)) this.store.sync.setLocalOnly({ kind: 'task', id: taskId, localOnly: true });
+      }
+      this.store.sync.refreshFromCanonical();
       new ChatSearch(this.store).rebuild();
     });
     // A backup made before channels brings its group chats back as group chats; they become channels like any other (COD-361).

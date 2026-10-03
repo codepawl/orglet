@@ -396,6 +396,11 @@ export class CoreService {
         this.notify();
         return worker;
       }
+      case 'setSyncLocalOnly': {
+        this.store.sync.setLocalOnly(commands.setSyncLocalOnly.parse(args));
+        this.notify();
+        return;
+      }
       case 'saveSkill': {
         const skill = this.saveSkill(commands.saveSkill.parse(args));
         this.notify();
@@ -956,7 +961,14 @@ export class CoreService {
         if (task.sideOf) throw new Error('Chat phụ luôn thuộc Tí của chat chính. Đổi tên chat phụ trong menu của nó.');
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id) || ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.');
         // A channel's name and members are edited as the channel (COD-361); its chat settings keep only the limit.
-        if (task.channel) { this.store.update('tasks', { ...task, budgetMicros: input.budgetMicros }); this.notify(); return; }
+        if (task.channel) {
+          this.store.transaction(() => {
+            if (input.localOnly !== undefined) this.store.sync.setLocalOnly({ kind: 'task', id: task.id, localOnly: input.localOnly });
+            this.store.update('tasks', { ...task, budgetMicros: input.budgetMicros });
+          });
+          this.notify();
+          return;
+        }
         const { assignee } = input;
         const team = assignee.kind === 'team' ? this.store.get<Team>('teams', assignee.teamId) : undefined;
         const workerIds = assignee.kind === 'workers' ? [...new Set(assignee.workerIds)] : undefined;
@@ -973,7 +985,11 @@ export class CoreService {
           Object.assign(updated, channelForGroup(this.store, updated, input.title || task.title));
           delete titles[task.id];
         }
-        this.store.transaction(() => { this.store.update('tasks', updated); this.store.setSetting('taskTitles', titles); });
+        this.store.transaction(() => {
+          if (input.localOnly !== undefined) this.store.sync.setLocalOnly({ kind: 'task', id: task.id, localOnly: input.localOnly });
+          this.store.update('tasks', updated);
+          this.store.setSetting('taskTitles', titles);
+        });
         this.notify(); return;
       }
       case 'reorder': {
@@ -1020,7 +1036,7 @@ export class CoreService {
     this.assertEntityRevision('worker', input.id, input.expectedRevision);
     assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
     if (input.id) this.store.get<Worker>('workers', input.id);
-    const { modelId, mcpServerIds, expectedRevision, ...fields } = input;
+    const { modelId, mcpServerIds, expectedRevision, localOnly, ...fields } = input;
     if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
     if (isCustomProvider(fields.provider)) {
       const connection = requireCustomConnection(this.store, fields.provider);
@@ -1036,7 +1052,10 @@ export class CoreService {
       revision: input.id ? this.store.nextRevision(input.id) : 1,
       ...(fields.provider !== 'demo' && modelId ? { modelId } : {}),
     };
-    this.store.version('workers', worker);
+    this.store.transaction(() => {
+      this.store.version('workers', worker);
+      if (localOnly !== undefined) this.store.sync.setLocalOnly({ kind: 'worker', id: worker.id, localOnly });
+    });
     return worker;
   }
   private saveSkill(input: Args<'saveSkill'>): Skill {
@@ -1654,7 +1673,7 @@ export class CoreService {
     if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
     this.policy.assertStart(task.teamId, task.id);
     const planFirst = input.planFirst ?? this.continuesPlanFirst(task, input.continueFrom);
-    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}), ...(planFirst ? { planFirst } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+    const revised: Task = { ...task, currentTurnId: id(), currentTurnCreatedAt: this.store.sync.turns.nextCreatedAt(task.id), sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}), ...(planFirst ? { planFirst } : {}) }, inputRevision: Math.max(task.inputRevision ?? 0, ...this.store.sync.turns.list(task.id).map(turn => turn.localRevision)) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
       decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
         ? { ...request, interruptedAt: now() } : request) };
     this.store.transaction(() => {
@@ -1881,6 +1900,9 @@ export class CoreService {
     const memoriesToDelete = this.knowledge.memoriesOnlyFrom(task.id);
     const tombstone = charged || keepArtifacts.size > 0;
     this.store.transaction(() => {
+      this.store.sync.deleteChat(task.id);
+      if (tombstone) this.store.sync.turns.redact(task.id);
+      else db.prepare('DELETE FROM chat_turns WHERE task_id=?').run(task.id);
       for (const run of runs) {
         db.prepare('DELETE FROM events WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM artifacts WHERE run_id=? AND id NOT IN (SELECT value FROM json_each(?))').run(run.id, JSON.stringify([...keepArtifacts]));

@@ -36,6 +36,7 @@ import { taskGrants, modelLists } from '../caches';
 import { Blocks, Zap } from 'lucide-react';
 import { Checkbox } from './Checkbox';
 import { desktopAppsAvailable } from './DesktopApps';
+import { LocalOnlyControl } from './LocalOnlyControl';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
 type Tab = 'general' | 'skill' | 'permissions' | 'memory';
@@ -151,6 +152,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [budget, setBudget] = useState(() => startsOnSuggestion ? budgetForProvider(worker ? initialBudget(worker) : DEFAULT_TASK_BUDGET, suggestedProvider) : initialBudget(worker));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
   const [description, setDescription] = useState(worker?.description ?? '');
+  const [localOnly, setLocalOnly] = useState(Boolean(worker && workspace.syncLocalOnly?.workers.includes(worker.id)));
   // Saved with the worker, like its other fields; off for every worker until the person turns it on (COD-199).
   const [autoApplyProposals, setAutoApplyProposals] = useState(worker?.autoApplyProposals ?? false);
   // The MCP servers this worker may use, saved with it; none until the person picks some (COD-241).
@@ -213,7 +215,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     const pickedServers = mcpServerIds.filter(serverId => (workspace.mcpServers ?? []).some(server => server.id === serverId));
     setBusy(true); clearError();
     try {
-      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(effort ? { effort } : {}), ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, localOnly, ...(effort ? { effort } : {}), ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name);
       if (!worker) onCreated?.(saved.id);
@@ -232,6 +234,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
+      <LocalOnlyControl checked={localOnly} onChange={setLocalOnly} permanent={worker && workspace.syncLocalOnly?.permanentWorkers?.includes(worker.id)} worker />
       <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProviderPicked(true); setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
         options={providerOptions} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} required={modelIdRequired(provider)} />}

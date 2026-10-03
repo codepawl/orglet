@@ -287,7 +287,7 @@ async function openSettingsTab(page, tab) {
 
 async function openWorkerTab(page, context, tab) {
   await openArea(page, 'Bạn bè và tin nhắn');
-  await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).click();
+  await page.locator('#main-content').getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).click();
   await page.getByRole('menuitem', { name: label('Chỉnh sửa') }).click();
   await page.getByRole('tab', { name: label(tab), exact: true }).click();
 }

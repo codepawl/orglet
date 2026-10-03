@@ -17,6 +17,7 @@ import { CHAT_SEARCH_BACKFILL } from './chat-search';
 import { DEFAULT_WEB_SEARCH_PROVIDER, WebSearchProvider } from '../../shared/web-tools';
 import type { RunActivity } from '../../shared/run-activity';
 import { emptyChannels, migrateCrews, migrateGroupChats } from './channels';
+import { LocalSync } from './local-sync';
 
 /** The skill a new workspace starts with. */
 export function seedSkill(skillId: string): Skill {
@@ -28,7 +29,7 @@ export function seedWorker(workerId: string, skillId: string): Worker {
   return { id: workerId, name: 'Researcher', revision: 1, provider: 'demo', skillId, instructions: 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.' };
 }
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 /**
  * What a new database records for the first-run account question (COD-337). The packaged smokes and screenshot
@@ -58,7 +59,8 @@ export class Store {
   readonly sqliteVersion: string;
   /** Where the database lives; files Orglet keeps for the person (edited sources, COD-280) sit in the same folder. */
   readonly databasePath: string;
-  constructor(path: string) {
+  readonly sync: LocalSync;
+  constructor(path: string, options: { syncNow?: () => number } = {}) {
     this.databasePath = path;
     this.db = new DatabaseSync(path);
     this.sqliteVersion = String(this.db.prepare('SELECT sqlite_version() AS v').get()!.v);
@@ -226,6 +228,37 @@ export class Store {
         CREATE TABLE IF NOT EXISTS browser_screenshots (
           id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), hash TEXT NOT NULL, mime TEXT NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL
         ); INSERT OR IGNORE INTO migrations VALUES (19);`);
+      this.db.exec(`CREATE TABLE IF NOT EXISTS sync_clock (
+          id INTEGER PRIMARY KEY CHECK(id=1), device_id TEXT NOT NULL,
+          wall_ms INTEGER NOT NULL CHECK(wall_ms>=0 AND wall_ms<=9007199254740991),
+          counter INTEGER NOT NULL CHECK(counter>=0 AND counter<=9007199254740991)
+        );
+        CREATE TABLE IF NOT EXISTS sync_revision_ids (
+          revision_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('worker','skill','team','knowledge')),
+          entity_id TEXT NOT NULL, local_revision INTEGER NOT NULL CHECK(local_revision>0),
+          generation INTEGER NOT NULL CHECK(generation>0), clock_json TEXT NOT NULL, data_hash TEXT NOT NULL,
+          UNIQUE(kind,entity_id,local_revision)
+        );
+        CREATE TABLE IF NOT EXISTS chat_turns (
+          id TEXT PRIMARY KEY, task_id TEXT NOT NULL, local_revision INTEGER NOT NULL CHECK(local_revision>=0), data TEXT NOT NULL,
+          UNIQUE(task_id,local_revision)
+        );
+        CREATE TABLE IF NOT EXISTS sync_records (record_key TEXT PRIMARY KEY, data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sync_outbox (
+          sequence INTEGER PRIMARY KEY, account_key TEXT NOT NULL, record_id TEXT NOT NULL UNIQUE, data TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS sync_outbox_account ON sync_outbox(account_key,sequence);
+        CREATE TABLE IF NOT EXISTS sync_inbox (
+          account_key TEXT NOT NULL, record_id TEXT NOT NULL, data TEXT NOT NULL, status TEXT NOT NULL,
+          PRIMARY KEY(account_key,record_id)
+        );
+        CREATE TABLE IF NOT EXISTS sync_visibility (
+          kind TEXT NOT NULL CHECK(kind IN ('worker','task')), entity_id TEXT NOT NULL, epoch TEXT NOT NULL,
+          local_only INTEGER NOT NULL CHECK(local_only IN (0,1)), deleted INTEGER NOT NULL CHECK(deleted IN (0,1)),
+          clock_json TEXT NOT NULL, PRIMARY KEY(kind,entity_id)
+        );
+        CREATE TABLE IF NOT EXISTS sync_deletions (kind TEXT NOT NULL, entity_id TEXT NOT NULL, PRIMARY KEY(kind,entity_id));
+        INSERT OR IGNORE INTO migrations VALUES (20);`);
       // Every step a run took in a desktop app, and the window pictures it kept (COD-261, phase 2a). Local only, like
       // the browser's. New tables and no schema version, so an older build can still open the workspace.
       this.db.exec(`CREATE TABLE IF NOT EXISTS desktop_actions (
@@ -265,6 +298,7 @@ export class Store {
     migrateCrews(this, now);
     if (newInstall) this.setSetting('accountChoice', firstRunChoice());
     this.recover();
+    this.sync = new LocalSync(this, options.syncNow);
   }
   /** The worker and skill a new workspace starts with; run again after the workspace is erased. */
   seedDefaults() {
@@ -274,9 +308,21 @@ export class Store {
     this.version('workers', seedWorker(id(), skill.id));
   }
   transaction<T>(fn: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
-    try { const result = fn(); this.db.exec('COMMIT'); return result; }
-    catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    const savepoint = this.db.isTransaction ? `transaction_${randomUUID().replaceAll('-', '')}` : undefined;
+    this.db.exec(savepoint ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE');
+    try {
+      const result = fn();
+      this.db.exec(savepoint ? `RELEASE ${savepoint}` : 'COMMIT');
+      return result;
+    } catch (error) {
+      if (savepoint) {
+        this.db.exec(`ROLLBACK TO ${savepoint}`);
+        this.db.exec(`RELEASE ${savepoint}`);
+      } else {
+        this.db.exec('ROLLBACK');
+      }
+      throw error;
+    }
   }
   // Table names are internal constants; user input is always bound as parameters.
   all<T>(table: string): T[] { return this.db.prepare(`SELECT data FROM ${table} ORDER BY rowid`).all().map(row => JSON.parse(String(row.data)) as T); }
@@ -286,12 +332,23 @@ export class Store {
     return JSON.parse(String(row.data)) as T;
   }
   put<T extends { id: string }>(table: string, value: T, extra?: { column: string; value: string }) {
-    if (extra) this.db.prepare(`INSERT INTO ${table}(id,data,${extra.column}) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data`).run(value.id, JSON.stringify(value), extra.value);
-    else this.db.prepare(`INSERT INTO ${table}(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data`).run(value.id, JSON.stringify(value));
+    this.transaction(() => {
+      const row = this.db.prepare(`SELECT data FROM ${table} WHERE id=?`).get(value.id);
+      const previous = row ? JSON.parse(String(row.data)) : undefined;
+      const stored = this.sync?.prepareWrite(table, value) ?? value;
+      if (extra) this.db.prepare(`INSERT INTO ${table}(id,data,${extra.column}) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data`).run(stored.id, JSON.stringify(stored), extra.value);
+      else this.db.prepare(`INSERT INTO ${table}(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data`).run(stored.id, JSON.stringify(stored));
+      this.sync?.captureWrite(table, stored, previous);
+    });
   }
   update<T extends { id: string }>(table: string, value: T) {
-    const result = this.db.prepare(`UPDATE ${table} SET data=? WHERE id=?`).run(JSON.stringify(value), value.id);
-    if (!result.changes) throw new Error('Không tìm thấy mục cần cập nhật.');
+    this.transaction(() => {
+      const row = this.db.prepare(`SELECT data FROM ${table} WHERE id=?`).get(value.id);
+      if (!row) throw new Error('Không tìm thấy mục cần cập nhật.');
+      const stored = this.sync?.prepareWrite(table, value) ?? value;
+      this.db.prepare(`UPDATE ${table} SET data=? WHERE id=?`).run(JSON.stringify(stored), stored.id);
+      this.sync?.captureWrite(table, stored, JSON.parse(String(row.data)));
+    });
   }
   version(table: 'workers' | 'skills' | 'teams', value: Worker | Skill | Team) {
     this.versionMany([{ table, value }]);
@@ -302,12 +359,15 @@ export class Store {
   versionMany(entries: { table: 'workers' | 'skills' | 'teams'; value: Worker | Skill | Team }[]) {
     this.transaction(() => this.versionRows(entries));
   }
-  /** Same as versionMany for callers that already own a transaction. */
+  /** Joins the caller's transaction with a savepoint, or owns the complete write when called directly. */
   versionRows(entries: { table: 'workers' | 'skills' | 'teams'; value: Worker | Skill | Team }[]) {
-    for (const { table, value } of entries) {
-      this.db.prepare('INSERT INTO revisions VALUES(?,?,?)').run(value.id, value.revision, JSON.stringify(value));
-      this.put(table, value);
-    }
+    this.transaction(() => {
+      for (const { table, value } of entries) {
+        this.db.prepare('INSERT INTO revisions VALUES(?,?,?)').run(value.id, value.revision, JSON.stringify(value));
+        this.put(table, value);
+        this.sync?.captureRevision(table === 'workers' ? 'worker' : table === 'teams' ? 'team' : 'skill', value, value.revision);
+      }
+    });
   }
   nextEventSequence(runId: string): number {
     return Number(this.db.prepare('SELECT COUNT(*)+1 AS sequence FROM events WHERE run_id=?').get(runId)!.sequence);
@@ -369,13 +429,25 @@ export class Store {
   accountChoice(): AccountChoiceRecord {
     return AccountChoiceRecord.catch(EXISTING_INSTALL_CHOICE).parse(this.setting<unknown>('accountChoice', EXISTING_INSTALL_CHOICE));
   }
-  setSetting(key: string, value: unknown) { this.db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(key, JSON.stringify(value)); }
+  setSetting(key: string, value: unknown) {
+    this.transaction(() => {
+      const previous = this.setting<unknown>(key, undefined);
+      this.db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(key, JSON.stringify(value));
+      this.sync?.captureSetting(key, value, previous);
+    });
+  }
   /** Where `web_search` sends queries. No row, or a value this build does not know, is Exa, for new and existing workspaces alike (COD-266). */
   webSearchProvider(): WebSearchProvider {
     return WebSearchProvider.catch(DEFAULT_WEB_SEARCH_PROVIDER).parse(this.setting<unknown>('webSearchProvider', DEFAULT_WEB_SEARCH_PROVIDER));
   }
   /** Drops a setting so its default applies again; storing `undefined` is not a value SQLite can hold. */
-  clearSetting(key: string) { this.db.prepare('DELETE FROM settings WHERE id=?').run(key); }
+  clearSetting(key: string) {
+    this.transaction(() => {
+      const previous = this.setting<unknown>(key, undefined);
+      this.db.prepare('DELETE FROM settings WHERE id=?').run(key);
+      this.sync?.captureSetting(key, undefined, previous);
+    });
+  }
   /** Archived and deleted workers and teams (settings key entityState); rows and revisions are never removed. */
   entityState(): EntityState {
     const state = this.setting<Partial<EntityState>>('entityState', {});
@@ -389,7 +461,7 @@ export class Store {
     const archived = <T extends { id: string }>(kind: 'workers' | 'teams', items: T[]) => items.flatMap(item => state[kind][item.id]?.archivedAt && !state[kind][item.id]?.deletedAt ? [{ ...item, archivedAt: state[kind][item.id].archivedAt! }] : []);
     // Items the user never placed keep their creation order after the placed ones.
     const ordered = <T extends { id: string }>(items: T[], ids: string[] = []) => items.map((item, index) => ({ item, rank: ids.includes(item.id) ? ids.indexOf(item.id) : ids.length + index })).sort((a, b) => a.rank - b.rank).map(entry => entry.item);
-    return { knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => this.titled(task, titles)), emptyChannels: emptyChannels(this), routines: this.all('routines'), heldForReview: this.heldForReview(), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: currentAccentColor(this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR))), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), backgroundNotifications: this.setting('backgroundNotifications', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges(), mcpServers: this.mcpServerViews(), webSearchProvider: this.webSearchProvider(), accountChoice: this.accountChoice() };
+    return { syncLocalOnly: this.sync?.localOnlyState(), knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => this.titled(task, titles)), emptyChannels: emptyChannels(this), routines: this.all('routines'), heldForReview: this.heldForReview(), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: currentAccentColor(this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR))), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), backgroundNotifications: this.setting('backgroundNotifications', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges(), mcpServers: this.mcpServerViews(), webSearchProvider: this.webSearchProvider(), accountChoice: this.accountChoice() };
   }
   /** A chat's name as every reader shows it: a channel's own name (COD-361), else the title the person or first answer gave. */
   private titled(task: Task, titles: Record<string, string>): Task {
@@ -433,7 +505,9 @@ export class Store {
     return Object.fromEntries(Object.entries(pending).map(([key, entry]) => [key, { name: entry.name, permissions: [...entry.permissions] }]));
   }
   detail(taskId: string): TaskDetail {
-    const task = this.get<Task>('tasks', taskId);
+    const task = this.titled(this.get<Task>('tasks', taskId), this.setting('taskTitles', {}));
+    const savedTurns = this.sync?.turns.list(taskId);
+    if (savedTurns) task.turnIds = Object.fromEntries(savedTurns.map(turn => [turn.localRevision, turn.id]));
     const runs = this.all<Run>('runs').filter(run => run.taskId === taskId);
     const runIds = new Set(runs.map(run => run.id));
     const grantRow = this.db.prepare('SELECT data FROM workspace_grants WHERE task_id=?').get(taskId);
@@ -445,7 +519,7 @@ export class Store {
         && !currentGrant.revoked && currentGrant.id === evidence.grantId && currentGrant.revision === evidence.grantRevision }));
     const appProposals = this.db.prepare('SELECT data FROM app_proposals WHERE task_id=? ORDER BY rowid').all(taskId)
       .map(row => AppProposal.parse(JSON.parse(String(row.data))));
-    return { task, runs, events: this.all<Activity>('events').filter(e => runIds.has(e.runId)), artifacts: this.all<Artifact>('artifacts').filter(a => runIds.has(a.runId)), profiles: this.all<ProfileRecord>('profiles').filter(p => p.taskId === taskId), preflights: this.all<PreflightRecord>('preflights').filter(p => p.taskId === taskId), sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, appProposals, usage: this.usage(taskId) };
+    return { task, savedTurns, runs, events: this.all<Activity>('events').filter(e => runIds.has(e.runId)), artifacts: this.all<Artifact>('artifacts').filter(a => runIds.has(a.runId)), profiles: this.all<ProfileRecord>('profiles').filter(p => p.taskId === taskId), preflights: this.all<PreflightRecord>('preflights').filter(p => p.taskId === taskId), sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, appProposals, usage: this.usage(taskId) };
   }
   recover() {
     for (const run of this.all<Run>('runs')) {

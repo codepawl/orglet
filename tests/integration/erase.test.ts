@@ -69,6 +69,29 @@ it('forgets a cited source instead of orphaning the chat that cites it', async (
   expect(detail.sources[0].hash).toBeUndefined();
   // With its path gone, nothing can read the file behind it again.
   await expect(core.sources.readVerified(source.id, [source.id])).rejects.toThrow();
+  await expect(core.sources.relink(source.id, [source.id], join(directory, 'cited.txt')))
+    .rejects.toThrow('Quyền đọc nguồn đã bị thu hồi.');
+  expect(store.db.prepare('SELECT path FROM sources WHERE id=?').get(source.id)?.path).toBe('');
+});
+
+it('withdraws erased cited-source metadata from snapshots and queued changes while retaining the chat placeholder', async () => {
+  const context = { accountKey: 'a'.repeat(64), generation: 1 };
+  store.sync.setRecordingContext(context);
+  const { task, source } = await chatWithSource('ERASED_SOURCE_METADATA_SENTINEL.txt');
+  expect(store.sync.snapshot(context).some(record => record.data.kind === 'source' && record.data.value.id === source.id)).toBe(true);
+  expect(store.sync.outbox(context).some(({ record }) => record.data.kind === 'source' && record.data.value.id === source.id)).toBe(true);
+  await erase('sources');
+  for (const records of [store.sync.snapshot(context), store.sync.outbox(context).map(row => row.record)]) {
+    expect(records.some(record => record.data.kind === 'source' && record.data.value.id === source.id)).toBe(false);
+    expect(records.some(record => record.data.kind === 'delete' && record.data.entity === 'source' && record.data.id === source.id)).toBe(true);
+    expect(JSON.stringify(records)).not.toContain('ERASED_SOURCE_METADATA_SENTINEL');
+    expect(JSON.stringify(records)).not.toContain(source.hash);
+  }
+  const detail = store.detail(task.id);
+  expect(detail.sources).toMatchObject([{ id: source.id, revoked: true }]);
+  expect(detail.sources[0].hash).toBeUndefined();
+  expect(store.db.prepare('SELECT path FROM sources WHERE id=?').get(source.id)?.path).toBe('');
+  await expect(core.sources.readVerified(source.id, [source.id])).rejects.toThrow();
 });
 
 it('puts everything back to a fresh install, and refuses without the typed word', async () => {
@@ -83,8 +106,10 @@ it('puts everything back to a fresh install, and refuses without the typed word'
   expect(summary).toEqual(expect.objectContaining({ scope: 'everything', chats: 1, knowledge: 1, sources: 1 }));
   for (const table of ERASE_TABLES) {
     const rows = Number(store.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!.count);
-    // Only the worker and skill a new workspace is seeded with, and the revisions behind them, survive.
-    expect({ table, rows }).toEqual({ table, rows: ['workers', 'skills'].includes(table) ? 1 : table === 'revisions' ? 2 : 0 });
+    // Fresh domain revisions and their new private replication identities survive; no old outbox or policy does.
+    const seededRows = ['workers', 'skills', 'sync_clock'].includes(table) ? 1
+      : ['revisions', 'sync_revision_ids', 'sync_records'].includes(table) ? 2 : 0;
+    expect({ table, rows }).toEqual({ table, rows: seededRows });
   }
   const seeded = store.all<Worker>('workers')[0];
   expect(seeded.name).toBe('Researcher');

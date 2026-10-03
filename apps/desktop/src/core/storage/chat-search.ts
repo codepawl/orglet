@@ -7,6 +7,8 @@ import {
 } from '../../shared/chat-search';
 import type { ForwardedMessage } from '../../shared/forward';
 import type { Store } from './database';
+import { chatTurnRevisions, chatTurnInput } from '../../shared/chat-turns';
+import type { SavedChatTurn } from './chat-turns';
 
 /**
  * The settings row saying how far the upgrade backfill has got through `tasks` (by rowid). It is written by the
@@ -56,14 +58,15 @@ function answerText(report: Report, sources: readonly Source[]): string {
  * Every turn of a chat the way the thread lists them (`TaskThread`): the first message, then one per revision the
  * chat reached, each with the words sent then and when its first run started.
  */
-function turnsOf(task: Task, runs: readonly Run[]) {
-  const current = task.inputRevision ?? 0;
-  const revisions = [...new Set([0, current, ...runs.map(run => run.snapshot.inputRevision ?? 0)])].sort((first, second) => first - second);
-  return revisions.map(revision => {
+function turnsOf(task: Task, runs: Run[], savedTurns?: SavedChatTurn[]) {
+  const detail = { task, runs, savedTurns };
+  const revisions = chatTurnRevisions(detail);
+  return revisions.flatMap(revision => {
     const runsOfTurn = runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
-    const input = revision === current ? task.currentInput ?? task : runsOfTurn.find(run => run.snapshot.input)?.snapshot.input ?? task;
+    const input = chatTurnInput(detail, revision);
+    if (!input) return [];
     const forwarded = 'forwarded' in input ? input.forwarded : undefined;
-    return { revision, turn: { brief: input.brief, forwarded }, at: runsOfTurn[0]?.startedAt ?? task.createdAt };
+    return [{ revision, turn: { brief: input.brief, forwarded }, at: savedTurns?.find(turn => turn.localRevision === revision)?.createdAt ?? runsOfTurn[0]?.startedAt ?? task.createdAt }];
   });
 }
 
@@ -80,7 +83,8 @@ export class ChatSearch {
 
   /** What the person wrote on one turn, the first message included. Call inside the transaction that saves the turn. */
   indexTurn(taskId: string, revision: number, turn: TurnWords, at: string) {
-    this.write({ taskId, messageId: turnMessageId(taskId, revision), kind: 'message', author: null, at, text: turnText(turn) });
+    const saved = this.store.sync?.turns.list(taskId).find(turn => turn.localRevision === revision);
+    this.write({ taskId, messageId: saved?.id ?? turnMessageId(taskId, revision), kind: 'message', author: null, at, text: turnText(turn) });
   }
 
   /** An answer or report as it lands. Call inside the transaction that saves the artifact. */
@@ -217,7 +221,7 @@ export class ChatSearch {
     if (task.deletedAt) return;
     const runs = this.store.db.prepare('SELECT data FROM runs WHERE task_id=? ORDER BY rowid').all(task.id)
       .map(row => JSON.parse(String(row.data)) as Run);
-    for (const turn of turnsOf(task, runs)) this.indexTurn(task.id, turn.revision, turn.turn, turn.at);
+    for (const turn of turnsOf(task, runs, this.store.sync?.turns.list(task.id))) this.indexTurn(task.id, turn.revision, turn.turn, turn.at);
     const runsById = new Map(runs.map(run => [run.id, run]));
     const sources = this.sourcesOf(task.id);
     const artifacts = this.store.db.prepare('SELECT a.data FROM artifacts a JOIN runs r ON r.id=a.run_id WHERE r.task_id=? ORDER BY a.rowid').all(task.id)

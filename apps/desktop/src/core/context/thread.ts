@@ -1,7 +1,7 @@
 import type { Artifact, Run, TaskDetail } from '../../shared/contracts';
 import type { ContextManifest, RunContext } from '../../shared/knowledge';
 import { fingerprint } from '../tools/sources';
-import { turnMessageId } from '../../shared/message-interactions';
+import { chatTurnRevisions, chatTurnInput, chatTurnMessageId } from '../../shared/chat-turns';
 import type { ChatQuote } from '../../shared/side-threads';
 import { THREAD_VERBATIM_TURNS } from '../../shared/thread-limits';
 import { meaningfulKeywordsOf, rarityScores } from './keywords';
@@ -83,14 +83,18 @@ function broughtIn(quote: ChatQuote, reader: Reader): ThreadTurn {
 }
 
 /** The turns of `detail` before `revision`, oldest first: each message, its answer, and anything brought in after it. */
-function turnsBefore(detail: TaskDetail, revision: number, reader: Reader): ThreadTurn[] {
+function turnsBefore(detail: TaskDetail, revision: number, reader: Reader, inclusive = false): ThreadTurn[] {
   const past: ThreadTurn[] = [];
-  for (let earlier = 0; earlier < revision; earlier++) {
+  const ordered = chatTurnRevisions(detail);
+  const anchor = ordered.indexOf(revision);
+  // A new run can be assembled before it is stored. A missing side-thread anchor fails closed instead.
+  const pastAliases = anchor < 0 ? (inclusive ? [] : ordered) : ordered.slice(0, anchor + Number(inclusive));
+  for (const earlier of pastAliases) {
     const runs = detail.runs.filter(item => (item.snapshot.inputRevision ?? 0) === earlier);
-    const message = runs.find(item => item.snapshot.input)?.snapshot.input?.brief ?? (earlier === 0 ? detail.task.brief : undefined);
+    const message = chatTurnInput(detail, earlier)?.brief;
     if (message) {
       const { text, truncated } = clip(message);
-      past.push({ id: turnMessageId(detail.task.id, earlier), from: 'user', text, revision: earlier, truncated });
+      past.push({ id: chatTurnMessageId(detail, earlier), from: 'user', text, revision: earlier, truncated });
     }
     const replies = answers(detail, runs, reader);
     for (const artifact of runs.some(item => item.stage === 'group') ? replies : replies.slice(-1)) past.push(said(detail, artifact, reader));
@@ -121,8 +125,8 @@ export function collectTurns(detail: TaskDetail, run: Run) {
  * `readerWorkerId` is the side thread's orglet, so its own answers in the main chat read as 'you'.
  */
 export function mainChatTurns(main: TaskDetail, throughRevision: number, readerWorkerId: string): ThreadTurn[] {
-  const turns = turnsBefore(main, throughRevision + 1, { workerId: readerWorkerId });
-  const revisions = [...new Set(turns.map(turn => turn.revision))].sort((first, second) => first - second);
+  const turns = turnsBefore(main, throughRevision, { workerId: readerWorkerId }, true);
+  const revisions = [...new Set(turns.map(turn => turn.revision))];
   const kept = new Set(revisions.slice(-MAIN_CHAT_TURNS));
   const recent = turns.filter(turn => kept.has(turn.revision));
   let size = recent.reduce((sum, turn) => sum + turn.text.length, 0);
@@ -162,9 +166,9 @@ function extractive(turns: ThreadTurn[]): { summary: string | null; omitted: Omi
 function retrieve(turns: ThreadTurn[], brief: string): ThreadMemory[] {
   const scores = rarityScores(meaningfulKeywordsOf(brief), turns.map(turn => meaningfulKeywordsOf(turn.text)));
   const ranked = turns
-    .map((turn, index) => ({ turn, score: scores[index] }))
+    .map((turn, index) => ({ turn, index, score: scores[index] }))
     .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.turn.revision - b.turn.revision);
+    .sort((a, b) => b.score - a.score || a.index - b.index);
   const snippets: ThreadMemory[] = [];
   let used = 0;
   for (const { turn } of ranked) {
@@ -178,7 +182,7 @@ function retrieve(turns: ThreadTurn[], brief: string): ThreadMemory[] {
 }
 
 function build(past: ThreadTurn[], sidecar: ThreadTurn[], brief: string, fold: number, mainChat: ThreadTurn[]): CompactedThread {
-  const revisions = [...new Set(past.map(turn => turn.revision))].sort((a, b) => a - b);
+  const revisions = [...new Set(past.map(turn => turn.revision))];
   const window = new Set(revisions.slice(-HISTORY_TURNS));
   let verbatimPast = past.filter(turn => window.has(turn.revision));
   const dropped = past.filter(turn => !window.has(turn.revision));
@@ -191,7 +195,7 @@ function build(past: ThreadTurn[], sidecar: ThreadTurn[], brief: string, fold: n
   for (let i = 0; i < fold && verbatimPast.length; i++) {
     dropped.push(verbatimPast.shift()!);
   }
-  dropped.sort((a, b) => a.revision - b.revision || past.indexOf(a) - past.indexOf(b));
+  dropped.sort((first, second) => past.indexOf(first) - past.indexOf(second));
   const { summary, omitted } = extractive(dropped);
   for (const turn of [...verbatimPast, ...sidecar]) if (turn.truncated) omitted.push({ kind: 'turn', revision: Math.max(1, turn.revision), reason: 'truncated' });
   return {

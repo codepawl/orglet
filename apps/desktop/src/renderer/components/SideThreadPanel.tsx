@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { Settings2, X } from 'lucide-react';
 import type { TaskDetail } from '../../shared/contracts';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { orglet } from '../api';
@@ -15,12 +15,13 @@ import { Button } from './ui';
  * other. It reads its own chat and what its runs changed, keeps both fresh on every change the core announces, marks
  * it seen while it is open, and hands them to `children`, which draws the thread and its prompt bar.
  */
-export function SideThreadPanel({ taskId, title, orgletName, focusMessageId, onClose, onSeen, children }: {
+export function SideThreadPanel({ taskId, title, orgletName, focusMessageId, onSettings, onClose, onSeen, children }: {
   taskId: string;
   title: string;
   orgletName: string;
   /** A message to bring into view once the thread is on screen (a search result or a notice that points into it). */
   focusMessageId?: string;
+  onSettings: () => void;
   onClose: () => void;
   /** Called after the thread was marked seen, so the sidebar's unread mark can follow. */
   onSeen: () => void;
@@ -35,6 +36,7 @@ export function SideThreadPanel({ taskId, title, orgletName, focusMessageId, onC
         <h2>{title}</h2>
         <p>{t('Chat phụ với {0}', [orgletName])}</p>
       </div>
+      <Button size="icon" aria-label={t('Thiết lập chat')} title={t('Thiết lập chat')} onClick={onSettings}><Settings2 size={18} /></Button>
       <Button size="icon" aria-label={t('Đóng chat phụ')} title={t('Đóng chat phụ')} onClick={onClose}><X size={18} /></Button>
     </div>
     <div className="thread-pane-body">

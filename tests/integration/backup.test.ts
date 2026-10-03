@@ -11,6 +11,9 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { Report, type Run, type Task, type Worker, type Skill, type Source } from '../../apps/desktop/src/shared/contracts';
 import { WorkspaceRecovery } from '../../apps/desktop/src/core/storage/workspace-recovery';
 import { changeOutcomeOf } from '../../apps/desktop/src/shared/workspace-recovery';
+import { eraseSources } from '../../apps/desktop/src/core/storage/erase';
+import { Sources } from '../../apps/desktop/src/core/tools/sources';
+import { SyncRecord } from '../../apps/desktop/src/shared/sync-records';
 
 const stores: Store[] = [];
 const create = () => { const store = new Store(':memory:'); stores.push(store); return store; };
@@ -33,8 +36,188 @@ const resign = (text: string, mutate: (payload: any) => void) => {
   envelope.checksum = createHash('sha256').update(JSON.stringify(envelope.payload)).digest('hex');
   return JSON.stringify(envelope);
 };
+const legacyBackup = (text: string) => {
+  const envelope = JSON.parse(resign(text, payload => {
+    delete payload.savedTurns;
+    delete payload.syncIdentities;
+    delete payload.localOnly;
+    delete payload.permanentDeletions;
+    for (const task of payload.tasks) {
+      delete task.currentTurnId;
+      delete task.turnIds;
+    }
+    for (const run of payload.runs) {
+      delete run.snapshot.turnId;
+      delete run.originDeviceId;
+    }
+  }));
+  envelope.version = 1;
+  return JSON.stringify(envelope);
+};
 
 describe('workspace backup and additive restore', () => {
+  it('keeps public deletion barriers through clean restore, delayed replay, repeated restore and restart', async () => {
+    const original = create();
+    const saved = fixture(original);
+    const context = { accountKey: 'a'.repeat(64), generation: 1 };
+    original.sync.setRecordingContext(context);
+    const delayed = original.sync.snapshot(context);
+    const sourceRecord = delayed.find(record => record.data.kind === 'source')!;
+    const absentId = id();
+    const absentSource = { ...saved.source, id: absentId, name: 'ERASED_ABSENT_SOURCE_SENTINEL', hash: 'b'.repeat(64) };
+    original.put('sources', absentSource, { column: 'path', value: '' });
+    const delayedAbsent = SyncRecord.parse({ ...sourceRecord, id: id(), data: { kind: 'source', value: {
+      id: absentId, name: absentSource.name, bytes: absentSource.bytes, hash: absentSource.hash,
+    } } });
+    const older = backups(original).export();
+    eraseSources(original);
+    original.db.prepare("INSERT OR IGNORE INTO sync_deletions VALUES('record',?)").run(`turn:${id()}`);
+    const text = backups(original).export();
+    const payload = JSON.parse(text).payload;
+    expect(payload.permanentDeletions).toEqual(expect.arrayContaining([
+      { kind: 'source', id: saved.source.id }, { kind: 'source', id: absentId },
+    ]));
+    expect(payload.permanentDeletions.some((deletion: { kind: string }) => deletion.kind === 'record')).toBe(false);
+    expect(payload.sources).toEqual([{ id: saved.source.id, name: 'Nguồn đã xóa', bytes: 0,
+      hash: '0'.repeat(64), revoked: true, availability: 'other-device' }]);
+    expect(text).not.toContain(absentSource.name);
+    const directory = await mkdtemp(join(tmpdir(), 'orglet-backup-deletions-'));
+    let restored = new Store(join(directory, 'state.sqlite'));
+    stores.push(restored);
+    try {
+      let manager = backups(restored);
+      manager.restore(manager.preview(text).token);
+      restored.sync.setRecordingContext(context);
+      const clock = restored.sync.revisions.clock.read();
+      manager.restore(manager.preview(text).token);
+      expect(restored.sync.revisions.clock.read()).toEqual(clock);
+      restored.sync.receive(context, [...delayed, delayedAbsent]);
+      expect(restored.get<Source>('sources', saved.source.id)).toEqual(payload.sources[0]);
+      expect(() => restored.get('sources', absentId)).toThrow();
+      await expect(new Sources(restored).relink(saved.source.id, [saved.source.id], join(directory, 'not-needed.txt'))).rejects.toThrow('thu hồi');
+      expect(() => manager.restore(manager.preview(older).token)).toThrow('xung đột');
+      expect(restored.get<Source>('sources', saved.source.id)).toEqual(payload.sources[0]);
+      restored.close();
+      restored = new Store(join(directory, 'state.sqlite'));
+      stores.push(restored);
+      restored.sync.setRecordingContext(context);
+      restored.sync.receive(context, [...delayed, delayedAbsent]);
+      expect(restored.sync.permanentDeletions()).toEqual(expect.arrayContaining(payload.permanentDeletions));
+      expect(() => restored.get('sources', absentId)).toThrow();
+      expect(JSON.stringify(restored.sync.snapshot(context))).not.toContain(absentSource.name);
+      manager = backups(restored);
+      expect(() => manager.preview(manager.export())).not.toThrow();
+    } finally {
+      restored.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects duplicate or private deletion markers while accepting key-only public barriers', () => {
+    const store = create();
+    const manager = backups(store);
+    const text = manager.export();
+    const deletion = { kind: 'knowledge', id: id() };
+    expect(() => manager.preview(resign(text, payload => { payload.permanentDeletions = [deletion]; }))).not.toThrow();
+    expect(() => manager.preview(resign(text, payload => { payload.permanentDeletions = [deletion, deletion]; }))).toThrow('bị trùng');
+    expect(() => manager.preview(resign(text, payload => { payload.permanentDeletions = [{ kind: 'record', id: id() }]; }))).toThrow();
+    expect(() => manager.preview(resign(text, payload => { payload.permanentDeletions = [{ ...deletion, epoch: id() }]; }))).toThrow();
+  });
+
+  it('restores V2 unstarted messages, stable revisions and local-only choices without private sync state', () => {
+    const original = create();
+    const saved = fixture(original);
+    const messageId = id();
+    original.update('tasks', { ...original.get<Task>('tasks', saved.task.id), inputRevision: 1, currentTurnId: messageId,
+      currentInput: { brief: 'Saved without starting a run', sourceIds: [] } });
+    original.sync.setLocalOnly({ kind: 'worker', id: saved.task.workerId, localOnly: true });
+    original.sync.setLocalOnly({ kind: 'task', id: saved.task.id, localOnly: true });
+    const identities = original.sync.revisions.identities();
+    original.setSetting('marketMutationJournal', [{ secret: 'PRIVATE_SYNC_JOURNAL_SENTINEL' }]);
+    const text = backups(original).export();
+    expect(JSON.parse(text).version).toBe(2);
+    expect(text).not.toContain('PRIVATE_SYNC_JOURNAL_SENTINEL');
+    expect(JSON.parse(text).payload).not.toHaveProperty('sync_clock');
+    expect(JSON.parse(text).payload).not.toHaveProperty('sync_outbox');
+    const restored = create();
+    const manager = backups(restored);
+    manager.restore(manager.preview(text).token);
+    expect(restored.sync.turns.list(saved.task.id).map(turn => [turn.id, turn.input.brief])).toEqual([
+      [saved.task.id, 'Restore history'], [messageId, 'Saved without starting a run'],
+    ]);
+    expect(restored.sync.revisions.identities()).toEqual(identities);
+    expect(restored.sync.localOnlyState()).toMatchObject({ workers: [saved.task.workerId], tasks: [saved.task.id] });
+    manager.restore(manager.preview(text).token);
+    expect(restored.sync.turns.list(saved.task.id)).toHaveLength(2);
+    expect(restored.sync.revisions.identities()).toEqual(identities);
+  });
+
+  it('rejects malformed V2 turn and revision references before writing, and preserves immutable messages', () => {
+    const original = create();
+    const saved = fixture(original);
+    const text = backups(original).export();
+    const target = create();
+    const manager = backups(target);
+    for (const mutate of [
+      (payload: any) => { payload.savedTurns[0].taskId = id(); },
+      (payload: any) => { payload.savedTurns.push({ ...payload.savedTurns[0], id: id() }); },
+      (payload: any) => { payload.tasks[0].currentTurnId = id(); },
+      (payload: any) => { payload.syncIdentities[0].localRevision = 999; },
+      (payload: any) => { payload.syncIdentities.push(payload.syncIdentities[0]); },
+      (payload: any) => { payload.localOnly.tasks = [id()]; },
+    ]) expect(() => manager.preview(resign(text, mutate))).toThrow();
+    expect(target.all('tasks')).toHaveLength(0);
+    manager.restore(manager.preview(text).token);
+    const conflicting = resign(text, payload => { payload.savedTurns[0].input.brief = 'Forged replacement'; });
+    expect(() => manager.restore(manager.preview(conflicting).token)).toThrow('xung đột');
+    expect(target.sync.turns.list(saved.task.id)[0].input.brief).toBe('Restore history');
+  });
+
+  it('keeps an answer attached to its durable message ID after a second user message', () => {
+    const original = create();
+    const saved = fixture(original);
+    const messageId = id();
+    const input = { brief: 'A second message', sourceIds: [] };
+    original.update('tasks', { ...original.get<Task>('tasks', saved.task.id), inputRevision: 1,
+      currentTurnId: messageId, currentInput: input });
+    original.version('workers', { ...saved.run.snapshot.worker, revision: 2, name: 'Authored worker revision' });
+    original.version('skills', { ...saved.run.snapshot.skill, revision: 2, name: 'Authored skill revision' });
+    const run: Run = { ...saved.run, id: id(), status: 'completed', snapshot: { ...saved.run.snapshot,
+      worker: original.get<Worker>('workers', saved.task.workerId), skill: original.get<Skill>('skills', saved.run.snapshot.skill.id),
+      inputRevision: 1, input } };
+    original.put('runs', run, { column: 'task_id', value: run.taskId });
+    const originalWorkerIdentity = original.sync.revisions.frozen('worker', run.snapshot.worker);
+    const originalSkillIdentity = original.sync.revisions.frozen('skill', run.snapshot.skill);
+    const report = Report.parse({ title: 'Second answer', summary: 'Saved answer', findings: [], limitations: [] });
+    const artifactId = id();
+    original.put('artifacts', { id: artifactId, runId: run.id, report,
+      hash: createHash('sha256').update(JSON.stringify(report)).digest('hex'), createdAt: now(), replyTo: messageId },
+    { column: 'run_id', value: run.id });
+    const text = backups(original).export();
+    const restored = create();
+    const manager = backups(restored);
+    manager.restore(manager.preview(text).token);
+    expect(restored.detail(saved.task.id).artifacts.find(artifact => artifact.id === artifactId)?.replyTo).toBe(messageId);
+    expect(restored.get<Run>('runs', run.id).snapshot.turnId).toBe(messageId);
+    const restoredRun = restored.get<Run>('runs', run.id);
+    expect(restored.sync.revisions.frozen('worker', restoredRun.snapshot.worker)).toEqual(originalWorkerIdentity);
+    expect(restored.sync.revisions.frozen('skill', restoredRun.snapshot.skill)).toEqual(originalSkillIdentity);
+    // Older retained runs can have authored revision IDs without an origin-device field.
+    const compatible = create();
+    const compatibleManager = backups(compatible);
+    const withoutRunOrigin = resign(text, payload => { for (const row of payload.runs) delete row.originDeviceId; });
+    compatibleManager.restore(compatibleManager.preview(withoutRunOrigin).token);
+    const context = { accountKey: 'a'.repeat(64), generation: 1 };
+    compatible.sync.setRecordingContext(context);
+    const captured = compatible.sync.snapshot(context).find(record => record.data.kind === 'run' && record.data.value.id === run.id)?.data;
+    expect(captured?.kind).toBe('run');
+    if (captured?.kind === 'run') {
+      expect(captured.value.worker.revisionId).toBe(originalWorkerIdentity.revisionId);
+      expect(captured.value.skill.revisionId).toBe(originalSkillIdentity.revisionId);
+    }
+    expect(() => manager.preview(resign(text, payload => { payload.artifacts[0].replyTo = saved.task.id; }))).toThrow('sai tin người dùng');
+  });
+
   it('exports and restores a run whose hand-in a failed command blocked', () => {
     const original = create();
     const fixtureData = fixture(original);
@@ -103,7 +286,7 @@ describe('workspace backup and additive restore', () => {
     const store = create(); const f = fixture(store); const manager = backups(store);
     const missingRun = { ...f.run, id: id() };
     store.put('runs', missingRun, { column: 'task_id', value: f.task.id });
-    const legacy = manager.export();
+    const legacy = legacyBackup(manager.export());
     store.db.prepare('DELETE FROM runs WHERE id=?').run(missingRun.id);
     const input = { brief: f.task.brief, sourceIds: f.task.sourceIds };
     store.update('runs', { ...f.run, snapshot: { ...f.run.snapshot, input } });
@@ -116,7 +299,7 @@ describe('workspace backup and additive restore', () => {
     expect(store.get<Task>('tasks', f.task.id).sourceIds).toHaveLength(2);
   });
   it('merges legacy backups after input backfill without weakening snapshot conflicts', () => {
-    const store = create(); const f = fixture(store); const manager = backups(store); const legacy = manager.export();
+    const store = create(); const f = fixture(store); const manager = backups(store); const legacy = legacyBackup(manager.export());
     const input = { brief: f.task.brief, sourceIds: f.task.sourceIds };
     const backfilled = { ...f.run, snapshot: { ...f.run.snapshot, input, inputRevision: 0 } };
     store.update('runs', backfilled);
@@ -124,7 +307,7 @@ describe('workspace backup and additive restore', () => {
     store.put('sources', added, { column: 'path', value: '' });
     store.update('tasks', { ...f.task, inputRevision: 1, currentInput: { brief: 'New request', sourceIds: [added.id] }, sourceIds: [...f.task.sourceIds, added.id] });
     manager.restore(manager.preview(legacy).token);
-    expect(store.get<Run>('runs', f.run.id).snapshot).toEqual(backfilled.snapshot);
+    expect(store.get<Run>('runs', f.run.id).snapshot).toEqual({ ...backfilled.snapshot, turnId: f.task.id });
     expect(store.get<Task>('tasks', f.task.id).currentInput?.sourceIds).toEqual([added.id]);
     for (const mutate of [
       (payload: any) => { payload.tasks[0].brief = 'Changed original request'; },
@@ -132,7 +315,7 @@ describe('workspace backup and additive restore', () => {
       (payload: any) => { payload.runs[0].snapshot.worker.name = 'Changed worker'; },
       (payload: any) => { payload.runs[0].snapshot.inputRevision = 1; },
     ]) expect(() => manager.restore(manager.preview(resign(legacy, mutate)).token)).toThrow('xung đột');
-    expect(store.get<Run>('runs', f.run.id).snapshot).toEqual(backfilled.snapshot);
+    expect(store.get<Run>('runs', f.run.id).snapshot).toEqual({ ...backfilled.snapshot, turnId: f.task.id });
   });
   it('rejects cyclic, duplicate and cross-task joins even with valid checksums', () => {
     const store = create(); const f = fixture(store);
@@ -149,8 +332,9 @@ describe('workspace backup and additive restore', () => {
     expect(() => manager.preview(resign(text, payload => { payload.runs[0].snapshot.upstreamArtifactIds = [second.id]; }))).toThrow('vòng lặp');
     expect(() => manager.preview(resign(text, payload => { payload.runs[1].snapshot.upstreamArtifactIds = [first.id, first.id]; }))).toThrow('trùng');
     expect(() => manager.preview(resign(text, payload => {
-      const otherTask = { ...payload.tasks[0], id: id() }; payload.tasks.push(otherTask);
+      const otherTask = { ...payload.tasks[0], id: id(), currentTurnId: undefined, turnIds: undefined }; payload.tasks.push(otherTask);
       payload.runs[1].taskId = otherTask.id;
+      delete payload.runs[1].snapshot.turnId;
     }))).toThrow('ngoài task');
     expect(store.all('tasks')).toHaveLength(1);
   });
@@ -180,7 +364,7 @@ describe('workspace backup and additive restore', () => {
   it('rejects checksum errors, unsupported versions and dangling references before writing', () => {
     const store = create(); fixture(store); const manager = backups(store); const text = manager.export();
     expect(() => manager.preview(text.replace('Restore history', 'Changed history'))).toThrow('Checksum');
-    expect(() => manager.preview(text.replace('"version":1', '"version":99'))).toThrow();
+    expect(() => manager.preview(text.replace('"version":2', '"version":99'))).toThrow();
     expect(() => manager.preview(resign(text, payload => { payload.tasks[0].sourceIds = [id()]; }))).toThrow('nguồn');
     expect(store.all('tasks')).toHaveLength(1);
   });
@@ -297,6 +481,66 @@ describe('restoring after deleting chats, and onto a new computer (COD-281)', ()
     expect(detail.runs.map(run => run.snapshot.input?.brief)).toEqual(['Restore history', '(đã xóa)']);
     expect(store.usage()).toEqual(usage);
     expect(() => backups(store).preview(backups(store).export())).not.toThrow();
+  });
+
+  it('exports a deleted charged multi-turn chat with redacted durable IDs and restores only the saved turns', async () => {
+    const store = create();
+    const core = coreFor(store);
+    const { paid } = paidAndFreeChats(store);
+    const context = { accountKey: 'a'.repeat(64), generation: 1 };
+    store.sync.setRecordingContext(context);
+    const appendChargedTurn = (revision: number, brief: string) => {
+      const input = { brief, sourceIds: [paid.source.id] };
+      const messageId = id();
+      store.update('tasks', { ...store.get<Task>('tasks', paid.task.id), inputRevision: revision,
+        currentTurnId: messageId, currentInput: input });
+      const run: Run = { ...paid.run, id: id(), status: 'completed', snapshot: { ...paid.run.snapshot,
+        inputRevision: revision, input } };
+      store.put('runs', run, { column: 'task_id', value: run.taskId });
+      const reservation = paid.ledger.reserve(run.id, paid.task.id, 'openai', 1000, 100_000, 5_000_000);
+      paid.ledger.settle(reservation, 50, 50);
+      return messageId;
+    };
+    const secondId = appendChargedTurn(1, 'Saved second private question');
+    const text = backups(store).export();
+    const laterId = appendChargedTurn(2, 'Later private question outside the backup');
+    const unstartedId = id();
+    store.update('tasks', { ...store.get<Task>('tasks', paid.task.id), inputRevision: 3, currentTurnId: unstartedId,
+      currentInput: { brief: 'Unstarted private question outside the backup', sourceIds: [paid.source.id] } });
+    const usage = store.usage();
+    await core.command('eraseData', { scope: 'chats' });
+    const redactedTurns = store.sync.turns.list(paid.task.id);
+    expect(redactedTurns.map(turn => turn.id)).toEqual([paid.task.id, secondId, laterId, unstartedId]);
+    expect(redactedTurns.map(turn => turn.input)).toEqual(Array.from({ length: 4 }, () => ({ brief: '(đã xóa)', sourceIds: [] })));
+    const deletedBackup = backups(store).export();
+    expect(() => backups(store).preview(deletedBackup)).not.toThrow();
+    expect(deletedBackup).not.toContain('Saved second private question');
+    expect(deletedBackup).not.toContain('Later private question outside the backup');
+    expect(deletedBackup).not.toContain('Unstarted private question outside the backup');
+    const queued = JSON.stringify(store.sync.outbox(context));
+    expect(queued).not.toContain('Saved second private question');
+    expect(queued).not.toContain('Later private question outside the backup');
+    expect(queued).not.toContain('Unstarted private question outside the backup');
+    expect(queued).not.toContain(paid.source.id);
+    restoreInto(store, text);
+    const restoredTurns = store.sync.turns.list(paid.task.id);
+    expect(restoredTurns.map(turn => [turn.id, turn.input.brief])).toEqual([
+      [paid.task.id, 'Restore history'], [secondId, 'Saved second private question'], [laterId, '(đã xóa)'], [unstartedId, '(đã xóa)'],
+    ]);
+    expect(restoredTurns[2].input.sourceIds).toEqual([]);
+    expect(restoredTurns[3].input.sourceIds).toEqual([]);
+    expect(store.detail(paid.task.id).task.currentTurnId).toBe(unstartedId);
+    expect(store.detail(paid.task.id).task.currentInput).toEqual({ brief: '(đã xóa)', sourceIds: [] });
+    expect(store.sync.localOnlyState().permanentTasks).toContain(paid.task.id);
+    expect(JSON.stringify(store.sync.snapshot(context))).not.toContain('Saved second private question');
+    expect(store.sync.snapshot(context).some(record => record.data.kind === 'chat' && record.data.value.id === paid.task.id)).toBe(false);
+    expect(() => store.sync.setLocalOnly({ kind: 'task', id: paid.task.id, localOnly: true })).not.toThrow();
+    expect(() => store.sync.setLocalOnly({ kind: 'task', id: paid.task.id, localOnly: false })).toThrow('Mục đã xóa');
+    expect(store.usage()).toEqual(usage);
+    expect(() => backups(store).preview(backups(store).export())).not.toThrow();
+    restoreInto(store, text);
+    expect(store.sync.turns.list(paid.task.id)).toEqual(restoredTurns);
+    expect(store.usage()).toEqual(usage);
   });
 
   /** A working copy as the runtime stores it, with a private folder, a path and a hash the backup must not carry. */

@@ -35,7 +35,8 @@ export const AnswerReaction = z.object({ messageId: z.uuid(), emoji: Reaction })
 export const AnswerReactions = z.array(AnswerReaction).max(MAX_ANSWER_REACTIONS);
 
 /** Stable ID for a saved user turn, including turns created before explicit reply support. */
-export function turnMessageId(taskId: string, revision: number): string {
+export function turnMessageId(taskId: string, revision: number, savedIds?: Record<number, string>): string {
+  if (savedIds?.[revision]) return z.uuid().parse(savedIds[revision]);
   const compact = taskId.replaceAll('-', '');
   if (!/^[a-f0-9]{32}$/i.test(compact) || !Number.isSafeInteger(revision) || revision < 0) throw new Error('Tin nhắn không hợp lệ.');
   const tail = (BigInt(`0x${compact.slice(-12)}`) ^ BigInt(revision)).toString(16).padStart(12, '0');

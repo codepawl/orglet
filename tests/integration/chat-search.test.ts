@@ -75,8 +75,10 @@ describe('what is indexed', () => {
     const taskId = await chat(dev, ['npm test fails in invoice-lib', 'It still fails after the fix', 'Please read the README first', 'Draft the investor update']);
 
     const later = await search('readme');
+    const readmeTurn = store.detail(taskId).savedTurns!.find(turn => turn.localRevision === 2)!;
+    expect(readmeTurn.input.brief).toBe('Please read the README first');
     expect(later.chats).toHaveLength(1);
-    expect(later.chats[0]).toMatchObject({ taskId, messageId: turnMessageId(taskId, 2), sender: { kind: 'you' } });
+    expect(later.chats[0]).toMatchObject({ taskId, messageId: readmeTurn.id, sender: { kind: 'you' } });
     expect(text(later.chats[0].snippet)).toBe('Please read the README first');
     expect(marked(later.chats[0].snippet)).toEqual(['README']);
 
@@ -199,8 +201,11 @@ describe('ranking', () => {
     const dev = await orglet();
     const taskId = await chat(dev, ['The deploy checklist is in the wiki', 'Checklist done, deploy tomorrow', 'Where is the deploy checklist again?']);
     const found = await search('deploy checklist');
+    const newestTurn = store.detail(taskId).savedTurns!.find(turn => turn.localRevision === 2)!;
+    expect(newestTurn.input.brief).toBe('Where is the deploy checklist again?');
     expect(found.chats).toHaveLength(1);
-    expect(found.chats[0].messageId).toBe(turnMessageId(taskId, 2));
+    expect(found.chats[0].messageId).toBe(newestTurn.id);
+    expect(text(found.chats[0].snippet)).toBe('Where is the deploy checklist again?');
   });
 });
 
@@ -209,6 +214,8 @@ describe('upgrade', () => {
     const dev = await orglet();
     answers = { status: 'Status: the migration finished overnight.' };
     const answeredTaskId = await chat(dev, ['Give me the status', 'And the README link?']);
+    const readmeTurn = store.detail(answeredTaskId).savedTurns!.find(turn => turn.localRevision === 1)!;
+    expect(readmeTurn.input.brief).toBe('And the README link?');
     // More chats than one backfill step holds, written straight to the table as an older version would have.
     const older: string[] = [];
     for (let index = 0; index < 30; index++) {
@@ -236,7 +243,9 @@ describe('upgrade', () => {
     expect(after.chats.map(hit => hit.taskId).sort()).toEqual([...older].sort());
     expect(store.setting(CHAT_SEARCH_BACKFILL, null)).toBeNull();
     const link = await search('readme');
-    expect(link.chats[0]).toMatchObject({ taskId: answeredTaskId, messageId: turnMessageId(answeredTaskId, 1) });
+    expect(link.chats[0]).toMatchObject({ taskId: answeredTaskId, messageId: readmeTurn.id });
+    expect(store.detail(answeredTaskId).savedTurns!.find(turn => turn.localRevision === 1)?.id).toBe(readmeTurn.id);
+    expect(text(link.chats[0].snippet)).toBe('And the README link?');
     const overnight = await search('overnight');
     expect(overnight.chats[0]).toMatchObject({ taskId: answeredTaskId, messageId: answerOf(answeredTaskId, 'overnight').id });
   });

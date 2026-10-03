@@ -28,6 +28,7 @@ type Roster = { workers: readonly { id: string }[]; teams: readonly { id: string
  * row, gains a `channel` record named after its title (or its orglets' names when it never had one), and its
  * orglets become the members. A chat for every orglet ('all') becomes a channel of the orglets listed today; the
  * name it had in `taskTitles` moves onto the channel, which is where a channel's name lives from now on.
+ * A saved group larger than the channel picker allows stays a group, with every historical participant intact.
  *
  * It runs each time the workspace opens and after a backup is restored, and touches only rows that still look like a
  * group chat, so running it twice changes nothing. The field is optional JSON on the row, so an older build still
@@ -43,9 +44,9 @@ export function migrateGroupChats(store: Store): number {
   let migrated = 0;
   store.transaction(() => {
     for (const task of legacy) {
-      const orgletIds = (task.assignees === 'all' ? listedWorkers.map(worker => worker.id) : task.assignees as string[]).slice(0, MAX_CHANNEL_MEMBERS);
+      const orgletIds = task.assignees === 'all' ? listedWorkers.map(worker => worker.id) : task.assignees as string[];
       // A chat for every orglet in a workspace with none left has nobody to make members of; it stays as it was.
-      if (!orgletIds.length) continue;
+      if (!orgletIds.length || orgletIds.length > MAX_CHANNEL_MEMBERS) continue;
       const names = orgletIds.map(orgletId => workers.find(worker => worker.id === orgletId)?.name ?? '');
       const title = titles[task.id]?.trim() || task.title?.trim();
       const name = title ? channelNameFrom([title]) : channelNameFrom(names);

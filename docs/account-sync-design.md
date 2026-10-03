@@ -1,6 +1,20 @@
 # Orglet account and sync: technical design
 
-**Status: design, not built** ([COD-329](https://linear.app/codepawl/issue/COD-329)). The product decisions are in [product.md](product.md) point 3. This page is how it would work. No account or sync code gets written before phase 0 below has run.
+**Status: account sign-in and local replication foundation implemented; network sync not connected** ([COD-329](https://linear.app/codepawl/issue/COD-329), [local foundation](https://github.com/codepawl/orglet/issues/480)). The product decisions are in [product.md](product.md) point 3. The sections below distinguish the local implementation from the remaining service and transport design.
+
+### Local replication foundation
+
+The local SQLite schema records explicit public projections, immutable revision UUIDs and durable message UUIDs. Numeric revisions remain local aliases so existing frozen runs and memory references are not renumbered. Concurrent revisions keep both historical bodies; logical generation, a hybrid logical clock and a stable UUID tie select the current configuration. Chat titles, reactions, quotes and listing origins merge independently. Side-thread and quote placement uses message UUIDs across devices and maps back to local aliases.
+
+An imported chat keeps its authored participant IDs. An unrelated orglet already on the receiving computer, or created there later, does not silently join that chat. This matches channels' fixed membership; a legacy local `all` selection is projected as its actual public roster.
+
+Canonical writes, clock advancement and any active account outbox entry share one transaction, including nested savepoints. No account transport is connected yet. The internal recording context fences account identity and generation; neither tokens nor this context cross renderer IPC. Unknown newer schemas remain staged and pause outgoing sync while local editing continues.
+
+An orglet or chat can be marked **Only on this computer**. Descendants inherit the choice. Withdrawal advances a scope epoch, removes blocked outbox entries and retains local copies. Permanent deletion records a tombstone without an age cutoff. Re-enabling changes the epoch again so an older offline copy cannot reopen a withdrawn scope. These records are local preparation; this change alone does not delete any server copy.
+
+Explicit backup recovery can still restore local chat history, including paid chats. Its permanent public deletion barrier remains: the recovered copy is marked private and cannot silently return to sync. Older backups cannot restore live shared entities against an existing permanent deletion ID.
+
+Received records cannot grant permissions, start runs or enable schedules. File metadata has no local path and a received file is marked unavailable on this device. Keys, account credentials, grants, operation journals, reviewed-skill approvals, browser profiles and caches are excluded by explicit schemas. Backup version 2 retains public revision identities, durable turns, privacy choices and permanent deletion IDs; version 1 remains accepted. Device clocks, account context, scope epochs, private receipt fences, outboxes and inboxes are not included.
 
 Prices and versions were read from the vendors' own pages on 2026-09-29. Cost figures are estimates built on the assumptions listed with them.
 

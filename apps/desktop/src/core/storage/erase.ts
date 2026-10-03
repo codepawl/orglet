@@ -17,6 +17,7 @@ export const ERASE_TABLES = [
   'workspace_read_evidence', 'process_evidence', 'workspace_processes', 'workspace_copies',
   'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'browser_actions', 'browser_screenshots', 'desktop_actions', 'desktop_screenshots', 'runs',
   'profiles', 'preflights', 'workspace_grants', 'chat_messages', 'chat_search', 'tasks',
+  'sync_inbox', 'sync_outbox', 'sync_records', 'sync_visibility', 'sync_deletions', 'chat_turns', 'sync_revision_ids', 'sync_clock',
   'knowledge_search', 'knowledge_revisions', 'knowledge', 'revisions',
   'routine_arrivals', 'routine_folders', 'routines', 'workers', 'teams', 'skills', 'sources', 'settings', 'mcp_servers',
 ] as const;
@@ -64,7 +65,12 @@ export function eraseSources(store: Store): { sources: number; sourcesForgotten:
   const forgotten = all.filter(source => cited.has(source.id));
   store.transaction(() => {
     for (const source of all) {
-      if (!cited.has(source.id)) { store.db.prepare('DELETE FROM sources WHERE id=?').run(source.id); continue; }
+      // A cited row remains as an unavailable placeholder, but its public metadata is erased too.
+      store.sync.deleteEntity('source', source.id);
+      if (!cited.has(source.id)) {
+        store.db.prepare('DELETE FROM sources WHERE id=?').run(source.id);
+        continue;
+      }
       store.db.prepare('UPDATE sources SET path=? WHERE id=?').run('', source.id);
       const { hash: _hash, ...rest } = source;
       store.update('sources', { ...rest, revoked: true });
@@ -83,6 +89,7 @@ export function eraseEverything(store: Store): { entities: number } {
   const entities = count(store, 'workers') + count(store, 'teams') + count(store, 'skills') + count(store, 'routines');
   const connections = readCustomConnections(store);
   const mcpServers = store.db.prepare('SELECT id,data FROM mcp_servers ORDER BY rowid').all();
+  store.sync.resetDevice();
   store.transaction(() => {
     for (const table of ERASE_TABLES) store.db.prepare(`DELETE FROM ${table}`).run();
     if (connections.length) writeCustomConnections(store, connections);

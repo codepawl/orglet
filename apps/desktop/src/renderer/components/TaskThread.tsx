@@ -1,3 +1,4 @@
+import { chatTurnRevisions, chatTurnInput, chatTurnMessageId, chatTurnCreatedAt } from '../../shared/chat-turns';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight, ListTodo, Play, UserRound } from 'lucide-react';
 import { answersWithPlan, canFollowPlan } from '../../shared/approval-mode';
@@ -31,7 +32,6 @@ import { clockLabel, needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges, hasReactions } from './MessageActions';
 import { messageGrouping, personAuthorKey, workerAuthorKey } from '../messageGroups';
 import { MAIN_DOCK } from './islandDock';
-import { turnMessageId } from '../../shared/message-interactions';
 import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, runEventMessage, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
@@ -115,7 +115,7 @@ function rememberDismissedLimitRun(taskId: string, runId: string) {
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
-type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; forwarded?: ForwardedMessage; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
+type Turn = { missingInput: boolean; revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; forwarded?: ForwardedMessage; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
 
 /**
  * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
@@ -150,18 +150,18 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const savedReport = savedReportId ? detail.artifacts.find(artifact => artifact.id === savedReportId) : undefined;
   const current = detail.task.inputRevision ?? 0;
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === current && !request.answer && !request.interruptedAt);
-  const turns: Turn[] = [...new Set([0, current, ...detail.runs.map(run => run.snapshot.inputRevision ?? 0)])].sort((a, b) => a - b).map(revision => {
+  const turns: Turn[] = chatTurnRevisions(detail).map(revision => {
     const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
-    const input = revision === current ? detail.task.currentInput ?? detail.task : runs.find(run => run.snapshot.input)?.snapshot.input ?? detail.task;
+    const input = chatTurnInput(detail, revision);
     const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
     // Group chat: each worker's latest answered run for this message, in the order they answered.
     const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
-    return { revision, runs, sentAt: runs[0]?.startedAt ?? detail.task.createdAt, brief: input.brief, replyTo: 'replyTo' in input ? input.replyTo : undefined, forwarded: 'forwarded' in input ? input.forwarded : undefined, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
+    return { missingInput: input === undefined, revision, runs, sentAt: chatTurnCreatedAt(detail, revision), brief: input?.brief ?? '', replyTo: input?.replyTo, forwarded: input?.forwarded, sources: (input?.sourceIds ?? []).map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
   });
   const replyLabel = (messageId?: string) => {
     if (!messageId) return undefined;
-    const userTurn = turns.find(turn => turnMessageId(detail.task.id, turn.revision) === messageId);
-    if (userTurn) return t('Bạn: {0}', [userTurn.brief.slice(0, 140)]);
+    const userTurn = turns.find(turn => chatTurnMessageId(detail, turn.revision) === messageId);
+    if (userTurn) return userTurn.missingInput ? t('Nội dung tin nhắn gốc không còn được lưu.') : t('Bạn: {0}', [userTurn.brief.slice(0, 140)]);
     const artifact = detail.artifacts.find(item => item.id === messageId);
     if (artifact) return t('{0}: {1}', [detail.runs.find(run => run.id === artifact.runId)?.snapshot.worker.name ?? 'Orglet', artifact.report.summary.slice(0, 140)]);
     const event = detail.events.find(item => item.id === messageId && item.teamMessage);
@@ -466,7 +466,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         // there is nothing to act on, so its error stays out of the thread: it used to surface as a card headed
         // "Hoàn tất" carrying a line of internal validation text (user, 2026-09-19). A paused task keeps its own
         // explanation just below, so it is quiet here too.
-        const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
+        const unresolvedError = (latest && !['completed', 'paused'].includes(detail.task.status))
+          || (turn.missingInput && headline && headline.status !== 'completed') ? headline : undefined;
         // A member that handed in a blocker still saved its report; the card's message points at it, so it opens from here.
         const blockerReport = unresolvedError?.stage === 'member' ? detail.artifacts.find(artifact => artifact.runId === unresolvedError.id) : undefined;
         // The crew answer already records this failure as `Role chưa hoàn tất: …`. A second card would repeat the
@@ -508,7 +509,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         // Each message of the turn is placed in drawing order, so a run of messages from one author shares one head.
         const timeMarked = needsTimeMark(previousSentAt, turn.sentAt);
         if (timeMarked) grouping.breakHere();
-        const personMessageId = turnMessageId(detail.task.id, turn.revision);
+        const personMessageId = chatTurnMessageId(detail, turn.revision);
         const personContinued = grouping.place({ key: personAuthorKey, at: turn.sentAt });
         const replyHeads = turn.replies.map(reply => grouping.place({ key: workerAuthorKey(reply.run.snapshot.worker.id), at: reply.artifact.createdAt }) ? undefined : workerHeader(reply.run));
         const sectionShown = !turn.replies.length || (latest && (busy || detail.task.status !== 'completed'));
@@ -525,7 +526,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const standaloneReceipts = chatAnswered ? undefined : receiptsFor(turn.revision);
         const turnQuotes = (detail.task.quotes ?? []).filter(quote => quote.afterRevision === turn.revision);
         const quoteHeads = turnQuotes.map(quote => grouping.place({ key: personAuthorKey, at: quote.createdAt }) ? undefined : personHeader);
-        return <div className="chat-turn" key={turn.revision}>
+        return <div className="chat-turn" key={personMessageId}>
           {timeMarked && <TimeMark at={turn.sentAt} />}
           <Message className="person-message" label={t('Tin của bạn')} header={personContinued ? undefined : personHeader} at={turn.sentAt}>
             {turn.forwarded
@@ -538,14 +539,14 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 <RoutedLine route={routeOfTurn(detail.task.routedTurns, turn.revision)} nameOf={workerId => workspace.workers.find(worker => worker.id === workerId)?.name
                   ?? detail.runs.find(run => run.snapshot.worker.id === workerId)?.snapshot.worker.name} />
                 <div className="user-message" id={`message-${personMessageId}`} tabIndex={-1}>
-                  <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
+                  {turn.missingInput ? <p className="muted">{t('Nội dung tin nhắn gốc không còn được lưu.')}</p> : <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>}
                 </div>
               </>}
             {/* The files follow the text in their own sideways row, the way Slack lists a message's attachments. */}
             {addedFiles.length > 0 && <MessageFiles files={addedFiles} onOpen={sourceId => showSources({ type: 'source', id: sourceId })} />}
             <MessageFoot badges={badgesFor(personMessageId)} />
-            <MessageActions taskId={detail.task.id} messageId={personMessageId} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={reactions} action={action}
-              onForward={forward ? () => forward({ taskId: detail.task.id, messageId: personMessageId, author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />
+            {!turn.missingInput && <MessageActions taskId={detail.task.id} messageId={personMessageId} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={reactions} action={action}
+              onForward={forward ? () => forward({ taskId: detail.task.id, messageId: personMessageId, author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />}
           </Message>
           {turn.replies.map((reply, replyIndex) => <Message key={reply.run.id} className="assistant-message" label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])} header={replyHeads[replyIndex]} at={reply.artifact.createdAt}>
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}

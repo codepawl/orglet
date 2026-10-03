@@ -1,6 +1,7 @@
 import type { Run, Task } from '../../shared/contracts';
-import { MessageReaction, SetMessageReaction, SetUserReaction, turnMessageId, type Reaction } from '../../shared/message-interactions';
+import { MessageReaction, SetMessageReaction, SetUserReaction, type Reaction } from '../../shared/message-interactions';
 import { Store, now } from '../storage/database';
+import { chatTurnRevisions, chatTurnInput, chatTurnMessageId } from '../../shared/chat-turns';
 
 /** `workerId` names the worker who wrote an answer or team message, so a worker can be kept off its own messages. */
 export type MessageTarget = { id: string; kind: 'user' | 'answer' | 'team'; author: string; excerpt: string; workerId?: string };
@@ -13,12 +14,9 @@ export class MessageInteractions {
   target(taskId: string, messageId: string, actorRun?: Run): MessageTarget {
     const detail = this.store.detail(taskId);
     const { task } = detail;
-    const currentRevision = task.inputRevision ?? 0;
-    for (let revision = 0; revision <= currentRevision; revision++) {
-      if (turnMessageId(taskId, revision) !== messageId) continue;
-      const input = revision === currentRevision ? task.currentInput : detail.runs.find(run =>
-        (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)?.snapshot.input;
-      const brief = input?.brief ?? (revision === 0 ? task.brief : undefined);
+    for (const revision of chatTurnRevisions(detail)) {
+      if (chatTurnMessageId(detail, revision) !== messageId) continue;
+      const brief = chatTurnInput(detail, revision)?.brief;
       if (!brief) break;
       return { id: messageId, kind: 'user', author: 'Người dùng', excerpt: excerpt(brief) };
     }
