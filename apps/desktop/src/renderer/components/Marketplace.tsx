@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, ShieldCheck, UserRoundPlus, X } from 'lucide-react';
 import type { MarketCatalogView, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
 import { orglet } from '../api';
@@ -9,6 +9,8 @@ import { MarketOwnListings } from './MarketPublishing';
 import { Select } from './Select';
 import { useMarketModeration } from './MarketModeration';
 import { MARKET_SEED_BODIES } from '../../shared/market-seed';
+import { PageTabs } from './PageTabs';
+import { RowMenu } from './RowMenu';
 
 function addedNotice(result: MarketAdded) {
   if (result.fallbackNames.length) toast(t('Đã dùng kết nối mặc định cho {0}; kết nối gợi ý chưa sẵn sàng.', [result.fallbackNames.join(', ')]));
@@ -18,7 +20,10 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
   const moderation = useMarketModeration();
   const [catalog, setCatalog] = useState<MarketCatalogView>();
   const [installed, setInstalled] = useState<MarketInstallation[]>([]);
-  const [busy, setBusy] = useState(true);
+  const [tab, setTab] = useState<'discover' | 'own'>('discover');
+  const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(true);
+  const viewGeneration = useRef(0);
   const [error, setError] = useState('');
   const [update, setUpdate] = useState<MarketUpdate>();
   const [previousPages, setPreviousPages] = useState<(string | undefined)[]>([]);
@@ -31,20 +36,24 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
   };
   useEffect(() => {
     let mounted = true;
+    const generation = viewGeneration.current;
     void (async () => {
       const cached = await orglet.call('marketCatalog', {});
       if (!mounted) return;
+      const saved = await orglet.call('marketInstallations', {});
+      if (!mounted || generation !== viewGeneration.current) return;
       setCatalog(cached);
-      setInstalled(await orglet.call('marketInstallations', {}));
+      setInstalled(saved);
       const fresh = await orglet.call('marketCatalog', { refresh: true });
-      if (!mounted) return;
-      setCatalog(fresh);
-      setInstalled(await orglet.call('marketInstallations', {}));
-    })().catch(reason => { if (mounted) setError(tMessage(String(reason.message ?? reason))); })
-      .finally(() => { if (mounted) setBusy(false); });
+      if (!mounted || generation !== viewGeneration.current) return;
+      const installations = await orglet.call('marketInstallations', {});
+      if (mounted && generation === viewGeneration.current) { setCatalog(fresh); setInstalled(installations); }
+    })().catch(reason => { if (mounted && generation === viewGeneration.current) setError(tMessage(String(reason.message ?? reason))); })
+      .finally(() => { if (mounted) setRefreshing(false); });
     return () => { mounted = false; };
   }, []);
   const action = async (operation: () => Promise<void>) => {
+    viewGeneration.current += 1;
     setBusy(true);
     setError('');
     try {
@@ -56,10 +65,12 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     }
   };
   return <section className="page-section marketplace" aria-labelledby="marketplace-title">
-    <PanelHeading title={<span id="marketplace-title">{t('Khám phá')}</span>} description={t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.')}>
+    <PanelHeading title={<span id="marketplace-title">{t('Marketplace')}</span>} description={tab === 'discover' ? t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.') : undefined}>
       {moderation.entry}
-      <Button type="button" variant="outline" disabled={busy} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{t('Làm mới')}</Button>
+      {tab === 'discover' && <Button type="button" variant="outline" disabled={busy || refreshing} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{refreshing ? t('Đang làm mới') : t('Làm mới')}</Button>}
     </PanelHeading>
+    <PageTabs tabs={[{ id: 'discover', label: t('Khám phá') }, { id: 'own', label: t('Mục của tôi') }]} current={tab} onSelect={setTab} label={t('Các phần của marketplace')} />
+    {tab === 'discover' ? <div className="marketplace-discover">
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
     {catalog?.error && <p className="muted" role="status">{tMessage(catalog.error)}</p>}
     {error && <p className="error" role="alert">{error}</p>}
@@ -71,19 +82,29 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
       setPreviousPages([]);
     })} />}
     {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <ul className="friends-sources">
-      {catalog.listings.map(listing => <li key={listing.listingId} className="friend-source marketplace-listing">
-        <span className="friend-source-text"><span className="friend-name">{listing.name}</span><span className="friend-status">{listing.summary}</span><span className="friend-status">{listing.kind === 'crew' ? t('Nhóm Tí') : t('Tí')} · {typeof listing.author === 'string' ? listing.author : listing.author.displayName} · {listing.license} · {listing.language.toUpperCase()} · v{listing.version}</span></span>
-        <span className="market-listing-actions">
-        {'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] && <Button type="button" variant="ghost" disabled={busy} onClick={() => moderation.setReport(listing)}><Flag size={15} />{t('Report')}</Button>}
-        {'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] && moderation.capability?.canReview && <Button type="button" variant="ghost" disabled={busy} onClick={() => moderation.setReview(listing)}><ShieldCheck size={15} />{t('Xem để duyệt')}</Button>}
-        <Button type="button" variant="outline" disabled={busy} onClick={() => void action(async () => {
+      {catalog.listings.length === 0 && <li className="marketplace-empty muted">{t('Chưa có mẫu trên trang này. Bạn có thể làm mới hoặc mở một trang đã lưu.')}</li>}
+      {catalog.listings.map(listing => {
+        const copies = installed.filter(item => item.listingId === listing.listingId);
+        const publicListing = 'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] ? listing : undefined;
+        return <li key={listing.listingId} className="friend-source marketplace-listing">
+        <div className="friend-source-text">
+          <h3 className="friend-name">{listing.name}</h3><p className="market-listing-summary">{listing.summary}</p>
+          <div className="market-listing-meta"><span>{listing.kind === 'crew' ? t('Nhóm Tí') : t('Tí')}</span><span className="market-listing-author">{typeof listing.author === 'string' ? listing.author : listing.author.displayName}</span><span>{listing.language.toUpperCase()} · v{listing.version}</span><span>{listing.license}</span></div>
+          {copies.length > 0 && <p className="market-listing-installed">{copies.length === 1 ? t('Đã thêm') : t('Đã thêm {0} bản trên máy', [copies.length])}{copies.some(item => item.updateAvailable) && ` · ${t('Có bản cập nhật')}`}</p>}
+        </div>
+        <div className="market-listing-actions">
+        <Button type="button" variant="primary" disabled={busy} onClick={() => void action(async () => {
           const result = await orglet.call('marketAdd', { listingId: listing.listingId, version: listing.version });
           addedNotice(result);
           await onAdded(result);
           setInstalled(await orglet.call('marketInstallations', {}));
-        })}><UserRoundPlus size={16} />{t('Thêm bạn')}</Button>
-        </span>
-      </li>)}
+        })}><UserRoundPlus size={16} />{copies.length ? t('Thêm bản nữa') : t('Thêm bạn')}</Button>
+        {publicListing && <RowMenu label={t('Tùy chọn {0}', [listing.name])} disabled={busy} items={[
+          { label: t('Report'), icon: Flag, onSelect: () => moderation.setReport(publicListing) },
+          ...(moderation.capability?.canReview ? [{ label: t('Xem để duyệt'), icon: ShieldCheck, onSelect: () => moderation.setReview(publicListing) }] : []),
+        ]} />}
+        </div>
+      </li>; })}
     </ul>}
     {(previousPages.length > 0 || catalog?.nextCursor) && <div className="marketplace-pagination">
       <Button type="button" variant="outline" disabled={busy || previousPages.length === 0} onClick={() => void action(async () => {
@@ -103,16 +124,17 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
         else setPreviousPages([]);
       })}><ChevronRight size={16} />{t('Trang tiếp theo')}</Button>
     </div>}
-    <MarketOwnListings />
-    {moderation.recovery}
-    {moderation.dialogs}
+    {installed.some(item => item.updateAvailable) && <section className="marketplace-updates" aria-label={t('Có bản cập nhật')}><h3>{t('Có bản cập nhật')}</h3>
     {installed.filter(item => item.updateAvailable).map(item => <div className="friend-source" key={item.entityId}>
       <span className="friend-source-text"><span className="friend-name">{item.name}</span><span className="friend-status">{t('Có bản cập nhật')} · v{item.version}</span></span>
       <Button type="button" variant="outline" aria-disabled={busy} onClick={() => {
         if (busy) return;
         void action(async () => setUpdate(await orglet.call('marketPreviewUpdate', { entityId: item.entityId })));
       }}><ArrowDownToLine size={16} />{t('Xem bản cập nhật')}</Button>
-    </div>)}
+    </div>)}</section>}
+    </div> : <MarketOwnListings />}
+    {moderation.recovery}
+    {moderation.dialogs}
     {update && <MarketUpdateCard update={update} onClose={() => setUpdate(undefined)} onApplied={async result => { addedNotice(result); setUpdate(undefined); await load(false); }} />}
   </section>;
 }
