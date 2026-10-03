@@ -17,8 +17,9 @@ export const OwnerAllowance = z.object({
 }).strict();
 export const OwnerSummary = z.object({
   listingId: ListingId, kind: z.enum(['orglet', 'crew']),
-  latest: z.object({ listing: MarketListingV2, state: MarketReviewState }).strict(),
+  latest: z.object({ listing: MarketListingV2, state: MarketReviewState, reason: z.string().max(2048).default('') }).strict(),
   published: MarketListingV2.nullable(), publicationEpoch: z.number().int().nonnegative(),
+  hidden: z.boolean().default(false), hiddenReason: z.string().max(2048).default(''),
 }).strict().refine(summary => summary.latest.listing.listingId === summary.listingId && summary.latest.listing.kind === summary.kind &&
   (summary.published === null || (summary.published.listingId === summary.listingId && summary.published.kind === summary.kind && summary.published.version <= summary.latest.listing.version)));
 export const OwnerSummaries = z.object({ publishingEnabled: z.boolean(), listings: z.array(OwnerSummary).max(10), allowance: OwnerAllowance }).strict()

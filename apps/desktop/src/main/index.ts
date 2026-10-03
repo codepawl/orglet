@@ -53,6 +53,8 @@ import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
 import { AccountFile, AccountService, accountPayload } from './account';
 import { MarketPublishingTransport, publishingRelayAllowed } from './market-publishing';
+import { MarketModerationTransport } from './market-moderation';
+import { MarketModerationAction, MarketModerationResult } from '../shared/market-moderation';
 import { PublishingAction, PublishingRelay, PublishingResult, type PublishingAction as PublishingRequest } from '../shared/market-desktop';
 import { AnalyticsClient } from './analytics';
 import { AnalyticsFeature, FLUSH_INTERVAL_MS, RendererErrorReport, analyticsAllowedHere, featureForCommand, settingChanges, settingsSnapshot, type ErrorKind } from '../shared/analytics';
@@ -77,6 +79,8 @@ const pending = new Map<string, { resolve: (value: unknown) => void; reject: (er
 const publishingAuthorized = new Map<string, PublishingRequest>();
 const publishingDispatched = new Set<string>();
 let publishingTransport: MarketPublishingTransport;
+let moderationTransport: MarketModerationTransport;
+let moderationCallerGeneration = 0;
 let window: BrowserWindow;
 /** Concurrent `open` requests share the first renderer load. Closing the desktop still quits the app. */
 let desktopReady: Promise<void> | undefined;
@@ -481,6 +485,9 @@ function relayBrowserEvent(raw: unknown) {
 async function createDesktopWindow() {
   window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('did-start-navigation', (_event, _address, inPlace, mainFrame) => {
+    if (mainFrame && !inPlace) moderationCallerGeneration += 1;
+  });
   // The desktop glow is its own window on Windows (COD-261); it goes with the main window so it never keeps the app open.
   if (process.platform === 'win32') desktopOverlay = new DesktopOverlayWindow(url, join(__dirname, 'preload.js'), taskId => request('cancel', { id: taskId }));
   window.on('closed', () => {
@@ -531,6 +538,7 @@ async function start() {
   });
   await account.load();
   publishingTransport = new MarketPublishingTransport(account);
+  moderationTransport = new MarketModerationTransport(account, fetch, { request: args => request('marketModerationJournal', args) });
   analytics = new AnalyticsClient({
     directory,
     baseUrl: accountsBaseUrl(process.env.ORGLET_ACCOUNTS_URL),
@@ -730,6 +738,13 @@ async function start() {
   handle('orglet:market-publishing', async raw => {
     const action = PublishingAction.parse(raw);
     return PublishingResult.parse(await request('marketPublishing', action, action));
+  });
+  handle('orglet:market-moderation', async raw => {
+    const ownerWindow = window;
+    const ownerFrame = ownerWindow?.webContents.mainFrame;
+    const callerGeneration = moderationCallerGeneration;
+    return MarketModerationResult.parse(await moderationTransport.perform(MarketModerationAction.parse(raw), () =>
+      Boolean(ownerWindow && !ownerWindow.isDestroyed() && window === ownerWindow && ownerWindow.webContents.mainFrame === ownerFrame && callerGeneration === moderationCallerGeneration)));
   });
   handle('orglet:account-sign-in', async () => accountPayload(await account.signIn()));
   handle('orglet:account-cancel-sign-in', async () => accountPayload(account.cancelSignIn()));

@@ -75,7 +75,7 @@ it('requires a fresh withdrawal confirmation and preserves an installed account 
     ...context,
     summaries: {
       publishingEnabled: true,
-      listings: [{ listingId: listing.listingId, kind: 'orglet', latest: { listing, state: 'approved' }, published: listing, publicationEpoch: 0 }],
+      listings: [{ listingId: listing.listingId, kind: 'orglet', latest: { listing, state: 'approved', reason: '' }, published: listing, publicationEpoch: 0, hidden: false, hiddenReason: '' }],
       allowance: { listingLimit: 10, listingCount: 1, submissionsInHour: 0, submissionLimit: 5 },
     },
   };

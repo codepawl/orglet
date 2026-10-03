@@ -4,18 +4,23 @@ import { ownerRoute, privateReply, type MarketEnvironment } from './owner-routes
 import { listingBody, publicListingSummary } from './listings';
 import { seedCatalogV2 } from './catalog-v2';
 import { sha256 } from './content';
+import { moderationRoute } from './moderation-routes';
+import { publicPublishingReady } from './moderation';
 
 export default {
   async fetch(request: Request, environment: MarketEnvironment = {}): Promise<Response> {
+    const moderation = await moderationRoute(request, environment);
+    if (moderation) return moderation;
     const owned = await ownerRoute(request, environment);
     if (owned) return owned;
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
     const url = new URL(request.url);
     const path = url.pathname;
     if (path === '/v2/catalog') {
+      const publicDatabase = await publicPublishingReady(environment) ? environment.MARKET_DB : undefined;
       const errorHeaders = { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' };
       try {
-        const page = await catalogPageV2(url.searchParams, environment.MARKET_DB);
+        const page = await catalogPageV2(url.searchParams, publicDatabase);
         const status = page === undefined ? 400 : 200;
         console.log(JSON.stringify({ operation: 'catalog-v2', method: request.method, status }));
         if (page === undefined) return new Response(request.method === 'HEAD' ? null : 'Tham số danh mục không hợp lệ.', { status, headers: errorHeaders });
@@ -30,8 +35,9 @@ export default {
       if (url.search) return privateReply(request, { code: 'invalid_request' }, 400);
       try {
         const seeds = await seedCatalogV2();
-        const listing = seeds.listings.find(item => item.listingId === publicSummary[1]) ??
-          (environment.MARKET_DB ? await publicListingSummary(environment.MARKET_DB, publicSummary[1]) : undefined);
+        const curated = seeds.listings.find(item => item.listingId === publicSummary[1]);
+        const publicDatabase = !curated && await publicPublishingReady(environment) ? environment.MARKET_DB : undefined;
+        const listing = curated ?? (publicDatabase ? await publicListingSummary(publicDatabase, publicSummary[1]) : undefined);
         return listing ? privateReply(request, listing) : privateReply(request, { code: 'not_found' }, 404);
       } catch {
         return privateReply(request, { code: 'storage_failed' }, 500);
@@ -43,9 +49,10 @@ export default {
       if (url.search || !Number.isSafeInteger(version)) return privateReply(request, { code: 'not_found' }, 404);
       const curatedBody = MARKET_SEED_BODIES[`${publicVersion[1]}:${version}`];
       if (curatedBody) return reply(request, curatedBody, 'public, max-age=31536000, immutable', await sha256(new TextEncoder().encode(curatedBody)));
-      if (!environment.MARKET_DB) return privateReply(request, { code: 'not_found' }, 404);
+      const publicDatabase = await publicPublishingReady(environment) ? environment.MARKET_DB : undefined;
+      if (!publicDatabase) return privateReply(request, { code: 'not_found' }, 404);
       try {
-        const body = await listingBody(environment.MARKET_DB, publicVersion[1], version);
+        const body = await listingBody(publicDatabase, publicVersion[1], version);
         if (!body) return privateReply(request, { code: 'not_found' }, 404);
         return reply(request, body.bytes, 'no-store', body.hash);
       } catch {

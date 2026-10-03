@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownToLine, ChevronLeft, ChevronRight, RefreshCw, UserRoundPlus, X } from 'lucide-react';
+import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, ShieldCheck, UserRoundPlus, X } from 'lucide-react';
 import type { MarketCatalogView, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
 import { orglet } from '../api';
 import { t, tMessage } from '../i18n';
@@ -7,12 +7,15 @@ import { Button, Drawer, PanelHeading } from './ui';
 import { toast } from './toast';
 import { MarketOwnListings } from './MarketPublishing';
 import { Select } from './Select';
+import { useMarketModeration } from './MarketModeration';
+import { MARKET_SEED_BODIES } from '../../shared/market-seed';
 
 function addedNotice(result: MarketAdded) {
   if (result.fallbackNames.length) toast(t('Đã dùng kết nối mặc định cho {0}; kết nối gợi ý chưa sẵn sàng.', [result.fallbackNames.join(', ')]));
 }
 
 export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => void | Promise<void> }) {
+  const moderation = useMarketModeration();
   const [catalog, setCatalog] = useState<MarketCatalogView>();
   const [installed, setInstalled] = useState<MarketInstallation[]>([]);
   const [busy, setBusy] = useState(true);
@@ -24,6 +27,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     setCatalog(next);
     setPreviousPages([]);
     setInstalled(await orglet.call('marketInstallations', {}));
+    if (refresh) await moderation.refresh();
   };
   useEffect(() => {
     let mounted = true;
@@ -53,6 +57,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
   };
   return <section className="page-section marketplace" aria-labelledby="marketplace-title">
     <PanelHeading title={<span id="marketplace-title">{t('Khám phá')}</span>} description={t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.')}>
+      {moderation.entry}
       <Button type="button" variant="outline" disabled={busy} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{t('Làm mới')}</Button>
     </PanelHeading>
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
@@ -68,12 +73,16 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <ul className="friends-sources">
       {catalog.listings.map(listing => <li key={listing.listingId} className="friend-source marketplace-listing">
         <span className="friend-source-text"><span className="friend-name">{listing.name}</span><span className="friend-status">{listing.summary}</span><span className="friend-status">{listing.kind === 'crew' ? t('Nhóm Tí') : t('Tí')} · {typeof listing.author === 'string' ? listing.author : listing.author.displayName} · {listing.license} · {listing.language.toUpperCase()} · v{listing.version}</span></span>
+        <span className="market-listing-actions">
+        {'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] && <Button type="button" variant="ghost" disabled={busy} onClick={() => moderation.setReport(listing)}><Flag size={15} />{t('Report')}</Button>}
+        {'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] && moderation.capability?.canReview && <Button type="button" variant="ghost" disabled={busy} onClick={() => moderation.setReview(listing)}><ShieldCheck size={15} />{t('Xem để duyệt')}</Button>}
         <Button type="button" variant="outline" disabled={busy} onClick={() => void action(async () => {
           const result = await orglet.call('marketAdd', { listingId: listing.listingId, version: listing.version });
           addedNotice(result);
           await onAdded(result);
           setInstalled(await orglet.call('marketInstallations', {}));
         })}><UserRoundPlus size={16} />{t('Thêm bạn')}</Button>
+        </span>
       </li>)}
     </ul>}
     {(previousPages.length > 0 || catalog?.nextCursor) && <div className="marketplace-pagination">
@@ -95,6 +104,8 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
       })}><ChevronRight size={16} />{t('Trang tiếp theo')}</Button>
     </div>}
     <MarketOwnListings />
+    {moderation.recovery}
+    {moderation.dialogs}
     {installed.filter(item => item.updateAvailable).map(item => <div className="friend-source" key={item.entityId}>
       <span className="friend-source-text"><span className="friend-name">{item.name}</span><span className="friend-status">{t('Có bản cập nhật')} · v{item.version}</span></span>
       <Button type="button" variant="outline" aria-disabled={busy} onClick={() => {

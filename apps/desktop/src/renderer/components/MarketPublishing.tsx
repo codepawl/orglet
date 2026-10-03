@@ -61,7 +61,7 @@ function decodedPreviewFiles(requestText: string): { path: string; text: string 
 }
 
 /** Readable public prose first; the complete original request remains inspectable without reconstruction. */
-function PublicContentPreview({ requestText }: { requestText: string }) {
+export function PublicContentPreview({ requestText }: { requestText: string }) {
   const submission = JSON.parse(requestText) as MarketSubmission;
   const workers = submission.kind === 'crew' ? submission.template.workers : [submission.template.worker];
   const skills = submission.kind === 'crew' ? submission.template.skills : [submission.template.skill];
@@ -71,7 +71,7 @@ function PublicContentPreview({ requestText }: { requestText: string }) {
     {workers.map((worker, index) => <section key={index}><h3>{worker.name}</h3>{worker.description && <p>{worker.description}</p>}<p className="muted">{providerName(worker.provider)}{worker.modelId && ` · ${worker.modelId}`}</p><pre className="market-public-prose">{worker.instructions}</pre></section>)}
     {skills.map((skill, index) => <section key={index}><h3>{skill.name}</h3><pre className="market-public-prose">{skill.content}</pre></section>)}
     {submission.kind === 'crew' && submission.template.knowledge?.map((note, index) => <section key={index}><h3>{note.title}</h3><pre className="market-public-prose">{note.content}</pre></section>)}
-    {decodedPreviewFiles(requestText).map(file => <details className="market-publishing-disclosure" key={file.path}><summary><ChevronRight size={14} aria-hidden="true" />{file.path}</summary><pre className="market-public-preview">{file.text}</pre></details>)}
+    {decodedPreviewFiles(requestText).map((file, index) => <details className="market-publishing-disclosure" key={`${index}-${file.path}`}><summary><ChevronRight size={14} aria-hidden="true" />{file.path}</summary><pre className="market-public-preview">{file.text}</pre></details>)}
     <details className="market-publishing-disclosure market-exact-request"><summary><ChevronRight size={14} aria-hidden="true" />{t('Xem toàn bộ JSON sẽ gửi')}</summary><pre className="market-public-preview" aria-label={t('Nội dung công khai chính xác')}>{requestText}</pre></details>
   </div>;
 }
@@ -242,7 +242,7 @@ export function MarketOwnListings() {
     {view?.summaries && <p className="muted">{t('{0}/{1} mục; {2}/5 lần gửi trong giờ qua.', [view.summaries.allowance.listingCount, view.summaries.allowance.listingLimit, view.summaries.allowance.submissionsInHour])}</p>}
     {view?.summaries?.listings.length === 0 && view.operations.length === 0 && <p className="muted">{t('Chưa có mục xuất bản. Mở menu của một Tí hoặc crew để xem trước và gửi mẫu.')}</p>}
     {view?.summaries?.listings.map(item => <div className="friend-source" key={item.listingId}>
-      <span className="friend-source-text"><span className="friend-name">{item.latest.listing.name}</span><span className="friend-status">{t('Phiên bản mới nhất')} · v{item.latest.listing.version} · {item.latest.state === 'pending' ? t('Đang chờ duyệt') : item.latest.state === 'approved' ? t('Đã duyệt') : t('Đã từ chối')}</span><span className="friend-status">{item.published ? `${t('Đang công khai')} · v${item.published.version}` : t('Hiện không công khai')}</span></span>
+      <span className="friend-source-text"><span className="friend-name">{item.latest.listing.name}</span><span className="friend-status">{t('Phiên bản mới nhất')} · v{item.latest.listing.version} · {item.latest.state === 'pending' ? t('Đang chờ duyệt') : item.latest.state === 'approved' ? t('Đã duyệt') : t('Đã từ chối')}</span><span className="friend-status">{item.published ? `${t('Đang công khai')} · v${item.published.version}` : t('Hiện không công khai')}</span>{item.latest.reason && <span className="friend-status">{item.latest.reason}</span>}{item.hidden && <span className="friend-status">{t('Mục đã bị ẩn. Gửi phiên bản mới không mở lại mục.')} {item.hiddenReason}</span>}</span>
       {item.published && <Button type="button" variant="outline" disabled={busy || view.capability.status !== 'available'} onClick={() => void confirmAction({ title: t('Ngừng xuất bản {0}?', [item.latest.listing.name]), description: t('Các bản đã thêm trên máy vẫn giữ nguyên. Đây là thao tác cho toàn bộ mục, không chỉ phiên bản đang xem.'), confirmLabel: t('Ngừng xuất bản') }).then(confirmed => {
         if (confirmed) void run({ action: 'unpublish', listingId: item.listingId, confirmation: view.confirmations[item.listingId] });
       })}><X size={16} />{t('Ngừng xuất bản')}</Button>}

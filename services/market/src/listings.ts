@@ -57,6 +57,7 @@ function operationFailure(error: unknown): never {
     ['market_owner', 404, 'not_found'], ['market_reserved', 409, 'reserved_listing'],
     ['market_capacity', 429, 'listing_limit'], ['market_rate', 429, 'submission_limit'],
     ['market_kind', 409, 'listing_kind'],
+    ['market_idempotency', 409, 'idempotency_conflict'],
   ];
   for (const [marker, status, code] of errors) {
     if (message.includes(marker)) throw new MarketOperationError(status, code);
@@ -163,7 +164,7 @@ export async function listingBody(database: D1Database, listingId: string, versi
     JOIN version_reviews AS reviews USING(listing_id, version)
     WHERE versions.listing_id = ? AND versions.version = ? AND (
       (? IS NOT NULL AND listings.owner_id = ?) OR
-      (? IS NULL AND listings.published_version IS NOT NULL AND reviews.state = 'approved')
+      (? IS NULL AND listings.published_version IS NOT NULL AND listings.moderation_hidden=0 AND reviews.state = 'approved')
     )
   `).bind(listingId, version, owner ?? null, owner ?? null, owner ?? null).first<VersionRow>();
   if (!row) return undefined;
@@ -174,7 +175,7 @@ export async function listingBody(database: D1Database, listingId: string, versi
     // Recheck after reconstruction, before the handler can answer HEAD or a conditional 304.
     const visible = await database.withSession('first-primary').prepare(`
       SELECT 1 AS visible FROM listings JOIN version_reviews USING(listing_id)
-      WHERE listing_id = ? AND version = ? AND published_version IS NOT NULL AND state = 'approved'
+      WHERE listing_id = ? AND version = ? AND published_version IS NOT NULL AND moderation_hidden=0 AND state = 'approved'
     `).bind(listingId, version).first();
     if (!visible) return undefined;
   }
@@ -185,7 +186,7 @@ export async function approvedListings(database: D1Database, after: string, limi
   const rows = await database.withSession('first-primary').prepare(`
     SELECT versions.* FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
       AND versions.version = listings.published_version JOIN version_reviews AS reviews USING(listing_id, version)
-    WHERE reviews.state = 'approved' AND listings.listing_id > ? ORDER BY listings.listing_id LIMIT ?
+    WHERE reviews.state = 'approved' AND listings.moderation_hidden=0 AND listings.listing_id > ? ORDER BY listings.listing_id LIMIT ?
   `).bind(after, limit).all<VersionRow>();
   return rows.results.map(publicListing);
 }
@@ -223,7 +224,8 @@ export async function ownerSummaries(database: D1Database, identity: MarketIdent
   const session = database.withSession('first-primary');
   const results = await session.batch([
     session.prepare(`
-      SELECT versions.*, reviews.state, listings.publication_epoch AS current_epoch, listings.published_version
+      SELECT versions.*, reviews.state, reviews.reason, listings.moderation_hidden,listings.moderation_reason,
+        listings.publication_epoch AS current_epoch, listings.published_version
       FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
         AND versions.version = (SELECT max(version) FROM listing_versions WHERE listing_id = listings.listing_id)
       JOIN version_reviews AS reviews ON reviews.listing_id = versions.listing_id AND reviews.version = versions.version
@@ -232,18 +234,20 @@ export async function ownerSummaries(database: D1Database, identity: MarketIdent
     session.prepare(`
       SELECT versions.* FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
         AND versions.version = listings.published_version JOIN version_reviews AS reviews USING(listing_id, version)
-      WHERE listings.owner_id = ? AND reviews.state = 'approved' ORDER BY listings.listing_id LIMIT 10
+      WHERE listings.owner_id = ? AND reviews.state = 'approved' AND listings.moderation_hidden=0 ORDER BY listings.listing_id LIMIT 10
     `).bind(identity.subject),
     session.prepare('SELECT count(*) AS total FROM listing_versions WHERE submitted_by = ? AND submitted_at > ?')
       .bind(identity.subject, Math.floor(Date.now() / 1000) - 3600),
   ]);
-  const latest = results[0].results as (VersionRow & { current_epoch: number })[];
+  const latest = results[0].results as (VersionRow & { current_epoch: number; reason: string; moderation_hidden: number; moderation_reason: string })[];
   const published = new Map((results[1].results as VersionRow[]).map(row => [row.listing_id, publicListing(row)]));
   return OwnerSummaries.parse({
     publishingEnabled,
     listings: latest.map(row => {
       const listing = publicListing(row);
-      return { listingId: row.listing_id, kind: listing.kind, latest: { listing, state: row.state }, published: published.get(row.listing_id) ?? null, publicationEpoch: row.current_epoch };
+      return { listingId: row.listing_id, kind: listing.kind, latest: { listing, state: row.state, reason: row.reason },
+        published: published.get(row.listing_id) ?? null, publicationEpoch: row.current_epoch,
+        hidden: row.moderation_hidden === 1, hiddenReason: row.moderation_reason };
     }),
     allowance: {
       listingLimit: identity.publishedListings, listingCount: latest.length,
@@ -256,7 +260,7 @@ export async function publicListingSummary(database: D1Database, listingId: stri
   const row = await database.withSession('first-primary').prepare(`
     SELECT versions.* FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
       AND versions.version = listings.published_version JOIN version_reviews AS reviews USING(listing_id, version)
-    WHERE listings.listing_id = ? AND reviews.state = 'approved'
+    WHERE listings.listing_id = ? AND listings.moderation_hidden=0 AND reviews.state = 'approved'
   `).bind(listingId).first<VersionRow>();
   return row ? publicListing(row) : undefined;
 }

@@ -532,6 +532,7 @@ export interface Bridge {
   about(): Promise<AboutInfo>;
   /** Explicit person-owned publishing surface; never part of worker/CLI command authority. */
   marketPublishing(action: import('./market-desktop').PublishingAction): Promise<import('./market-desktop').PublishingResult>;
+  marketModeration(action: import('./market-moderation').MarketModerationAction): Promise<import('./market-moderation').MarketModerationResult>;
   /** The CodePawl account on this computer (COD-337): who and which plan, never a token. */
   accountState(): Promise<import('./account').AccountState>;
   /** Opens the browser to sign in; settles when the sign-in finishes, is cancelled or fails (a translated reason). */
