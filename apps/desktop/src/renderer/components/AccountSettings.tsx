@@ -3,6 +3,7 @@ import { ChartNoAxesColumn, ExternalLink, LogIn, LogOut, RefreshCw, Smartphone, 
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import type { AccountState } from '../../shared/account';
 import type { SyncPauseReason, SyncPreview, SyncStatus } from '../../shared/sync-status';
+import type { SyncConflict, SyncConflictVersion } from '../../shared/sync-conflicts';
 import { useSync } from '../account';
 import type { AnalyticsState } from '../../shared/analytics';
 import type { AboutLink } from '../../shared/updates';
@@ -10,7 +11,7 @@ import { orglet } from '../api';
 import { t } from '../i18n';
 import { toast } from './toast';
 import { Avatar } from './Avatar';
-import { Button } from './ui';
+import { Button, Drawer } from './ui';
 import { confirmAction } from './confirm';
 import { InfoTip } from './InfoTip';
 import { Switch } from './Switch';
@@ -173,6 +174,58 @@ function JoinChoice({ onClose }: { onClose: () => void }) {
   </div>;
 }
 
+const conflictKind = (conflict: SyncConflict) => conflict.entity === 'worker' ? t('Tí') : conflict.entity === 'skill' ? t('Kỹ năng') : conflict.entity === 'team' ? t('Kênh') : t('Ghi chú');
+const versionLabel = (version: SyncConflictVersion) => version.current
+  ? version.thisComputer ? t('Đang dùng · sửa trên máy này') : t('Đang dùng · sửa trên máy khác')
+  : version.thisComputer ? t('Bản kia · sửa trên máy này') : t('Bản kia · sửa trên máy khác');
+
+/**
+ * Things two computers changed while apart (GH-484). The row shows only while there are some. The dialog puts the two
+ * versions side by side; choosing one writes it as a new revision everywhere, and the other stays in the history.
+ */
+function ConflictsRow({ busy }: { busy: boolean }) {
+  const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let current = true;
+    const load = () => void orglet.call('syncConflicts', {}).then(value => { if (current) setConflicts(value); }).catch(() => undefined);
+    load();
+    const stop = orglet.onChange(load);
+    return () => { current = false; stop(); };
+  }, []);
+  if (!conflicts.length) return null;
+  const choose = async (conflict: SyncConflict, version: SyncConflictVersion) => {
+    setError('');
+    try {
+      await orglet.call('resolveSyncConflict', { entity: conflict.entity, id: conflict.id, revisionId: version.revisionId, generation: conflict.generation });
+      toast(t('Đã chọn bản dùng cho {0}', [conflict.name]), 'success', t('Đồng bộ'));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
+  return <>
+    <Row title={t('Sửa trên hai máy')} description={t('{0} mục được sửa trên hai máy khi chưa đồng bộ. Orglet đang dùng bản sửa sau; bản kia vẫn còn.', [conflicts.length])}>
+      <Button variant="outline" disabled={busy} onClick={() => setOpen(true)}>{t('Xem lại')}</Button>
+    </Row>
+    {open && <Drawer open onClose={() => setOpen(false)} title={t('Sửa trên hai máy')} description={t('Chọn bản muốn dùng. Bản còn lại vẫn nằm trong lịch sử.')}>
+      <div className="sync-conflicts">
+        {error && <p role="alert" className="error">{error}</p>}
+        {conflicts.map(conflict => <section key={`${conflict.entity}:${conflict.id}`} className="marketplace-comparison" aria-label={conflict.name}>
+          <h3>{conflict.name} <span className="muted">· {conflictKind(conflict)}</span></h3>
+          <div className="marketplace-comparison-columns">
+            {conflict.versions.slice(0, 2).map(version => <div key={version.revisionId} className="sync-conflict-version">
+              <p className="muted">{versionLabel(version)}</p>
+              <pre>{version.text}</pre>
+              <Button variant={version.current ? 'outline' : 'primary'} disabled={busy} onClick={() => void choose(conflict, version)}>{version.current ? t('Giữ bản này') : t('Dùng bản này')}</Button>
+            </div>)}
+          </div>
+        </section>)}
+      </div>
+    </Drawer>}
+  </>;
+}
+
 /** Sync in one row: what it is doing, and one button when the person can do something about it. */
 function SyncRow({ busy }: { busy: boolean }) {
   const status = useSync() ?? { state: 'off' as const };
@@ -190,6 +243,7 @@ function SyncRow({ busy }: { busy: boolean }) {
         : canRetry ? <Button variant="outline" disabled={busy} onClick={start}><RefreshCw size={14} />{t('Thử lại')}</Button> : null}
     </Row>
     {joining && status.state === 'link_required' && <JoinChoice onClose={() => setJoining(false)} />}
+    <ConflictsRow busy={busy} />
   </>;
 }
 

@@ -3996,6 +3996,17 @@ export const en: Dictionary = {
   'Sắp có. Hiện chưa có chat hay tệp nào rời khỏi máy này.': 'Coming next. No chat or file leaves this computer yet.',
   // COD-329 phase 3: the sync row in Settings → Account.
   'Đồng bộ đang tắt trên máy này. Bật lên rồi chọn gộp hay thay dữ liệu ở đây.': 'Sync is off on this computer. Turn it on, then choose to merge or replace what is here.',
+  // GH-484: versions two computers wrote while apart.
+  'Sửa trên hai máy': 'Changed on two computers',
+  '{0} mục được sửa trên hai máy khi chưa đồng bộ. Orglet đang dùng bản sửa sau; bản kia vẫn còn.': '{0} items were changed on two computers before they synced. Orglet uses the later change; the other is still there.',
+  'Chọn bản muốn dùng. Bản còn lại vẫn nằm trong lịch sử.': 'Choose the version to use. The other one stays in the history.',
+  'Đang dùng · sửa trên máy này': 'In use · changed on this computer',
+  'Đang dùng · sửa trên máy khác': 'In use · changed on another computer',
+  'Bản kia · sửa trên máy này': 'The other · changed on this computer',
+  'Bản kia · sửa trên máy khác': 'The other · changed on another computer',
+  'Giữ bản này': 'Keep this one',
+  'Đã chọn bản dùng cho {0}': 'Chose the version to use for {0}',
+  'Mục này vừa thay đổi. Xem lại hai bản rồi chọn.': 'This item just changed. Look at both versions again, then choose.',
   // GH-484: joining an account from a computer that holds data.
   'Bật đồng bộ trên máy này': 'Turn on sync on this computer',
   'Máy này đã có dữ liệu. Chọn cách nó tham gia tài khoản.': 'This computer already has data. Choose how it joins your account.',

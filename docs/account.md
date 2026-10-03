@@ -60,6 +60,16 @@ Sync needs a sync server. CodePawl's is not running yet, so a normal install sho
 - After **Erase all data**, sync stays off on that computer until you turn it on again, so the account's copy does not come straight back.
 - **Erase all data** and **Replace** change only this computer. Neither deletes your account or anything in it.
 
+### When two computers changed the same thing
+
+If you edit the same orglet, skill, crew or note on two computers before they sync, Orglet keeps both versions and uses the one changed later. **Settings → Account** then shows **Changed on two computers** with **Review**. The review puts the two versions side by side and says which one is in use and which computer changed each.
+
+- **Keep this one** or **Use this one** makes that version the current one on every computer.
+- The other version is not deleted; it stays in the history.
+- A chat that is already running keeps the version it started with.
+
+Messages, reactions and renamed chats never need this: two messages are both kept, and a rename and a reaction on different computers both apply.
+
 ### What it does not do
 
 - Nothing marked **Only on this computer** leaves it.
