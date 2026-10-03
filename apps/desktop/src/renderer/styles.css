@@ -3019,7 +3019,7 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .user-panel.compact > .org-row-menu { flex:0 0 auto; }
 .user-panel.compact .user-panel-who { width:40px; justify-content:center; padding:0; }
 .user-panel > .org-row-menu { flex:1; min-width:0; }
-.user-panel-who { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-width:0; height:40px; padding:0 8px 0 4px; border-radius:10px; text-align:left; }
+.user-panel-who { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-width:0; height:40px; padding:0 8px 0 10px; border-radius:10px; text-align:left; }
 .user-panel-who:hover:not(:disabled), .user-panel-who[aria-expanded="true"] { background:var(--row-hover); }
 .user-panel-more { flex-shrink:0; margin-left:auto; color:var(--muted); }
 .user-panel-face { position:relative; display:grid; place-items:center; flex-shrink:0; }
