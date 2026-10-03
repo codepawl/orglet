@@ -75,7 +75,7 @@ Pull requests run three workflows. Docs-only changes trigger them too.
 
 | Workflow | File | What it runs | Merge gate |
 |---|---|---|---|
-| Windows desktop | [`desktop.yml`](.github/workflows/desktop.yml) | `pnpm audit --prod --audit-level=high`, `pnpm typecheck`, `pnpm test`, the UI kit's build and package checks; in parallel `pnpm make` and the packaged smokes, including `pnpm test:harness` | **Required**: the check named `test` |
+| Windows desktop | [`desktop.yml`](.github/workflows/desktop.yml) | `pnpm audit --prod --audit-level=high`, `pnpm typecheck`, the UI kit's build and package checks; in parallel `pnpm test` split over three runners with `--shard`, and `pnpm make` and the packaged smokes, including `pnpm test:harness` | **Required**: the check named `test` |
 | macOS desktop | [`macos.yml`](.github/workflows/macos.yml) | `pnpm typecheck`, `pnpm test`, `pnpm make`; signs when Developer ID secrets exist, notarizes on `main` | Runs on PRs; not the required check |
 | Linux desktop | [`linux.yml`](.github/workflows/linux.yml) | `pnpm typecheck`, `pnpm test`, `pnpm make`, a headless packaged smoke | Runs on PRs; not the required check |
 

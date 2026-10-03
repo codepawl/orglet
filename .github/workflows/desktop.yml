@@ -32,11 +32,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --prod --audit-level=high
       - run: pnpm typecheck
-      # The sync service is installed first: the desktop's sync tests run against its account object (GH-482).
       - run: pnpm --config.verify-deps-before-run=false --dir services/sync install --frozen-lockfile
-      - run: pnpm test
-        env:
-          ORGLET_REQUIRE_SYNC_SERVICE: '1'
       - run: pnpm --config.verify-deps-before-run=false --dir services/market install --frozen-lockfile
       - run: pnpm --config.verify-deps-before-run=false --dir services/market typecheck
       - run: pnpm --config.verify-deps-before-run=false --dir services/market test
@@ -46,6 +42,32 @@ jobs:
       # The UI kit as someone installing it would get it: publint reads its package.json, attw its types (COD-273).
       - run: pnpm --filter @codepawl/orglet-ui build
       - run: pnpm --filter @codepawl/orglet-ui check:package
+  # `pnpm test` in three runners at once. In one job it took 8 to 13 minutes: the app's files ran three at a time
+  # for about 345 s, then the real-Chrome files ran alone for about 105 s (run 37138036492). Vitest's --shard gives
+  # each runner a third of every project's files, so every file still runs exactly once.
+  vitest:
+    name: vitest (${{ matrix.shard }}/3)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6
+        with:
+          version: '11.19.0'
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24.19.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The sync service is installed first: the desktop's sync tests run against its account object (GH-482).
+      - run: pnpm --config.verify-deps-before-run=false --dir services/sync install --frozen-lockfile
+      - run: pnpm test --shard=${{ matrix.shard }}/3
+        env:
+          ORGLET_REQUIRE_SYNC_SERVICE: '1'
   packaged:
     name: packaged
     runs-on: windows-latest
@@ -182,10 +204,10 @@ jobs:
       - run: pnpm test:sync-privacy
       - run: pnpm test:i18n
       - run: pnpm test:alignment
-  # Branch protection requires this exact check name. It is green only when both
-  # Windows jobs succeeded, so packaged smokes stay required without a ruleset change.
+  # Branch protection requires this exact check name. It is green only when every
+  # Windows job succeeded, so packaged smokes stay required without a ruleset change.
   test:
-    needs: [checks, packaged]
+    needs: [checks, vitest, packaged]
     if: ${{ always() && !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 5
@@ -194,6 +216,8 @@ jobs:
         shell: bash
         run: |
           echo "checks=${{ needs.checks.result }}"
+          echo "vitest=${{ needs.vitest.result }}"
           echo "packaged=${{ needs.packaged.result }}"
           test "${{ needs.checks.result }}" = success
+          test "${{ needs.vitest.result }}" = success
           test "${{ needs.packaged.result }}" = success
