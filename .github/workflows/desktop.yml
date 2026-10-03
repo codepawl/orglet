@@ -34,9 +34,13 @@ jobs:
       - run: pnpm typecheck
       # The sync service is installed first: the desktop's sync tests run against its account object (GH-482).
       - run: pnpm --config.verify-deps-before-run=false --dir services/sync install --frozen-lockfile
+      # The tests keep their workspaces and SQLite files in the temp folder. The runner's own temp folder is on the
+      # work drive (D:), next to the checkout; the default one is on the slower system drive.
       - run: pnpm test
         env:
           ORGLET_REQUIRE_SYNC_SERVICE: '1'
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
       - run: pnpm --config.verify-deps-before-run=false --dir services/market install --frozen-lockfile
       - run: pnpm --config.verify-deps-before-run=false --dir services/market typecheck
       - run: pnpm --config.verify-deps-before-run=false --dir services/market test
