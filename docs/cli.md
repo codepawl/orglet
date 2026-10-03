@@ -141,6 +141,8 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 
 Page Up at the top of the conversation loads the ten turns before what is shown, and `/history [n]` loads `n` of them. They appear above, numbered the way `orglet read --turns` numbers them: `#3` is your third message and `#3.1` the first answer to it. The first load starts before the first message this terminal sent, so nothing shows twice. A line at the top says how many earlier turns are left, or that the chat starts there.
 
+Messages are numbered in the order they were written, with their saved send times. Messages received out of order from another device appear in that same order. Use the current history to find a message's number before replying or revising it.
+
 `/reply #3.1 <message>` sends a message as a reply to that one. `/react <reaction> [#n]` puts your reaction on the latest answer or on message `#n`, and `/unreact` takes it off; Tab completes the reaction names. `/forward Writer, Review channel [#n]` forwards the latest answer, or message `#n`, to those chats, and each one answers it as a new turn.
 
 When an orglet asks a question, the chat prints it with numbered choices. `/answer 2` picks the second; `/answer <words>` answers in your own words, as the desktop's message box does. The terminal then waits for the turn to go on. A question asking to use an MCP tool is not shown this way: it is an approval, so the chat says to open it in the app.

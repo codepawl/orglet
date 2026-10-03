@@ -1,5 +1,5 @@
 import type { Artifact, Routine, RunInput, Task, TaskDetail, Team, Worker } from '../../shared/contracts';
-import { turnMessageId } from '../../shared/message-interactions';
+import { chatTurnRevisions, chatTurnInput, chatTurnMessageId } from '../../shared/chat-turns';
 import { withoutSourceIds } from '../../shared/source-mentions';
 import { chatHeadline, type ForwardedMessage, type ForwardTarget } from '../../shared/forward';
 import { channelLabel } from '../../shared/channels';
@@ -77,9 +77,8 @@ export class Forwards {
   /** One saved message of this chat: a turn the person sent, or a finished answer. */
   message(task: Task, messageId: string): ForwardSource {
     const detail = this.store.detail(task.id);
-    const current = task.inputRevision ?? 0;
-    for (let revision = 0; revision <= current; revision++) {
-      if (turnMessageId(task.id, revision) !== messageId) continue;
+    for (const revision of chatTurnRevisions(detail)) {
+      if (chatTurnMessageId(detail, revision) !== messageId) continue;
       const input = turnInput(detail, revision);
       if (!input) break;
       if (input.forwarded) return this.original(input.forwarded);
@@ -114,9 +113,5 @@ export class Forwards {
 
 /** A turn's saved input: the chat's current one, or the one its runs froze. */
 function turnInput(detail: TaskDetail, revision: number): RunInput | undefined {
-  const { task } = detail;
-  const firstTurn: RunInput = { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources };
-  if (revision === (task.inputRevision ?? 0)) return task.currentInput ?? (revision === 0 ? firstTurn : undefined);
-  const frozen = detail.runs.find(run => (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)?.snapshot.input;
-  return frozen ?? (revision === 0 ? firstTurn : undefined);
+  return chatTurnInput(detail, revision);
 }

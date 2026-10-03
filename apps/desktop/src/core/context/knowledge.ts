@@ -91,7 +91,9 @@ export class KnowledgeBase {
   remember(run: Run, raw: unknown, options: { untrusted: boolean }): RememberOutcome {
     const input = RememberArgs.parse(raw);
     const scope = this.memoryScope(run, input.scope ?? 'worker');
-    const provenance: Knowledge['provenance'] = { kind: 'turn', taskId: run.taskId, runId: run.id, messageId: turnMessageId(run.taskId, run.snapshot.inputRevision ?? 0), workerId: run.snapshot.worker.id };
+    const messageId = run.snapshot.turnId ?? this.store.sync.turns.list(run.taskId)
+      .find(turn => turn.localRevision === (run.snapshot.inputRevision ?? 0))?.id ?? turnMessageId(run.taskId, run.snapshot.inputRevision ?? 0);
+    const provenance: Knowledge['provenance'] = { kind: 'turn', taskId: run.taskId, runId: run.id, messageId, workerId: run.snapshot.worker.id };
     const status = options.untrusted ? 'proposed' : 'approved';
     const existing = this.memories().filter(item => item.status !== 'archived' && sameScope(item.scope, scope));
     const duplicate = existing.find(item => similarMemoryText(item.content, input.text));
@@ -135,6 +137,7 @@ export class KnowledgeBase {
     });
   }
   deleteRows(itemId: string) {
+    this.store.sync.deleteEntity('knowledge', itemId);
     for (const table of ['knowledge_search', 'knowledge_revisions', 'knowledge']) this.store.db.prepare(`DELETE FROM ${table} WHERE id=?`).run(itemId);
   }
   /**
@@ -178,9 +181,12 @@ export class KnowledgeBase {
   }
   write(item: Knowledge) {
     Knowledge.parse(item);
-    this.store.db.prepare('INSERT INTO knowledge_revisions VALUES(?,?,?)').run(item.id, item.revision, JSON.stringify(item));
-    this.store.put('knowledge', item);
-    this.index(item);
+    this.store.transaction(() => {
+      this.store.db.prepare('INSERT INTO knowledge_revisions VALUES(?,?,?)').run(item.id, item.revision, JSON.stringify(item));
+      this.store.put('knowledge', item);
+      this.store.sync.captureRevision('knowledge', item, item.revision);
+      this.index(item);
+    });
   }
   index(item: Knowledge) {
     this.store.db.prepare('DELETE FROM knowledge_search WHERE id=?').run(item.id);

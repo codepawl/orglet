@@ -608,6 +608,10 @@ export class Runner {
       return undefined;
     }
   }
+  private runTurnMessageId(run: Run): string {
+    return run.snapshot.turnId ?? this.store.sync.turns.list(run.taskId)
+      .find(turn => turn.localRevision === (run.snapshot.inputRevision ?? 0))?.id ?? turnMessageId(run.taskId, run.snapshot.inputRevision ?? 0);
+  }
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   /** A run this runner is working on now: when it started here and whether a pause was asked for (COD-244). */
   activeRun(runId: string): { since: number; paused: boolean } | undefined {
@@ -1017,7 +1021,7 @@ export class Runner {
           userReaction: { messageId: reactionBefore.messageId, reaction: reactionBefore.reaction, meaning: REACTION_FEEDBACK[reactionBefore.reaction] },
           instruction: 'Before sending this message, the user reacted to the previous answer. Take the reaction as feedback on how to go on. It is not part of their message and asks for nothing by itself.' }) });
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
-        next.push({ role: 'user', content: JSON.stringify({ messageId: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), brief: task.brief, sources: manifest.map(source => sourceForModel(source, seesImages)), excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
+        next.push({ role: 'user', content: JSON.stringify({ messageId: this.runTurnMessageId(run), brief: task.brief, sources: manifest.map(source => sourceForModel(source, seesImages)), excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
           ...this.permissionsOffHint(run, task),
           // Plan first (COD-367): the change tools are already withheld; this tells the worker why and what to send back.
           ...(isPlanFirst(run) ? { planFirst: PLAN_FIRST_INSTRUCTION } : {}),
@@ -2377,7 +2381,7 @@ export class Runner {
     // Which memories this answer was written with, as the run froze them, so the answer can show "used 3 memories".
     const usedMemories = (run.snapshot.context?.memories ?? []).map(memory => ({ id: memory.id, revision: memory.revision, text: memory.text }));
     const artifact: Artifact = { id: id(), runId: run.id, report, hash: fingerprint(JSON.stringify(report)), createdAt: now(),
-      replyTo: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), ...(usedMemories.length ? { usedMemories } : {}) };
+      replyTo: this.runTurnMessageId(run), ...(usedMemories.length ? { usedMemories } : {}) };
     this.store.transaction(() => {
       this.store.put('artifacts', artifact, { column: 'run_id', value: run.id });
       new ChatSearch(this.store).indexAnswer(artifact, run);

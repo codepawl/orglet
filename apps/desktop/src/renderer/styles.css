@@ -125,7 +125,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    the thread's name and whose thread it is at the top and the close button on their centre line, then the thread and
    its own prompt bar. It takes Details' place while open. */
 .details-pane.thread-pane { background:var(--bg); box-shadow:var(--panel-shadow); }
-.thread-pane-title { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.thread-pane-title { flex:1; display:flex; flex-direction:column; gap:1px; min-width:0; }
 .thread-pane-title h2 { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .thread-pane-title p { font-size:12px; line-height:16px; color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .thread-pane-body { flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -3112,3 +3112,13 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-review-report > p { margin-block: 0 6px; }
 @media (max-width: 560px) { .market-listing-actions { justify-content: flex-start; width: 100%; } }
 @media (max-width: 560px) { .market-publishing-target { grid-template-columns: minmax(0, 1fr); } }
+
+/* One inherited setting does not need the editor's full-height panel. */
+.org-drawer:has(.local-only-form) {
+  --org-panel-width: min(480px, calc(100vw - 32px));
+  --org-panel-height: fit-content;
+  max-height: calc(100dvh - 32px);
+}
+.local-only-form .actions { justify-content: flex-end; }
+.local-only-control.org-switch-field-disabled { opacity: 1; }
+.local-only-control.org-switch-field-disabled .org-switch { opacity: .55; }

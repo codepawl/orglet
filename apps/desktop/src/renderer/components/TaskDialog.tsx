@@ -13,6 +13,7 @@ import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { Input } from '@codepawl/orglet-ui';
+import { LocalOnlyControl } from './LocalOnlyControl';
 
 type Tab = 'general' | 'limits';
 type InvalidField = 'assignees' | 'budget';
@@ -30,6 +31,7 @@ const tabs = [
 export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { open: boolean; task?: Task; workspace: Workspace; usedMicros: number; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>(task?.channel ? 'limits' : 'general');
   const [title, setTitle] = useState(task?.title ?? '');
+  const [localOnly, setLocalOnly] = useState(Boolean(task && workspace.syncLocalOnly?.tasks.includes(task.id)));
   const [mode, setMode] = useState(!task ? 'workers' : task.teamId ? `team:${task.teamId}` : task.assignees === 'all' ? 'all' : 'workers');
   const [chosen, setChosen] = useState<string[]>(() => !task ? [] : Array.isArray(task.assignees) ? task.assignees : [task.workerId]);
   const [budget, setBudget] = useState(toAmount(task?.budgetMicros ?? 500_000));
@@ -50,7 +52,7 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
     const assignee = mode === 'all' ? { kind: 'all' as const } : mode.startsWith('team:') ? { kind: 'team' as const, teamId: mode.slice(5) } : { kind: 'workers' as const, workerIds: workspace.workers.map(worker => worker.id).filter(id => chosen.includes(id)) };
     setBusy(true); clearError();
     try {
-      await orglet.call('updateTask', { id: task.id, title: title.trim(), assignee, budgetMicros });
+      await orglet.call('updateTask', { id: task.id, title: title.trim(), assignee, budgetMicros, localOnly });
       toast(t('Đã lưu chat'), 'success', title.trim() || task.title || task.brief.split('\n')[0]); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
@@ -77,5 +79,6 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
       <p className="muted">{t('Đã dùng {0}; mọi người được giao dùng chung giới hạn này.', [formatMoney(usedMicros)])}</p>
     </>}
     {running && <p role="status">{t('Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.')}</p>}
+    <LocalOnlyControl checked={localOnly} onChange={setLocalOnly} inherited={workspace.syncLocalOnly?.inheritedTasks.includes(task.id)} permanent={workspace.syncLocalOnly?.permanentTasks?.includes(task.id)} />
   </TabbedFormDialog>;
 }

@@ -152,6 +152,7 @@ export class Routines {
         if (task.routineId === routineId) this.store.patchTask(task.id, { routineName: routine.name });
       }
       this.folders.forgetArrivals(routineId);
+      this.store.sync.deleteEntity('routine', routineId);
       this.store.db.prepare('DELETE FROM routines WHERE id=?').run(routineId);
     });
     this.notify();

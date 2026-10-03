@@ -39,6 +39,12 @@ The link back to the app uses the `com.codepawl.orglet:` scheme. Setup registers
 - **Signed in**: your email, shown only in part (such as `an•••@example.com`) so a screenshot does not carry it, and your name, with **Sign out**, your **Plan** (Free), **Sync**, which says it is coming next and that no chat or file leaves this computer yet, and the **Usage statistics and error reports** switch.
 - **Your sign-in ended**: the service no longer accepts this computer's sign-in, for example after 30 days without opening Orglet or after you signed out everywhere. Choose **Sign in again**. Nothing on this computer is lost.
 
+## Only on this computer
+
+Open an orglet's **Edit** window or a chat's **Chat settings** and turn on **Only on this computer** to keep it out of future sync. An orglet passes this choice to its chats and memories. A chat passes it to its side threads. An inherited switch explains where to change the choice and cannot be turned off in the child chat.
+
+The choice is saved on this computer and included in a workspace backup. It does not delete your local messages or files. Signing in still does not send chats between computers; the connection to the sync service comes next.
+
 ## What is stored where
 
 - **On this computer**, in Orglet's data folder, one file `account.credential` holds the sign-in, encrypted with your system's secure storage the same way as API keys, plus your email, name and plan so Settings can show them offline. It is not in the database, so a backup never includes it and **Erase all data** leaves it alone.

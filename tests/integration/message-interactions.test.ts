@@ -133,6 +133,8 @@ it('lets an API worker react through its tool loop and carries a verified reply 
     expect(store.detail(taskId).task.currentInput?.brief).toBe('Explain more');
     expect(JSON.stringify(messages.at(-1))).toContain('That works for me, keep going this way.');
     expect(JSON.stringify(messages.at(-1))).toContain('userReaction');
-    expect(store.detail(taskId).artifacts[1].replyTo).toBe(turnMessageId(taskId, 1));
+    const savedFollowUp = store.sync.turns.list(taskId).find(turn => turn.localRevision === 1)!;
+    expect(savedFollowUp.input.brief).toBe('Explain more');
+    expect(store.detail(taskId).artifacts[1].replyTo).toBe(savedFollowUp.id);
   } finally { await core.runner.shutdown(); }
 });

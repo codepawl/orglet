@@ -317,13 +317,20 @@ export class Sources {
    */
   async relink(sourceId: string, allowedIds: string[], path: string): Promise<Source> {
     if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const deleted = () => this.store.db.prepare("SELECT entity_id FROM sync_deletions WHERE kind='source' AND entity_id=?").get(sourceId);
+    if (deleted()) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
     const source = this.store.get<Source>('sources', sourceId);
     if (this.storedPath(sourceId)) throw new Error('Chỉ chọn lại được tệp của nguồn khôi phục từ bản sao lưu.');
     const rule = limitFor(source.name);
     const read = await this.readFile(path, rule, rule.kind === 'media' ? 'hash' : 'buffer');
     if (read.hash !== source.hash) throw new Error(`Tệp này không khớp với ${source.name} đã đính kèm. Chọn đúng tệp đó.`);
-    const relinked: Source = { ...source, revoked: false };
-    this.store.db.prepare('UPDATE sources SET data=?, path=? WHERE id=?').run(JSON.stringify(relinked), resolve(path), sourceId);
+    const { availability: _availability, ...metadata } = source;
+    const relinked: Source = { ...metadata, revoked: false };
+    this.store.transaction(() => {
+      if (deleted()) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
+      this.store.db.prepare('UPDATE sources SET path=? WHERE id=?').run(resolve(path), sourceId);
+      this.store.update('sources', relinked);
+    });
     return relinked;
   }
   /** Exact permitted, hash-checked bytes, for handing a snapshot copy to a local harness. Never media. */
@@ -366,6 +373,7 @@ export class Sources {
     const source = this.store.get<Source>('sources', sourceId);
     if (source.revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
     const row = this.store.db.prepare('SELECT path FROM sources WHERE id=?').get(sourceId)!;
+    if (!row.path) throw new Error(source.availability === 'other-device' ? 'Tệp ở máy khác. Chưa có bản tải xuống trên máy này.' : `Không còn tệp nguồn ${source.name} ở chỗ cũ.`);
     const read = await this.readFile(String(row.path), limitFor(source.name), mode).catch((error: unknown) => {
       // The file lived on disk when it was attached; saying which one is gone is more use than the system error.
       if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') throw new Error(`Không còn tệp nguồn ${source.name} ở chỗ cũ. Tệp có thể đã bị đổi tên, di chuyển hoặc xóa. Đính kèm lại tệp, hoặc mở Nguồn của cuộc trò chuyện và Thu hồi quyền đọc để tiếp tục mà không có tệp này.`);

@@ -8,7 +8,6 @@ import { taskTitle } from '../../apps/desktop/src/core/orchestration/runner';
 import { markdownToPlain } from '../../apps/desktop/src/shared/plainText';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
-import { turnMessageId } from '../../apps/desktop/src/shared/message-interactions';
 import { earlierTurns } from './earlier-turns';
 
 let directory: string; let store: Store; let core: CoreService;
@@ -185,6 +184,8 @@ it('lets a reply to one orglet’s answer in a group chat address that orglet, u
   const answeredBy = (revision: number) => store.detail(taskId).runs.filter(run => run.stage === 'group' && run.snapshot.inputRevision === revision).map(run => run.snapshot.worker.id);
   await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(1).length === 2);
   const accountantAnswer = store.detail(taskId).artifacts.find(artifact => artifact.report.summary === 'Kế toán đây.')!;
+  const rollCallTurn = store.detail(taskId).savedTurns!.find(turn => turn.localRevision === 1)!;
+  expect(rollCallTurn.input.brief).toBe('Mọi người điểm danh');
 
   // Replying to Kế toán's answer is talking to Kế toán.
   replies.push(answer('Kế toán trả lời.'));
@@ -203,8 +204,13 @@ it('lets a reply to one orglet’s answer in a group chat address that orglet, u
   await core.command('reviseTask', { taskId, brief: '@all cùng xem', replyTo: accountantAnswer.id, ...scope });
   await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(4).length === 2);
   replies.push(answer('3'), answer('4'));
-  await core.command('reviseTask', { taskId, brief: 'Nhắc lại câu này', replyTo: turnMessageId(taskId, 1), ...scope });
+  await core.command('reviseTask', { taskId, brief: 'Nhắc lại câu này', replyTo: rollCallTurn.id, ...scope });
   await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(5).length === 2);
+  expect(answeredBy(5)).toEqual([workerId, second.id]);
+  expect(store.detail(taskId).task.currentInput?.replyTo).toBe(rollCallTurn.id);
+  for (const run of store.detail(taskId).runs.filter(run => run.snapshot.inputRevision === 5)) {
+    expect(run.snapshot.input?.replyTo).toBe(rollCallTurn.id);
+  }
 });
 
 const unsourcedReport = (): ModelReply => ({
