@@ -7,6 +7,7 @@ import * as rules from './alignment/rules.ts';
 import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
+import { openSettings } from './smoke-language.mjs';
 
 // Measures alignment on the packaged app's main screens instead of trusting a screenshot (COD-333). It seeds a
 // throwaway workspace on Demo (no provider is called; one crew member runs on a local stand-in for Ollama that holds
@@ -281,7 +282,7 @@ async function reset(page, context) {
 
 async function openSettingsTab(page, tab) {
   await openSidebar(page);
-  await page.getByRole('button', { name: startsWith('Cài đặt') }).first().click();
+  await openSettings(page);
   await page.getByRole('tab', { name: label(tab), exact: true }).click();
 }
 

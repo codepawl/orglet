@@ -2382,6 +2382,7 @@ export const en: Dictionary = {
   'Thêm tài khoản': 'Add account',
   'Thư mục đăng nhập': 'Sign-in folder',
   'Tài khoản': 'Account',
+  'Tài khoản và cài đặt': 'Account and settings',
   'Trên macOS, Cursor Agent giữ một lần đăng nhập cho cả máy trong Keychain, nên chỉ dùng được tài khoản mặc định.': 'On macOS, Cursor Agent keeps one sign-in for the whole computer in the Keychain, so only the default account works.',
   'Tài khoản mặc định': 'Default account',
   'Tài khoản {0}': '{0} account',
