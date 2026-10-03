@@ -37,7 +37,12 @@ The bucket and the account object's SQLite are not one transaction. An upload re
 
 `SYNC_MASTER_KEYS` is JSON with an `active` integer and a `keys` object mapping versions to base64-encoded random 32-byte keys. Keep it in a Worker secret, or the ignored `.dev.vars` for local development; never add it to Wrangler vars, source or logs. Rotation temporarily includes old and new master versions and switches active to the new version. Each accessed account rewraps its existing random data key without rewriting its encrypted records. Keep old versions until all existing account wrappers have been rewrapped; this change has no automatic fleet rotation job.
 
-Trusted account lifecycle RPC can erase live payloads and the wrapped key while retaining an account-deleted marker. The public Worker has no erase route; the Accounts deletion hookup is separate work. A still-valid access token cannot recreate a deleted account.
+The identity service reaches account lifecycle through the `SyncLifecycle` entrypoint, by service binding only: it has no route, and a sync access token cannot call it. Both calls take the subject from the identity service's own session and are safe to repeat.
+
+- `deleteAccount(subject)` erases live payloads, files and the wrapped key and keeps the account-deleted marker, so a still-valid access token cannot recreate the account.
+- `revokeDevice(subject, grantId)` refuses that sign-in from then on, frees its device slot and closes its sockets, without waiting for its token to end.
+
+Binding the identity Worker to this entrypoint and calling it from its deletion and device pages is that service's change.
 
 Deleting the live wrapped key does **not** prove irreversible erasure of historical backups or SQLite point-in-time recovery. Historical wrappers may remain recoverable while their master version exists. Stronger historical crypto-erasure requires a separately designed key lifecycle; this service promises live-service deletion only. Cloudflare documents [SQLite storage and recovery](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
 

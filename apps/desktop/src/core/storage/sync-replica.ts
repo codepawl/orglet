@@ -4,12 +4,12 @@ import { dirname, join, relative, isAbsolute } from 'node:path';
 import type { Store } from './database';
 import { editedSourcesDirectory } from '../tools/sources';
 import { fileNameOf } from '../../shared/source-versions';
-import type { Source, Task } from '../../shared/contracts';
+import type { Source, Task, Worker } from '../../shared/contracts';
 import { removeSeed, untouchedSeed } from './factory-seed';
 import { SyncDeviceId, type SyncRecordingContext } from '../../shared/sync';
 import { SyncRecord, syncRecordKey } from '../../shared/sync-records';
 import { SyncServerCursor, SYNC_BATCH_BYTES, SYNC_FILE_BYTES } from '../../shared/sync-protocol';
-import { SyncReplicaAction, type SyncReplicaBatch, type SyncReplicaFiles, type SyncReplicaState } from '../../shared/sync-replica';
+import { SyncReplicaAction, type SyncReplicaBatch, type SyncReplicaCounts, type SyncReplicaFiles, type SyncReplicaState } from '../../shared/sync-replica';
 
 /** Room for the request's own fields around the records. */
 const BATCH_MARGIN_BYTES = 65_536;
@@ -22,13 +22,14 @@ const BATCH_MARGIN_BYTES = 65_536;
 export class SyncReplica {
   constructor(private store: Store, private notify: () => void) {}
 
-  execute(raw: unknown): SyncReplicaState | SyncReplicaBatch | SyncReplicaFiles | null | Promise<null> {
+  execute(raw: unknown): SyncReplicaState | SyncReplicaBatch | SyncReplicaFiles | SyncReplicaCounts | null | Promise<null> {
     const input = SyncReplicaAction.parse(raw);
     if (input.action === 'attach') return this.attach(input.context);
     if (input.action === 'detach') {
       this.store.sync.setRecordingContext(undefined);
       return null;
     }
+    if (input.action === 'counts') return this.counts();
     if (input.action === 'begin') return this.begin(input.context, input.discardSeed);
     if (input.action === 'receive') return this.receive(input.context, input.records, input.cursor);
     if (input.action === 'settle') return this.settle(input.context, input.cursor);
@@ -144,6 +145,15 @@ export class SyncReplica {
       // Data erased here on purpose counts too: the account's copy returns only when the person asks for it.
       ownData: account.held || !untouchedSeed(this.store),
     };
+  }
+
+  private counts(): SyncReplicaCounts {
+    const state = this.store.entityState().workers;
+    const workers = this.store.all<Worker>('workers').filter(worker => !state[worker.id]?.deletedAt);
+    const tasks = this.store.all<Task>('tasks').filter(task => !task.deletedAt);
+    const orglets = workers.filter(worker => !this.store.sync.isLocalOnly('worker', worker.id)).length;
+    const chats = tasks.filter(task => !this.store.sync.isLocalOnly('task', task.id)).length;
+    return { orglets, chats, localOnly: workers.length - orglets + tasks.length - chats };
   }
 
   private begin(context: SyncRecordingContext, discardSeed: boolean): null {

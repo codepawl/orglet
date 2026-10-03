@@ -50,7 +50,8 @@ const bridge: Bridge = {
     return () => ipcRenderer.removeListener('orglet:account', listener);
   },
   syncState: () => invoke('orglet:sync-state'),
-  syncStart: () => invoke('orglet:sync-start'),
+  syncStart: choice => invoke('orglet:sync-start', choice),
+  syncPreview: () => invoke('orglet:sync-preview'),
   syncDownloadSource: (taskId, id) => invoke('orglet:sync-download', { taskId, id }),
   onSync: callback => {
     const listener = (_event: Electron.IpcRendererEvent, status: SyncStatus) => callback(status);

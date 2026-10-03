@@ -1,4 +1,5 @@
-import { rmSync } from 'node:fs';
+import { readdirSync, rmSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { Source, Task } from '../../shared/contracts';
 import { isMemory, type Knowledge } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
@@ -92,12 +93,15 @@ export function eraseEverything(store: Store): { entities: number } {
   // An account this computer had joined still holds its own copy. Erasing here must not bring that copy straight
   // back, so each such account is kept as held: sync stays off until the person turns it on again.
   const accountKeys = store.db.prepare('SELECT account_key FROM sync_accounts').all().map(row => String(row.account_key));
+  // The computer stays the same device to the sync server, which ties a sign-in to one device id.
+  const clock = store.db.prepare('SELECT device_id,wall_ms,counter FROM sync_clock WHERE id=1').get();
   store.sync.resetDevice();
   store.transaction(() => {
     for (const table of ERASE_TABLES) store.db.prepare(`DELETE FROM ${table}`).run();
     for (const accountKey of accountKeys) {
       store.db.prepare('INSERT INTO sync_accounts(account_key,linked,cursor_json,held) VALUES(?,0,NULL,1)').run(accountKey);
     }
+    if (clock) store.db.prepare('INSERT INTO sync_clock(id,device_id,wall_ms,counter) VALUES(1,?,?,?)').run(clock.device_id, clock.wall_ms, clock.counter);
     if (connections.length) writeCustomConnections(store, connections);
     for (const server of mcpServers) store.db.prepare('INSERT INTO mcp_servers(id,data) VALUES(?,?)').run(server.id, server.data);
   });
@@ -105,4 +109,25 @@ export function eraseEverything(store: Store): { entities: number } {
   // Seeding writes a revision of its own, in its own transaction, so it waits until the tables are empty.
   store.seedDefaults();
   return { entities };
+}
+
+/**
+ * A copy of the whole database beside it, made before sync replaces this computer's data with the account's (GH-484).
+ * Only the newest copy is kept. It never leaves the computer: no backup, export or sync reads it.
+ */
+export function checkpointBeforeReplace(store: Store): string {
+  const path = store.databasePath;
+  if (!path || path === ':memory:') throw new Error('Không tạo được bản sao an toàn trước khi thay thế.');
+  const database = resolve(path);
+  const prefix = `${basename(database)}.before-replace-`;
+  for (const name of readdirSync(dirname(database))) {
+    if (name.startsWith(prefix)) rmSync(join(dirname(database), name), { force: true });
+  }
+  const target = `${database}.before-replace-${Date.now()}.bak`;
+  try {
+    store.db.exec(`VACUUM INTO '${target.replaceAll("'", "''")}'`);
+  } catch {
+    throw new Error('Không tạo được bản sao an toàn trước khi thay thế.');
+  }
+  return target;
 }

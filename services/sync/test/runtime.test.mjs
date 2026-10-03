@@ -323,3 +323,22 @@ test('file limits count reserved bytes, and withdrawal or account deletion remov
     await refused(await putFile(owner, next.sourceId, next.bytes), 410);
   } finally { await runtime.dispose(); await start(); }
 });
+test('the identity service can revoke one sign-in and delete an account, both safely repeated', async () => {
+  const owner = 'lifecycle'; const file = attachment(owner, 'lifecycle file body'); const before = await objects(owner);
+  await push(owner, file.records); assert.equal((await putFile(owner, file.sourceId, file.bytes)).status, 200);
+  const other = crypto.randomUUID(); const second = { grant: 'lifecycle-second' };
+  await ok(owner, 'snapshot', { deviceId: other, limit: 100 }, second);
+  for (let attempt = 0; attempt < 2; attempt++) assert.equal((await call(owner, 'lifecycleRevoke', { grantId: 'lifecycle-second' })).status, 204);
+  // The revoked sign-in is refused though its token has not expired, even under a new device id; the other still syncs.
+  await refused(await call(owner, 'snapshot', { deviceId: other, limit: 100 }, second), 403, 'device_released');
+  await refused(await call(owner, 'snapshot', { deviceId: crypto.randomUUID(), limit: 100 }, second), 403, 'device_released');
+  assert.equal((await snapshot(owner)).records.length, file.records.length);
+  for (let attempt = 0; attempt < 2; attempt++) assert.equal((await call(owner, 'lifecycleDelete')).status, 204);
+  const deleted = await ok(owner, 'inspect');
+  assert.equal(deleted.account[0].deleted, 1); assert.equal(deleted.account[0].wrapped, null); assert.equal(deleted.records.length, 0); assert.equal(deleted.files.length, 0);
+  assert.deepEqual(await objects(owner), before);
+  await refused(await call(owner, 'snapshot', { deviceId: device(owner), limit: 100 }), 410);
+  await refused(await putFile(owner, file.sourceId, file.bytes), 410);
+  // Neither call has a public route.
+  for (const path of ['/v1/lifecycle', '/v1/delete', '/v1/devices/revoke']) assert.equal((await runtime.dispatchFetch(`https://sync.test${path}`, { method: 'POST' })).status, 404);
+});

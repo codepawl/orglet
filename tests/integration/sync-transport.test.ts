@@ -2,13 +2,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { SyncReplica } from '../../apps/desktop/src/core/storage/sync-replica';
-import { eraseEverything } from '../../apps/desktop/src/core/storage/erase';
+import { checkpointBeforeReplace, eraseEverything } from '../../apps/desktop/src/core/storage/erase';
 import { Sources } from '../../apps/desktop/src/core/tools/sources';
 import { FILE_NOT_SYNCED } from '../../apps/desktop/src/main/sync-transport';
 import type { Source } from '../../apps/desktop/src/shared/contracts';
@@ -46,6 +47,8 @@ type Device = {
   transform?: (path: string, text: string) => string;
   /** Flips a byte of the next downloaded file. */
   damage?: boolean;
+  /** Where the last replace saved its copy of the database. */
+  checkpoint?: string;
 };
 type FixtureSocket = { accept(): void; close(code?: number): void; addEventListener(type: string, listener: (event: { data?: unknown }) => void): void };
 type Runtime = {
@@ -141,6 +144,11 @@ function device(owner: string, options: { sockets?: boolean } = {}): Device {
     baseUrl: 'https://sync.test',
     account: { syncContext: () => created.context, getAccessToken: async () => `token-${created.owner}` },
     core: async action => replica.execute(JSON.parse(JSON.stringify(action))),
+    // What the core's replaceWithAccount does, without the running-task check.
+    replaceLocal: async () => {
+      created.checkpoint = checkpointBeforeReplace(store);
+      eraseEverything(store);
+    },
     fetch: fixtureFetch,
     connect: fixtureConnect,
     onChange: status => created.statuses.push(status),
@@ -439,6 +447,68 @@ describe.skipIf(!installed && !required)('account sync through the local Worker'
     expect(liveChats(second.store)).toEqual([]);
     await converge(first);
     expect(liveChats(first.store)).toEqual([task.id]);
+    // Turning sync on again works from the same sign-in: the computer is still the same device to the server.
+    await converge(second);
+    expect(liveChats(second.store)).toEqual([task.id]);
+  }, 120_000);
+
+  it('shows both sides before joining, and replace erases only this computer after saving a copy', async () => {
+    const owner = randomUUID();
+    const first = device(owner);
+    const inAccount = chat(first.store, 'Already in the account');
+    await converge(first);
+
+    const second = device(owner);
+    const mine = chat(second.store, 'Only ever on the second computer');
+    const kept = chat(second.store, 'Marked to stay here');
+    second.store.sync.setLocalOnly({ kind: 'task', id: kept.id, localOnly: true });
+    await second.transport.refresh();
+    await second.transport.settled();
+    expect(second.transport.state()).toEqual({ state: 'link_required' });
+    const sentBefore = second.requests.filter(path => path === '/v1/push').length;
+    expect(await second.transport.preview()).toEqual({ local: { orglets: 1, chats: 1 }, account: { orglets: 1, chats: 1 }, localOnly: 1 });
+    // Looking changes nothing and sends nothing.
+    expect(second.transport.state()).toEqual({ state: 'link_required' });
+    expect(second.requests.filter(path => path === '/v1/push').length).toBe(sentBefore);
+    expect(liveChats(second.store)).toEqual([mine.id, kept.id].sort());
+
+    await second.transport.start('replace');
+    await second.transport.settled();
+    await converge(second, first);
+    expect(liveChats(second.store)).toEqual([inAccount.id]);
+    expect(second.store.all<Worker>('workers').map(worker => worker.id)).toEqual(first.store.all<Worker>('workers').map(worker => worker.id));
+    // The account lost nothing and gained nothing from the replaced computer.
+    expect(liveChats(first.store)).toEqual([inAccount.id]);
+    // The copy saved before erasing still holds what was here.
+    const copy = new DatabaseSync(second.checkpoint!, { readOnly: true });
+    const briefs = copy.prepare('SELECT data FROM tasks').all().map(row => (JSON.parse(String(row.data)) as Task).brief).sort();
+    copy.close();
+    expect(briefs).toEqual(['Marked to stay here', 'Only ever on the second computer']);
+    await expect(second.transport.preview()).rejects.toThrow('Máy này không còn gì phải chọn cho đồng bộ.');
+  }, 120_000);
+
+  it('erases nothing when the copy cannot be saved', async () => {
+    const owner = randomUUID();
+    const first = device(owner);
+    chat(first.store, 'In the account');
+    await converge(first);
+    const second = device(owner);
+    const mine = chat(second.store, 'Must survive a failed replace');
+    await second.transport.refresh();
+    await second.transport.settled();
+    const failing = new SyncTransport({
+      baseUrl: 'https://sync.test',
+      account: { syncContext: () => second.context, getAccessToken: async () => `token-${owner}` },
+      core: async action => new SyncReplica(second.store, () => undefined).execute(JSON.parse(JSON.stringify(action))),
+      replaceLocal: async () => { throw new Error('Không tạo được bản sao an toàn trước khi thay thế.'); },
+      fetch: (async () => { throw new TypeError('fetch failed'); }) as typeof fetch,
+      connect: () => ({ close: () => undefined }),
+    });
+    await failing.refresh();
+    await expect(failing.start('replace')).rejects.toThrow('Không tạo được bản sao an toàn trước khi thay thế.');
+    expect(failing.state()).toEqual({ state: 'link_required' });
+    expect(liveChats(second.store)).toEqual([mine.id]);
+    await failing.stop();
   }, 120_000);
 
   it('sends a saved file version once a message carries it, and downloads its bytes only when it is opened', async () => {

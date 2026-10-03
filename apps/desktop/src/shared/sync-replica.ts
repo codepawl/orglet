@@ -13,6 +13,8 @@ const Outcome = z.object({ id: z.uuid(), status: z.enum(['kept', 'superseded', '
 export const SyncReplicaAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('attach'), context: SyncRecordingContext }).strict(),
   z.object({ action: z.literal('detach') }).strict(),
+  /** How many orglets and chats this computer would send, and how many stay local-only. */
+  z.object({ action: z.literal('counts') }).strict(),
   /** Starts a download of the whole account: joins this computer to it and forgets the old cursor. */
   z.object({ action: z.literal('begin'), context: SyncRecordingContext, discardSeed: z.boolean() }).strict(),
   /** One page from the server. A pull page carries its cursor; a snapshot page does not. */
@@ -57,3 +59,7 @@ export const SyncReplicaFiles = z.object({
     bytes: z.number().int().nonnegative() }).strict()).max(8),
 }).strict();
 export type SyncReplicaFiles = z.infer<typeof SyncReplicaFiles>;
+
+export const SyncReplicaCounts = z.object({ orglets: z.number().int().nonnegative(), chats: z.number().int().nonnegative(),
+  localOnly: z.number().int().nonnegative() }).strict();
+export type SyncReplicaCounts = z.infer<typeof SyncReplicaCounts>;
