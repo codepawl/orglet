@@ -113,9 +113,12 @@ it('keeps the read faces under the answer, the toolbar on it, and states a membe
   expect(bubble).toBeLessThan(receipts);
   expect(receipts).toBeLessThan(actions);
   expect(html.slice(actions)).toMatch(/^class="message-actions" role="group" aria-label="Message actions"/);
-  // While the chat can still be retried, what is unfinished is the prompt bar's to show with Retry, not the thread's.
-  expect(html).not.toContain('Incomplete work and limitations');
-  expect(html).not.toContain('Retry with current settings');
+  // While the chat can still be retried, what is unfinished ends the thread as its own card with Retry, outside the answer.
+  const stateCard = html.indexOf('class="unfinished-work"');
+  expect(stateCard).toBeGreaterThan(actions);
+  expect(html.match(/Incomplete work and limitations/g)).toHaveLength(1);
+  expect(html.indexOf('Retry with current settings')).toBeGreaterThan(stateCard);
+  expect(html).not.toContain('class="chat-limitations"');
   expect(unfinishedWork(detail)?.limitations).toEqual([`Role chưa hoàn tất: Listener: ${error}`]);
   // Once the chat is finished, the note is a record and stays with its answer, after the text and before the faces.
   const finished: TaskDetail = { ...detail, task: { ...detail.task, status: 'completed' } };
@@ -130,8 +133,8 @@ it('keeps the read faces under the answer, the toolbar on it, and states a membe
   expect(note).toBeLessThan(finishedHtml.indexOf('Unfinished roles: Listener:'));
   expect(finishedHtml.indexOf('Unfinished roles: Listener:')).toBeLessThan(finishedHtml.indexOf('class="read-receipts"', note));
   expect(finishedHtml).not.toContain('Retry with current settings');
-  // The failure is said once on screen: on the bar while it can be retried, with the answer afterwards. No second card.
-  expect(html).not.toContain("An assessed check needs sources provided to the run.");
+  // The failure is said once on screen: in the card that ends the thread while it can be retried, with the answer afterwards.
+  expect(html.match(/An assessed check needs sources provided to the run./g)).toHaveLength(1);
   expect(finishedHtml.match(/An assessed check needs sources provided to the run./g)).toHaveLength(1);
   expect(html).not.toContain('Needs attention');
   expect(html).toContain('aria-label="React"');
