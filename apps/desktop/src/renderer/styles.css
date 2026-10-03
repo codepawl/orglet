@@ -101,15 +101,16 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .app.sidebar-hidden { --sidebar-column-width:0px; }
 /* Every panel has its place: the left column, the main card, the right panel. */
 .app > .area-rail { grid-column:1; grid-row:1; width:var(--area-rail-width); z-index:2; background:var(--window); }
-.app > .sidebar { grid-column:2; grid-row:1; width:var(--sidebar-width); background:var(--window); }
+.app > .sidebar { grid-column:2; grid-row:1; width:var(--sidebar-width); justify-self:end; margin-right:var(--shell-gap); background:var(--window); }
 .app > .main-pane { grid-column:3; grid-row:1; }
 .app > .details-pane,.app > .members-pane { grid-column:4; grid-row:1; margin-left:var(--shell-gap); }
-/* The full-width sidebar slides as one piece on the column's curve, without fading its rows. It remains mounted
-   and inert while closing; the permanent area rail covers it as it leaves. Dragging follows the pointer. */
+/* The full-width sidebar slides as one piece, without fading its rows. It is pinned to the right edge of its
+   column, so the column's own transition is the only motion: the sidebar cannot run ahead of or behind the chat's
+   edge, as a second transition on its transform could when the two started a frame apart. It remains mounted and
+   inert while closing; the permanent area rail covers it as it leaves. Dragging follows the pointer. */
 .app.resizing { transition:none; }
-.sidebar { transition:transform var(--motion-base) var(--ease-out), visibility 0s linear 0s; }
-.sidebar.collapsed { transform:translateX(calc(-100% - var(--shell-gap))); pointer-events:none; visibility:hidden;
-  transition:transform var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); }
+.sidebar { transition:visibility 0s linear 0s; }
+.sidebar.collapsed { pointer-events:none; visibility:hidden; transition:visibility 0s linear var(--motion-base); }
 @media(prefers-reduced-motion:reduce) { .app,.sidebar,.sidebar.collapsed { transition:none; } .details-pane { animation:none; } }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { --right-column-width:calc(var(--details-width) + var(--shell-gap)); }
@@ -1511,7 +1512,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    adds must not shift the shell along: everything is one column here. */
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
-@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
+@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--window); box-shadow:8px 0 30px #0002; transition:transform var(--motion-base) var(--ease-out), visibility 0s linear 0s; } .sidebar.collapsed { transform:translateX(calc(-100% - var(--shell-gap))); transition:transform var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; justify-self:auto; margin-right:0; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
 @media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 12px; } .finding-heading { flex-wrap:wrap; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
