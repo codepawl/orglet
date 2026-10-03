@@ -48,7 +48,7 @@ import { HarnessAccounts } from './harness/accounts';
 import { UsageReadings } from './harness/usage-readings';
 import { HarnessSignIns, localSignInRuntime, type SignInEnd } from './harness/sign-in';
 import { executeHarness, type HarnessRequest, type HarnessResult } from './harness/exec';
-import { eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
+import { checkpointBeforeReplace, eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../shared/erase';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
@@ -1196,6 +1196,21 @@ export class CoreService {
    * still leaves its cost row behind and knowledge it taught keeps the artifact it cites. API keys live outside the
    * database, in the credential store, and no scope here touches them.
    */
+  /**
+   * Account sync's Replace (GH-484): this computer's workspace makes way for the account's. A copy of the database
+   * is saved first and nothing is erased without it. Connections, MCP servers, keys and Tacet's files stay, and
+   * nothing is deleted from the account. Only main calls this, after the person confirmed.
+   */
+  replaceWithAccount(): { checkpoint: string } {
+    if (this.isBusy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi xóa.');
+    const checkpoint = checkpointBeforeReplace(this.store);
+    eraseEverything(this.store);
+    this.modelListMemory = emptyModelListCache();
+    this.modelListLoaded = false;
+    this.notify();
+    return { checkpoint };
+  }
+
   async eraseData(scope: EraseScope, confirm?: string): Promise<EraseSummary> {
     if (this.isBusy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi xóa.');
     if (scope === 'everything' && confirm !== ERASE_CONFIRMATION) throw new Error(`Gõ ${ERASE_CONFIRMATION} để xác nhận xóa toàn bộ.`);

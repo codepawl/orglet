@@ -1,5 +1,5 @@
 import { AccountSync as BaseAccountSync } from '../src/account-object';
-import production from '../src/index';
+import production, { SyncLifecycle } from '../src/index';
 import type { Env, DurableObjectStub } from '../worker-configuration';
 import type { SyncIdentity } from '../src/auth';
 import type { SyncPushRequest } from '../../../apps/desktop/src/shared/sync-protocol';
@@ -24,7 +24,7 @@ class FixtureAccountSync extends BaseAccountSync {
     this.ctx.storage.sql.exec('UPDATE records SET cipher=? WHERE record_key=?', JSON.stringify(cipher), row.record_key);
   }
 }
-export { FixtureAccountSync as AccountSync };
+export { FixtureAccountSync as AccountSync, SyncLifecycle };
 type FixtureInput = { operation: string; owner: string; routeOwner?: string; device: string; grant?: string; expiresAt?: number;
   limits?: SyncIdentity['limits']; input?: unknown; enabled?: boolean };
 export default {
@@ -69,6 +69,9 @@ export default {
         await env.SYNC_FILES.put(key, bytes);
         return new Response(null, { status: 204 });
       }
+      // The identity service's two calls, made here straight on the object the entrypoint would reach.
+      if (input.operation === 'lifecycleDelete') { await stub.eraseAccount(); return new Response(null, { status: 204 }); }
+      if (input.operation === 'lifecycleRevoke') { await stub.revokeGrant((input.input as { grantId: string }).grantId); return new Response(null, { status: 204 }); }
       if (input.operation === 'erase') { await stub.erase(identity); return new Response(null, { status: 204 }); }
       if (input.operation === 'inspect') return Response.json(await stub.inspectFixture());
       if (input.operation === 'fail') { await stub.failFixture(Boolean(input.enabled)); return new Response(null, { status: 204 }); }

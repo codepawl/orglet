@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import type { SyncRecordingContext } from '../shared/sync';
 import { SyncFileStored, SyncHint, SyncPushResult, SyncServerCursor, SYNC_BATCH_BYTES, SYNC_FILE_BYTES } from '../shared/sync-protocol';
-import { SyncReplicaBatch, SyncReplicaFiles, SyncReplicaState, type SyncReplicaAction } from '../shared/sync-replica';
-import { SyncStatus, type SyncPauseReason } from '../shared/sync-status';
+import { SyncReplicaBatch, SyncReplicaCounts, SyncReplicaFiles, SyncReplicaState, type SyncReplicaAction } from '../shared/sync-replica';
+import { SyncPreview, SyncStatus, type SyncChoice, type SyncPauseReason } from '../shared/sync-status';
 
 /**
  * Account sync on the network (COD-329 phase 3). Main owns the access token, every request and the hint socket; the
@@ -42,6 +42,8 @@ export type SyncTransportDependencies = {
     getAccessToken(): Promise<string>;
   };
   core: (action: SyncReplicaAction) => Promise<unknown>;
+  /** Saves a copy of the database, then erases this computer's workspace. Rejects, erasing nothing, when it cannot. */
+  replaceLocal?: () => Promise<unknown>;
   fetch?: typeof fetch;
   connect?: SyncConnect;
   /** Reads a file Orglet saved under its own data folder; the tests pass a reader of their own. */
@@ -63,6 +65,8 @@ class Stale extends Error {}
 
 const CONTEXT_CHANGED = 'Phiên đồng bộ đã đổi.';
 export const SYNC_NOT_ON = 'Đồng bộ đang tắt trên máy này.';
+export const NOTHING_TO_CHOOSE = 'Máy này không còn gì phải chọn cho đồng bộ.';
+export const PREVIEW_FAILED = 'Không đọc được tài khoản. Kiểm tra kết nối rồi thử lại.';
 export const FILE_NOT_SYNCED = 'Tệp này chưa được đồng bộ; nó chỉ có trên máy đã đính kèm.';
 export const FILE_DOWNLOAD_FAILED = 'Không tải được tệp. Kiểm tra kết nối rồi thử lại.';
 /** Refusals of one file that sending it again cannot change. */
@@ -133,6 +137,13 @@ function createdAt(raw: unknown): string {
 function isOrglet(raw: unknown): boolean {
   const data = (raw as { data?: { kind?: unknown; revision?: { entity?: unknown } } } | null)?.data;
   return data?.kind === 'revision' && data.revision?.entity === 'worker';
+}
+function orgletId(raw: unknown): string {
+  return String((raw as { data?: { revision?: { value?: { id?: unknown } } } } | null)?.data?.revision?.value?.id);
+}
+function kindOf(raw: unknown): string {
+  const kind = (raw as { data?: { kind?: unknown } } | null)?.data?.kind;
+  return typeof kind === 'string' ? kind : '';
 }
 
 /** Pages the core accepts: at most 100 records and under the batch size. */
@@ -231,10 +242,38 @@ export class SyncTransport {
     this.trigger();
   }
 
-  /** The person asked: let this computer join the account, or try again now. */
-  async start(): Promise<SyncStatus> {
+  /**
+   * Before a computer that holds data joins: how many orglets and chats are here and in the account. Reads the
+   * account without changing it and sends nothing from this computer.
+   */
+  async preview(): Promise<SyncPreview> {
     await this.refresh();
     const session = this.session;
+    if (!session || !session.waitingForConsent) throw new Error(NOTHING_TO_CHOOSE);
+    try {
+      const { records } = await this.snapshot(session);
+      const local = SyncReplicaCounts.parse(await this.core({ action: 'counts' }, session));
+      const orglets = new Set(records.filter(isOrglet).map(orgletId));
+      const chats = records.filter(record => kindOf(record) === 'chat').length;
+      return SyncPreview.parse({ local: { orglets: local.orglets, chats: local.chats }, account: { orglets: orglets.size, chats }, localOnly: local.localOnly });
+    } catch (error) {
+      if (error instanceof ReplicaFailed) throw new Error(error.message);
+      throw new Error(PREVIEW_FAILED);
+    }
+  }
+
+  /**
+   * The person asked: let this computer join the account, or try again now. `replace` first erases this computer's
+   * workspace (a copy is saved beside the database); if that fails, nothing changes and sync stays off.
+   */
+  async start(choice: SyncChoice = 'merge'): Promise<SyncStatus> {
+    await this.refresh();
+    const session = this.session;
+    if (session?.waitingForConsent && choice === 'replace') {
+      if (!this.dependencies.replaceLocal) throw new Error(NOTHING_TO_CHOOSE);
+      await this.dependencies.replaceLocal();
+      if (!this.alive(session)) return this.state();
+    }
     if (session) {
       session.waitingForConsent = false;
       session.stopped = false;
@@ -470,9 +509,8 @@ export class SyncTransport {
     }, delay);
   }
 
-  /** The whole account, staged here until its last page arrived, then handed to the core in dependency order. */
-  private async download(session: Session) {
-    this.set({ state: 'syncing' });
+  /** Every page of the account as it stands at one cursor. */
+  private async snapshot(session: Session): Promise<{ records: unknown[]; cursor: SyncServerCursor }> {
     const records: unknown[] = [];
     let cursor!: SyncServerCursor;
     let token: string | undefined;
@@ -482,6 +520,13 @@ export class SyncTransport {
       cursor = page.cursor;
       token = page.next ?? undefined;
     } while (token);
+    return { records, cursor };
+  }
+
+  /** The whole account, staged here until its last page arrived, then handed to the core in dependency order. */
+  private async download(session: Session) {
+    this.set({ state: 'syncing' });
+    const { records, cursor } = await this.snapshot(session);
     const ranked = records.map((record, index) => ({ record, index, rank: receiveRank(record), createdAt: createdAt(record) }))
       .sort((first, second) => first.rank - second.rank || first.createdAt.localeCompare(second.createdAt) || first.index - second.index)
       .map(item => item.record);

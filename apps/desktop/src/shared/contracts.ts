@@ -546,8 +546,10 @@ export interface Bridge {
   onAccount(callback: (state: import('./account').AccountState) => void): () => void;
   /** Account sync on this computer (COD-329): its state in plain words, never a token, id or address. */
   syncState(): Promise<import('./sync-status').SyncStatus>;
-  /** The person lets this computer join the account, or asks for another try now. */
-  syncStart(): Promise<import('./sync-status').SyncStatus>;
+  /** The person lets this computer join the account (merging, or replacing what is here), or asks for another try now. */
+  syncStart(choice?: import('./sync-status').SyncChoice): Promise<import('./sync-status').SyncStatus>;
+  /** Counts of orglets and chats here and in the account, before a computer that holds data joins. */
+  syncPreview(): Promise<import('./sync-status').SyncPreview>;
   /** Fetches a file that is on another computer, when the account has its bytes, and keeps a copy here. */
   syncDownloadSource(taskId: string, id: string): Promise<void>;
   /** Every change of sync's state, pushed by the main process. */

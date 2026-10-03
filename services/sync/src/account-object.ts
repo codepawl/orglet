@@ -564,8 +564,30 @@ export class AccountSync extends DurableObject<Env> {
     this.schedule();
   }
   async erase(identity: SyncIdentity): Promise<void> {
-    // Preserve the deletion marker: an unexpired Accounts token must never recreate this key.
     this.name(identity);
+    await this.eraseAccount();
+  }
+  /**
+   * The identity service revoked one sign-in (a device's grant family). Its device slot is freed, its sockets close,
+   * and a token of that grant that has not expired yet is refused from now on. Safe to repeat.
+   */
+  async revokeGrant(grantId: string): Promise<void> {
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(grantId)) fail('invalid_request', 400);
+    this.ctx.storage.transactionSync(() => {
+      this.sql('INSERT OR IGNORE INTO revoked_grants VALUES(?)', grantId);
+      this.sql('DELETE FROM devices WHERE grant_id=?', grantId);
+    });
+    for (const socket of this.ctx.getWebSockets()) {
+      if ((socket.deserializeAttachment() as Session).grantId === grantId) socket.close(1008, 'Device released');
+    }
+    this.schedule();
+  }
+  /**
+   * Account deletion, called by the identity service once the person confirmed there. Safe to repeat: a deleted
+   * account stays deleted, and whatever objects a first attempt left are removed by the next one.
+   */
+  async eraseAccount(): Promise<void> {
+    // Preserve the deletion marker: an unexpired Accounts token must never recreate this key.
     const objects = this.sql<{ object_key: string }>('SELECT object_key FROM files').map(row => row.object_key);
     this.ctx.storage.transactionSync(() => {
       for (const table of ['records', 'changes', 'receipts', 'immutable_bodies', 'barriers', 'visibility', 'devices', 'revoked_grants', 'files', 'file_refs']) this.sql(`DELETE FROM ${table}`);

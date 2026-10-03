@@ -38,3 +38,22 @@ export function syncBaseUrl(override: string | undefined): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * How a computer that already holds data joins the account (GH-484). `merge` sends what is here and brings what the
+ * account has. `replace` erases this computer's workspace, after saving a copy beside the database, and brings only
+ * what the account has; it never deletes anything from the account.
+ */
+export const SyncChoice = z.enum(['merge', 'replace']);
+export type SyncChoice = z.infer<typeof SyncChoice>;
+
+const Count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const SyncCounts = z.object({ orglets: Count, chats: Count }).strict();
+/** What the person sees before choosing: how much is on each side. Counts only, never names or text. */
+export const SyncPreview = z.object({
+  local: SyncCounts,
+  account: SyncCounts,
+  /** Orglets and chats marked "Only on this computer": a merge leaves them here, a replace erases them too. */
+  localOnly: Count,
+}).strict();
+export type SyncPreview = z.infer<typeof SyncPreview>;

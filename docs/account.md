@@ -54,8 +54,11 @@ Sync needs a sync server. CodePawl's is not running yet, so a normal install sho
 ### Turning it on
 
 - **A new computer** with nothing of yours on it yet joins the account by itself when you sign in. The Researcher it started with makes way for your own orglets.
-- **A computer that already has chats or orglets** asks first: **Settings → Account → Sync** says sync is off here, and **Turn on sync** merges what is on this computer with your account. Nothing leaves the computer before you choose it.
+- **A computer that already has chats or orglets** asks first: **Settings → Account → Sync** says sync is off here. **Turn on sync** shows how many orglets and chats are on this computer and in your account, then offers two ways to join. Nothing leaves the computer before you choose, and **Cancel** changes nothing.
+  - **Merge with account** sends what is here and brings what the account has. Two orglets with the same name stay two orglets; nothing is matched by name. Anything marked **Only on this computer** stays here.
+  - **Replace with account** erases every orglet and chat on this computer, including the ones marked **Only on this computer**, and brings what the account has. Orglet first saves a copy of the whole database beside it (`orglet.sqlite.before-replace-<time>.bak`, only the newest is kept); if the copy cannot be saved, nothing is erased. Your connections, keys and MCP servers stay. Nothing is deleted from your account.
 - After **Erase all data**, sync stays off on that computer until you turn it on again, so the account's copy does not come straight back.
+- **Erase all data** and **Replace** change only this computer. Neither deletes your account or anything in it.
 
 ### What it does not do
 
@@ -80,7 +83,7 @@ Only Orglet's own copies of files sync: a version you saved in the [file viewer]
 - **Could not reach the sync server**: Orglet tries again by itself, waiting longer each time (up to 5 minutes), and right away when you bring the window forward. **Retry** tries now.
 - **Your account is full**: new changes stay on this computer and keep arriving from others. **Retry** tries to send them again.
 - **Your account has data from a newer Orglet**: update the app; changes from here wait until then.
-- **This computer was removed from your account**, or **Your account already syncs as many computers as it allows**, or **This account was deleted on the server**. Nothing on this computer is lost in any of these.
+- **This computer was removed from your account** (its sign-in was revoked from your account page), or **Your account already syncs as many computers as it allows**, or **This account was deleted on the server**. Nothing on this computer is lost in any of these.
 
 Changes are sent a few seconds after you make them, and while you keep changing things, at most once a minute. Changes from other computers arrive as soon as the server says there are some, or when you bring the window forward. Nothing syncs while Orglet is closed.
 

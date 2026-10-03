@@ -1,3 +1,4 @@
+import { WorkerEntrypoint } from 'cloudflare:workers';
 import type { Env } from '../worker-configuration';
 import { AccountSync, SyncOperationError } from './account-object';
 import { identityConfiguration, verifySyncIdentity } from './auth';
@@ -5,6 +6,28 @@ import { SyncPushRequest, SyncPullRequest, SyncSnapshotRequest, SyncReleaseDevic
 import { SyncDeviceId } from '../../../apps/desktop/src/shared/sync';
 
 export { AccountSync };
+
+/**
+ * What the identity service may ask of sync, through a service binding only: this class has no route, so nothing on
+ * the internet reaches it, and a sync access token cannot call it. The subject comes from the identity service's own
+ * session, never from a request body a client wrote. Both calls are safe to repeat after a failure.
+ */
+export class SyncLifecycle extends WorkerEntrypoint<Env> {
+  private account(subject: string) {
+    if (typeof subject !== 'string' || !subject.trim() || subject.length > 200) throw new SyncOperationError('invalid_request', 400);
+    return this.env.SYNC_ACCOUNTS.getByName(JSON.stringify([identityConfiguration(this.env).issuer, subject]));
+  }
+  /** Removes the account's records, key and files, and leaves the marker that keeps a live token from recreating it. */
+  async deleteAccount(subject: string): Promise<{ deleted: true }> {
+    await this.account(subject).eraseAccount();
+    return { deleted: true };
+  }
+  /** One sign-in was revoked at the identity service: that device stops syncing at once, not when its token ends. */
+  async revokeDevice(subject: string, grantId: string): Promise<{ revoked: true }> {
+    await this.account(subject).revokeGrant(grantId);
+    return { revoked: true };
+  }
+}
 const encoder = new TextEncoder();
 function error(code: string, status: number): Response {
   return Response.json({ code }, { status, headers: { 'Cache-Control': 'no-store' } });

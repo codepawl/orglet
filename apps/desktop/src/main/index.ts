@@ -53,7 +53,7 @@ import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
 import { AccountFile, AccountService, accountPayload } from './account';
 import { SyncTransport } from './sync-transport';
-import { syncBaseUrl } from '../shared/sync-status';
+import { SyncChoice, syncBaseUrl } from '../shared/sync-status';
 import { MarketPublishingTransport, publishingRelayAllowed } from './market-publishing';
 import { MarketModerationTransport } from './market-moderation';
 import { MarketModerationAction, MarketModerationResult } from '../shared/market-moderation';
@@ -672,6 +672,7 @@ async function start() {
     baseUrl: syncBaseUrl(process.env.ORGLET_SYNC_URL),
     account,
     core: action => request('syncReplica', action),
+    replaceLocal: () => request('syncReplaceLocal', undefined),
     onChange: status => { if (window && !window.isDestroyed()) window.webContents.send('orglet:sync', status); },
   });
   void syncTransport.refresh();
@@ -762,7 +763,8 @@ async function start() {
   handle('orglet:account-sign-in', async () => accountPayload(await account.signIn()));
   // Sync's state is as strict as the account's: no token, id or address. The window can only ask it to start.
   handle('orglet:sync-state', async () => syncTransport!.state());
-  handle('orglet:sync-start', async () => syncTransport!.start());
+  handle('orglet:sync-start', async raw => syncTransport!.start(SyncChoice.optional().parse(raw)));
+  handle('orglet:sync-preview', async () => syncTransport!.preview());
   // The window names a chat and one of its files; the core checks the chat owns it before and after the download.
   handle('orglet:sync-download', async raw => {
     const input = z.object({ taskId: Id, id: Id }).strict().parse(raw);
