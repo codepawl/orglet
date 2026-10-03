@@ -268,14 +268,24 @@ export class LocalSync {
       return !policy.local_only && !policy.deleted && policy.epoch === scope.epoch;
     });
   }
+  /**
+   * The server takes a file's owner from a message that names it. A file the chat holds but no message has carried
+   * yet (a version just saved in the viewer) waits here until one does.
+   */
+  private sendable(record: SyncRecord): boolean {
+    if (record.data.kind !== 'source') return true;
+    return Boolean(this.store.db.prepare(`SELECT 1 FROM chat_turns WHERE EXISTS
+      (SELECT 1 FROM json_each(json_extract(chat_turns.data,'$.input.sourceIds')) WHERE value=?) LIMIT 1`).get(record.data.value.id));
+  }
   private enqueue(record: SyncRecord) {
-    if (!this.context || !this.eligible(record)) return;
+    if (!this.context || !this.eligible(record) || !this.sendable(record)) return;
     this.store.db.prepare('INSERT OR IGNORE INTO sync_outbox(account_key,record_id,data) VALUES(?,?,?)')
       .run(this.context.accountKey, record.id, JSON.stringify(record));
   }
-  private record(raw: SyncData) {
+  /** Returns whether a new envelope was written. */
+  private record(raw: SyncData): boolean {
     const data = SyncData.parse(raw);
-    if (this.permanentlyBlocked(data)) return;
+    if (this.permanentlyBlocked(data)) return false;
     const key = syncRecordKey(data);
     const previous = this.store.db.prepare('SELECT data FROM sync_records WHERE record_key=?').get(key);
     const prior = previous && SyncRecord.parse(JSON.parse(String(previous.data)));
@@ -284,12 +294,21 @@ export class LocalSync {
     const scopes = this.scopes(data);
     const scopeUpgrade = prior && teamScope && canonicalJson(prior.scopes) !== canonicalJson(scopes);
     const rosterUpgrade = prior?.data.kind === 'chat' && data.kind === 'chat' && prior.data.value.participants === undefined;
-    if (this.backfilling && prior && !scopeUpgrade && !rosterUpgrade) return;
-    if (prior && canonicalJson(prior.data) === canonicalJson(data) && !scopeUpgrade) return;
+    if (this.backfilling && prior && !scopeUpgrade && !rosterUpgrade) return false;
+    if (prior && canonicalJson(prior.data) === canonicalJson(data) && !scopeUpgrade) return false;
     const clock = this.revisions.clock.tick();
     const record = SyncRecord.parse({ schemaVersion: 1, id: randomUUID(), origin: clock.deviceId, clock, scopes, data });
     this.store.db.prepare('INSERT INTO sync_records VALUES(?,?) ON CONFLICT(record_key) DO UPDATE SET data=excluded.data').run(key, JSON.stringify(record));
     this.enqueue(record);
+    return true;
+  }
+  /** A new message makes the files it carries sendable. */
+  private recordTurn(turn: SyncTurn) {
+    if (!this.record({ kind: 'turn', value: turn })) return;
+    for (const sourceId of turn.input.sourceIds) {
+      const row = this.store.db.prepare('SELECT data FROM sync_records WHERE record_key=?').get(`source:${sourceId}`);
+      if (row) this.enqueue(SyncRecord.parse(JSON.parse(String(row.data))));
+    }
   }
   /** Canonical writers call within their owning transaction; incoming writes never echo. */
   captureRevision(entity: SyncRevision['entity'], value: unknown, alias: number) {
@@ -308,7 +327,7 @@ export class LocalSync {
       let saved = this.turns.list(run.taskId).find(turn => turn.localRevision === alias);
       if (!saved && run.snapshot.input) saved = this.turns.save({ id: run.snapshot.turnId ?? turnMessageId(run.taskId, alias), taskId: run.taskId,
         createdAt: this.turns.nextCreatedAt(run.taskId, Date.parse(run.startedAt)), input: SyncTurn.shape.input.strip().parse(run.snapshot.input) }, alias);
-      if (saved) this.record({ kind: 'turn', value: SyncTurn.strip().parse(saved) });
+      if (saved) this.recordTurn(SyncTurn.strip().parse(saved));
       return { ...value, originDeviceId: run.originDeviceId ?? this.revisions.clock.read().deviceId, snapshot: { ...run.snapshot, turnId: saved?.id ?? run.snapshot.turnId } };
     }
     if (table !== 'tasks' || this.importing) return value;
@@ -403,7 +422,7 @@ export class LocalSync {
     }
     this.purgeBlockedOutbox();
     const turn = this.turns.list(task.id).find(saved => saved.localRevision === (task.inputRevision ?? 0));
-    if (turn) this.record({ kind: 'turn', value: SyncTurn.strip().parse(turn) });
+    if (turn) this.recordTurn(SyncTurn.strip().parse(turn));
     for (const field of ['title', 'archivedAt', 'channel'] as const) {
       if (canonicalJson(task[field] ?? null) !== canonicalJson(before?.[field] ?? null)) {
         this.record(SyncData.parse({ kind: 'chatField', taskId: task.id, change: { field, value: task[field] ?? null } }));
@@ -670,6 +689,10 @@ export class LocalSync {
   }
   deviceId(): string {
     return this.revisions.clock.read().deviceId;
+  }
+  /** Throws unless this is the account the computer is recording for right now. */
+  checkContext(context: SyncRecordingContext) {
+    this.assertContext(context);
   }
   acknowledge(context: SyncRecordingContext, ids: readonly string[]) {
     const checked = this.assertContext(context);

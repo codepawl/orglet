@@ -1,9 +1,15 @@
+import { createHash } from 'node:crypto';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, isAbsolute } from 'node:path';
 import type { Store } from './database';
+import { editedSourcesDirectory } from '../tools/sources';
+import { fileNameOf } from '../../shared/source-versions';
+import type { Source, Task } from '../../shared/contracts';
 import { removeSeed, untouchedSeed } from './factory-seed';
 import { SyncDeviceId, type SyncRecordingContext } from '../../shared/sync';
 import { SyncRecord, syncRecordKey } from '../../shared/sync-records';
-import { SyncServerCursor, SYNC_BATCH_BYTES } from '../../shared/sync-protocol';
-import { SyncReplicaAction, type SyncReplicaBatch, type SyncReplicaState } from '../../shared/sync-replica';
+import { SyncServerCursor, SYNC_BATCH_BYTES, SYNC_FILE_BYTES } from '../../shared/sync-protocol';
+import { SyncReplicaAction, type SyncReplicaBatch, type SyncReplicaFiles, type SyncReplicaState } from '../../shared/sync-replica';
 
 /** Room for the request's own fields around the records. */
 const BATCH_MARGIN_BYTES = 65_536;
@@ -16,7 +22,7 @@ const BATCH_MARGIN_BYTES = 65_536;
 export class SyncReplica {
   constructor(private store: Store, private notify: () => void) {}
 
-  execute(raw: unknown): SyncReplicaState | SyncReplicaBatch | null {
+  execute(raw: unknown): SyncReplicaState | SyncReplicaBatch | SyncReplicaFiles | null | Promise<null> {
     const input = SyncReplicaAction.parse(raw);
     if (input.action === 'attach') return this.attach(input.context);
     if (input.action === 'detach') {
@@ -27,7 +33,94 @@ export class SyncReplica {
     if (input.action === 'receive') return this.receive(input.context, input.records, input.cursor);
     if (input.action === 'settle') return this.settle(input.context, input.cursor);
     if (input.action === 'outbox') return this.outbox(input.context);
+    if (input.action === 'files') return this.files(input.context);
+    if (input.action === 'fileSent') return this.fileSent(input.context, input.sourceId, input.stored);
+    if (input.action === 'fileWanted') return this.fileWanted(input.context, input.taskId, input.sourceId);
+    if (input.action === 'fileReceived') return this.fileReceived(input.context, input.taskId, input.sourceId, input.base64);
     return this.acknowledge(input.context, input.outcomes);
+  }
+
+  /**
+   * Only Orglet's own copies sync: a saved version under `edited-sources/`. An attached file is a path on this
+   * computer that Orglet never copied, so its bytes stay where the person keeps them.
+   */
+  private files(context: SyncRecordingContext): SyncReplicaFiles {
+    this.store.sync.checkContext(context);
+    const owned = editedSourcesDirectory(this.store);
+    if (!owned) return { uploads: [] };
+    const rows = this.store.db.prepare(`SELECT sources.data,sources.path FROM sources
+      JOIN sync_confirmed ON sync_confirmed.account_key=? AND sync_confirmed.record_key='source:' || sources.id
+      WHERE sources.path!='' AND json_extract(sources.data,'$.editedFrom') IS NOT NULL AND json_extract(sources.data,'$.revoked')=0
+        AND json_extract(sources.data,'$.bytes')<=?
+        AND NOT EXISTS (SELECT 1 FROM sync_files WHERE sync_files.account_key=? AND sync_files.source_id=sources.id)
+      ORDER BY sources.rowid LIMIT 32`).all(context.accountKey, SYNC_FILE_BYTES, context.accountKey);
+    const uploads: SyncReplicaFiles['uploads'] = [];
+    for (const row of rows) {
+      const source = JSON.parse(String(row.data)) as Source;
+      const within = relative(owned, String(row.path));
+      if (within.startsWith('..') || isAbsolute(within)) continue;
+      if (uploads.length < 8) uploads.push({ sourceId: source.id, path: String(row.path), hash: source.hash, bytes: source.bytes });
+    }
+    return { uploads };
+  }
+
+  private fileSent(context: SyncRecordingContext, sourceId: string, stored: boolean): null {
+    this.store.sync.checkContext(context);
+    this.store.db.prepare(`INSERT INTO sync_files VALUES(?,?,?)
+      ON CONFLICT(account_key,source_id) DO UPDATE SET stored=excluded.stored`).run(context.accountKey, sourceId, Number(stored));
+    return null;
+  }
+
+  /** The same checks run before the request and again before the bytes are kept. */
+  private wanted(context: SyncRecordingContext, taskId: string, sourceId: string): Source {
+    this.store.sync.checkContext(context);
+    const task = this.store.get<Task>('tasks', taskId);
+    if (!task.sourceIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const source = this.store.get<Source>('sources', sourceId);
+    const row = this.store.db.prepare('SELECT path FROM sources WHERE id=?').get(sourceId);
+    if (source.revoked || this.store.db.prepare("SELECT entity_id FROM sync_deletions WHERE kind='source' AND entity_id=?").get(sourceId)) {
+      throw new Error('Quyền đọc nguồn đã bị thu hồi.');
+    }
+    if (source.availability !== 'other-device' || String(row?.path ?? '')) throw new Error('Tệp này đã có trên máy này.');
+    return source;
+  }
+
+  private fileWanted(context: SyncRecordingContext, taskId: string, sourceId: string): null {
+    this.wanted(context, taskId, sourceId);
+    return null;
+  }
+
+  /**
+   * Keeps downloaded bytes as Orglet's own copy. The bytes must be exactly the ones the source record names; the
+   * folder comes from the source's id and the name is reduced to a file name, so neither can point elsewhere.
+   */
+  private async fileReceived(context: SyncRecordingContext, taskId: string, sourceId: string, base64: string): Promise<null> {
+    const source = this.wanted(context, taskId, sourceId);
+    const bytes = Buffer.from(base64, 'base64');
+    if (bytes.length !== source.bytes || createHash('sha256').update(bytes).digest('hex') !== source.hash) {
+      throw new Error('Tệp tải về không khớp với tệp đã đính kèm.');
+    }
+    const owned = editedSourcesDirectory(this.store);
+    if (!owned) throw new Error('Không lưu được tệp khi dữ liệu không nằm trong thư mục.');
+    const path = join(owned, sourceId, fileNameOf(source.name));
+    await mkdir(dirname(path), { recursive: true });
+    const partial = `${path}.part`;
+    try {
+      await writeFile(partial, bytes);
+      await rename(partial, path);
+      this.store.transaction(() => {
+        const { availability: _availability, ...kept } = this.wanted(context, taskId, sourceId);
+        this.store.db.prepare('UPDATE sources SET path=? WHERE id=?').run(path, sourceId);
+        this.store.update('sources', kept);
+        // The account already has these bytes; this copy is not sent back.
+        this.fileSent(context, sourceId, true);
+      });
+    } catch (error) {
+      await rm(dirname(path), { recursive: true, force: true });
+      throw error;
+    }
+    this.notify();
+    return null;
   }
 
   private account(accountKey: string) {

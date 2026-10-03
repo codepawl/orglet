@@ -287,6 +287,9 @@ export class Store {
         );
         CREATE TABLE IF NOT EXISTS sync_confirmed (
           account_key TEXT NOT NULL, record_key TEXT NOT NULL, record_id TEXT NOT NULL, PRIMARY KEY(account_key,record_key)
+        );
+        CREATE TABLE IF NOT EXISTS sync_files (
+          account_key TEXT NOT NULL, source_id TEXT NOT NULL, stored INTEGER NOT NULL CHECK(stored IN (0,1)), PRIMARY KEY(account_key,source_id)
         );`);
       // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
       // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),

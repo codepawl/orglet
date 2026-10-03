@@ -548,6 +548,8 @@ export interface Bridge {
   syncState(): Promise<import('./sync-status').SyncStatus>;
   /** The person lets this computer join the account, or asks for another try now. */
   syncStart(): Promise<import('./sync-status').SyncStatus>;
+  /** Fetches a file that is on another computer, when the account has its bytes, and keeps a copy here. */
+  syncDownloadSource(taskId: string, id: string): Promise<void>;
   /** Every change of sync's state, pushed by the main process. */
   onSync(callback: (status: import('./sync-status').SyncStatus) => void): () => void;
   /** Whether usage analytics is on for the signed-in account (COD-344); nothing is recorded without an account. */

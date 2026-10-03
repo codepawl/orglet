@@ -75,3 +75,20 @@ export async function encryptRow(key: CryptoKey, value: string, context: readonl
 export async function decryptRow(key: CryptoKey, value: Ciphertext, context: readonly (string | number)[]): Promise<string> {
   return decoder.decode(await openBytes(key, value, JSON.stringify(['orglet-sync-row', ...context])));
 }
+function fileContext(context: readonly (string | number)[]): string {
+  return JSON.stringify(['orglet-sync-file', ...context]);
+}
+/** A file is stored as its 12-byte nonce followed by the AES-GCM ciphertext, bound to the account, hash and size. */
+export async function encryptFile(key: CryptoKey, value: Uint8Array<ArrayBuffer>, context: readonly (string | number)[]): Promise<Uint8Array<ArrayBuffer>> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const body = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encoder.encode(fileContext(context)), tagLength: 128 }, key, value));
+  const sealed = new Uint8Array(iv.length + body.length);
+  sealed.set(iv);
+  sealed.set(body, iv.length);
+  return sealed;
+}
+export async function decryptFile(key: CryptoKey, sealed: Uint8Array<ArrayBuffer>, context: readonly (string | number)[]): Promise<Uint8Array<ArrayBuffer>> {
+  if (sealed.length < 28) throw new Error('Invalid encrypted value');
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: sealed.slice(0, 12), additionalData: encoder.encode(fileContext(context)), tagLength: 128 },
+    key, sealed.slice(12)));
+}

@@ -9,8 +9,11 @@
     "SYNC_ISSUER": "https://accounts.codepawl.com/api/auth",
     "SYNC_AUDIENCE": "https://sync.orglet.codepawl.com",
     "SYNC_MAX_ACCOUNT_BYTES": "33554432",
-    "SYNC_MAX_RECORDS": "10000"
+    "SYNC_MAX_RECORDS": "10000",
+    "SYNC_MAX_FILE_BYTES": "26214400",
+    "SYNC_MAX_FILE_STORAGE_BYTES": "268435456"
   },
+  "r2_buckets": [{ "binding": "SYNC_FILES", "bucket_name": "orglet-sync-files" }],
   "durable_objects": { "bindings": [{ "name": "SYNC_ACCOUNTS", "class_name": "AccountSync" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountSync"] }],
   "observability": { "enabled": true, "redact_query_string": true,

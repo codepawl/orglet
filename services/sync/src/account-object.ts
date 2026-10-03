@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { SyncRecord, syncRecordKey } from '../../../apps/desktop/src/shared/sync-records';
 import { compareSyncClock, syncScopeNamespace, syncUuidFromDigest, SyncDeviceId } from '../../../apps/desktop/src/shared/sync';
 import { canonicalSyncData } from '../../../apps/desktop/src/shared/sync-json';
-import { SyncPushRequest, SyncPullRequest, SyncSnapshotRequest, SyncReleaseDeviceRequest,
-  SyncServerCursor, SYNC_BATCH_BYTES, SYNC_RECORD_BYTES } from '../../../apps/desktop/src/shared/sync-protocol';
+import { SyncPushRequest, SyncPullRequest, SyncSnapshotRequest, SyncReleaseDeviceRequest, SyncFileRequest,
+  SyncServerCursor, SYNC_BATCH_BYTES, SYNC_RECORD_BYTES, SYNC_FILE_BYTES } from '../../../apps/desktop/src/shared/sync-protocol';
 import { identityConfiguration, type SyncIdentity } from './auth';
-import { masterKeys, createAccountKey, unwrapAccountKey, rewrapAccountKey, encryptRow, decryptRow,
+import { masterKeys, createAccountKey, unwrapAccountKey, rewrapAccountKey, encryptRow, decryptRow, encryptFile, decryptFile,
   type WrappedKey, type Ciphertext } from './crypto';
 import { assessScope, deletionEntities, immutable, type DeletionEntity } from './scope-policy';
 
@@ -17,6 +17,9 @@ export class SyncOperationError extends Error {
 }
 type Account = { sequence: number; privacy: number; floor: number; deleted: number; wrapped: string | null; history_ms: number };
 type Stored = { record_key: string; sequence: number; cipher: string; scopes: string; entities: string; created_at: number };
+type FileRow = { hash: string; bytes: number; state: string; expires_at: number; generation: string; object_key: string };
+/** An upload that never finished gives its reserved bytes back after this long. */
+const FILE_PENDING_MS = 600_000;
 type Session = { deviceId: string; grantId: string; expiresAt: number; generation: string; subject: string };
 type Prepared = { record: SyncRecord; key: string; digest: string; bodyDigest: string; initial: Map<string, string> };
 const encoder = new TextEncoder();
@@ -56,7 +59,10 @@ export class AccountSync extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS visibility (kind TEXT NOT NULL,id TEXT NOT NULL,epoch TEXT NOT NULL,local_only INTEGER NOT NULL,
         deleted INTEGER NOT NULL, clock TEXT NOT NULL, PRIMARY KEY(kind,id));
       CREATE TABLE IF NOT EXISTS devices (device_id TEXT PRIMARY KEY,grant_id TEXT UNIQUE NOT NULL,expires_at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS revoked_grants (grant_id TEXT PRIMARY KEY);`);
+      CREATE TABLE IF NOT EXISTS revoked_grants (grant_id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS files (hash TEXT PRIMARY KEY, bytes INTEGER NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending','stored')),
+        expires_at INTEGER NOT NULL, generation TEXT NOT NULL, object_key TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS file_refs (source_id TEXT PRIMARY KEY, hash TEXT NOT NULL);`);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
   private sql<T extends Record<string, SqlStorageValue>>(query: string, ...bindings: SqlStorageValue[]): T[] {
@@ -300,7 +306,13 @@ export class AccountSync extends DurableObject<Env> {
         for (const outcome of outcomes) statuses.set(outcome.id, outcome.status);
         return { cursor: this.cursor(), outcomes: input.records.map(record => ({ id: record.id, status: statuses.get(record.id)! })) };
       });
-      if (result) { this.hint(result.cursor); this.schedule(); return result; }
+      if (result) {
+        this.hint(result.cursor);
+        this.schedule();
+        // A withdrawal or deletion may have removed the last record that named a stored file.
+        this.ctx.waitUntil(this.sweepFiles());
+        return result;
+      }
     }
     return fail('retry_sync', 503);
   }
@@ -362,6 +374,114 @@ export class AccountSync extends DurableObject<Env> {
       page.push(record);
     }
     return page;
+  }
+  private fileLimits() {
+    const file = Number(this.env.SYNC_MAX_FILE_BYTES);
+    const total = Number(this.env.SYNC_MAX_FILE_STORAGE_BYTES);
+    if (!Number.isSafeInteger(file) || file < 1 || file > SYNC_FILE_BYTES || !Number.isSafeInteger(total) || total < file) fail('sync_unavailable', 503);
+    return { file, total };
+  }
+  /** The public source record names the bytes a file must have; a caller cannot claim a hash of its own. */
+  private async sourceFile(session: { key: CryptoKey; name: string; generation: string }, sourceId: string) {
+    const row = this.sql<Stored>('SELECT * FROM records WHERE record_key=?', `source:${sourceId}`)[0];
+    if (!row) return undefined;
+    const [record] = await this.open([row], session.key, session.name, session.generation);
+    return record.data.kind === 'source' ? { hash: record.data.value.hash, bytes: record.data.value.bytes } : undefined;
+  }
+  private sourceIsPublic(sourceId: string): boolean {
+    return Boolean(this.sql('SELECT record_key FROM records WHERE record_key=?', `source:${sourceId}`).length);
+  }
+  /**
+   * Stores one attached file's bytes, encrypted under the account key. The bucket write and this object's SQLite are
+   * not one transaction, so the bytes are reserved first (pending bytes count toward the limit), written, then
+   * committed; a reservation that never commits expires and its object is swept.
+   */
+  async putFile(identity: SyncIdentity, raw: z.infer<typeof SyncFileRequest>, body: ArrayBuffer): Promise<{ status: 'stored' | 'present' }> {
+    const checked = SyncFileRequest.safeParse(raw);
+    if (!checked.success) fail('invalid_request', 400);
+    const input = checked.data;
+    const limits = this.fileLimits();
+    if (body.byteLength > limits.file) fail('file_too_large', 413);
+    const session = await this.key(identity, input.deviceId);
+    const source = await this.sourceFile(session, input.sourceId);
+    if (!source) fail('file_unknown', 404);
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', body)), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (hash !== source.hash || body.byteLength !== source.bytes) fail('file_mismatch', 409);
+    const objectKey = `files/${await digest(session.name)}/${hash}`;
+    const reserved = this.ctx.storage.transactionSync(() => {
+      this.name(identity);
+      if (!this.sourceIsPublic(input.sourceId)) fail('file_unknown', 404);
+      const now = Date.now();
+      const existing = this.sql<FileRow>('SELECT * FROM files WHERE hash=?', hash)[0];
+      if (existing?.state === 'stored') {
+        this.sql('INSERT INTO file_refs VALUES(?,?) ON CONFLICT(source_id) DO UPDATE SET hash=excluded.hash', input.sourceId, hash);
+        return 'present' as const;
+      }
+      if (existing && existing.expires_at > now) return 'busy' as const;
+      const used = this.sql<{ bytes: number }>("SELECT COALESCE(SUM(bytes),0) AS bytes FROM files WHERE hash!=? AND (state='stored' OR expires_at>?)", hash, now)[0].bytes;
+      if (used + body.byteLength > limits.total) fail('file_storage_limit', 413);
+      this.sql(`INSERT INTO files VALUES(?,?,'pending',?,?,?) ON CONFLICT(hash) DO UPDATE SET bytes=excluded.bytes,state=excluded.state,
+        expires_at=excluded.expires_at,generation=excluded.generation,object_key=excluded.object_key`, hash, body.byteLength, now + FILE_PENDING_MS, session.generation, objectKey);
+      return 'reserved' as const;
+    });
+    if (reserved === 'present') return { status: 'present' };
+    if (reserved === 'busy') fail('retry_sync', 503);
+    this.schedule();
+    try {
+      await this.env.SYNC_FILES.put(objectKey, await encryptFile(session.key, new Uint8Array(body), [session.name, session.generation, hash, body.byteLength]));
+    } catch {
+      this.sql("DELETE FROM files WHERE hash=? AND state='pending'", hash);
+      return fail('sync_unavailable', 503);
+    }
+    const committed = this.ctx.storage.transactionSync(() => {
+      const account = this.account();
+      // The account was deleted, or the file's record was withdrawn, while the bytes were on their way.
+      if (account.deleted || !account.wrapped || (JSON.parse(account.wrapped) as WrappedKey).generation !== session.generation || !this.sourceIsPublic(input.sourceId)) {
+        this.sql("DELETE FROM files WHERE hash=? AND state='pending'", hash);
+        return false;
+      }
+      this.sql("UPDATE files SET state='stored' WHERE hash=?", hash);
+      this.sql('INSERT INTO file_refs VALUES(?,?) ON CONFLICT(source_id) DO UPDATE SET hash=excluded.hash', input.sourceId, hash);
+      return true;
+    });
+    if (!committed) {
+      await this.env.SYNC_FILES.delete(objectKey);
+      return fail('file_unknown', 404);
+    }
+    return { status: 'stored' };
+  }
+  async getFile(identity: SyncIdentity, raw: z.infer<typeof SyncFileRequest>): Promise<ArrayBuffer> {
+    const checked = SyncFileRequest.safeParse(raw);
+    if (!checked.success) fail('invalid_request', 400);
+    const input = checked.data;
+    const session = await this.key(identity, input.deviceId);
+    const reference = this.sql<{ hash: string }>('SELECT hash FROM file_refs WHERE source_id=?', input.sourceId)[0];
+    if (!reference || !this.sourceIsPublic(input.sourceId)) fail('file_unknown', 404);
+    const file = this.sql<FileRow>("SELECT * FROM files WHERE hash=? AND state='stored'", reference.hash)[0];
+    if (!file) fail('file_unknown', 404);
+    const object = await this.env.SYNC_FILES.get(file.object_key);
+    if (!object) fail('file_unknown', 404);
+    let plain: Uint8Array<ArrayBuffer>;
+    try {
+      plain = await decryptFile(session.key, new Uint8Array(await object.arrayBuffer()), [session.name, file.generation, file.hash, file.bytes]);
+    } catch { return fail('file_damaged', 409); }
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', plain)), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (hash !== file.hash || plain.byteLength !== file.bytes) fail('file_damaged', 409);
+    this.name(identity);
+    if (!this.sourceIsPublic(input.sourceId)) fail('file_unknown', 404);
+    return plain.buffer;
+  }
+  /** Deletes objects nothing names any more: an expired reservation, or a file whose last record was withdrawn. */
+  private async sweepFiles() {
+    this.sql("DELETE FROM file_refs WHERE NOT EXISTS (SELECT 1 FROM records WHERE record_key='source:' || file_refs.source_id)");
+    const doomed = this.sql<FileRow>(`SELECT * FROM files WHERE (state='pending' AND expires_at<=?)
+      OR (state='stored' AND NOT EXISTS (SELECT 1 FROM file_refs WHERE file_refs.hash=files.hash))`, Date.now());
+    for (const file of doomed) {
+      await this.env.SYNC_FILES.delete(file.object_key);
+      // A new upload of the same bytes may have started while the object was being deleted.
+      this.sql(`DELETE FROM files WHERE hash=? AND state=? AND expires_at=?
+        AND NOT EXISTS (SELECT 1 FROM file_refs WHERE file_refs.hash=files.hash)`, file.hash, file.state, file.expires_at);
+    }
   }
   async releaseDevice(identity: SyncIdentity, raw: z.infer<typeof SyncReleaseDeviceRequest>) {
     const checked = SyncReleaseDeviceRequest.safeParse(raw);
@@ -432,21 +552,27 @@ export class AccountSync extends DurableObject<Env> {
     const expiry = this.ctx.getWebSockets().filter(socket => this.validSocket(socket)).map(socket => (socket.deserializeAttachment() as Session).expiresAt);
     const oldest = this.sql<{ created_at: number | null }>('SELECT MIN(created_at) AS created_at FROM changes')[0].created_at;
     if (oldest !== null) expiry.push(oldest + this.account().history_ms + 1);
+    const pending = this.sql<{ expires_at: number | null }>("SELECT MIN(expires_at) AS expires_at FROM files WHERE state='pending'")[0].expires_at;
+    if (pending !== null) expiry.push(pending + 1);
     if (expiry.length) this.ctx.waitUntil(this.ctx.storage.setAlarm(Math.max(Date.now() + 1, expiry.reduce((first, next) => Math.min(first, next), Infinity))));
     else this.ctx.waitUntil(this.ctx.storage.deleteAlarm());
   }
   async alarm() {
     this.ctx.storage.transactionSync(() => this.prune());
     for (const socket of this.ctx.getWebSockets()) if (!this.validSocket(socket)) socket.close(1008, 'Session expired');
+    await this.sweepFiles();
     this.schedule();
   }
   async erase(identity: SyncIdentity): Promise<void> {
     // Preserve the deletion marker: an unexpired Accounts token must never recreate this key.
     this.name(identity);
+    const objects = this.sql<{ object_key: string }>('SELECT object_key FROM files').map(row => row.object_key);
     this.ctx.storage.transactionSync(() => {
-      for (const table of ['records', 'changes', 'receipts', 'immutable_bodies', 'barriers', 'visibility', 'devices', 'revoked_grants']) this.sql(`DELETE FROM ${table}`);
+      for (const table of ['records', 'changes', 'receipts', 'immutable_bodies', 'barriers', 'visibility', 'devices', 'revoked_grants', 'files', 'file_refs']) this.sql(`DELETE FROM ${table}`);
       this.sql('UPDATE account SET deleted=1,wrapped=NULL,sequence=sequence+1,privacy=privacy+1 WHERE id=1');
     });
+    // An upload still on its way sees the deleted account when it commits and removes its own object.
+    for (const key of objects) await this.env.SYNC_FILES.delete(key);
     for (const socket of this.ctx.getWebSockets()) socket.close(1008, 'Account deleted');
     this.ctx.waitUntil(this.ctx.storage.deleteAlarm());
   }

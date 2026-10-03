@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import type { SyncRecordingContext } from '../shared/sync';
-import { SyncHint, SyncPushResult, SyncServerCursor, SYNC_BATCH_BYTES } from '../shared/sync-protocol';
-import { SyncReplicaBatch, SyncReplicaState, type SyncReplicaAction } from '../shared/sync-replica';
+import { SyncFileStored, SyncHint, SyncPushResult, SyncServerCursor, SYNC_BATCH_BYTES, SYNC_FILE_BYTES } from '../shared/sync-protocol';
+import { SyncReplicaBatch, SyncReplicaFiles, SyncReplicaState, type SyncReplicaAction } from '../shared/sync-replica';
 import { SyncStatus, type SyncPauseReason } from '../shared/sync-status';
 
 /**
@@ -42,6 +44,8 @@ export type SyncTransportDependencies = {
   core: (action: SyncReplicaAction) => Promise<unknown>;
   fetch?: typeof fetch;
   connect?: SyncConnect;
+  /** Reads a file Orglet saved under its own data folder; the tests pass a reader of their own. */
+  readFile?: (path: string) => Promise<Uint8Array>;
   now?: () => number;
   onChange?: (status: SyncStatus) => void;
 };
@@ -58,6 +62,11 @@ class ReplicaFailed extends Error {}
 class Stale extends Error {}
 
 const CONTEXT_CHANGED = 'Phiên đồng bộ đã đổi.';
+export const SYNC_NOT_ON = 'Đồng bộ đang tắt trên máy này.';
+export const FILE_NOT_SYNCED = 'Tệp này chưa được đồng bộ; nó chỉ có trên máy đã đính kèm.';
+export const FILE_DOWNLOAD_FAILED = 'Không tải được tệp. Kiểm tra kết nối rồi thử lại.';
+/** Refusals of one file that sending it again cannot change. */
+const FILE_SETTLED = new Set(['file_unknown', 'file_mismatch', 'file_too_large']);
 const Refusal = z.object({ code: z.string().regex(/^[a-z_]{1,64}$/) });
 // Pages are read loosely: a record from a newer Orglet is staged by the core, not refused here.
 const PullPage = z.object({ cursor: SyncServerCursor, records: z.array(z.unknown()).max(100), more: z.boolean() });
@@ -182,11 +191,13 @@ export class SyncTransport {
   private pushTimer: ReturnType<typeof setTimeout> | undefined;
   private fetch: typeof fetch;
   private connect: SyncConnect;
+  private readFile: (path: string) => Promise<Uint8Array>;
   private now: () => number;
 
   constructor(private dependencies: SyncTransportDependencies) {
     this.fetch = dependencies.fetch ?? fetch;
     this.connect = dependencies.connect ?? openSyncSocket;
+    this.readFile = dependencies.readFile ?? (path => readFile(path));
     this.now = dependencies.now ?? Date.now;
   }
 
@@ -357,6 +368,54 @@ export class SyncTransport {
     if (!session.cursor) await this.download(session);
     else if (session.wantPull) await this.pull(session);
     await this.push(session);
+    await this.sendFiles(session);
+  }
+
+  /**
+   * The person opened a file that lives on another computer. Its bytes are fetched once, checked by the core against
+   * the file's own record, and kept as a copy here. Rejects with a Vietnamese reason.
+   */
+  async downloadFile(taskId: string, sourceId: string): Promise<void> {
+    const session = this.session;
+    if (!session || session.waitingForConsent || session.stopped || !session.cursor) throw new Error(SYNC_NOT_ON);
+    try {
+      await this.core({ action: 'fileWanted', context: session.context, taskId, sourceId }, session);
+      const response = await this.call(session, 'GET', `/v1/files/${sourceId}`);
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length > SYNC_FILE_BYTES) throw new Error(FILE_DOWNLOAD_FAILED);
+      await this.core({ action: 'fileReceived', context: session.context, taskId, sourceId, base64: bytes.toString('base64') }, session);
+    } catch (error) {
+      if (error instanceof ReplicaFailed) throw new Error(error.message);
+      if (error instanceof SyncRefused && (error.code === 'file_unknown' || error.code === 'file_damaged')) throw new Error(FILE_NOT_SYNCED);
+      throw new Error(FILE_DOWNLOAD_FAILED);
+    }
+  }
+
+  /** Bytes of saved versions go after their records, one file per request, each checked against its record first. */
+  private async sendFiles(session: Session) {
+    if (session.uploadRefused) return;
+    for (;;) {
+      const batch = SyncReplicaFiles.parse(await this.core({ action: 'files', context: session.context }, session));
+      if (!batch.uploads.length) return;
+      for (const file of batch.uploads) {
+        const bytes = await this.readFile(file.path).catch(() => undefined);
+        let stored = false;
+        if (bytes && bytes.length === file.bytes && createHash('sha256').update(bytes).digest('hex') === file.hash) {
+          try {
+            SyncFileStored.parse(await (await this.call(session, 'PUT', `/v1/files/${file.sourceId}`, bytes)).json());
+            stored = true;
+          } catch (error) {
+            if (error instanceof SyncRefused && error.code === 'file_storage_limit') {
+              session.uploadRefused = 'storage_limit';
+              session.uploadHeldUntil = this.now() + PUSH_HOLD_MS;
+              return;
+            }
+            if (!(error instanceof SyncRefused) || !FILE_SETTLED.has(error.code)) throw error;
+          }
+        }
+        await this.core({ action: 'fileSent', context: session.context, sourceId: file.sourceId, stored }, session);
+      }
+    }
   }
 
   private failed(session: Session, error: unknown) {
@@ -532,27 +591,37 @@ export class SyncTransport {
   }
 
   private async post<Result = void>(session: Session, path: string, body: unknown, schema?: z.ZodType<Result>): Promise<Result> {
+    const text = await (await this.call(session, 'POST', path, JSON.stringify(body))).text();
+    if (!this.alive(session)) throw new Stale();
+    if (text.length > RESPONSE_CHARACTERS) throw new Error('Phản hồi đồng bộ quá lớn.');
+    return schema ? schema.parse(JSON.parse(text)) : undefined as Result;
+  }
+
+  /** One authenticated request. A string body is JSON, bytes are a file; a refusal is thrown with the server's code. */
+  private async call(session: Session, method: 'POST' | 'PUT' | 'GET', path: string, body?: string | Uint8Array): Promise<Response> {
     const token = await this.dependencies.account.getAccessToken();
     if (!this.alive(session)) throw new Stale();
     const response = await this.fetch(new URL(path, this.dependencies.baseUrl), {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-Orglet-Device': session.deviceId,
+        ...(body === undefined ? {} : { 'Content-Type': typeof body === 'string' ? 'application/json' : 'application/octet-stream' }),
+      },
+      ...(body === undefined ? {} : { body: body as BodyInit }),
       redirect: 'error',
       signal: AbortSignal.any([session.controller.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
     });
-    const text = await response.text();
     if (!this.alive(session)) throw new Stale();
-    if (text.length > RESPONSE_CHARACTERS) throw new Error('Phản hồi đồng bộ quá lớn.');
     if (!response.ok) {
       let code = 'sync_unavailable';
       try {
-        code = Refusal.parse(JSON.parse(text)).code;
+        code = Refusal.parse(JSON.parse(await response.text())).code;
       } catch {
         // A proxy or an outage answered, not the sync service.
       }
       throw new SyncRefused(code, response.status);
     }
-    return schema ? schema.parse(JSON.parse(text)) : undefined as Result;
+    return response;
   }
 }

@@ -62,7 +62,15 @@ Sync needs a sync server. CodePawl's is not running yet, so a normal install sho
 - Nothing marked **Only on this computer** leaves it.
 - API keys, harness sign-ins, MCP servers, folder grants, file paths and browser profiles never sync. A chat that arrives from another computer has no permissions and no folder here; a schedule arrives turned off until you check it and turn it on here.
 - An orglet's run belongs to the computer that ran it. Other computers show it and cannot continue it.
-- Attached files sync later; until then a file from another computer shows as being on that computer.
+- A file you attached is a path on the computer where you attached it. Orglet never copied it, so its contents do not sync; other computers show its name and say it is on another computer.
+
+### Files
+
+Only Orglet's own copies of files sync: a version you saved in the [file viewer](viewing-and-editing-files.md), up to 25 MiB, once a message in the chat carries it.
+
+- On the computer that saved it, the version's contents are sent after the message.
+- On another computer the version appears in the chat, and its contents are downloaded only when you open it and choose **Download to this computer**. The download is checked against the file's fingerprint before it is kept.
+- For a file that did not sync, open it and choose **Choose file** to point Orglet at the same file here. It is accepted only when its contents match.
 
 ### What Settings shows
 

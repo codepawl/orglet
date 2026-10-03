@@ -29,6 +29,8 @@ The buttons at the top right:
 
 A file in a chat restored from a backup opens with **Choose file** instead of its content, since a backup holds no file contents. Pick the same file on this computer and it opens again, for you and the orglet. A different file is refused, even with the same name.
 
+A file that came from another computer through [sync](account.md#files) opens the same way, with **Download to this computer** beside **Choose file** when the account has its contents. Only versions saved in this viewer sync their contents.
+
 ## Edit text and code
 
 1. Open a text, code, Markdown, CSV or JSON file.

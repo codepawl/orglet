@@ -21,3 +21,8 @@ export const SyncSnapshotResult = z.object({ cursor: SyncServerCursor, records: 
 export const SyncHint = z.object({ kind: z.literal('changes'), cursor: SyncServerCursor }).strict();
 export const SYNC_BATCH_BYTES = 8_388_608;
 export const SYNC_RECORD_BYTES = 2_097_152;
+// Attached file bytes travel apart from records: PUT or GET /v1/files/<source id>, raw bytes, one file per request.
+export const SyncFileRequest = z.object({ deviceId: SyncDeviceId, sourceId: z.uuid() }).strict();
+export const SyncFileStored = z.object({ status: z.enum(['stored', 'present']) }).strict();
+/** The largest file that syncs: 25 MiB. A deployment can set a lower limit, never a higher one. */
+export const SYNC_FILE_BYTES = 26_214_400;

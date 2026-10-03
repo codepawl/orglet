@@ -8,7 +8,7 @@ import { z } from 'zod';
 // This entry is bundled only by the native test. Production exports neither fixture routes nor inspection hooks.
 class FixtureAccountSync extends BaseAccountSync {
   inspectFixture() {
-    return Object.fromEntries(['account', 'records', 'changes', 'receipts', 'immutable_bodies', 'barriers', 'visibility', 'devices', 'revoked_grants']
+    return Object.fromEntries(['account', 'records', 'changes', 'receipts', 'immutable_bodies', 'barriers', 'visibility', 'devices', 'revoked_grants', 'files', 'file_refs']
       .map(table => [table, this.ctx.storage.sql.exec(`SELECT * FROM ${table} ORDER BY rowid`).toArray()]));
   }
   failFixture(enabled: boolean) {
@@ -50,6 +50,25 @@ export default {
       if (input.operation === 'pull') return Response.json(await stub.pull(identity, input.input as Parameters<BaseAccountSync['pull']>[1]));
       if (input.operation === 'snapshot') return Response.json(await stub.snapshot(identity, input.input as Parameters<BaseAccountSync['snapshot']>[1]));
       if (input.operation === 'release') return Response.json(await stub.releaseDevice(identity, input.input as Parameters<BaseAccountSync['releaseDevice']>[1]));
+      if (input.operation === 'putFile') {
+        const file = input.input as { deviceId: string; sourceId: string; base64: string };
+        const bytes = Uint8Array.from(atob(file.base64), character => character.charCodeAt(0));
+        return Response.json(await stub.putFile(identity, { deviceId: file.deviceId, sourceId: file.sourceId } as Parameters<BaseAccountSync['putFile']>[1], bytes.buffer));
+      }
+      if (input.operation === 'getFile') {
+        const bytes = new Uint8Array(await stub.getFile(identity, input.input as Parameters<BaseAccountSync['getFile']>[1]));
+        let text = '';
+        for (const byte of bytes) text += String.fromCharCode(byte);
+        return Response.json({ base64: btoa(text) });
+      }
+      if (input.operation === 'objects') return Response.json({ keys: (await env.SYNC_FILES.list()).objects.map(object => object.key) });
+      if (input.operation === 'damage') {
+        const key = (input.input as { key: string }).key;
+        const bytes = new Uint8Array(await (await env.SYNC_FILES.get(key))!.arrayBuffer());
+        bytes[bytes.length - 1] ^= 1;
+        await env.SYNC_FILES.put(key, bytes);
+        return new Response(null, { status: 204 });
+      }
       if (input.operation === 'erase') { await stub.erase(identity); return new Response(null, { status: 204 }); }
       if (input.operation === 'inspect') return Response.json(await stub.inspectFixture());
       if (input.operation === 'fail') { await stub.failFixture(Boolean(input.enabled)); return new Response(null, { status: 204 }); }

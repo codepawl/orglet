@@ -1431,6 +1431,7 @@ button.notice-body { cursor:pointer; }
 .source-stage>.preview-state { justify-content:center; padding:48px 0; font-size:14px; }
 .source-stage>.source-restored { flex-direction:column; gap:14px; text-align:center; }
 .source-restored>p { margin:0; max-width:420px; text-wrap:pretty; }
+.source-restored-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
 /* The shape of a source or a diff on its way, at the width the content will take. */
 .source-stage>.source-shape,.source-stage>.diff-shape { width:100%; max-width:720px; padding:24px 0; font-size:14px; }
 .source-shape-media { height:240px; }
