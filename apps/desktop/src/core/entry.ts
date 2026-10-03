@@ -26,6 +26,7 @@ import { decisionsDirectory, filesFrom } from './decisions/manifest';
 import { workerRuntime } from './decisions/worker-runtime';
 import { runFinishedEvent, TURN_COMMANDS, turnSentEvent, turnTaskId } from './analytics-events';
 import { MarketPublishing } from './market/publishing';
+import { MarketModerationJournal } from './market/moderation-journal';
 import type { PublishingRelay } from '../shared/market-desktop';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
@@ -102,6 +103,7 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
   port.postMessage({ type: 'profile', id, input });
 });
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
+const moderationJournal = new MarketModerationJournal(store);
 const publishingCaller = new AsyncLocalStorage<string>();
 const pendingPublishing = new Map<string, (reply: unknown) => void>();
 const publishing = new MarketPublishing(store, {
@@ -235,6 +237,7 @@ port.on('message', async ({ data }) => {
   try {
     const value = command === 'marketPublishing'
       ? await publishingCaller.run(id, () => publishing.execute(args))
+      : command === 'marketModerationJournal' ? moderationJournal.execute(args)
       : command === 'importSources'
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))

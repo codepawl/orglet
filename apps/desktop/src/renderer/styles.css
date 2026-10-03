@@ -3103,4 +3103,12 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-public-prose { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; font-size: 13px; line-height: 1.6; }
 .market-own > summary h2 { margin: 0; }
 .marketplace-pagination { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.market-listing-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex-wrap: wrap; flex-shrink: 0; }
+.market-review-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; width: 100%; }
+.market-review-footer > :first-child { margin-inline-end: auto; }
+.market-review-reports { display: grid; gap: 12px; margin-block: 20px; min-width: 0; }
+.market-review-reports h3 { margin: 0; font-size: 14px; }
+.market-review-report { border-block-start: 1px solid var(--border); padding-block-start: 12px; min-width: 0; }
+.market-review-report > p { margin-block: 0 6px; }
+@media (max-width: 560px) { .market-listing-actions { justify-content: flex-start; width: 100%; } }
 @media (max-width: 560px) { .market-publishing-target { grid-template-columns: minmax(0, 1fr); } }

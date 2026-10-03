@@ -130,7 +130,7 @@ it.each([
   await act(async () => complete({ kind: 'own', view: {
     capability: { status: 'available' }, confirmations: {},
     operations: [{ id: 'c6639dce-1304-4f39-9b7d-a9d3b9f5aa60', name: 'Previous account private listing', operation: 'create', target: null, state: 'unknown' }],
-    summaries: { publishingEnabled: true, listings: [{ listingId: 'private-fixture', kind: 'orglet', publicationEpoch: 0, published: null, latest: { state: 'pending', listing: {
+    summaries: { publishingEnabled: true, listings: [{ listingId: 'private-fixture', kind: 'orglet', publicationEpoch: 0, published: null, hidden: false, hiddenReason: '', latest: { state: 'pending', reason: '', listing: {
       listingId: 'private-fixture', kind: 'orglet', version: 1, name: 'Previous account private listing', summary: 'Fixture', tags: [], language: 'en', license: 'CC-BY-4.0', changelog: '', author: { displayName: 'Fixture' }, sha256: 'a'.repeat(64), reviewDigest: 'b'.repeat(64),
     } } }], allowance: { listingCount: 1, listingLimit: 10, submissionLimit: 5, submissionsInHour: 0 } },
   } }));

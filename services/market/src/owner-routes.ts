@@ -3,8 +3,13 @@ import { ListingId, MarketIdempotencyKey, MARKET_REQUEST_LIMIT } from '../../../
 import { validateMarketSubmission } from '../../../apps/desktop/src/shared/market-publishing';
 import { verifyMarketIdentity } from './auth';
 import { listingBody, ownerListings, ownerSummaries, submitListing, unpublishListing, MarketOperationError } from './listings';
+import { moderationReady } from './moderation';
 
-export type MarketEnvironment = Partial<Omit<Env, 'MARKET_WRITES_ENABLED'>> & { MARKET_WRITES_ENABLED?: string };
+export type MarketEnvironment = Partial<Omit<Env, 'MARKET_WRITES_ENABLED' | 'MARKET_PUBLIC_PUBLISHING_ENABLED' | 'MARKET_REVIEWER_SUBJECTS'>> & {
+  MARKET_WRITES_ENABLED?: string;
+  MARKET_PUBLIC_PUBLISHING_ENABLED?: string;
+  MARKET_REVIEWER_SUBJECTS?: string;
+};
 
 export function privateReply(request: Request, value: unknown, status = 200): Response {
   return new Response(request.method === 'HEAD' ? null : JSON.stringify(value), {
@@ -13,9 +18,9 @@ export function privateReply(request: Request, value: unknown, status = 200): Re
 }
 
 /** Count actual streamed bytes as well as declared length. Never parse an unbounded envelope. */
-export async function readSubmissionBody(request: Request): Promise<string> {
+export async function readSubmissionBody(request: Request, limit = MARKET_REQUEST_LIMIT): Promise<string> {
   const declared = request.headers.get('content-length');
-  if (declared !== null && (!/^[0-9]+$/.test(declared) || Number(declared) > MARKET_REQUEST_LIMIT)) {
+  if (declared !== null && (!/^[0-9]+$/.test(declared) || Number(declared) > limit)) {
     throw new MarketOperationError(413, 'request_size');
   }
   if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(request.headers.get('content-type') ?? '')) {
@@ -30,7 +35,7 @@ export async function readSubmissionBody(request: Request): Promise<string> {
       const chunk = await reader.read();
       if (chunk.done) break;
       length += chunk.value.length;
-      if (length > MARKET_REQUEST_LIMIT) {
+      if (length > limit) {
         await reader.cancel();
         throw new MarketOperationError(413, 'request_size');
       }
@@ -92,7 +97,8 @@ export async function ownerRoute(request: Request, environment: MarketEnvironmen
     return new Response(request.method === 'HEAD' ? null : authentication.response.body, authentication.response);
   }
   const database = environment.MARKET_DB;
-  if (!database || (!read && environment.MARKET_WRITES_ENABLED !== 'true')) {
+  const ready = await moderationReady(database);
+  if (!database || !ready || (!read && environment.MARKET_WRITES_ENABLED !== 'true')) {
     return privateReply(request, { code: 'publishing_unavailable' }, 503);
   }
   try {

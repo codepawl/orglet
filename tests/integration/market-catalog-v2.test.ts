@@ -103,3 +103,14 @@ it.each([400, 500])('keeps v2 GET/HEAD error headers identical for status %s and
     logging.mockRestore();
   }
 });
+
+it('serves curated reads without touching D1 even when account publishing is enabled', async () => {
+  const withSession = vi.fn(() => { throw new Error('Curated reads must not probe D1.'); });
+  const environment = { MARKET_DB: { withSession } as unknown as NonNullable<Parameters<typeof marketWorker.fetch>[1]>['MARKET_DB'], MARKET_PUBLIC_PUBLISHING_ENABLED: 'true', MARKET_REVIEWER_SUBJECTS: '["fixture-reviewer"]' };
+  const key = Object.keys(MARKET_SEED_BODIES)[0];
+  const [listingId, version] = key.split(':');
+  for (const path of ['/v1/catalog', `/v1/listings/${listingId}/versions/${version}`, `/v2/listings/${listingId}`, `/v2/listings/${listingId}/versions/${version}`]) {
+    for (const method of ['GET', 'HEAD']) expect((await marketWorker.fetch(new Request(`${origin}${path}`, {method}), environment)).status).toBe(200);
+  }
+  expect(withSession).not.toHaveBeenCalled();
+});

@@ -19,7 +19,7 @@ export function publishingRelayAllowed(action: PublishingAction | undefined, rel
   return action.action === 'unpublish' && relay.operation === 'unpublish' && relay.target === action.listingId;
 }
 
-async function readBounded(response: Response, limit: number): Promise<unknown> {
+export async function readBounded(response: Response, limit: number): Promise<unknown> {
   if (!response.body) throw new Error('Invalid response');
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
