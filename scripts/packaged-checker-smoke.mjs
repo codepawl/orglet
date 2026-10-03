@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
-import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, openChannels, openSettings } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
@@ -202,7 +202,7 @@ try {
   console.log(JSON.stringify({ taskToolPermissionsUI: 'passed', toolLayout }));
   const backupPath = join(directory, 'workspace.json');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, backupPath);
-  await page.getByRole('button', { name: 'Cài đặt', exact: true }).click(); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
+  await openSettings(page); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
   await page.getByRole('button', { name: 'Lưu bản sao lưu', exact: true }).click();
   await page.getByText('Đã lưu bản sao lưu', { exact: true }).waitFor();
   const backup = JSON.parse(await readFile(backupPath, 'utf8'));
@@ -312,7 +312,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
     dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
   }, backupPath);
-  await page.getByRole('button', { name: 'Cài đặt', exact: true }).click(); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
+  await openSettings(page); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
   await page.getByRole('button', { name: 'Khôi phục từ tệp', exact: true }).click();
   await page.getByText('Đã khôi phục các mục còn thiếu', { exact: true }).waitFor();
   const restored = await page.evaluate(id => window.orglet.call('task', { id }), result.id);

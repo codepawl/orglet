@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { packagedExecutable } from './packaged-executable.mjs';
+import { openSettings } from './smoke-language.mjs';
 
 // Custom OpenAI-compatible connections (COD-242), end to end in the packaged app, against a fake server this script
 // starts on loopback:
@@ -171,7 +172,7 @@ try {
   await page.getByRole('textbox', { name: 'Message' }).waitFor({ timeout: 30_000 });
 
   // Settings → API connections → Custom connections.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await openSettings(page);
   await page.getByRole('tab', { name: 'API connections', exact: true }).click();
 
   // Plain http to a host on the internet is refused, and the form says why before anything is saved.

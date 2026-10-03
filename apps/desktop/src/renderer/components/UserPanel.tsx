@@ -1,41 +1,41 @@
 import type { ReactNode } from 'react';
-import { Settings } from './icons';
+import { ChevronsUpDown } from 'lucide-react';
 import { t } from '../i18n';
 import { Avatar } from './Avatar';
-import { Button } from './ui';
+import { RowMenu, type RowMenuItem } from './RowMenu';
 import { dwellHandlers } from '../prefetch';
 
 /**
  * The person's panel at the bottom left (COD-366), the way Discord's user panel sits under its rail and channel list:
- * who they are, what the app is doing for them in a few words, and Settings. Folded to the rail's width it is the face
- * alone, which opens Settings. The connection dot says whether any connection can run a model, as it did beside
- * Settings in the sidebar footer, and `trailing` carries a ready update.
+ * who they are and what the app is doing for them in a few words. The whole panel is one button that opens the
+ * person's menu (`items`): the account, Settings and the Settings pages people reach for most. Folded to the rail's
+ * width it is the face alone, which opens the same menu. The connection dot says whether any connection can run a
+ * model, and `trailing` carries a ready update.
  */
-export function UserPanel({ name, status, connected, compact, onSettings, onDwell, trailing }: {
+export function UserPanel({ name, status, connected, compact, items, onDwell, trailing }: {
   name: string;
   /** One quiet line under the name: what is running, or what the account is. */
   status: string;
   connected: boolean;
   compact: boolean;
-  onSettings: () => void;
+  /** What the panel opens: the account, Settings and its most used pages. */
+  items: RowMenuItem[];
   onDwell?: (resting: boolean) => void;
   trailing?: ReactNode;
 }) {
-  const face = <Avatar name={name} seed={name} size="sm" />;
-  const dwell = dwellHandlers(onDwell);
+  const face = <span className="user-panel-face"><Avatar name={name} seed={name} size="sm" /><span className={`connection-dot ${connected ? 'connected' : ''}`} aria-hidden="true" /></span>;
+  const label = t('Tài khoản và cài đặt');
   if (compact) {
-    return <div className="user-panel compact">
-      <button type="button" className="user-panel-face" aria-label={t('Cài đặt')} title={t('Cài đặt')} onClick={onSettings} {...dwell}>
-        {face}<span className={`connection-dot ${connected ? 'connected' : ''}`} aria-hidden="true" />
-      </button>
+    return <div className="user-panel compact" {...dwellHandlers(onDwell)}>
+      <RowMenu label={label} className="user-panel-who" align="start" items={items}>{face}</RowMenu>
     </div>;
   }
-  return <div className="user-panel">
-    <div className="user-panel-who">
-      <span className="user-panel-face">{face}<span className={`connection-dot ${connected ? 'connected' : ''}`} aria-hidden="true" /></span>
+  return <div className="user-panel" {...dwellHandlers(onDwell)}>
+    <RowMenu label={label} className="user-panel-who" align="start" items={items}>
+      {face}
       <span className="user-panel-text"><span className="user-panel-name">{name}</span><span className="user-panel-status">{status}</span></span>
-    </div>
+      <ChevronsUpDown className="user-panel-more" size={14} aria-hidden="true" />
+    </RowMenu>
     {trailing}
-    <Button size="icon" aria-label={t('Cài đặt')} title={t('Cài đặt')} onClick={onSettings} {...dwell}><Settings size={18} /></Button>
   </div>;
 }

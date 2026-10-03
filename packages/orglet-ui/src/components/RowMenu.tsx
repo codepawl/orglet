@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './Button';
 import { cn } from '../cn';
@@ -55,11 +55,13 @@ function placePanel(anchor: MenuAnchor, panel: HTMLElement, host: HTMLElement): 
  * right-click anywhere in the closest ancestor matching that selector opens the menu at the pointer; the innermost menu
  * takes the click, so a nested row's menu wins over its parent's.
  */
-export function RowMenu({ label, items, icon: Icon, cancelLabel, className, align = 'end', asksOnOpen = false, contextMenuOf, disabled = false }: {
+export function RowMenu({ label, items, icon: Icon, cancelLabel, className, align = 'end', asksOnOpen = false, contextMenuOf, disabled = false, children }: {
   label: string;
   items: RowMenuItem[];
   /** What the trigger shows. */
   icon: RowMenuIcon;
+  /** A trigger wider than one icon, such as a name with a face: shown in place of the icon, and the button takes its size. */
+  children?: ReactNode;
   /** The way back from a question, such as "No". */
   cancelLabel: string;
   /** Classes for the trigger button. */
@@ -198,8 +200,8 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
   const shortcut = items.find(item => item.shortcut)?.shortcut?.replaceAll('Ctrl', 'Control');
   return <div ref={root} className="org-row-menu" onBlur={event => closeOnFocusLeaving(event.relatedTarget)}
     onKeyDown={event => { if (open) onMenuKey(event); }}>
-    <Button ref={trigger} type="button" size="icon" className={cn(className)} aria-label={label} title={label} aria-haspopup="menu"
-      aria-expanded={open} aria-keyshortcuts={shortcut} disabled={disabled} onClick={toggle}><Icon size={16} /></Button>
+    <Button ref={trigger} type="button" size={children ? undefined : 'icon'} className={cn(className)} aria-label={label} title={label} aria-haspopup="menu"
+      aria-expanded={open} aria-keyshortcuts={shortcut} disabled={disabled} onClick={toggle}>{children ?? <Icon size={16} />}</Button>
     {menu}
   </div>;
 }

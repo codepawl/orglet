@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, Bookmark, BellRing, ChevronRight, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
+import { ArrowLeft, Bookmark, BellRing, ChevronRight, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
-import { Button, Drawer } from './components/ui';
+import { Button } from './components/ui';
+import { PanelPage } from './components/PanelPage';
 import { SkillEditor } from './components/Editors';
 import { WorkerDialog, workerProviderOptions } from './components/WorkerDialog';
 import { chatSettingsTarget, connectModelStep, demoWorkerToConnect } from './chatSettings';
@@ -106,6 +107,7 @@ import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry } from './components/AreaRail';
 import { UserPanel } from './components/UserPanel';
+import { CircleUserRound, Database, Info, LogIn, Plug } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
@@ -286,6 +288,24 @@ export function App() {
     : (panel === 'skill' || panel === 'knowledge') && fromLibrary
       ? <Button size="icon" aria-label={t('Quay lại Thư viện')} onClick={backToLibrary}><ArrowLeft size={18} /></Button>
       : undefined;
+  // Library and Schedules are pages in the main panel, not dialogs: the rail and the sidebar stay in reach beside
+  // them, so going to a chat or an area has to leave the page.
+  const pagePanelOpen = panel === 'library' || panel === 'skill' || panel === 'knowledge' || panel === 'routines';
+  const pagePanelRef = useRef(pagePanelOpen); pagePanelRef.current = pagePanelOpen;
+  /**
+   * Leaves the open page before `go` shows something else in the main panel. A schedule with unsaved changes asks
+   * first; then this answers true, and `go` runs again only if the person agrees to drop them.
+   */
+  const leavingPage = (go: () => void): boolean => {
+    if (!pagePanelRef.current) return false;
+    if (routineDirty.current) {
+      void leaveRoutine(() => { pagePanelRef.current = false; setPanel(null); go(); });
+      return true;
+    }
+    pagePanelRef.current = false;
+    setPanel(null);
+    return false;
+  };
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const openSettings = (tab: SettingsTab = 'general') => { setSettingsTab(tab); setPanel('settings'); };
   // Chat details sit in the shell next to the conversation, not over it.
@@ -607,6 +627,7 @@ export function App() {
   };
   /** Opens a chat: a side thread beside its main chat when there is room, anything else in the main pane. */
   const openTask = (id: string, options: { toMessage?: boolean } = {}) => {
+    if (leavingPage(() => openTask(id, options))) return;
     const mainTaskId = mainChatBeside(id);
     if (mainTaskId) {
       showThreadBeside(id, mainTaskId);
@@ -665,6 +686,7 @@ export function App() {
     setMessageToShow(messageId ? { taskId, messageId } : undefined);
   };
   const openTeam = (id: string) => {
+    if (leavingPage(() => openTeam(id))) return;
     setTeamId(id);
     setFriendsOpen(false);
     setArea('channels');
@@ -675,6 +697,7 @@ export function App() {
     setTimeout(() => composer.current?.focus(), 0);
   };
   const openWorker = (id: string) => {
+    if (leavingPage(() => openWorker(id))) return;
     setWorkerId(id);
     setTeamId('');
     setFriendsOpen(false);
@@ -802,6 +825,11 @@ export function App() {
   const detailsChats = useRef(new Set<string>());
   const [chatViews, setChatViews] = useState<Record<string, ChatViewName>>({});
   const activeChatKeyRef = useRef(activeChatKey);
+  // Anything else that changes what the main panel shows (search, a notification, the Friends row) leaves an open
+  // Library or Schedules page too. A schedule with unsaved changes stays until the person decides.
+  useEffect(() => {
+    if (pagePanelRef.current && !routineDirty.current) setPanel(null);
+  }, [activeChatKey, area, friendsOpen]);
   activeChatKeyRef.current = activeChatKey;
   const chatViewKey = selected ?? activeChatKey;
   const chatViewKeyRef = useRef(chatViewKey);
@@ -2031,7 +2059,8 @@ export function App() {
         }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
       : null;
   const areaEntries: AreaRailEntry[] = [
-    { key: 'home', icon: <span className="orglet-mark small" aria-hidden="true">o</span>, label: t('Bạn bè và tin nhắn'), active: area === 'home', onSelect: () => {
+    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: area === 'home' && !pagePanelOpen, onSelect: function goHome() {
+      if (leavingPage(goHome)) return;
       clearSelection();
       // From another area Home comes back to the DM that was open; on Home itself the button is the way to Friends.
       const openTaskRow = selectedRef.current ? workspaceRef.current?.tasks.find(task => task.id === selectedRef.current) : undefined;
@@ -2039,9 +2068,9 @@ export function App() {
       setFriendsOpen(area === 'home' || !dmOpen);
       setArea('home');
     } },
-    { key: 'channels', icon: <Hash size={20} />, label: t('Kênh'), active: area === 'channels', onSelect: () => setArea('channels') },
-    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity', count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: () => setArea('activity') },
-    { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library', count: knowledgeToReview, onSelect: () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); } },
+    { key: 'channels', icon: <Hash size={20} />, label: t('Kênh'), active: area === 'channels' && !pagePanelOpen, onSelect: function goToChannels() { if (!leavingPage(goToChannels)) setArea('channels'); } },
+    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: function goToActivity() { if (!leavingPage(goToActivity)) setArea('activity'); } },
+    { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
     { key: 'schedules', icon: <CalendarClock size={20} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
   ];
   const createItems = [
@@ -2100,10 +2129,32 @@ export function App() {
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
     <AreaRail entries={areaEntries} createItems={createItems} sidebarOpen={sidebar} onOpenSidebar={openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)} compact={!sidebar || narrowWindow}
-      onSettings={() => openSettings()} onDwell={dwellAbout}
+      items={[
+        { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
+        { label: t('Cài đặt'), icon: SlidersHorizontal, onSelect: () => openSettings() },
+        { label: t('Kết nối API'), icon: Plug, onSelect: () => openSettings('connections') },
+        { label: t('Chi phí & giới hạn'), icon: Wallet, onSelect: () => openSettings('usage') },
+        { label: t('Dữ liệu'), icon: Database, onSelect: () => openSettings('data') },
+        { label: t('Giới thiệu'), icon: Info, onSelect: () => openSettings('about') },
+      ]}
+      onDwell={dwellAbout}
       trailing={sidebar && !narrowWindow && updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
     <main className="main-pane" id="main-content" tabIndex={-1}>
-      {page ?? <>
+      {pagePanelOpen ? <PanelPage pageKey={`${panel}:${libraryTab}:${routineView.editing}`} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
+        icon={panel === 'routines' ? <CalendarClock size={16} aria-hidden="true" /> : <BookOpen size={16} aria-hidden="true" />}
+        description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined}
+        actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack}
+        title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) : panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : t('Thư viện')}>
+      {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
+      
+      {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}
+      {panel === 'library' && <div className="form">
+        <div className="tab-row"><div className="tabs" role="tablist" aria-label={t('Thư viện')} onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return; event.preventDefault(); const next = libraryTab === 'skills' ? 'knowledge' : 'skills'; setLibraryTab(next); document.getElementById(`library-tab-${next}`)?.focus(); }}>{(['skills', 'knowledge'] as const).map(tab => <Button key={tab} id={`library-tab-${tab}`} role="tab" aria-selected={libraryTab === tab} aria-controls="library-panel" tabIndex={libraryTab === tab ? 0 : -1} onClick={() => setLibraryTab(tab)}><span className="tab-label">{tab === 'skills' ? 'Skills' : 'Knowledge'}<span className="tab-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span></span></Button>)}</div>
+          <div className="tab-row-actions">{libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}</div></div>
+        <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
+      </div>}
+      {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />}
+      </PanelPage> : page ?? <>
       <ChatHeader contentKey={`${activeChatKey}:${chatViewList.map(view => `${view.name}${view.count ?? ''}`).join()}`}
         views={chatViewList.length > 1 ? <ChatViewTabs views={chatViewList} current={chatView} onSelect={showChatView} /> : null}
         lead={<>
@@ -2222,17 +2273,6 @@ export function App() {
         onWorkspace: changeNewChatWorkspace,
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
-    <Drawer open={panel !== null && !['settings', 'worker', 'task', 'activity', 'thread'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : t('Chi tiết cuộc trò chuyện')}>
-      {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
-      
-      {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}
-      {panel === 'library' && <div className="form">
-        <div className="tab-row"><div className="tabs" role="tablist" aria-label={t('Thư viện')} onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return; event.preventDefault(); const next = libraryTab === 'skills' ? 'knowledge' : 'skills'; setLibraryTab(next); document.getElementById(`library-tab-${next}`)?.focus(); }}>{(['skills', 'knowledge'] as const).map(tab => <Button key={tab} id={`library-tab-${tab}`} role="tab" aria-selected={libraryTab === tab} aria-controls="library-panel" tabIndex={libraryTab === tab ? 0 : -1} onClick={() => setLibraryTab(tab)}><span className="tab-label">{tab === 'skills' ? 'Skills' : 'Knowledge'}<span className="tab-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span></span></Button>)}</div>
-          <div className="tab-row-actions">{libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}</div></div>
-        <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
-      </div>}
-      {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />}
-    </Drawer>
     {viewingSource && sourceDetail && <SourceDialog key={viewingSource.id} detail={sourceDetail} sourceId={viewingSource.id} lines={viewingSource.lines} onClose={() => setViewingSource(undefined)} refresh={() => void refresh()}
       openSource={id => setViewingSource(current => ({ id, detail: current?.detail }))}
       onAsk={source => {
