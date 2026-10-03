@@ -2,8 +2,8 @@ import type { Artifact, TaskDetail } from '../shared/contracts';
 
 /**
  * The latest answer's unfinished parts, while the chat still waits on them: the answer came with limitations and
- * the turn can be retried. It is a state of the chat, not something the orglet said, so it is shown on the prompt
- * bar beside its Retry and not as part of the answer in the thread. An earlier turn's limitations, and those of a
+ * the turn can be retried. It is a state of the chat, not something the orglet said, so it ends the thread as a
+ * card of its own beside its Retry and not as part of the answer. An earlier turn's limitations, and those of a
  * finished chat, stay with their answer as a record.
  */
 export function unfinishedWork(detail: TaskDetail): { artifact: Artifact; limitations: readonly string[] } | undefined {
