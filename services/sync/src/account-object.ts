@@ -62,7 +62,10 @@ export class AccountSync extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS revoked_grants (grant_id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS files (hash TEXT PRIMARY KEY, bytes INTEGER NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending','stored')),
         expires_at INTEGER NOT NULL, generation TEXT NOT NULL, object_key TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS file_refs (source_id TEXT PRIMARY KEY, hash TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS file_refs (source_id TEXT PRIMARY KEY, hash TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS rate (bucket TEXT PRIMARY KEY, window_start INTEGER NOT NULL, count INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, action TEXT NOT NULL,
+        device TEXT, count INTEGER NOT NULL);`);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
   private sql<T extends Record<string, SqlStorageValue>>(query: string, ...bindings: SqlStorageValue[]): T[] {
@@ -78,6 +81,37 @@ export class AccountSync extends DurableObject<Env> {
     if (this.sql('SELECT grant_id FROM revoked_grants WHERE grant_id=?', identity.grantId).length) fail('device_released', 403);
     return name;
   }
+  /**
+   * One counter per kind of work in a fixed window, kept in this account's own storage so it survives a restart.
+   * These bound a broken or hostile client; a person's own use stays far below them. They are deployment settings,
+   * apart from the storage and device entitlements a token carries.
+   */
+  private limit(bucket: 'requests' | 'files' | 'devices') {
+    const [setting, fallback, windowMs] = bucket === 'requests' ? [this.env.SYNC_RATE_REQUESTS, 600, 600_000]
+      : bucket === 'files' ? [this.env.SYNC_RATE_FILES, 60, 3_600_000] : [this.env.SYNC_RATE_DEVICES, 10, day];
+    const max = setting === undefined ? fallback : Number(setting);
+    if (!Number.isSafeInteger(max) || max < 1 || max > 1_000_000) fail('sync_unavailable', 503);
+    const now = Date.now();
+    const row = this.sql<{ window_start: number; count: number }>('SELECT window_start,count FROM rate WHERE bucket=?', bucket)[0];
+    if (!row || now - row.window_start >= windowMs) {
+      this.sql('INSERT INTO rate VALUES(?,?,1) ON CONFLICT(bucket) DO UPDATE SET window_start=excluded.window_start,count=1', bucket, now);
+      return;
+    }
+    if (row.count >= max) fail('rate_limited', 429);
+    this.sql('UPDATE rate SET count=count+1 WHERE bucket=?', bucket);
+  }
+  /**
+   * What happened to the account, for the person's own account page: an action, when, which device and how many.
+   * Never content, names, paths or tokens. The newest 500 entries of the last 90 days are kept.
+   */
+  private record(action: 'device_registered' | 'device_released' | 'device_revoked' | 'withdrawn' | 'deleted' | 'file_stored' | 'account_deleted',
+    device: string | null, count = 1) {
+    this.sql('INSERT INTO audit(at,action,device,count) VALUES(?,?,?,?)', Date.now(), action, device, count);
+    this.sql('DELETE FROM audit WHERE at<? OR id<=(SELECT MAX(id) FROM audit)-500', Date.now() - 90 * day);
+  }
+  async auditLog(): Promise<{ at: number; action: string; device: string | null; count: number }[]> {
+    return this.sql<{ at: number; action: string; device: string | null; count: number }>('SELECT at,action,device,count FROM audit ORDER BY id DESC LIMIT 500');
+  }
   private cursor(account = this.account()): z.infer<typeof SyncServerCursor> {
     if (!account.wrapped || account.deleted) fail('account_deleted', 410);
     return { generation: (JSON.parse(account.wrapped) as WrappedKey).generation, sequence: account.sequence, privacy: account.privacy };
@@ -90,6 +124,10 @@ export class AccountSync extends DurableObject<Env> {
     const bound = this.sql<{ device_id: string }>('SELECT device_id FROM devices WHERE grant_id=?', identity.grantId)[0];
     if (bound && bound.device_id !== deviceId) fail('device_grant_mismatch', 403);
     if (!previous && this.sql<{ count: number }>('SELECT COUNT(*) AS count FROM devices')[0].count >= identity.limits.devices) fail('device_limit', 403);
+    if (!previous) {
+      this.limit('devices');
+      this.record('device_registered', deviceId);
+    }
     this.sql('INSERT INTO devices VALUES(?,?,?) ON CONFLICT(device_id) DO UPDATE SET expires_at=MAX(expires_at,excluded.expires_at)', deviceId, identity.grantId, identity.expiresAt);
   }
   private fence(identity: SyncIdentity, deviceId: string, before: Account): boolean {
@@ -99,9 +137,13 @@ export class AccountSync extends DurableObject<Env> {
     if (!device || device.grant_id !== identity.grantId) fail('device_released', 403);
     return current.sequence === before.sequence && current.privacy === before.privacy && current.floor === before.floor && current.wrapped === before.wrapped;
   }
-  private async key(identity: SyncIdentity, deviceId: string) {
+  /** `exempt` is for work that only takes data away (a withdrawal, a deletion): a rate limit never holds that back. */
+  private async key(identity: SyncIdentity, deviceId: string, exempt = false) {
     const name = this.name(identity);
-    this.ctx.storage.transactionSync(() => this.register(identity, deviceId));
+    this.ctx.storage.transactionSync(() => {
+      if (!exempt) this.limit('requests');
+      this.register(identity, deviceId);
+    });
     const masters = await masterKeys(this.env.SYNC_MASTER_KEYS);
     this.name(identity);
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -213,8 +255,11 @@ export class AccountSync extends DurableObject<Env> {
     const input = checked.data;
     if (byteLength(input) > SYNC_BATCH_BYTES || input.records.some(record => byteLength(record) > SYNC_RECORD_BYTES)) fail('payload_too_large', 413);
     const prepared = await this.prepare(input.records);
+    const onlyRemoves = input.records.every(record => record.data.kind === 'withdraw' || record.data.kind === 'delete'
+      || record.data.kind === 'entityState' && Boolean(record.data.value?.deletedAt));
     for (let attempt = 0; attempt < 3; attempt++) {
-      const session = await this.key(identity, input.deviceId);
+      // A retry after a concurrent write is the same request, counted once.
+      const session = await this.key(identity, input.deviceId, onlyRemoves || attempt > 0);
       const rows = this.rows();
       const confirmed = await this.open(rows, session.key, session.name, session.generation);
       if (!this.fence(identity, input.deviceId, session.state)) continue;
@@ -269,12 +314,15 @@ export class AccountSync extends DurableObject<Env> {
               data.root.kind, data.root.id, data.epoch, Number(data.localOnly), Number(data.deleted), JSON.stringify(record.clock));
             if (data.deleted) this.sql('INSERT OR IGNORE INTO barriers VALUES(?,?)', data.root.kind, data.root.id);
             this.purge(data.root.kind, data.root.id, data.deleted);
+            this.record(data.deleted ? 'deleted' : 'withdrawn', input.deviceId);
           } else if (record.data.kind === 'delete') {
             this.sql('INSERT OR IGNORE INTO barriers VALUES(?,?)', record.data.entity, record.data.id);
             this.purge(record.data.entity, record.data.id, true);
+            this.record('deleted', input.deviceId);
           } else if (record.data.kind === 'entityState' && record.data.value?.deletedAt) {
             this.sql('INSERT OR IGNORE INTO barriers VALUES(?,?)', record.data.entity, record.data.id);
             this.purge(record.data.entity, record.data.id, true);
+            this.record('deleted', input.deviceId);
           } else privacyOnly = false;
           const sequence = session.state.sequence + index + 1;
           const cipher = JSON.stringify(encrypted[index]);
@@ -403,6 +451,7 @@ export class AccountSync extends DurableObject<Env> {
     const limits = this.fileLimits();
     if (body.byteLength > limits.file) fail('file_too_large', 413);
     const session = await this.key(identity, input.deviceId);
+    this.limit('files');
     const source = await this.sourceFile(session, input.sourceId);
     if (!source) fail('file_unknown', 404);
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', body)), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -442,6 +491,7 @@ export class AccountSync extends DurableObject<Env> {
       }
       this.sql("UPDATE files SET state='stored' WHERE hash=?", hash);
       this.sql('INSERT INTO file_refs VALUES(?,?) ON CONFLICT(source_id) DO UPDATE SET hash=excluded.hash', input.sourceId, hash);
+      this.record('file_stored', input.deviceId);
       return true;
     });
     if (!committed) {
@@ -492,6 +542,7 @@ export class AccountSync extends DurableObject<Env> {
       const row = this.sql<{ grant_id: string }>('SELECT grant_id FROM devices WHERE device_id=?', checked.data.targetDeviceId)[0];
       if (row) this.sql('INSERT OR IGNORE INTO revoked_grants VALUES(?)', row.grant_id);
       this.sql('DELETE FROM devices WHERE device_id=?', checked.data.targetDeviceId);
+      if (row) this.record('device_released', checked.data.targetDeviceId);
     });
     for (const socket of this.ctx.getWebSockets()) {
       const session = socket.deserializeAttachment() as Session;
@@ -575,7 +626,9 @@ export class AccountSync extends DurableObject<Env> {
     if (!/^[A-Za-z0-9_-]{1,200}$/.test(grantId)) fail('invalid_request', 400);
     this.ctx.storage.transactionSync(() => {
       this.sql('INSERT OR IGNORE INTO revoked_grants VALUES(?)', grantId);
+      const device = this.sql<{ device_id: string }>('SELECT device_id FROM devices WHERE grant_id=?', grantId)[0];
       this.sql('DELETE FROM devices WHERE grant_id=?', grantId);
+      if (device) this.record('device_revoked', device.device_id);
     });
     for (const socket of this.ctx.getWebSockets()) {
       if ((socket.deserializeAttachment() as Session).grantId === grantId) socket.close(1008, 'Device released');
@@ -590,8 +643,11 @@ export class AccountSync extends DurableObject<Env> {
     // Preserve the deletion marker: an unexpired Accounts token must never recreate this key.
     const objects = this.sql<{ object_key: string }>('SELECT object_key FROM files').map(row => row.object_key);
     this.ctx.storage.transactionSync(() => {
-      for (const table of ['records', 'changes', 'receipts', 'immutable_bodies', 'barriers', 'visibility', 'devices', 'revoked_grants', 'files', 'file_refs']) this.sql(`DELETE FROM ${table}`);
+      const alreadyDeleted = Boolean(this.account().deleted);
+      for (const table of ['records', 'changes', 'receipts', 'immutable_bodies', 'barriers', 'visibility', 'devices', 'revoked_grants', 'files', 'file_refs', 'rate', 'audit']) this.sql(`DELETE FROM ${table}`);
       this.sql('UPDATE account SET deleted=1,wrapped=NULL,sequence=sequence+1,privacy=privacy+1 WHERE id=1');
+      // The one entry a deleted account keeps: that it was deleted, and when.
+      if (!alreadyDeleted) this.record('account_deleted', null);
     });
     // An upload still on its way sees the deleted account when it commits and removes its own object.
     for (const key of objects) await this.env.SYNC_FILES.delete(key);

@@ -27,7 +27,9 @@ The original workspace contained only `plans/orglet_mvp_plan_vi.md` and its codi
 
 ## Validation completed locally
 
-- GH-484 (conflict review): Settings → Account lists orglets, skills, crews and notes that two computers changed while apart, both versions side by side; the choice is written as a new revision and syncs like an edit. Still not built for GH-484: server rate limits and audit, and the identity service's calls into `SyncLifecycle`.
+- GH-484 (server limits): per-account rate limits for requests, file uploads and new devices, durable in the account object, never applied to withdrawals or deletions; and a content-free audit log of device and deletion events, read only by the identity service's binding.
+
+- GH-484 (conflict review): Settings → Account lists orglets, skills, crews and notes that two computers changed while apart, both versions side by side; the choice is written as a new revision and syncs like an edit. The identity service's calls into `SyncLifecycle` live in its own repository.
 
 - GH-479: installed marketplace copies and their per-copy origins sync like any other record; nothing is installed or fetched on the receiving computer. New origins carry an `authoring-v1` baseline that is the same on every computer and ignores per-computer choices; an older origin reports unknown instead of edited when it cannot say. Two-store tests cover arrival, concurrent adds, an update applied on one computer, deletion with stale replay, local-only copies and the legacy baseline.
 

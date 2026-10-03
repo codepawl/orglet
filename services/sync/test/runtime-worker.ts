@@ -71,6 +71,7 @@ export default {
       }
       // The identity service's two calls, made here straight on the object the entrypoint would reach.
       if (input.operation === 'lifecycleDelete') { await stub.eraseAccount(); return new Response(null, { status: 204 }); }
+      if (input.operation === 'audit') return Response.json(await stub.auditLog());
       if (input.operation === 'lifecycleRevoke') { await stub.revokeGrant((input.input as { grantId: string }).grantId); return new Response(null, { status: 204 }); }
       if (input.operation === 'erase') { await stub.erase(identity); return new Response(null, { status: 204 }); }
       if (input.operation === 'inspect') return Response.json(await stub.inspectFixture());
