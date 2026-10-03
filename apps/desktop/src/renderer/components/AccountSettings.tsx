@@ -12,6 +12,7 @@ import { t } from '../i18n';
 import { toast } from './toast';
 import { Avatar } from './Avatar';
 import { Button, Drawer } from './ui';
+import { StatusMark, type StatusMarkState } from './StatusMark';
 import { confirmAction } from './confirm';
 import { InfoTip } from './InfoTip';
 import { Switch } from './Switch';
@@ -102,6 +103,20 @@ function AnalyticsRow({ busy }: { busy: boolean }) {
   </Row>;
 }
 
+/** Something that failed, led by the error mark so it is seen before it is read. */
+function ErrorLine({ text }: { text: string }) {
+  return <p role="alert" className="error outcome-line"><StatusMark variant="filled" tone="error" label={t('Không thành công')} decorative />{text}</p>;
+}
+
+/** The mark beside "Sync": a tick once synced, a turning ring while it works, an exclamation when it cannot go on. */
+function syncMark(status: SyncStatus): StatusMarkState & { label: string } {
+  if (status.state === 'synced') return { variant: 'filled', tone: 'success', label: t('Đã đồng bộ xong') };
+  if (status.state === 'syncing') return { variant: 'busy', tone: 'working', label: t('Đang đồng bộ…') };
+  if (status.state === 'offline') return { variant: 'dashed', tone: 'error', label: t('Không kết nối được') };
+  if (status.state === 'paused') return { variant: 'filled', tone: 'error', label: t('Đồng bộ đang dừng') };
+  return { variant: 'empty', tone: 'muted', label: t('Đồng bộ đang tắt') };
+}
+
 /** Why sync stopped, in the person's words. Local editing goes on in every case. */
 function pauseText(reason: SyncPauseReason | undefined): string {
   if (reason === 'update_required') return t('Tài khoản có dữ liệu từ bản Orglet mới hơn. Cập nhật app để gửi tiếp thay đổi từ máy này.');
@@ -165,7 +180,7 @@ function JoinChoice({ onClose }: { onClose: () => void }) {
         <div><dt>{t('Trong tài khoản')}</dt><dd>{counts(preview.account)}</dd></div>
       </dl> : !error && <SkeletonGroup label={t('Đang đọc tài khoản…')}><Skeleton width="58%" /><Skeleton width="52%" delay={0.04} /></SkeletonGroup>}
       {preview && preview.localOnly > 0 && <p className="sync-join-note">{t('{0} mục "Chỉ trên máy này" không được gửi đi khi gộp.', [preview.localOnly])}</p>}
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <ErrorLine text={error} />}
       <div className="sync-join-actions">
         <Button variant="outline" disabled={working} onClick={onClose}>{t('Hủy')}</Button>
         <Button variant="outline" disabled={!preview || working} onClick={() => void join('replace')}>{t('Thay bằng tài khoản')}</Button>
@@ -210,7 +225,7 @@ function ConflictsRow({ busy }: { busy: boolean }) {
     </Row>
     {open && <Drawer open onClose={() => setOpen(false)} title={t('Sửa trên hai máy')} description={t('Chọn bản muốn dùng. Bản còn lại vẫn nằm trong lịch sử.')}>
       <div className="sync-conflicts">
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <ErrorLine text={error} />}
         {conflicts.map(conflict => <section key={`${conflict.entity}:${conflict.id}`} className="marketplace-comparison" aria-label={conflict.name}>
           <h3>{conflict.name} <span className="muted">· {conflictKind(conflict)}</span></h3>
           <div className="marketplace-comparison-columns">
@@ -238,7 +253,7 @@ function SyncRow({ busy }: { busy: boolean }) {
     {status.skipped ? <>{' '}{t('{0} thay đổi quá lớn nên chỉ ở trên máy này.', [status.skipped])}</> : null}
   </span>;
   return <>
-    <Row title={t('Đồng bộ')} description={description}>
+    <Row title={<span className="sync-title"><StatusMark {...syncMark(status)} decorative />{t('Đồng bộ')}</span>} description={description}>
       {status.state === 'link_required' ? !joining && <Button variant="primary" disabled={busy} onClick={() => setJoining(true)}><RefreshCw size={14} />{t('Bật đồng bộ')}</Button>
         : canRetry ? <Button variant="outline" disabled={busy} onClick={start}><RefreshCw size={14} />{t('Thử lại')}</Button> : null}
     </Row>
