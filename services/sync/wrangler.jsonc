@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orglet-sync",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-03",
+  "workers_dev": false,
+  "vars": {
+    "SYNC_ENABLED": "false",
+    "SYNC_ISSUER": "https://accounts.codepawl.com/api/auth",
+    "SYNC_AUDIENCE": "https://sync.orglet.codepawl.com",
+    "SYNC_MAX_ACCOUNT_BYTES": "33554432",
+    "SYNC_MAX_RECORDS": "10000"
+  },
+  "durable_objects": { "bindings": [{ "name": "SYNC_ACCOUNTS", "class_name": "AccountSync" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountSync"] }],
+  "observability": { "enabled": true, "redact_query_string": true,
+    "logs": { "enabled": true, "head_sampling_rate": 0.1, "invocation_logs": false },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 } }
+}

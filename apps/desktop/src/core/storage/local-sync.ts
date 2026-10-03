@@ -3,11 +3,11 @@ import { z } from 'zod';
 import type { Store } from './database';
 import { SyncRevisions } from './sync-revisions';
 import { ChatTurns } from './chat-turns';
-import { SyncRecordingContext, compareSyncClock, SetSyncLocalOnly } from '../../shared/sync';
+import { SyncRecordingContext, compareSyncClock, SetSyncLocalOnly, syncUuidFromDigest, syncScopeNamespace } from '../../shared/sync';
 import { SyncRecord, SyncData, SyncChat, SyncTurn, SyncRoot, SyncScope, SyncSource, SyncRoutine, SyncRun, SyncArtifact, syncRecordKey } from '../../shared/sync-records';
 import { SyncRevision } from '../../shared/sync-revisions';
 import { canonicalSyncData as canonicalJson } from '../../shared/sync-json';
-import { Id, RunInput, Routine, type Task, type Worker, type Skill, type Team, type Run, type Artifact, type Activity } from '../../shared/contracts';
+import { Id, RunInput, Routine, TeamInput, type Task, type Worker, type Skill, type Team, type Run, type Artifact, type Activity } from '../../shared/contracts';
 import { MarketOrigins } from '../../shared/market';
 import { Channel, EmptyChannel } from '../../shared/channels';
 import { MessageReaction } from '../../shared/message-interactions';
@@ -17,23 +17,20 @@ import { CustomConnection } from '../../shared/custom-connections';
 import { TeamMessage } from '../../shared/team-messages';
 import { turnMessageId } from '../../shared/message-interactions';
 
-const LocalChat = SyncChat.extend({ sideOf: SideOf.optional() });
+const LocalChat = SyncChat.omit({ participants: true }).extend({ sideOf: SideOf.optional() });
 const PermanentDeletion = z.object({ kind: z.enum(['worker', 'task', 'knowledge', 'team', 'skill', 'source', 'routine']), id: Id }).strict();
 const TaskInput = LocalChat.extend({ brief: z.string(), sourceIds: z.array(Id), inputRevision: z.number().int().nonnegative().optional(),
+  teamSnapshot: TeamInput.extend({ id: Id, revision: z.number().int().positive(), memberIds: z.array(Id) }).strip().optional(),
   currentInput: RunInput.optional(), currentTurnId: Id.optional(), currentTurnCreatedAt: z.iso.datetime().optional(), title: z.string().optional(), archivedAt: z.string().optional(),
   channel: Channel.optional(), messageReactions: z.array(MessageReaction).optional(), quotes: z.array(ChatQuote).optional() });
 const Visibility = z.object({ kind: z.enum(['worker', 'task']), entity_id: Id, epoch: Id,
   local_only: z.union([z.literal(0), z.literal(1)]), deleted: z.union([z.literal(0), z.literal(1)]), clock_json: z.string() }).strict();
 
 function stableUuid(namespace: string): string {
-  const bytes = createHash('sha256').update(namespace).digest().subarray(0, 16);
-  bytes[6] = (bytes[6] & 15) | 128;
-  bytes[8] = (bytes[8] & 63) | 128;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return syncUuidFromDigest(createHash('sha256').update(namespace).digest());
 }
 function initialEpoch(root: SyncRoot): string {
-  return stableUuid(`orglet-sync-scope:${root.kind}:${root.id}`);
+  return stableUuid(syncScopeNamespace(root));
 }
 
 /** Local replication only. Account transport, token ownership and orchestration are intentionally outside this store. */
@@ -170,6 +167,7 @@ export class LocalSync {
       if (revision.entity === 'team') roots = [...revision.value.memberIds, revision.value.synthesizerId].map(id => ({ kind: 'worker', id }));
       if (revision.entity === 'knowledge') {
         if (revision.value.scope.type === 'worker') roots = this.roots('worker', revision.value.scope.id);
+        if (revision.value.scope.type === 'team') roots = this.teamWorkers(revision.value.scope.id).map(id => ({ kind: 'worker', id }));
         if (revision.value.provenance.kind === 'run' || revision.value.provenance.kind === 'turn') {
           roots.push(...this.roots('task', revision.value.provenance.taskId));
         }
@@ -187,7 +185,8 @@ export class LocalSync {
         }
       }
     } else if (data.kind === 'chat') roots = [...this.chatRoots({ ...data.value,
-      sideOf: data.value.sideOf && { taskId: data.value.sideOf.taskId, throughRevision: 0 } }), ...this.roots('task', data.value.id)];
+      sideOf: data.value.sideOf && { taskId: data.value.sideOf.taskId, throughRevision: 0 } }),
+      ...(data.value.participants ?? []).map(id => ({ kind: 'worker' as const, id })), ...this.roots('task', data.value.id)];
     else if (data.kind === 'turn') roots = this.roots('task', data.value.taskId);
     else if (data.kind === 'chatField' || data.kind === 'reaction' || data.kind === 'quote') {
       roots = this.roots('task', data.taskId);
@@ -197,6 +196,9 @@ export class LocalSync {
       }
     }
     else if (data.kind === 'entityState' && data.entity === 'worker') roots = this.roots('worker', data.id);
+    else if (data.kind === 'entityState' && data.entity === 'team' && !data.value?.deletedAt) {
+      roots = this.teamWorkers(data.id).map(id => ({ kind: 'worker', id }));
+    }
     else if (data.kind === 'origin') roots = Object.values(data.value.workerIds).map(id => ({ kind: 'worker', id }));
     else if (data.kind === 'channel') roots = data.value.members.flatMap(member => member.kind === 'orglet' ? [member.id] : this.teamWorkers(member.id))
       .map(id => ({ kind: 'worker', id }));
@@ -275,10 +277,16 @@ export class LocalSync {
     if (this.permanentlyBlocked(data)) return;
     const key = syncRecordKey(data);
     const previous = this.store.db.prepare('SELECT data FROM sync_records WHERE record_key=?').get(key);
-    if (this.backfilling && previous) return;
-    if (previous && canonicalJson(SyncRecord.parse(JSON.parse(String(previous.data))).data) === canonicalJson(data)) return;
+    const prior = previous && SyncRecord.parse(JSON.parse(String(previous.data)));
+    const teamScope = data.kind === 'revision' && data.revision.entity === 'knowledge' && data.revision.value.scope.type === 'team'
+      || data.kind === 'entityState' && data.entity === 'team';
+    const scopes = this.scopes(data);
+    const scopeUpgrade = prior && teamScope && canonicalJson(prior.scopes) !== canonicalJson(scopes);
+    const rosterUpgrade = prior?.data.kind === 'chat' && data.kind === 'chat' && prior.data.value.participants === undefined;
+    if (this.backfilling && prior && !scopeUpgrade && !rosterUpgrade) return;
+    if (prior && canonicalJson(prior.data) === canonicalJson(data) && !scopeUpgrade) return;
     const clock = this.revisions.clock.tick();
-    const record = SyncRecord.parse({ schemaVersion: 1, id: randomUUID(), origin: clock.deviceId, clock, scopes: this.scopes(data), data });
+    const record = SyncRecord.parse({ schemaVersion: 1, id: randomUUID(), origin: clock.deviceId, clock, scopes, data });
     this.store.db.prepare('INSERT INTO sync_records VALUES(?,?) ON CONFLICT(record_key) DO UPDATE SET data=excluded.data').run(key, JSON.stringify(record));
     this.enqueue(record);
   }
@@ -286,6 +294,10 @@ export class LocalSync {
   captureRevision(entity: SyncRevision['entity'], value: unknown, alias: number) {
     if (this.importing) return;
     this.record({ kind: 'revision', revision: this.revisions.capture(entity, value, alias) });
+    if (entity === 'team' && !this.backfilling) {
+      this.refreshScopes();
+      this.purgeBlockedOutbox();
+    }
   }
   prepareWrite<T extends { id: string }>(table: string, value: T): T {
     if (table === 'runs' && !this.importing) {
@@ -379,7 +391,7 @@ export class LocalSync {
       const anchor = task.sideOf && this.turns.list(task.sideOf.taskId).find(turn => turn.localRevision === task.sideOf!.throughRevision);
       // Missing legacy context stays local instead of attaching the thread to another device's numeric alias.
       if (!task.sideOf || anchor) this.record({ kind: 'chat', value: SyncChat.parse({ ...chat,
-        assignees: task.assignees === 'all' ? this.participantIds(task) : task.assignees,
+        assignees: task.assignees === 'all' ? this.participantIds(task) : task.assignees, participants: this.participantIds(task),
         sideOf: task.sideOf && anchor ? { taskId: task.sideOf.taskId, throughTurnId: anchor.id } : undefined }) });
     }
     if (!this.backfilling && before
@@ -675,13 +687,16 @@ export class LocalSync {
     else if (data.kind === 'chat') {
       const sideOf = data.value.sideOf ? { taskId: data.value.sideOf.taskId,
         throughRevision: this.turns.list(data.value.sideOf.taskId).find(turn => turn.id === data.value.sideOf!.throughTurnId)!.localRevision } : undefined;
-      const chat = { ...data.value, sideOf };
+      const { participants: _participants, ...publicChat } = data.value;
+      const chat = { ...publicChat, sideOf };
       if (!this.exists('tasks', chat.id)) this.store.put('tasks', { ...chat, brief: '', sourceIds: [], status: 'completed', budgetMicros: 0, consent: false, accepted: false } satisfies Task);
       else {
         const task = this.store.get<Task>('tasks', data.value.id);
         if (task.createdAt !== data.value.createdAt) throw new Error('Định danh chat đã có thời điểm tạo khác.');
         const { teamId: _teamId, assignees: _assignees, teamSnapshot: _snapshot, ...kept } = task;
-        this.store.update('tasks', { ...kept, ...chat, consent: false, providerScopes: [], toolCapabilities: [] });
+        this.store.update('tasks', { ...kept, ...chat,
+          ...(task.teamId === chat.teamId && task.teamSnapshot ? { teamSnapshot: task.teamSnapshot } : {}),
+          consent: false, providerScopes: [], toolCapabilities: [] });
       }
     } else if (data.kind === 'turn') {
       for (const id of data.value.input.sourceIds) {

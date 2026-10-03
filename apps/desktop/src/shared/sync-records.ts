@@ -19,7 +19,7 @@ export type SyncTurn = z.infer<typeof SyncTurn>;
 // Exact frozen rosters/scopes may exceed picker limits; receive bounds wire records by bytes.
 export const SyncChat = z.object({ id: Id, workerId: Id, teamId: Id.optional(), createdAt: z.iso.datetime(),
   sideOf: SideOf.omit({ throughRevision: true }).extend({ throughTurnId: Id }).strict().optional(),
-  assignees: z.union([z.literal('all'), z.array(Id)]).optional() }).strict();
+  assignees: z.union([z.literal('all'), z.array(Id)]).optional(), participants: z.array(Id).optional() }).strict();
 export const SyncChatField = z.discriminatedUnion('field', [
   z.object({ field: z.literal('title'), value: z.string().max(200).nullable() }).strict(),
   z.object({ field: z.literal('archivedAt'), value: z.iso.datetime().nullable() }).strict(),
