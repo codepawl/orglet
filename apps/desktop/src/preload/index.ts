@@ -6,6 +6,7 @@ import type { OpenChatTarget } from '../shared/cli';
 import type { OverlayBridge, OverlayView } from '../shared/desktop-overlay';
 import type { DecisionModelState } from '../shared/decisions';
 import type { AccountState } from '../shared/account';
+import type { SyncStatus } from '../shared/sync-status';
 
 async function invoke<T>(channel: string, args?: unknown): Promise<T> {
   const reply: Reply<T> = await ipcRenderer.invoke(channel, args);
@@ -47,6 +48,13 @@ const bridge: Bridge = {
     const listener = (_event: Electron.IpcRendererEvent, state: AccountState) => callback(state);
     ipcRenderer.on('orglet:account', listener);
     return () => ipcRenderer.removeListener('orglet:account', listener);
+  },
+  syncState: () => invoke('orglet:sync-state'),
+  syncStart: () => invoke('orglet:sync-start'),
+  onSync: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, status: SyncStatus) => callback(status);
+    ipcRenderer.on('orglet:sync', listener);
+    return () => ipcRenderer.removeListener('orglet:sync', listener);
   },
   analyticsState: () => invoke('orglet:analytics-state'),
   setAnalytics: enabled => invoke('orglet:analytics-set', enabled),

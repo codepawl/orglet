@@ -28,6 +28,7 @@ import { runFinishedEvent, TURN_COMMANDS, turnSentEvent, turnTaskId } from './an
 import { MarketPublishing } from './market/publishing';
 import { MarketModerationJournal } from './market/moderation-journal';
 import type { PublishingRelay } from '../shared/market-desktop';
+import { SyncReplica } from './storage/sync-replica';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -104,6 +105,8 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
 });
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
 const moderationJournal = new MarketModerationJournal(store);
+// Only main sends `syncReplica`, while it talks to the sync server; the window's command list does not have it.
+const syncReplica = new SyncReplica(store, () => port.postMessage({ type: 'changed' }));
 const publishingCaller = new AsyncLocalStorage<string>();
 const pendingPublishing = new Map<string, (reply: unknown) => void>();
 const publishing = new MarketPublishing(store, {
@@ -238,6 +241,7 @@ port.on('message', async ({ data }) => {
     const value = command === 'marketPublishing'
       ? await publishingCaller.run(id, () => publishing.execute(args))
       : command === 'marketModerationJournal' ? moderationJournal.execute(args)
+      : command === 'syncReplica' ? syncReplica.execute(args)
       : command === 'importSources'
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))

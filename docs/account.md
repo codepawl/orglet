@@ -1,6 +1,6 @@
 # CodePawl account
 
-Orglet works fully without an account. You can also sign in to a free CodePawl account. Syncing your orglets, channels and chats between computers comes next; **today nothing syncs**. Signing in changes nothing about where your chats and files live: they stay on this computer. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
+Orglet works fully without an account. You can also sign in to a free CodePawl account. Syncing your orglets, channels and chats between computers is built into the app, but CodePawl's sync server is not running yet, so **today nothing syncs**; see [Sync](#sync). Signing in changes nothing about where your chats and files live: they stay on this computer. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
 
 Part of the [user guide](user-guide.md). The design behind it is [account-sync-design.md](account-sync-design.md).
 
@@ -36,14 +36,45 @@ The link back to the app uses the `com.codepawl.orglet:` scheme. Setup registers
 
 - **Not signed in**: **Sign in**, what an account gives you (above), and one sentence on what signing in sends, with the privacy and terms links and an **i** that lists what is sent.
 - **Signing in**: while your browser is open, the orglet beside **Signing in** thinks, and **Cancel** stops the sign-in.
-- **Signed in**: your email, shown only in part (such as `an•••@example.com`) so a screenshot does not carry it, and your name, with **Sign out**, your **Plan** (Free), **Sync**, which says it is coming next and that no chat or file leaves this computer yet, and the **Usage statistics and error reports** switch.
+- **Signed in**: your email, shown only in part (such as `an•••@example.com`) so a screenshot does not carry it, and your name, with **Sign out**, your **Plan** (Free), **Sync** (what it is doing, see [Sync](#sync)), and the **Usage statistics and error reports** switch.
 - **Your sign-in ended**: the service no longer accepts this computer's sign-in, for example after 30 days without opening Orglet or after you signed out everywhere. Choose **Sign in again**. Nothing on this computer is lost.
 
 ## Only on this computer
 
 Open an orglet's **Edit** window or a chat's **Chat settings** and turn on **Only on this computer** to keep it out of future sync. An orglet passes this choice to its chats and memories. A chat passes it to its side threads. An inherited switch explains where to change the choice and cannot be turned off in the child chat.
 
-The choice is saved on this computer and included in a workspace backup. It does not delete your local messages or files. Signing in still does not send chats between computers; the connection to the sync service comes next.
+The choice is saved on this computer and included in a workspace backup. It does not delete your local messages or files. Turning it on for something that already synced takes it off the account; your other computers keep their copy, marked the same way.
+
+## Sync
+
+Sync keeps your orglets, channels, chats, memories, schedules and a few settings the same on every computer signed in to the same account. Each computer keeps its own full copy and works offline; changes catch up when it is online again.
+
+Sync needs a sync server. CodePawl's is not running yet, so a normal install shows **Sync** as coming next and sends nothing. Someone running their own server starts Orglet with `ORGLET_SYNC_URL` set to its address (see the [technical guide](technical-guide.md#account-sync)).
+
+### Turning it on
+
+- **A new computer** with nothing of yours on it yet joins the account by itself when you sign in. The Researcher it started with makes way for your own orglets.
+- **A computer that already has chats or orglets** asks first: **Settings → Account → Sync** says sync is off here, and **Turn on sync** merges what is on this computer with your account. Nothing leaves the computer before you choose it.
+- After **Erase all data**, sync stays off on that computer until you turn it on again, so the account's copy does not come straight back.
+
+### What it does not do
+
+- Nothing marked **Only on this computer** leaves it.
+- API keys, harness sign-ins, MCP servers, folder grants, file paths and browser profiles never sync. A chat that arrives from another computer has no permissions and no folder here; a schedule arrives turned off until you check it and turn it on here.
+- An orglet's run belongs to the computer that ran it. Other computers show it and cannot continue it.
+- Attached files sync later; until then a file from another computer shows as being on that computer.
+
+### What Settings shows
+
+**Settings → Account → Sync** says one of:
+
+- **Syncing** or **Synced**.
+- **Could not reach the sync server**: Orglet tries again by itself, waiting longer each time (up to 5 minutes), and right away when you bring the window forward. **Retry** tries now.
+- **Your account is full**: new changes stay on this computer and keep arriving from others. **Retry** tries to send them again.
+- **Your account has data from a newer Orglet**: update the app; changes from here wait until then.
+- **This computer was removed from your account**, or **Your account already syncs as many computers as it allows**, or **This account was deleted on the server**. Nothing on this computer is lost in any of these.
+
+Changes are sent a few seconds after you make them, and while you keep changing things, at most once a minute. Changes from other computers arrive as soon as the server says there are some, or when you bring the window forward. Nothing syncs while Orglet is closed.
 
 ## What is stored where
 
@@ -51,7 +82,8 @@ The choice is saved on this computer and included in a workspace backup. It does
 - **The short-lived access token** stays in the app's memory and is gone when Orglet closes. The app's window never sees either token; it only learns whether you are signed in, your email, name and plan.
 - Sync and marketplace use separate access tokens. New browser sign-ins authorize both resources; an older saved sign-in still works for sync and usage statistics, but needs another browser sign-in before marketplace account access. The desktop can prepare a [public submission](marketplace-design.md#desktop-publishing); production sends remain unavailable until moderation is enabled.
 - **Also in the data folder**: `analytics.json`, a random install id made on this computer (never a hardware id), whether the analytics switch is on and the version that last ran, and `analytics-queue.json`, the statistics waiting to be sent. Neither is in the database or a backup.
-- **On CodePawl's servers**: your account (email, name, a hashed password or the Google or GitHub sign-in you used), and the usage statistics and error reports below while analytics is on. No chats, orglets or files, since nothing syncs yet.
+- **Sync's own bookkeeping** (which account this computer joined and how far it has read it) is in the database but never in a backup.
+- **On CodePawl's servers**: your account (email, name, a hashed password or the Google or GitHub sign-in you used), and the usage statistics and error reports below while analytics is on. No chats, orglets or files, since CodePawl's sync server is not running yet.
 
 ## Usage statistics and error reports
 

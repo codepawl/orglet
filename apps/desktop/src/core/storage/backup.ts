@@ -7,6 +7,7 @@ import { TeamMessage, TeamReassignment } from '../../shared/team-messages';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store, now, id, seedSkill, seedWorker } from './database';
+import { removeSeed } from './factory-seed';
 import { DELETED_CHAT_TEXT, deletedRunSnapshot } from './deleted-chat';
 import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, RunContextUse, TeamPlan, PlanAssignment } from '../../shared/contracts';
 import { DatasetProfile, DataFormat } from '../../shared/profiles';
@@ -616,10 +617,7 @@ function replaceUntouchedSeed(store: Store, current: Payload, incoming: Payload)
   const incomingState = incoming.entityState?.workers ?? {};
   const bringsLiveOrglet = incoming.workers.some(item => !incomingState[item.id]?.deletedAt && !incomingState[item.id]?.archivedAt);
   if (!bringsLiveOrglet || incoming.workers.some(item => item.id === worker.id)) return current;
-  store.sync.discardFactorySeed(worker.id, skill.id);
-  store.db.prepare('DELETE FROM workers WHERE id=?').run(worker.id);
-  store.db.prepare('DELETE FROM skills WHERE id=?').run(skill.id);
-  store.db.prepare('DELETE FROM revisions WHERE entity_id IN (?,?)').run(worker.id, skill.id);
+  removeSeed(store, { workerId: worker.id, skillId: skill.id });
   return { ...current, workers: [], skills: [], revisions: [], syncIdentities: current.syncIdentities?.filter(identity => identity.entityId !== worker.id && identity.entityId !== skill.id) };
 }
 

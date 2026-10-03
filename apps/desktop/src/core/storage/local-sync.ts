@@ -7,6 +7,7 @@ import { SyncRecordingContext, compareSyncClock, SetSyncLocalOnly, syncUuidFromD
 import { SyncRecord, SyncData, SyncChat, SyncTurn, SyncRoot, SyncScope, SyncSource, SyncRoutine, SyncRun, SyncArtifact, syncRecordKey } from '../../shared/sync-records';
 import { SyncRevision } from '../../shared/sync-revisions';
 import { canonicalSyncData as canonicalJson } from '../../shared/sync-json';
+import { SYNC_RECORD_BYTES } from '../../shared/sync-protocol';
 import { Id, RunInput, Routine, TeamInput, type Task, type Worker, type Skill, type Team, type Run, type Artifact, type Activity } from '../../shared/contracts';
 import { MarketOrigins } from '../../shared/market';
 import { Channel, EmptyChannel } from '../../shared/channels';
@@ -634,8 +635,41 @@ export class LocalSync {
     this.assertCompatible(context);
     z.number().int().min(1).max(100).parse(limit);
     this.store.transaction(() => this.purgeBlockedOutbox());
-    return this.store.db.prepare('SELECT sequence,data FROM sync_outbox WHERE account_key=? ORDER BY sequence LIMIT ?').all(checked.accountKey, limit)
+    // The server checks each record against what it already holds plus the rest of the batch, so whatever a record
+    // depends on goes first: an orglet before its skill, a chat before its turns, a run before its answer.
+    return this.store.db.prepare(`SELECT sequence,data FROM sync_outbox WHERE account_key=? AND length(CAST(data AS BLOB))<=?
+      ORDER BY CASE json_extract(data,'$.data.kind')
+        WHEN 'withdraw' THEN 0 WHEN 'delete' THEN 0
+        WHEN 'revision' THEN CASE json_extract(data,'$.data.revision.entity') WHEN 'worker' THEN 1 WHEN 'skill' THEN 2 WHEN 'team' THEN 3 ELSE 9 END
+        WHEN 'entityState' THEN 4 WHEN 'chat' THEN 5 WHEN 'turn' THEN 6 WHEN 'source' THEN 7
+        WHEN 'run' THEN 10 WHEN 'artifact' THEN 11 WHEN 'event' THEN 11 ELSE 8 END,
+        CASE json_extract(data,'$.data.kind') WHEN 'chat' THEN json_extract(data,'$.data.value.createdAt') ELSE '' END,
+        sequence LIMIT ?`).all(checked.accountKey, SYNC_RECORD_BYTES, limit)
       .map(row => ({ sequence: Number(row.sequence), record: SyncRecord.parse(JSON.parse(String(row.data))) }));
+  }
+  /** Queued changes the server would refuse for their size; they stay on this computer. */
+  oversized(context: SyncRecordingContext): number {
+    const checked = this.assertContext(context);
+    return Number(this.store.db.prepare('SELECT COUNT(*) AS count FROM sync_outbox WHERE account_key=? AND length(CAST(data AS BLOB))>?')
+      .get(checked.accountKey, SYNC_RECORD_BYTES)!.count);
+  }
+  /** Whether a newer Orglet left data here that this build cannot read; sending waits for an update. */
+  hasFutureRecords(context: SyncRecordingContext): boolean {
+    const checked = this.assertContext(context);
+    return Boolean(this.store.db.prepare("SELECT record_id FROM sync_inbox WHERE account_key=? AND status='future' LIMIT 1").get(checked.accountKey));
+  }
+  /** After the account was downloaded: queue every public record whose current envelope the server does not hold. */
+  requeue(context: SyncRecordingContext, confirmed: ReadonlyMap<string, string>) {
+    this.assertContext(context);
+    this.store.transaction(() => {
+      for (const row of this.store.db.prepare('SELECT record_key,data FROM sync_records').all()) {
+        const record = SyncRecord.parse(JSON.parse(String(row.data)));
+        if (confirmed.get(String(row.record_key)) !== record.id) this.enqueue(record);
+      }
+    });
+  }
+  deviceId(): string {
+    return this.revisions.clock.read().deviceId;
   }
   acknowledge(context: SyncRecordingContext, ids: readonly string[]) {
     const checked = this.assertContext(context);

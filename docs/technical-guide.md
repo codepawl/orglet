@@ -352,6 +352,21 @@ The optional account (COD-337, user page [account.md](account.md), design [accou
 
 A development run (`pnpm dev`) and a ZIP copy do not register the scheme, so the browser cannot hand the sign-in back to them; a Setup install registers it on every start.
 
+### Account sync
+
+Desktop replication (GH-482, design [account-sync-design.md](account-sync-design.md), server [services/sync](../services/sync/README.md)) runs while Orglet is open and an account is signed in.
+
+- **Server.** `ORGLET_SYNC_URL` names it; only https, or http on this computer. There is no default, because CodePawl's sync service is not deployed, so a build without the variable never syncs and the row says sync is coming. The access token is the account's sync resource token.
+- **Who does what.** `main/sync-transport.ts` holds the token, every request, the hint socket and the timers; it imports nothing from Electron. `core/storage/sync-replica.ts` holds SQLite: which accounts this computer joined (`sync_accounts`), the cursor, and which record envelopes the server is known to hold (`sync_confirmed`). Main asks the core through one internal `syncReplica` command that the window's command list does not have. Every action names the account context (account key and sign-in generation); main checks it before each request and before the core applies a reply, and the core refuses a context that no longer matches, so a reply that lands after a sign-out or an account switch changes nothing.
+- **Joining.** A computer whose only data is its untouched Researcher joins by itself and drops that seed when the account brings orglets. Any other data waits for **Turn on sync** (`syncStart`). Erasing all data keeps a held row for each joined account, so the account does not return without that click.
+- **A download** stages every snapshot page in main, then hands the records to the core in dependency order, saves the cursor and queues every local record whose current envelope the server lacks. A `cursor_reset` (history pruned, or a privacy withdrawal moved the epoch) downloads again.
+- **Sending.** The outbox goes out in batches of at most 100 records and under the 8 MiB request limit, ordered so a record's dependencies go first (an orglet before its skill, a chat before its turns, a run before its answer). A batch keeps its record ids until acknowledged, so a lost reply is resent and the server answers it from its receipts. A refused upload (account full, a record the server will not take) holds sending for 10 minutes while downloads continue. A row over the 2 MiB record limit is never sent and is counted on screen. Local changes are sent 5 seconds after the first one and at most once a minute while they keep coming.
+- **Receiving.** A pull runs only after a hint on the socket, a reconnect or the window coming forward. The socket carries cursor hints only; it is replaced when the server closes it as its token ends, and after 16 minutes at the latest. A lost connection retries after 5 seconds, doubling to 5 minutes.
+- **A new sign-in on the same computer** has a new grant while the server still ties the device to the old one; the transport releases its own device slot once and registers again.
+- **The window** gets `SyncStatus` only (state, a pause reason, the last sync time and a count of oversized changes), parsed strictly, through `syncState`, `syncStart` and the `orglet:sync` event.
+
+`tests/integration/sync-transport.test.ts` runs two and three real SQLite workspaces against the service's account object in a local Worker runtime; the Windows CI job installs the service first and sets `ORGLET_REQUIRE_SYNC_SERVICE=1` so a missing install fails there instead of skipping. Those tests use the service's synthetic-identity test entry, so they do not cover JWT checks (the service's own tests do) or a deployed server.
+
 ### Usage analytics
 
 A signed-in account sends usage statistics and error reports (COD-344; what is sent, in the user's words: [account.md → Usage statistics and error reports](account.md#usage-statistics-and-error-reports)). The pure part is `shared/analytics.ts` (the whitelist, the scrubber, the queue limits, the request split and the gating); the sending is `main/analytics.ts`, because only main holds the access token. Nothing imports Electron, so `tests/integration/analytics.test.ts` drives it with a fake fetch.

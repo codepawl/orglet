@@ -544,6 +544,12 @@ export interface Bridge {
   accountSignOut(): Promise<import('./account').AccountState>;
   /** Every change of the account's state, pushed by the main process. */
   onAccount(callback: (state: import('./account').AccountState) => void): () => void;
+  /** Account sync on this computer (COD-329): its state in plain words, never a token, id or address. */
+  syncState(): Promise<import('./sync-status').SyncStatus>;
+  /** The person lets this computer join the account, or asks for another try now. */
+  syncStart(): Promise<import('./sync-status').SyncStatus>;
+  /** Every change of sync's state, pushed by the main process. */
+  onSync(callback: (status: import('./sync-status').SyncStatus) => void): () => void;
   /** Whether usage analytics is on for the signed-in account (COD-344); nothing is recorded without an account. */
   analyticsState(): Promise<import('./analytics').AnalyticsState>;
   /** The switch in Settings → Account; turning it off empties the queue. */

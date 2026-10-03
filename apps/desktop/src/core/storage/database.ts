@@ -279,6 +279,15 @@ export class Store {
           ledger_id TEXT PRIMARY KEY REFERENCES ledger(id), cache_read_tokens INTEGER NOT NULL CHECK(cache_read_tokens>=0),
           cache_write_tokens INTEGER NOT NULL CHECK(cache_write_tokens>=0)
         );`);
+      // Which accounts this computer has joined and how far it has read each one (COD-329 phase 3). Local only: a
+      // backup carries neither. New tables and no schema version, so an older build can still open the workspace.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS sync_accounts (
+          account_key TEXT PRIMARY KEY, linked INTEGER NOT NULL CHECK(linked IN (0,1)), cursor_json TEXT,
+          held INTEGER NOT NULL CHECK(held IN (0,1))
+        );
+        CREATE TABLE IF NOT EXISTS sync_confirmed (
+          account_key TEXT NOT NULL, record_key TEXT NOT NULL, record_id TEXT NOT NULL, PRIMARY KEY(account_key,record_key)
+        );`);
       // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
       // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),
       // so that forced default is dropped once; any other limit someone picked is kept. A settings row, not a schema

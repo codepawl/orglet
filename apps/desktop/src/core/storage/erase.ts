@@ -17,7 +17,7 @@ export const ERASE_TABLES = [
   'workspace_read_evidence', 'process_evidence', 'workspace_processes', 'workspace_copies',
   'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'browser_actions', 'browser_screenshots', 'desktop_actions', 'desktop_screenshots', 'runs',
   'profiles', 'preflights', 'workspace_grants', 'chat_messages', 'chat_search', 'tasks',
-  'sync_inbox', 'sync_outbox', 'sync_records', 'sync_visibility', 'sync_deletions', 'chat_turns', 'sync_revision_ids', 'sync_clock',
+  'sync_confirmed', 'sync_accounts', 'sync_inbox', 'sync_outbox', 'sync_records', 'sync_visibility', 'sync_deletions', 'chat_turns', 'sync_revision_ids', 'sync_clock',
   'knowledge_search', 'knowledge_revisions', 'knowledge', 'revisions',
   'routine_arrivals', 'routine_folders', 'routines', 'workers', 'teams', 'skills', 'sources', 'settings', 'mcp_servers',
 ] as const;
@@ -89,9 +89,15 @@ export function eraseEverything(store: Store): { entities: number } {
   const entities = count(store, 'workers') + count(store, 'teams') + count(store, 'skills') + count(store, 'routines');
   const connections = readCustomConnections(store);
   const mcpServers = store.db.prepare('SELECT id,data FROM mcp_servers ORDER BY rowid').all();
+  // An account this computer had joined still holds its own copy. Erasing here must not bring that copy straight
+  // back, so each such account is kept as held: sync stays off until the person turns it on again.
+  const accountKeys = store.db.prepare('SELECT account_key FROM sync_accounts').all().map(row => String(row.account_key));
   store.sync.resetDevice();
   store.transaction(() => {
     for (const table of ERASE_TABLES) store.db.prepare(`DELETE FROM ${table}`).run();
+    for (const accountKey of accountKeys) {
+      store.db.prepare('INSERT INTO sync_accounts(account_key,linked,cursor_json,held) VALUES(?,0,NULL,1)').run(accountKey);
+    }
     if (connections.length) writeCustomConnections(store, connections);
     for (const server of mcpServers) store.db.prepare('INSERT INTO mcp_servers(id,data) VALUES(?,?)').run(server.id, server.data);
   });
