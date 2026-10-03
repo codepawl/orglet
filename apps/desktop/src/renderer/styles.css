@@ -1443,6 +1443,9 @@ button.notice-body { cursor:pointer; }
 .sync-join-counts dt { color:var(--muted); font-size:13px; }
 .sync-join-counts dd { margin:0; font-size:14px; font-variant-numeric:tabular-nums; }
 .sync-join-note { margin:0; color:var(--muted); font-size:13px; text-wrap:pretty; }
+.sync-title { display:inline-flex; align-items:center; gap:8px; }
+.outcome-line { display:flex; align-items:flex-start; gap:8px; margin:0; text-wrap:pretty; }
+.outcome-line > .org-status-mark { flex-shrink:0; margin-top:2px; }
 /* Two versions of one thing, side by side, each with its own choice under it (GH-484). */
 .sync-conflicts { display:flex; flex-direction:column; gap:28px; }
 .sync-conflict-version { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
