@@ -27,9 +27,13 @@ The original workspace contained only `plans/orglet_mvp_plan_vi.md` and its codi
 
 ## Validation completed locally
 
+- GH-484 (server limits): per-account rate limits for requests, file uploads and new devices, durable in the account object, never applied to withdrawals or deletions; and a content-free audit log of device and deletion events, read only by the identity service's binding.
+
+- GH-484 (conflict review): Settings → Account lists orglets, skills, crews and notes that two computers changed while apart, both versions side by side; the choice is written as a new revision and syncs like an edit. The identity service's calls into `SyncLifecycle` live in its own repository.
+
 - GH-479: installed marketplace copies and their per-copy origins sync like any other record; nothing is installed or fetched on the receiving computer. New origins carry an `authoring-v1` baseline that is the same on every computer and ignores per-computer choices; an older origin reports unknown instead of edited when it cannot say. Two-store tests cover arrival, concurrent adds, an update applied on one computer, deletion with stale replay, local-only copies and the legacy baseline.
 
-- GH-484 (first part): a computer that holds data sees both sides' counts and chooses to merge or to replace; replace saves a database copy, then erases this computer only. Erasing keeps the device id so the same sign-in can join again. The sync service has a route-less `SyncLifecycle` entrypoint (`deleteAccount`, `revokeDevice`) for the identity service. Not built: the conflict review screen, server rate limits and audit, and the identity service's calls.
+- GH-484 (first part): a computer that holds data sees both sides' counts and chooses to merge or to replace; replace saves a database copy, then erases this computer only. Erasing keeps the device id so the same sign-in can join again. The sync service has a route-less `SyncLifecycle` entrypoint (`deleteAccount`, `revokeDevice`) for the identity service. Not built here: server rate limits and audit, and the identity service's calls.
 
 - GH-483: saved file versions sync their bytes. The server stores each file once per account and hash in R2, encrypted under the account key and named only through its public source record, with reserve/write/commit, pending-byte limits and a sweep of unnamed objects. The desktop sends a version after a message carries it and downloads on the person's click, checking size and SHA-256 on both sides. Path-only attachments do not sync. No bucket is provisioned.
 

@@ -1439,6 +1439,10 @@ button.notice-body { cursor:pointer; }
 .sync-join-counts dt { color:var(--muted); font-size:13px; }
 .sync-join-counts dd { margin:0; font-size:14px; font-variant-numeric:tabular-nums; }
 .sync-join-note { margin:0; color:var(--muted); font-size:13px; text-wrap:pretty; }
+/* Two versions of one thing, side by side, each with its own choice under it (GH-484). */
+.sync-conflicts { display:flex; flex-direction:column; gap:28px; }
+.sync-conflict-version { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
+.sync-conflict-version pre { align-self:stretch; max-height:260px; overflow:auto; }
 .sync-join-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; }
 /* The shape of a source or a diff on its way, at the width the content will take. */
 .source-stage>.source-shape,.source-stage>.diff-shape { width:100%; max-width:720px; padding:24px 0; font-size:14px; }

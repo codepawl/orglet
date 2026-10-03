@@ -49,6 +49,7 @@ import { UsageReadings } from './harness/usage-readings';
 import { HarnessSignIns, localSignInRuntime, type SignInEnd } from './harness/sign-in';
 import { executeHarness, type HarnessRequest, type HarnessResult } from './harness/exec';
 import { checkpointBeforeReplace, eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
+import { SyncConflicts } from './storage/sync-conflicts';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../shared/erase';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
@@ -398,6 +399,12 @@ export class CoreService {
       }
       case 'setSyncLocalOnly': {
         this.store.sync.setLocalOnly(commands.setSyncLocalOnly.parse(args));
+        this.notify();
+        return;
+      }
+      case 'syncConflicts': commands.syncConflicts.parse(args); return new SyncConflicts(this.store).list();
+      case 'resolveSyncConflict': {
+        new SyncConflicts(this.store).resolve(commands.resolveSyncConflict.parse(args));
         this.notify();
         return;
       }

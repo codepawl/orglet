@@ -22,6 +22,10 @@ export class SyncLifecycle extends WorkerEntrypoint<Env> {
     await this.account(subject).eraseAccount();
     return { deleted: true };
   }
+  /** What happened to the account lately (devices joined or removed, things withdrawn or deleted), with no content. */
+  async auditLog(subject: string): Promise<{ at: number; action: string; device: string | null; count: number }[]> {
+    return this.account(subject).auditLog();
+  }
   /** One sign-in was revoked at the identity service: that device stops syncing at once, not when its token ends. */
   async revokeDevice(subject: string, grantId: string): Promise<{ revoked: true }> {
     await this.account(subject).revokeGrant(grantId);

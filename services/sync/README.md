@@ -41,12 +41,19 @@ The identity service reaches account lifecycle through the `SyncLifecycle` entry
 
 - `deleteAccount(subject)` erases live payloads, files and the wrapped key and keeps the account-deleted marker, so a still-valid access token cannot recreate the account.
 - `revokeDevice(subject, grantId)` refuses that sign-in from then on, frees its device slot and closes its sockets, without waiting for its token to end.
+- `auditLog(subject)` returns the account's log described under Rate limits and the audit log.
 
 Binding the identity Worker to this entrypoint and calling it from its deletion and device pages is that service's change.
 
 Deleting the live wrapped key does **not** prove irreversible erasure of historical backups or SQLite point-in-time recovery. Historical wrappers may remain recoverable while their master version exists. Stronger historical crypto-erasure requires a separately designed key lifecycle; this service promises live-service deletion only. Cloudflare documents [SQLite storage and recovery](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
 
 Incremental history lasts at most 90 days, or the lower signed history entitlement. Live winning records are not age-pruned here: deleting referenced chat history requires a separate reference-safe policy. Signed storage limits include current/log ciphertext and estimates for retained fence/device metadata. Deployment also imposes `SYNC_MAX_ACCOUNT_BYTES` (32 MiB default) and `SYNC_MAX_RECORDS` (10,000 default), because scope validation currently materializes the bounded account projection. These operational ceilings can be lower than a signed entitlement. Storage rejection never deletes local data. Privacy/deletion operations may reduce existing payloads even after a signed quota shrinks; permanent fence metadata is not evicted to make room.
+
+### Rate limits and the audit log
+
+Each account object counts its own work in fixed windows, in its own storage, so the counts survive a restart: `SYNC_RATE_REQUESTS` requests per 10 minutes (600 by default), `SYNC_RATE_FILES` file uploads per hour (60) and `SYNC_RATE_DEVICES` newly registered devices per day (10). Over a limit the answer is `429 rate_limited` and nothing is stored; the desktop treats it like a lost connection and tries again later. A push that only withdraws or deletes is never limited, and neither are the identity service's lifecycle calls. These numbers bound a broken or hostile client and sit far above a person's own use (a measured day is under 100 requests; downloading a full account of 10,000 records is about 200). They are deployment settings, apart from the storage and device entitlements a token carries.
+
+The account object also keeps a short log of what happened to the account: a device registered, released or revoked, something withdrawn or deleted, a file stored, the account deleted. An entry is an action, a time, a device id where one applies and a count. It never holds content, names, paths, account ids or tokens. The newest 500 entries of the last 90 days are kept, deleting the account leaves only the entry that it was deleted, and the log is read only through `SyncLifecycle.auditLog(subject)`, which has no route.
 
 ## Local checks
 

@@ -140,7 +140,7 @@ Transport is TLS everywhere. Cloudflare also encrypts Durable Object and R2 stor
 | Data | Rule |
 |---|---|
 | Turns, runs, events, reports | Append-only with unique ids, so they never conflict. A run belongs to the computer that ran it; other devices see it read-only. |
-| Orglets, crews, skills, notes (already revisioned) | Revisions are kept from both sides. The live row is the highest revision, ties broken by HLC. The losing edit stays in history, visible in the revision list. |
+| Orglets, crews, skills, notes (already revisioned) | Revisions are kept from both sides. The live row is the highest revision, ties broken by HLC. The losing edit stays in history. Settings → Account lists such pairs side by side, and choosing one writes it as a new revision. |
 | A chat's own fields (title, archived, reactions, quotes) | Merge per field, not per row, so a reaction added on one computer and a rename on another both survive. Reactions become their own rows. |
 | Settings | Per key, the higher HLC wins. |
 

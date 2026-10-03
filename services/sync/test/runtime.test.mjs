@@ -20,7 +20,9 @@ async function start(secret = activeSecret, enabled = 'true', files = {}) {
     durableObjects: { SYNC_ACCOUNTS: { className: 'AccountSync', useSQLite: true } }, r2Buckets: ['SYNC_FILES'],
     bindings: { SYNC_ENABLED: enabled, SYNC_ISSUER: 'https://issuer.test/api/auth', SYNC_AUDIENCE: 'https://sync.test',
       SYNC_MASTER_KEYS: secret, SYNC_MAX_ACCOUNT_BYTES: '33554432', SYNC_MAX_RECORDS: '10000',
-      SYNC_MAX_FILE_BYTES: files.file ?? '26214400', SYNC_MAX_FILE_STORAGE_BYTES: files.total ?? '268435456' } }] });
+      SYNC_MAX_FILE_BYTES: files.file ?? '26214400', SYNC_MAX_FILE_STORAGE_BYTES: files.total ?? '268435456',
+      ...(files.requests ? { SYNC_RATE_REQUESTS: files.requests } : {}), ...(files.fileRate ? { SYNC_RATE_FILES: files.fileRate } : {}),
+      ...(files.devices ? { SYNC_RATE_DEVICES: files.devices } : {}) } }] });
   options.resourcePersistencePath = join(persistence, 'v3'); options.telemetry = { enabled: false };
   runtime = new Miniflare(options);
 }
@@ -341,4 +343,42 @@ test('the identity service can revoke one sign-in and delete an account, both sa
   await refused(await putFile(owner, file.sourceId, file.bytes), 410);
   // Neither call has a public route.
   for (const path of ['/v1/lifecycle', '/v1/delete', '/v1/devices/revoke']) assert.equal((await runtime.dispatchFetch(`https://sync.test${path}`, { method: 'POST' })).status, 404);
+});
+test('rate limits bound requests, files and new devices per account, and never hold back a withdrawal', async () => {
+  await runtime.dispose(); await start(activeSecret, 'true', { requests: '4', fileRate: '1', devices: '2' });
+  try {
+    const owner = 'rate'; const first = attachment(owner, 'first file'); const second = attachment(owner, 'second file');
+    await push(owner, [...first.records, ...second.records]);
+    assert.equal((await putFile(owner, first.sourceId, first.bytes)).status, 200);
+    await refused(await putFile(owner, second.sourceId, second.bytes), 429, 'rate_limited');
+    assert.equal((await call(owner, 'snapshot', { deviceId: device(owner), limit: 100 })).status, 200);
+    await refused(await call(owner, 'snapshot', { deviceId: device(owner), limit: 100 }), 429, 'rate_limited');
+    await refused(await call(owner, 'push', { deviceId: device(owner), records: [setting(owner, 'vi')] }), 429, 'rate_limited');
+    // Taking something back is never rate limited.
+    const withdrawn = record(owner, { kind: 'withdraw', root: { kind: 'task', id: first.taskId }, epoch: crypto.randomUUID(), localOnly: true, deleted: false }, [], 5000);
+    assert.equal((await call(owner, 'push', { deviceId: device(owner), records: [withdrawn] })).status, 200);
+    // Another account has its own counters.
+    assert.equal((await call('rate-other', 'snapshot', { deviceId: device('rate-other'), limit: 100 })).status, 200);
+    // Counters survive a restart: this account is still over its limit.
+    await runtime.dispose(); await start(activeSecret, 'true', { requests: '4', fileRate: '1', devices: '2' });
+    await refused(await call(owner, 'snapshot', { deviceId: device(owner), limit: 100 }), 429, 'rate_limited');
+    const many = 'rate-devices';
+    for (const grant of ['one', 'two']) assert.equal((await call(many, 'snapshot', { deviceId: crypto.randomUUID(), limit: 100 }, { grant })).status, 200);
+    await refused(await call(many, 'snapshot', { deviceId: crypto.randomUUID(), limit: 100 }, { grant: 'three' }), 429, 'rate_limited');
+  } finally { await runtime.dispose(); await start(); }
+});
+test('the audit log says what happened to an account and never what was in it', async () => {
+  const owner = 'audited'; const file = attachment(owner, 'PRIVATE_AUDIT_SENTINEL');
+  await push(owner, file.records); assert.equal((await putFile(owner, file.sourceId, file.bytes)).status, 200);
+  const other = crypto.randomUUID(); await ok(owner, 'snapshot', { deviceId: other, limit: 100 }, { grant: 'audited-second' });
+  await call(owner, 'lifecycleRevoke', { grantId: 'audited-second' });
+  await push(owner, [record(owner, { kind: 'withdraw', root: { kind: 'task', id: file.taskId }, epoch: crypto.randomUUID(), localOnly: false, deleted: true }, [], 5000)]);
+  const log = await ok(owner, 'audit');
+  assert.deepEqual(log.map(entry => entry.action).reverse(), ['device_registered', 'file_stored', 'device_registered', 'device_revoked', 'deleted']);
+  assert.equal(log.find(entry => entry.action === 'device_revoked').device, other);
+  for (const entry of log) assert.deepEqual(Object.keys(entry).sort(), ['action', 'at', 'count', 'device']);
+  const text = JSON.stringify(log);
+  for (const secret of ['PRIVATE_AUDIT_SENTINEL', 'notes.txt', file.sourceId, file.taskId, 'audited-second', owner]) assert.equal(text.includes(secret), false, secret);
+  assert.equal((await call(owner, 'lifecycleDelete')).status, 204);
+  assert.deepEqual((await ok(owner, 'audit')).map(entry => entry.action), ['account_deleted']);
 });
