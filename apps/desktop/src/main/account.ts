@@ -194,6 +194,13 @@ export class AccountService {
     return { accountKey, generation: this.generation, status };
   }
 
+  /** Main/core binding only: the account local changes are recorded for, or nothing while no sign-in is usable. */
+  syncContext(): { accountKey: string; generation: number } | undefined {
+    const { accountKey, generation } = this.publishingContext();
+    if (!accountKey || !this.saved?.refreshToken || this.persistenceError) return undefined;
+    return { accountKey, generation };
+  }
+
   /**
    * Opens the browser at the sign-in page and waits for it to come back through `handleCallback`. Resolves with the
    * signed-in state, or with the earlier state when the person cancels; rejects with a Vietnamese reason otherwise.

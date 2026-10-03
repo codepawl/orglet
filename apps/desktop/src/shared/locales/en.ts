@@ -3994,6 +3994,22 @@ export const en: Dictionary = {
   'Thống kê sử dụng và báo lỗi': 'Usage statistics and error reports',
   'Thống kê sử dụng': 'Usage statistics',
   'Sắp có. Hiện chưa có chat hay tệp nào rời khỏi máy này.': 'Coming next. No chat or file leaves this computer yet.',
+  // COD-329 phase 3: the sync row in Settings → Account.
+  'Đồng bộ đang tắt trên máy này. Bật lên thì dữ liệu ở đây được gộp với tài khoản.': 'Sync is off on this computer. Turning it on merges what is here with your account.',
+  'Bật đồng bộ': 'Turn on sync',
+  'Đang đồng bộ…': 'Syncing…',
+  'Đã đồng bộ. Mục đặt "Chỉ trên máy này" không rời khỏi máy.': 'Synced. Anything marked "Only on this computer" stays here.',
+  'Không kết nối được máy chủ đồng bộ. Orglet sẽ tự thử lại.': 'Could not reach the sync server. Orglet will try again.',
+  'Tài khoản có dữ liệu từ bản Orglet mới hơn. Cập nhật app để gửi tiếp thay đổi từ máy này.': 'Your account has data from a newer Orglet. Update the app to keep sending changes from this computer.',
+  'Tài khoản đã đầy. Thay đổi mới vẫn lưu trên máy này và chưa được gửi đi.': 'Your account is full. New changes are saved on this computer and not sent yet.',
+  'Tài khoản đã đủ số máy được đồng bộ.': 'Your account already syncs as many computers as it allows.',
+  'Máy này đã được gỡ khỏi tài khoản. Đăng xuất rồi đăng nhập lại để đồng bộ tiếp.': 'This computer was removed from your account. Sign out and sign in again to sync.',
+  'Tài khoản này đã bị xóa trên máy chủ. Dữ liệu trên máy này vẫn còn.': 'This account was deleted on the server. Everything on this computer is still here.',
+  'Máy chủ đồng bộ đang tắt. Orglet sẽ tự thử lại.': 'The sync server is turned off. Orglet will try again.',
+  'Máy chủ từ chối một số thay đổi. Chúng vẫn nằm trên máy này.': 'The server refused some changes. They are still on this computer.',
+  '{0} thay đổi quá lớn nên chỉ ở trên máy này.': '{0} changes are too large to sync and stay on this computer.',
+  'Không gửi được cập nhật trạng thái đồng bộ.': 'Could not send the sync status update.',
+  'Phản hồi đồng bộ quá lớn.': 'The sync reply is too large.',
   // COD-340: the sidebar folded to a rail of faces.
   'Tạo mới': 'Create',
   // COD-355: the Open list in the sidebar and on the rail, and the views of the chat on screen.

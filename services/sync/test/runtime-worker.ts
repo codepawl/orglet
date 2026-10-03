@@ -32,7 +32,7 @@ export default {
     if (new URL(request.url).pathname === '/fixture-connect') {
       const owner = request.headers.get('x-fixture-owner')!;
       const device = request.headers.get('x-fixture-device')!;
-      const identity: SyncIdentity = { subject: owner, grantId: `fixture-${owner}`,
+      const identity: SyncIdentity = { subject: owner, grantId: request.headers.get('x-fixture-grant') ?? `fixture-${owner}`,
         expiresAt: Number(request.headers.get('x-fixture-expiry')), limits: { storageBytes: 5_000_000, devices: 3, historyDays: 90 } };
       return await env.SYNC_ACCOUNTS.getByName(JSON.stringify([env.SYNC_ISSUER, owner])).fetch('https://sync.internal/connect', { headers: {
         Upgrade: 'websocket', 'x-orglet-identity': JSON.stringify(identity), 'x-orglet-device': device,

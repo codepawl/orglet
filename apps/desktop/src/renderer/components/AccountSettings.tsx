@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ChartNoAxesColumn, ExternalLink, LogIn, LogOut, RefreshCw, Smartphone, UserRound, X } from 'lucide-react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import type { AccountState } from '../../shared/account';
+import type { SyncPauseReason, SyncStatus } from '../../shared/sync-status';
+import { useSync } from '../account';
 import type { AnalyticsState } from '../../shared/analytics';
 import type { AboutLink } from '../../shared/updates';
 import { orglet } from '../api';
@@ -98,6 +100,42 @@ function AnalyticsRow({ busy }: { busy: boolean }) {
   </Row>;
 }
 
+/** Why sync stopped, in the person's words. Local editing goes on in every case. */
+function pauseText(reason: SyncPauseReason | undefined): string {
+  if (reason === 'update_required') return t('Tài khoản có dữ liệu từ bản Orglet mới hơn. Cập nhật app để gửi tiếp thay đổi từ máy này.');
+  if (reason === 'storage_limit') return t('Tài khoản đã đầy. Thay đổi mới vẫn lưu trên máy này và chưa được gửi đi.');
+  if (reason === 'device_limit') return t('Tài khoản đã đủ số máy được đồng bộ.');
+  if (reason === 'device_released') return t('Máy này đã được gỡ khỏi tài khoản. Đăng xuất rồi đăng nhập lại để đồng bộ tiếp.');
+  if (reason === 'account_deleted') return t('Tài khoản này đã bị xóa trên máy chủ. Dữ liệu trên máy này vẫn còn.');
+  if (reason === 'server_unavailable') return t('Máy chủ đồng bộ đang tắt. Orglet sẽ tự thử lại.');
+  return t('Máy chủ từ chối một số thay đổi. Chúng vẫn nằm trên máy này.');
+}
+
+function syncText(status: SyncStatus): string {
+  if (status.state === 'link_required') return t('Đồng bộ đang tắt trên máy này. Bật lên thì dữ liệu ở đây được gộp với tài khoản.');
+  if (status.state === 'syncing') return t('Đang đồng bộ…');
+  if (status.state === 'synced') return t('Đã đồng bộ. Mục đặt "Chỉ trên máy này" không rời khỏi máy.');
+  if (status.state === 'offline') return t('Không kết nối được máy chủ đồng bộ. Orglet sẽ tự thử lại.');
+  if (status.state === 'paused') return pauseText(status.reason);
+  return t('Sắp có. Hiện chưa có chat hay tệp nào rời khỏi máy này.');
+}
+
+/** Sync in one row: what it is doing, and one button when the person can do something about it. */
+function SyncRow({ busy }: { busy: boolean }) {
+  const status = useSync() ?? { state: 'off' as const };
+  const start = () => void orglet.syncStart().catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Đồng bộ')));
+  const stuck = status.reason === 'update_required' || status.reason === 'device_released' || status.reason === 'account_deleted';
+  const canRetry = status.state === 'offline' || (status.state === 'paused' && !stuck);
+  const description = <span role="status">
+    {syncText(status)}
+    {status.skipped ? <>{' '}{t('{0} thay đổi quá lớn nên chỉ ở trên máy này.', [status.skipped])}</> : null}
+  </span>;
+  return <Row title={t('Đồng bộ')} description={description}>
+    {status.state === 'link_required' ? <Button variant="primary" disabled={busy} onClick={start}><RefreshCw size={14} />{t('Bật đồng bộ')}</Button>
+      : canRetry ? <Button variant="outline" disabled={busy} onClick={start}><RefreshCw size={14} />{t('Thử lại')}</Button> : null}
+  </Row>;
+}
+
 export function AccountSettings({ account, busy, act }: { account: AccountState | undefined; busy: boolean; act: Act }) {
   const about = t('Tài khoản CodePawl');
   // The browser may stay open for minutes, so this waits on its own instead of holding the other tabs busy.
@@ -149,7 +187,7 @@ export function AccountSettings({ account, busy, act }: { account: AccountState 
     <Row title={t('Gói')} description={!account.plan || account.plan === 'free' ? t('Tài khoản miễn phí. Orglet vẫn miễn phí và mã nguồn mở.') : undefined}>
       <span className="setting-value">{planName(account.plan)}</span>
     </Row>
-    <Row title={t('Đồng bộ')} description={t('Sắp có. Hiện chưa có chat hay tệp nào rời khỏi máy này.')} />
+    <SyncRow busy={busy} />
     <AnalyticsRow busy={busy} />
   </>;
 }

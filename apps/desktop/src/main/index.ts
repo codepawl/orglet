@@ -52,6 +52,8 @@ import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
 import { AccountFile, AccountService, accountPayload } from './account';
+import { SyncTransport } from './sync-transport';
+import { syncBaseUrl } from '../shared/sync-status';
 import { MarketPublishingTransport, publishingRelayAllowed } from './market-publishing';
 import { MarketModerationTransport } from './market-moderation';
 import { MarketModerationAction, MarketModerationResult } from '../shared/market-moderation';
@@ -93,6 +95,8 @@ let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
 /** The optional CodePawl account (COD-337): its tokens stay here, the window hears only `AccountState`. */
 let account: AccountService;
+/** Account sync (COD-329 phase 3); it stays off in a build with no `ORGLET_SYNC_URL`. */
+let syncTransport: SyncTransport | undefined;
 /** Usage analytics for a signed-in account (COD-344); records nothing without an account or with the switch off. */
 let analytics: AnalyticsClient;
 /** The settings as last saved, so a save can say which keys changed without sending their values. */
@@ -534,6 +538,7 @@ async function start() {
     onChange: state => {
       if (window && !window.isDestroyed()) window.webContents.send('orglet:account', accountPayload(state));
       void analytics?.accountChanged(state);
+      void syncTransport?.refresh();
     },
   });
   await account.load();
@@ -587,7 +592,7 @@ async function start() {
         if (pending.has(message.parentId) && publishingAuthorized.has(message.parentId)) core.postMessage({ id: message.id, command: 'marketPublishingReply', args: reply });
         return;
       }
-      if (message.type === 'changed') { if (window && !window.isDestroyed()) window.webContents.send('orglet:changed'); return; }
+      if (message.type === 'changed') { if (window && !window.isDestroyed()) window.webContents.send('orglet:changed'); syncTransport?.localChanged(); return; }
       if (message.type === 'progress' || message.type === 'cliProgress') {
         if (message.type === 'progress' && window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
         for (const observer of cliObservers) observer({ progress: message.update });
@@ -662,6 +667,14 @@ async function start() {
       if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
     });
   });
+  // The token and every request stay here; the core is asked only for what to send and to apply what arrived.
+  syncTransport = new SyncTransport({
+    baseUrl: syncBaseUrl(process.env.ORGLET_SYNC_URL),
+    account,
+    core: action => request('syncReplica', action),
+    onChange: status => { if (window && !window.isDestroyed()) window.webContents.send('orglet:sync', status); },
+  });
+  void syncTransport.refresh();
   const startupSettings = await request('workspace', {}).then(workspace => workspace as { language?: Language; autoUpdate?: boolean }).catch(() => ({} as { language?: Language; autoUpdate?: boolean }));
   language = startupSettings.language ?? DEFAULT_LANGUAGE;
   savedSettings = settingsSnapshot(startupSettings);
@@ -747,6 +760,9 @@ async function start() {
       Boolean(ownerWindow && !ownerWindow.isDestroyed() && window === ownerWindow && ownerWindow.webContents.mainFrame === ownerFrame && callerGeneration === moderationCallerGeneration)));
   });
   handle('orglet:account-sign-in', async () => accountPayload(await account.signIn()));
+  // Sync's state is as strict as the account's: no token, id or address. The window can only ask it to start.
+  handle('orglet:sync-state', async () => syncTransport!.state());
+  handle('orglet:sync-start', async () => syncTransport!.start());
   handle('orglet:account-cancel-sign-in', async () => accountPayload(account.cancelSignIn()));
   handle('orglet:account-sign-out', async () => accountPayload(await account.signOut()));
   // Analytics (COD-344): the window can read and flip the switch, name a feature from a fixed list, and report an error
@@ -1138,6 +1154,7 @@ else {
   });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
   app.on('activate', () => { if (started) void showWindow(); });
+  app.on('browser-window-focus', () => syncTransport?.windowFocused());
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', event => {
     // Analytics gets one short last flush (at most 3 seconds) before anything else closes.
@@ -1159,6 +1176,7 @@ else {
     }
     // MCP servers run under the core (COD-241). The core is told first, so it closes the servers it holds while main
     // checks and stops the ones it reported; only a process still the one Orglet started is stopped here.
+    void syncTransport?.stop();
     if (ready) core?.postMessage({ id: randomUUID(), command: 'shutdown', args: undefined });
     ready = false; void cliServer?.close(); updater?.stop(); stopProfiles();
     stopProcessTrees(mcpProcesses);

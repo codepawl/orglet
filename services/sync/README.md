@@ -1,6 +1,6 @@
 # Orglet sync service
 
-This Worker replicates Orglet's explicit public records into one SQLite Durable Object per verified account. It never runs an orglet, enables a schedule or grants access to a computer. Desktop transport and R2 files are separate changes. The checked-in configuration has no public route and keeps `SYNC_ENABLED=false`; it does not deploy or connect a user's local profile.
+This Worker replicates Orglet's explicit public records into one SQLite Durable Object per verified account. It never runs an orglet, enables a schedule or grants access to a computer. R2 files are a separate change. The checked-in configuration has no public route and keeps `SYNC_ENABLED=false`; it does not deploy or connect a user's local profile. The desktop connects only when started with `ORGLET_SYNC_URL` naming a server ([technical guide](../../docs/technical-guide.md#account-sync)).
 
 ## Protocol
 
@@ -53,4 +53,4 @@ The service pins the same Wrangler/Miniflare versions as Market. Node tests veri
 
 Use your own issuer/JWKS and HTTPS sync resource audience, registering the desktop client and required scopes with that issuer. Keep the account route derived from issuer and subject. Configure signed storage/device/history entitlements and the operational ceilings; limits never come from a plan name. Set the master key ring with Wrangler secret tooling. A local development profile can enable `SYNC_ENABLED` and use an ignored local secret; no resources are needed for tests.
 
-For a production rollout, separately review the exact green commit, namespace migration, account identity configuration, master-key secret, route and storage limits. The tracked `new_sqlite_classes` migration creates an account namespace when deployed; unlike `check:deploy`, a real deploy changes infrastructure. Configure the intended route and enable flag only in that reviewed rollout. Verify the actual issuer, negative account/audience cases, two-device push/pull/snapshot/privacy and socket expiry before connecting desktop transport. No production resources or routes have been provisioned by this source change.
+For a production rollout, separately review the exact green commit, namespace migration, account identity configuration, master-key secret, route and storage limits. The tracked `new_sqlite_classes` migration creates an account namespace when deployed; unlike `check:deploy`, a real deploy changes infrastructure. Configure the intended route and enable flag only in that reviewed rollout. Verify the actual issuer, negative account/audience cases, two-device push/pull/snapshot/privacy and socket expiry before giving the desktop a default `ORGLET_SYNC_URL`. No production resources or routes have been provisioned by this source change.

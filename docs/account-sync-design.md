@@ -1,6 +1,6 @@
 # Orglet account and sync: technical design
 
-**Status: account sign-in, local replication foundation and sync server implemented; desktop network transport not connected** ([COD-329](https://linear.app/codepawl/issue/COD-329), [local foundation](https://github.com/codepawl/orglet/issues/480), [server](https://github.com/codepawl/orglet/issues/481)). The product decisions are in [product.md](product.md) point 3. The sections below distinguish implemented pieces from the remaining transport and deployment design.
+**Status: account sign-in, local replication foundation, sync server and desktop transport implemented; the sync server is not deployed, so no production build syncs** ([COD-329](https://linear.app/codepawl/issue/COD-329), [local foundation](https://github.com/codepawl/orglet/issues/480), [server](https://github.com/codepawl/orglet/issues/481), [desktop](https://github.com/codepawl/orglet/issues/482)). The product decisions are in [product.md](product.md) point 3. The sections below distinguish implemented pieces from the remaining transport and deployment design.
 
 ### Local replication foundation
 
@@ -8,7 +8,7 @@ The local SQLite schema records explicit public projections, immutable revision 
 
 An imported chat keeps its authored participant IDs. An unrelated orglet already on the receiving computer, or created there later, does not silently join that chat. This matches channels' fixed membership; a legacy local `all` selection is projected as its actual public roster.
 
-Canonical writes, clock advancement and any active account outbox entry share one transaction, including nested savepoints. No account transport is connected yet. The internal recording context fences account identity and generation; neither tokens nor this context cross renderer IPC. Unknown newer schemas remain staged and pause outgoing sync while local editing continues.
+Canonical writes, clock advancement and any active account outbox entry share one transaction, including nested savepoints. The desktop transport below records an outbox only after this computer joined the account. The internal recording context fences account identity and generation; neither tokens nor this context cross renderer IPC. Unknown newer schemas remain staged and pause outgoing sync while local editing continues.
 
 An orglet or chat can be marked **Only on this computer**. Descendants inherit the choice. Withdrawal advances a scope epoch, removes blocked outbox entries and retains local copies. Permanent deletion records a tombstone without an age cutoff. Re-enabling changes the epoch again so an older offline copy cannot reopen a withdrawn scope. These records are local preparation; this change alone does not delete any server copy.
 
@@ -18,13 +18,17 @@ Received records cannot grant permissions, start runs or enable schedules. File 
 
 Prices and versions were read from the vendors' own pages on 2026-09-29. Cost figures are estimates built on the assumptions listed with them.
 
+### Desktop transport
+
+Main owns the token, requests, the hint socket and timing; the core owns SQLite, the cursor and which envelopes the server holds. A computer with only its untouched seed joins by itself; any other local data waits for the person's explicit **Turn on sync**, which merges it (the merge-or-replace choice is [GH-484](https://github.com/codepawl/orglet/issues/484)). A download stages all snapshot pages, applies them in dependency order, saves the cursor and queues what the server lacks. Pushes are batched in dependency order, coalesced to at most one a minute while edits continue, and resent with the same record ids after a lost reply. Pulls follow socket hints, reconnects and window focus; there is no polling timer. Refusals stay visible: an account that is full or a refused record holds uploads while downloads continue, a released device or deleted account stops sync, and data from a newer schema stops uploads until the app is updated. The details are in the [technical guide](technical-guide.md#account-sync). Attached file bytes ([GH-483](https://github.com/codepawl/orglet/issues/483)) and account lifecycle ([GH-484](https://github.com/codepawl/orglet/issues/484)) remain follow-up work.
+
 ### Sync server implementation
 
 `services/sync` implements authenticated push, incremental pull, pinned snapshot pages, device release and cursor-only WebSocket hints. One SQLite Durable Object belongs to the exact issuer and subject. Strict public projections exclude machine authority; frozen crew participants and team-scoped notes inherit privacy. Permanent entity and record barriers survive payload deletion and reject changed-envelope resurrection. Entire batches commit with receipts, quotas and sequence advancement in one native transaction.
 
 The service keeps encrypted row bodies behind a random per-account key, a versioned master-key wrapper and account/generation/record/sequence authenticated context. History retention applies to incremental logs; live historical records are not silently removed. A bounded account size and record count protect materialization even when a signed entitlement is larger. Device slots bind to verified grant families, and a replacement grant can release an occupied slot before registering itself. Snapshot consumers must stage all pages and apply only a complete, unchanged snapshot.
 
-The checked-in configuration is disabled, has no public route and provisions nothing during local checks. Desktop transport, R2 file bytes and the account-deletion integration remain follow-up work. Native SQLite fixtures test persistence, atomic failure, privacy, quotas, device release and WebSocket behavior; separate actual JWT tests cover identity verification. These fixtures do not prove positive authenticated production HTTP or forced hibernation eviction. See the [service contract and rollout requirements](../services/sync/README.md).
+The checked-in configuration is disabled, has no public route and provisions nothing during local checks. R2 file bytes and the account-deletion integration remain follow-up work. Native SQLite fixtures test persistence, atomic failure, privacy, quotas, device release and WebSocket behavior; separate actual JWT tests cover identity verification. These fixtures do not prove positive authenticated production HTTP or forced hibernation eviction. See the [service contract and rollout requirements](../services/sync/README.md).
 
 ## What we are building
 
