@@ -248,7 +248,8 @@ try {
   await page.getByRole('button', { name: 'Xác nhận', exact: true }).click();
   await page.getByText('Chưa rõ kết quả. Thử lại sẽ dùng đúng nội dung đã gửi.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Thử lại đúng thao tác', exact: true }).click();
-  await page.getByText('Đã ghi nhận thao tác.', { exact: true }).waitFor();
+  // A toast from the earlier report retry can still be visible; await this decision's drawer receipt.
+  await page.getByRole('dialog').getByText('Đã ghi nhận thao tác.', { exact: true }).waitFor();
   const decisions = await app.evaluate(() => global.__moderationFixture.requests.filter(request => request.path.endsWith('/decision')));
   assert.equal(decisions.length, 3); assert.equal(decisions[1].text, decisions[2].text); assert.equal(decisions[1].key, decisions[2].key);
   await close(page); await close(page);
