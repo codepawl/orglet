@@ -106,6 +106,7 @@ import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry } from './components/AreaRail';
 import { UserPanel } from './components/UserPanel';
+import { CircleUserRound, LogIn, Plug } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
@@ -2100,6 +2101,11 @@ export function App() {
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
     <AreaRail entries={areaEntries} createItems={createItems} sidebarOpen={sidebar} onOpenSidebar={openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)} compact={!sidebar || narrowWindow}
+      accountItems={[
+        { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
+        { label: t('Chi phí & giới hạn'), icon: Wallet, onSelect: () => openSettings('usage') },
+        { label: t('Kết nối API'), icon: Plug, onSelect: () => openSettings('connections') },
+      ]}
       onSettings={() => openSettings()} onDwell={dwellAbout}
       trailing={sidebar && !narrowWindow && updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
     <main className="main-pane" id="main-content" tabIndex={-1}>
