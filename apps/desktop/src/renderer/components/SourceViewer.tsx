@@ -1,6 +1,7 @@
 import { Viewer } from '@codepawl/orglet-ui';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ExternalLink, FolderOpen, MessageSquarePlus, Pencil, PenLine, ShieldOff, X } from 'lucide-react';
+import { Download, ExternalLink, FolderOpen, MessageSquarePlus, Pencil, PenLine, ShieldOff, X } from 'lucide-react';
+import { useSync } from '../account';
 import type { Source, SourceBytes, TaskDetail } from '../../shared/contracts';
 import { INLINE_PREVIEW_LIMIT } from '../../shared/source-kinds';
 import { versionName } from '../../shared/source-versions';
@@ -117,6 +118,10 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
   const [editing, setEditing] = useState(false);
   // A version just saved opens as soon as the chat's list of sources has it.
   const [opening, setOpening] = useState<string>();
+  // Bumped when a file from another computer was downloaded, so its content is read again.
+  const [fetched, setFetched] = useState(0);
+  const [downloading, setDownloading] = useState(false);
+  const sync = useSync();
   const state = source ? inlineState(source) : 'revoked';
   const editKind = source ? editKindOf(source) : undefined;
   const ready = !content.loading && !content.error && (content.text !== undefined || content.media !== undefined);
@@ -137,7 +142,7 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     void request.then(next => { if (active) setContent(next); })
       .catch(err => { if (active) setContent({ loading: false, error: (err as Error).message }); });
     return () => { active = false; };
-  }, [taskId, sourceId, state, source?.hash, keptText]);
+  }, [taskId, sourceId, state, source?.hash, keptText, fetched]);
   useEffect(() => {
     if (lines && content.text !== undefined) document.querySelector('#source-viewer .line-highlight')?.scrollIntoView({ block: 'center' });
   }, [content, lines?.[0], lines?.[1]]);
@@ -156,6 +161,16 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
       const relinked = await orglet.relinkSource(taskId, sourceId);
       if (relinked) refresh();
     } catch (err) { setError(tMessage((err as Error).message)); }
+  }
+  async function download() {
+    setError('');
+    setDownloading(true);
+    try {
+      await orglet.syncDownloadSource(taskId, sourceId);
+      refresh();
+      setFetched(count => count + 1);
+    } catch (err) { setError((err as Error).message); }
+    finally { setDownloading(false); }
   }
   async function openExternally() {
     setError('');
@@ -231,11 +246,20 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     if (state === 'parquet') return <p className="preview-state">{t('Parquet chưa xem được; chạy checker local để xem cột và số dòng.')}</p>;
     if (state === 'too-large') return <p className="preview-state">{t('Tệp quá lớn để xem trong Orglet.')}</p>;
     if (content.loading) return <SkeletonGroup label={t('Đang mở…')} className="source-shape">{source.media ? <Skeleton shape="block" className="source-shape-media" /> : <SkeletonText lines={8} />}</SkeletonGroup>;
+    // A file attached on another computer: sync brings its bytes when the account has them, or the person picks it.
+    if (content.error && source.availability === 'other-device' && !source.revoked) return <div className="preview-state source-restored">
+      <p>{t('Tệp này ở máy khác và chưa có trên máy này.')}</p>
+      <div className="source-restored-actions">
+        {sync && sync.state !== 'off' && sync.state !== 'link_required' && <Button variant="primary" disabled={downloading} onClick={() => void download()}><Download size={14} />{downloading ? t('Đang tải…') : t('Tải về máy này')}</Button>}
+        <Button variant="outline" disabled={downloading} onClick={() => void relink()}><FolderOpen size={14} />{t('Chọn tệp trên máy')}</Button>
+      </div>
+      {error && <p role="alert" className="error">{error}</p>}
+    </div>;
     if (content.error) return <p className="preview-state">{tMessage(content.error)}</p>;
     return <SourcePreview name={source.name} kind={previewKindOf(source)} text={content.text} media={content.media} citedLines={lines} openExternally={externally} />;
   }
   return <SourceViewer {...frame} className="source-file" onClose={onClose} actions={actions}>
-    {error && !restoredWithoutFile && <p role="alert" className="error">{error}</p>}
+    {error && !restoredWithoutFile && source.availability !== 'other-device' && <p role="alert" className="error">{error}</p>}
     {body(source)}
   </SourceViewer>;
 }

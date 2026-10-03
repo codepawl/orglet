@@ -4010,6 +4010,16 @@ export const en: Dictionary = {
   '{0} thay đổi quá lớn nên chỉ ở trên máy này.': '{0} changes are too large to sync and stay on this computer.',
   'Không gửi được cập nhật trạng thái đồng bộ.': 'Could not send the sync status update.',
   'Phản hồi đồng bộ quá lớn.': 'The sync reply is too large.',
+  // GH-483: a file that is on another computer.
+  'Tệp này ở máy khác và chưa có trên máy này.': 'This file is on another computer and not on this one yet.',
+  'Tải về máy này': 'Download to this computer',
+  'Đang tải…': 'Downloading…',
+  'Đồng bộ đang tắt trên máy này.': 'Sync is off on this computer.',
+  'Tệp này chưa được đồng bộ; nó chỉ có trên máy đã đính kèm.': 'This file has not synced; it is only on the computer that attached it.',
+  'Không tải được tệp. Kiểm tra kết nối rồi thử lại.': 'Could not download the file. Check your connection and try again.',
+  'Tệp tải về không khớp với tệp đã đính kèm.': 'The downloaded file does not match the one that was attached.',
+  'Tệp này đã có trên máy này.': 'This file is already on this computer.',
+  'Không lưu được tệp khi dữ liệu không nằm trong thư mục.': 'The file cannot be saved while the data is not in a folder.',
   // COD-340: the sidebar folded to a rail of faces.
   'Tạo mới': 'Create',
   // COD-355: the Open list in the sidebar and on the rail, and the views of the chat on screen.

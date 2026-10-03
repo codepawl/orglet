@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -9,6 +9,9 @@ import { pathToFileURL } from 'node:url';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { SyncReplica } from '../../apps/desktop/src/core/storage/sync-replica';
 import { eraseEverything } from '../../apps/desktop/src/core/storage/erase';
+import { Sources } from '../../apps/desktop/src/core/tools/sources';
+import { FILE_NOT_SYNCED } from '../../apps/desktop/src/main/sync-transport';
+import type { Source } from '../../apps/desktop/src/shared/contracts';
 import { SyncTransport, type SyncConnect } from '../../apps/desktop/src/main/sync-transport';
 import type { SyncStatus } from '../../apps/desktop/src/shared/sync-status';
 import type { Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
@@ -41,6 +44,8 @@ type Device = {
   /** When set, the next request waits here after it was sent and before its reply is handed back. */
   hold?: { entered: () => void; release: Promise<void> };
   transform?: (path: string, text: string) => string;
+  /** Flips a byte of the next downloaded file. */
+  damage?: boolean;
 };
 type FixtureSocket = { accept(): void; close(code?: number): void; addEventListener(type: string, listener: (event: { data?: unknown }) => void): void };
 type Runtime = {
@@ -54,7 +59,8 @@ const accountKey = (owner: string) => createHash('sha256').update(owner).digest(
 const DEFAULT_LIMITS: Limits = { storageBytes: 5_000_000, devices: 3, historyDays: 90 };
 
 function device(owner: string, options: { sockets?: boolean } = {}): Device {
-  const store = new Store(':memory:');
+  // A real folder, so saved file versions have somewhere to live beside the database.
+  const store = new Store(join(mkdtempSync(join(tmpdir(), 'orglet-sync-device-')), 'orglet.sqlite'));
   const created: Device = {
     owner, grant: `grant-${randomUUID()}`, store, statuses: [], faults: [], requests: [], limits: DEFAULT_LIMITS,
     context: { accountKey: accountKey(owner), generation: 1 }, sockets: options.sockets ?? false,
@@ -67,6 +73,28 @@ function device(owner: string, options: { sockets?: boolean } = {}): Device {
     expect((init?.headers as Record<string, string>).Authorization).toBe(`Bearer token-${created.owner}`);
     const fault = created.faults.shift();
     if (fault === 'network') throw new TypeError('fetch failed');
+    const fileId = /^\/v1\/files\/([0-9a-f-]{36})$/.exec(path)?.[1];
+    if (fileId) {
+      created.requests[created.requests.length - 1] = `${init?.method} ${path}`;
+      const deviceId = (init?.headers as Record<string, string>)['X-Orglet-Device'];
+      const sending = init?.method === 'PUT';
+      const answer = await runtime.dispatchFetch('https://fixture.test/fixture', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner: created.owner, operation: sending ? 'putFile' : 'getFile', device: deviceId, grant: created.grant, limits: created.limits,
+          input: { deviceId, sourceId: fileId, ...(sending ? { base64: Buffer.from(init?.body as Uint8Array).toString('base64') } : {}) } }),
+      });
+      const reply = await answer.text();
+      const held = created.hold;
+      if (held) {
+        created.hold = undefined;
+        held.entered();
+        await held.release;
+      }
+      if (sending || answer.status !== 200) return new Response(reply, { status: answer.status, headers: { 'Content-Type': 'application/json' } });
+      const bytes = Buffer.from((JSON.parse(reply) as { base64: string }).base64, 'base64');
+      if (created.damage) bytes[0] ^= 1;
+      return new Response(bytes, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
+    }
     const body = JSON.parse(String(init?.body)) as { deviceId: string };
     const response = await runtime.dispatchFetch('https://fixture.test/fixture', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -173,9 +201,10 @@ describe.skipIf(!installed && !required)('account sync through the local Worker'
     const masters = JSON.stringify({ active: 1, keys: { 1: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64') } });
     const options = convertV4MiniflareOptions({ workers: [{ name: 'orglet-sync-transport-test', modules: true,
       script: readFileSync(bundle, 'utf8'), compatibilityDate: '2026-10-03',
-      durableObjects: { SYNC_ACCOUNTS: { className: 'AccountSync', useSQLite: true } },
+      durableObjects: { SYNC_ACCOUNTS: { className: 'AccountSync', useSQLite: true } }, r2Buckets: ['SYNC_FILES'],
       bindings: { SYNC_ENABLED: 'true', SYNC_ISSUER: 'https://issuer.test/api/auth', SYNC_AUDIENCE: 'https://sync.test',
-        SYNC_MASTER_KEYS: masters, SYNC_MAX_ACCOUNT_BYTES: '33554432', SYNC_MAX_RECORDS: '10000' } }] });
+        SYNC_MASTER_KEYS: masters, SYNC_MAX_ACCOUNT_BYTES: '33554432', SYNC_MAX_RECORDS: '10000',
+        SYNC_MAX_FILE_BYTES: '26214400', SYNC_MAX_FILE_STORAGE_BYTES: '268435456' } }] });
     options.resourcePersistencePath = join(mkdtempSync(join(tmpdir(), 'orglet-sync-transport-')), 'v3');
     options.telemetry = { enabled: false };
     runtime = new Miniflare(options);
@@ -410,5 +439,90 @@ describe.skipIf(!installed && !required)('account sync through the local Worker'
     expect(liveChats(second.store)).toEqual([]);
     await converge(first);
     expect(liveChats(first.store)).toEqual([task.id]);
+  }, 120_000);
+
+  it('sends a saved file version once a message carries it, and downloads its bytes only when it is opened', async () => {
+    const owner = randomUUID();
+    const first = device(owner);
+    const folder = mkdtempSync(join(tmpdir(), 'orglet-sync-attached-'));
+    const attachedPath = join(folder, 'notes.txt');
+    writeFileSync(attachedPath, 'Attached on the first computer');
+    const sources = new Sources(first.store);
+    const [attached] = await sources.import([attachedPath]);
+    const task: Task = { id: randomUUID(), workerId: first.store.all<Worker>('workers')[0].id, brief: 'Read this', sourceIds: [attached.id], status: 'completed',
+      createdAt: new Date().toISOString(), budgetMicros: 1000, consent: false, accepted: false };
+    first.store.put('tasks', task);
+    const version = await sources.saveVersion(attached.id, [attached.id], 'notes (edited).txt', { text: 'Edited on the first computer' });
+    first.store.patchTask(task.id, { sourceIds: [attached.id, version.id] });
+
+    // The chat holds the version, but no message has carried it: nothing about it is sent, and nothing is refused.
+    await converge(first);
+    expect(first.requests.some(request => request.startsWith('PUT /v1/files/'))).toBe(false);
+    first.store.update('tasks', { ...first.store.get<Task>('tasks', task.id), inputRevision: 1, currentTurnId: randomUUID(),
+      currentInput: { brief: 'Now use my edit', sourceIds: [version.id] } });
+    await converge(first);
+    expect(first.requests.filter(request => request.startsWith('PUT /v1/files/'))).toEqual([`PUT /v1/files/${version.id}`]);
+    await converge(first);
+    expect(first.requests.filter(request => request.startsWith('PUT /v1/files/')).length).toBe(1);
+
+    const second = device(owner);
+    await converge(second);
+    expect(second.store.get<Source>('sources', version.id)).toMatchObject({ availability: 'other-device', hash: version.hash, editedFrom: attached.id });
+    expect(second.requests.some(request => request.startsWith('GET /v1/files/'))).toBe(false);
+    const storedPath = () => String(second.store.db.prepare('SELECT path FROM sources WHERE id=?').get(version.id)!.path);
+    expect(storedPath()).toBe('');
+
+    // A file the first computer only pointed at was never copied, so the account has no bytes for it.
+    await expect(second.transport.downloadFile(task.id, attached.id)).rejects.toThrow(FILE_NOT_SYNCED);
+    // Another chat cannot fetch this chat's file.
+    const elsewhere = chat(second.store, 'Another chat');
+    await expect(second.transport.downloadFile(elsewhere.id, version.id)).rejects.toThrow('Không có quyền đọc nguồn ngoài task này.');
+    // Bytes that are not the recorded ones are refused and nothing is kept.
+    second.damage = true;
+    await expect(second.transport.downloadFile(task.id, version.id)).rejects.toThrow('Tệp tải về không khớp với tệp đã đính kèm.');
+    expect(storedPath()).toBe('');
+    second.damage = false;
+
+    await second.transport.downloadFile(task.id, version.id);
+    expect(storedPath()).toContain(join('edited-sources', version.id));
+    expect(readFileSync(storedPath(), 'utf8')).toBe('Edited on the first computer');
+    expect(second.store.get<Source>('sources', version.id).availability).toBeUndefined();
+    expect(await new Sources(second.store).read(version.id, [attached.id, version.id])).toContain('Edited on the first computer');
+    await expect(second.transport.downloadFile(task.id, version.id)).rejects.toThrow('Tệp này đã có trên máy này.');
+    // The downloaded copy is this computer's own; having it does not send it again.
+    await converge(second, first);
+    expect(second.requests.some(request => request.startsWith('PUT /v1/files/'))).toBe(false);
+  }, 120_000);
+
+  it('keeps no file when the account is signed out while its bytes are on the way', async () => {
+    const owner = randomUUID();
+    const first = device(owner);
+    const folder = mkdtempSync(join(tmpdir(), 'orglet-sync-attached-'));
+    writeFileSync(join(folder, 'draft.txt'), 'Original');
+    const sources = new Sources(first.store);
+    const [attached] = await sources.import([join(folder, 'draft.txt')]);
+    const task: Task = { id: randomUUID(), workerId: first.store.all<Worker>('workers')[0].id, brief: 'Read this', sourceIds: [attached.id], status: 'completed',
+      createdAt: new Date().toISOString(), budgetMicros: 1000, consent: false, accepted: false };
+    first.store.put('tasks', task);
+    const version = await sources.saveVersion(attached.id, [attached.id], 'draft (edited).txt', { text: 'Edited' });
+    first.store.update('tasks', { ...first.store.get<Task>('tasks', task.id), sourceIds: [attached.id, version.id], inputRevision: 1,
+      currentTurnId: randomUUID(), currentInput: { brief: 'Use my edit', sourceIds: [version.id] } });
+    await converge(first);
+    const second = device(owner);
+    await converge(second);
+
+    let entered!: () => void;
+    let release!: () => void;
+    const sent = new Promise<void>(resolvePromise => { entered = resolvePromise; });
+    second.hold = { entered, release: new Promise<void>(resolvePromise => { release = resolvePromise; }) };
+    const download = second.transport.downloadFile(task.id, version.id);
+    const failed = expect(download).rejects.toThrow();
+    await sent;
+    second.context = undefined;
+    await second.transport.refresh();
+    release();
+    await failed;
+    expect(String(second.store.db.prepare('SELECT path FROM sources WHERE id=?').get(version.id)!.path)).toBe('');
+    expect(second.store.get<Source>('sources', version.id).availability).toBe('other-device');
   }, 120_000);
 });

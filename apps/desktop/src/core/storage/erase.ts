@@ -17,7 +17,7 @@ export const ERASE_TABLES = [
   'workspace_read_evidence', 'process_evidence', 'workspace_processes', 'workspace_copies',
   'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'browser_actions', 'browser_screenshots', 'desktop_actions', 'desktop_screenshots', 'runs',
   'profiles', 'preflights', 'workspace_grants', 'chat_messages', 'chat_search', 'tasks',
-  'sync_confirmed', 'sync_accounts', 'sync_inbox', 'sync_outbox', 'sync_records', 'sync_visibility', 'sync_deletions', 'chat_turns', 'sync_revision_ids', 'sync_clock',
+  'sync_files', 'sync_confirmed', 'sync_accounts', 'sync_inbox', 'sync_outbox', 'sync_records', 'sync_visibility', 'sync_deletions', 'chat_turns', 'sync_revision_ids', 'sync_clock',
   'knowledge_search', 'knowledge_revisions', 'knowledge', 'revisions',
   'routine_arrivals', 'routine_folders', 'routines', 'workers', 'teams', 'skills', 'sources', 'settings', 'mcp_servers',
 ] as const;

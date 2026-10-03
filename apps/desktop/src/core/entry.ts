@@ -241,7 +241,7 @@ port.on('message', async ({ data }) => {
     const value = command === 'marketPublishing'
       ? await publishingCaller.run(id, () => publishing.execute(args))
       : command === 'marketModerationJournal' ? moderationJournal.execute(args)
-      : command === 'syncReplica' ? syncReplica.execute(args)
+      : command === 'syncReplica' ? await syncReplica.execute(args)
       : command === 'importSources'
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))

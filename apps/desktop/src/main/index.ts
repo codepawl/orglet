@@ -763,6 +763,11 @@ async function start() {
   // Sync's state is as strict as the account's: no token, id or address. The window can only ask it to start.
   handle('orglet:sync-state', async () => syncTransport!.state());
   handle('orglet:sync-start', async () => syncTransport!.start());
+  // The window names a chat and one of its files; the core checks the chat owns it before and after the download.
+  handle('orglet:sync-download', async raw => {
+    const input = z.object({ taskId: Id, id: Id }).strict().parse(raw);
+    await syncTransport!.downloadFile(input.taskId, input.id);
+  });
   handle('orglet:account-cancel-sign-in', async () => accountPayload(account.cancelSignIn()));
   handle('orglet:account-sign-out', async () => accountPayload(await account.signOut()));
   // Analytics (COD-344): the window can read and flip the switch, name a feature from a fixed list, and report an error

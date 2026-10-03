@@ -22,6 +22,14 @@ export const SyncReplicaAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('settle'), context: SyncRecordingContext, cursor: SyncServerCursor }).strict(),
   z.object({ action: z.literal('outbox'), context: SyncRecordingContext }).strict(),
   z.object({ action: z.literal('acknowledge'), context: SyncRecordingContext, outcomes: z.array(Outcome).max(100) }).strict(),
+  /** Saved file versions whose record the server holds and whose bytes it has not been sent. */
+  z.object({ action: z.literal('files'), context: SyncRecordingContext }).strict(),
+  /** One file was settled: stored, or refused in a way sending again cannot change. */
+  z.object({ action: z.literal('fileSent'), context: SyncRecordingContext, sourceId: z.uuid(), stored: z.boolean() }).strict(),
+  /** The person opened a file that is on another computer; the chat must own it. */
+  z.object({ action: z.literal('fileWanted'), context: SyncRecordingContext, taskId: z.uuid(), sourceId: z.uuid() }).strict(),
+  z.object({ action: z.literal('fileReceived'), context: SyncRecordingContext, taskId: z.uuid(), sourceId: z.uuid(),
+    base64: z.string().max(34_952_536) }).strict(),
 ]);
 export type SyncReplicaAction = z.infer<typeof SyncReplicaAction>;
 
@@ -43,3 +51,9 @@ export const SyncReplicaBatch = z.object({
   updateRequired: z.boolean(),
 }).strict();
 export type SyncReplicaBatch = z.infer<typeof SyncReplicaBatch>;
+
+export const SyncReplicaFiles = z.object({
+  uploads: z.array(z.object({ sourceId: z.uuid(), path: z.string().min(1).max(32768), hash: z.string().regex(/^[a-f0-9]{64}$/),
+    bytes: z.number().int().nonnegative() }).strict()).max(8),
+}).strict();
+export type SyncReplicaFiles = z.infer<typeof SyncReplicaFiles>;

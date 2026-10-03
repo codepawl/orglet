@@ -11,14 +11,16 @@ const directory = resolve(import.meta.dirname, '..');
 const devices = new Map();
 const expiries = new Map();
 const masters = JSON.stringify({ active: 1, keys: { 1: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64') } });
-let runtime, persistence, bundle;
+let runtime, persistence, bundle, activeSecret = masters;
 function device(owner) { if (!devices.has(owner)) devices.set(owner, crypto.randomUUID()); return devices.get(owner); }
-async function start(secret = masters, enabled = 'true') {
+async function start(secret = activeSecret, enabled = 'true', files = {}) {
+  activeSecret = secret;
   const options = convertV4MiniflareOptions({ workers: [{ name: 'orglet-sync-local-test', modules: true,
     script: await readFile(bundle, 'utf8'), compatibilityDate: '2026-10-03',
-    durableObjects: { SYNC_ACCOUNTS: { className: 'AccountSync', useSQLite: true } },
+    durableObjects: { SYNC_ACCOUNTS: { className: 'AccountSync', useSQLite: true } }, r2Buckets: ['SYNC_FILES'],
     bindings: { SYNC_ENABLED: enabled, SYNC_ISSUER: 'https://issuer.test/api/auth', SYNC_AUDIENCE: 'https://sync.test',
-      SYNC_MASTER_KEYS: secret, SYNC_MAX_ACCOUNT_BYTES: '33554432', SYNC_MAX_RECORDS: '10000' } }] });
+      SYNC_MASTER_KEYS: secret, SYNC_MAX_ACCOUNT_BYTES: '33554432', SYNC_MAX_RECORDS: '10000',
+      SYNC_MAX_FILE_BYTES: files.file ?? '26214400', SYNC_MAX_FILE_STORAGE_BYTES: files.total ?? '268435456' } }] });
   options.resourcePersistencePath = join(persistence, 'v3'); options.telemetry = { enabled: false };
   runtime = new Miniflare(options);
 }
@@ -259,4 +261,65 @@ test('actual persisted account wrapper rotates without rewriting the row ciphert
   assert.equal(rotated.records[0].cipher, before.records[0].cipher);
   await runtime.dispose(); await start(JSON.stringify({ active: 2, keys: { 2: next } }));
   assert.equal((await snapshot(owner)).records[0].data.change.value, 'en');
+});
+function attachment(owner, text, name = 'notes.txt') {
+  const lead = worker(owner); const taskId = crypto.randomUUID(), sourceId = crypto.randomUUID();
+  const scopes = [lead.scope, { kind: 'task', id: taskId, epoch: epoch('task', taskId) }];
+  const bytes = Buffer.from(text);
+  const chat = record(owner, { kind: 'chat', value: { id: taskId, workerId: lead.id, createdAt: '2026-01-01T00:00:00.000Z' } }, scopes);
+  const turn = record(owner, { kind: 'turn', value: { id: crypto.randomUUID(), taskId, createdAt: '2026-01-01T00:00:00.000Z',
+    input: { brief: 'With a file', sourceIds: [sourceId] } } }, scopes);
+  const source = record(owner, { kind: 'source', value: { id: sourceId, name, bytes: bytes.length,
+    hash: createHash('sha256').update(bytes).digest('hex') } }, scopes);
+  return { taskId, sourceId, bytes, records: [lead.row, chat, turn, source] };
+}
+function putFile(owner, sourceId, bytes, extra) {
+  return call(owner, 'putFile', { deviceId: device(owner), sourceId, base64: Buffer.from(bytes).toString('base64') }, extra);
+}
+async function objects(owner) { return (await ok(owner, 'objects')).keys; }
+test('a file is stored encrypted for its own record only, shared by hash inside one account and refused when altered', async () => {
+  const a = 'files-a', b = 'files-b'; const first = attachment(a, 'PRIVATE_FILE_SENTINEL body'); const second = attachment(a, 'PRIVATE_FILE_SENTINEL body', 'copy.txt');
+  const before = await objects(a);
+  await refused(await putFile(a, first.sourceId, first.bytes), 404, 'file_unknown');
+  await push(a, [...first.records, ...second.records]);
+  await refused(await putFile(a, first.sourceId, Buffer.from('other bytes entirely!!!!!!')), 409, 'file_mismatch');
+  assert.equal((await (await putFile(a, first.sourceId, first.bytes)).json()).status, 'stored');
+  assert.equal((await (await putFile(a, second.sourceId, second.bytes)).json()).status, 'present');
+  const keys = (await objects(a)).filter(key => !before.includes(key)); assert.equal(keys.length, 1);
+  assert.equal(keys[0].includes(a), false); assert.equal(keys[0].endsWith(first.records[3].data.value.hash), true);
+  const inspected = await ok(a, 'inspect'); assert.equal(inspected.files.length, 1); assert.equal(inspected.files[0].state, 'stored'); assert.equal(inspected.file_refs.length, 2);
+  const read = await ok(a, 'getFile', { deviceId: device(a), sourceId: second.sourceId });
+  assert.equal(Buffer.from(read.base64, 'base64').toString(), 'PRIVATE_FILE_SENTINEL body');
+  // Another account with the same bytes neither reads this object nor shares it.
+  const other = attachment(b, 'PRIVATE_FILE_SENTINEL body'); await push(b, other.records);
+  await refused(await call(b, 'getFile', { deviceId: device(b), sourceId: first.sourceId }), 404, 'file_unknown');
+  await refused(await call(b, 'getFile', { deviceId: device(b), sourceId: other.sourceId }), 404, 'file_unknown');
+  assert.equal((await (await putFile(b, other.sourceId, other.bytes)).json()).status, 'stored');
+  assert.equal((await objects(a)).length, before.length + 2);
+  await runtime.dispose(); await start();
+  assert.equal(Buffer.from((await ok(a, 'getFile', { deviceId: device(a), sourceId: first.sourceId })).base64, 'base64').toString(), 'PRIVATE_FILE_SENTINEL body');
+  await call(a, 'damage', { key: keys[0] });
+  await refused(await call(a, 'getFile', { deviceId: device(a), sourceId: first.sourceId }), 409, 'file_damaged');
+  assert.equal((await call(b, 'getFile', { deviceId: device(b), sourceId: other.sourceId })).status, 200);
+});
+test('file limits count reserved bytes, and withdrawal or account deletion removes the stored object', async () => {
+  const before = await objects('files-limits');
+  await runtime.dispose(); await start(activeSecret, 'true', { file: '64', total: '100' });
+  try {
+    const owner = 'files-limits'; const small = attachment(owner, 'x'.repeat(60)); const next = attachment(owner, 'y'.repeat(60)); const big = attachment(owner, 'z'.repeat(65));
+    await push(owner, [...small.records, ...next.records, ...big.records]);
+    await refused(await putFile(owner, big.sourceId, big.bytes), 413, 'file_too_large');
+    assert.equal((await putFile(owner, small.sourceId, small.bytes)).status, 200);
+    await refused(await putFile(owner, next.sourceId, next.bytes), 413, 'file_storage_limit');
+    assert.equal((await objects(owner)).length, before.length + 1);
+    // Withdrawing the chat removes its record, so nothing names the file and its object goes.
+    await push(owner, [record(owner, { kind: 'withdraw', root: { kind: 'task', id: small.taskId }, epoch: crypto.randomUUID(), localOnly: true, deleted: false }, [], 5000)]);
+    await refused(await call(owner, 'getFile', { deviceId: device(owner), sourceId: small.sourceId }), 404, 'file_unknown');
+    await ok(owner, 'maintain').catch(() => undefined);
+    assert.deepEqual(await objects(owner), before);
+    assert.equal((await putFile(owner, next.sourceId, next.bytes)).status, 200);
+    assert.equal((await call(owner, 'erase')).status, 204);
+    assert.deepEqual(await objects(owner), before);
+    await refused(await putFile(owner, next.sourceId, next.bytes), 410);
+  } finally { await runtime.dispose(); await start(); }
 });
