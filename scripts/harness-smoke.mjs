@@ -3,7 +3,7 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openSettings } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 
@@ -58,7 +58,7 @@ try {
     assert.equal(item.runnable, true);
   }
 
-  await page.getByRole('button', { name: /^Cài đặt/ }).click();
+  await openSettings(page);
   await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).click();
   const section = page.getByRole('region', { name: 'Harness trên máy' });
   await section.waitFor();

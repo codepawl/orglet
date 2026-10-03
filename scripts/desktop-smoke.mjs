@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import electronPath from 'electron';
-import { useVietnamese, openThreadByBrief, archiveCurrentChat, openChannels, openHome } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, archiveCurrentChat, openChannels, openHome, openSettings } from './smoke-language.mjs';
 
 const data = await mkdtemp(join(tmpdir(), 'orglet-desktop-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
@@ -99,7 +99,7 @@ try {
   assert.match(await readFile(exported, 'utf8'), /Reaction: agree/);
   const fakeKeyPath = join(data, 'fixture-key.txt'); const fakeKey = 'sk-orglet-fixture-not-a-real-api-key'; await writeFile(fakeKeyPath, fakeKey);
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, fakeKeyPath);
-  await page.getByRole('button', { name: 'Cài đặt', exact: true }).click();
+  await openSettings(page);
   await page.getByRole('tab', { name: 'Kết nối API', exact: true }).click();
   const openaiRegion = page.getByRole('region', { name: 'Kết nối OpenAI', exact: true });
   await openaiRegion.getByRole('switch').click();

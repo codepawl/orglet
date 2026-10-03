@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openChannels, openHome } from './smoke-language.mjs';
+import { useVietnamese, openChannels, openHome, openSettings } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 // Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
@@ -24,7 +24,7 @@ try {
   assert.equal(await useVietnamese(page), 'en', 'a new install starts in US English');
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'vi');
 
-  await page.getByRole('button', { name: /^Cài đặt/ }).click();
+  await openSettings(page);
   await page.getByRole('combobox', { name: 'Ngôn ngữ', exact: true }).click();
   await page.getByRole('option', { name: 'English (US)', exact: true }).click();
   // The dialog re-renders in English once the dictionary chunk has loaded.
@@ -62,7 +62,7 @@ try {
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).language, 'en');
   assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet 32 MB; images 20 MB; audio 50 MB; video and PDF 200 MB', 'language is read at startup');
   // British English: same text with UK spellings.
-  await page.getByRole('button', { name: /^Settings/ }).click();
+  await openSettings(page);
   await page.getByRole('combobox', { name: 'Language', exact: true }).click();
   await page.getByRole('option', { name: 'English (UK)', exact: true }).click();
   await page.waitForFunction(() => document.documentElement.lang === 'en-GB');
@@ -75,7 +75,7 @@ try {
   await page.getByRole('button', { name: 'Customise', exact: true }).waitFor();
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: /^Settings/ }).click();
+  await openSettings(page);
   await page.getByRole('combobox', { name: 'Language', exact: true }).click();
   await page.getByRole('option', { name: 'Tiếng Việt', exact: true }).click();
   await page.getByRole('combobox', { name: 'Ngôn ngữ', exact: true }).waitFor();

@@ -61,3 +61,11 @@ export async function archiveCurrentChat(page) {
   await page.getByRole('heading', { name: /^Đang nhắn với / }).waitFor();
   await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).waitFor();
 }
+
+/**
+ * Settings opens from the person's panel at the bottom left: the panel is a menu, and Settings is one of its items.
+ */
+export async function openSettings(page) {
+  await page.locator('.user-panel-who').click();
+  await page.getByRole('menuitem', { name: /^(Cài đặt|Settings)$/ }).click();
+}
