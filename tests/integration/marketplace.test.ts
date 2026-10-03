@@ -242,7 +242,7 @@ it('reviews customization, rejects stale cards and creates new revisions while k
   await core.command('saveWorker', { ...original, instructions: 'My customized instructions', autoApplyProposals: true });
   await server.publish(template => { template.worker.instructions = 'Updated instructions'; template.skill.content = 'Updated skill'; });
   const preview = await server.market.previewUpdate(added.entityId);
-  expect(preview.customized).toBe(true);
+  expect(preview.customization).toBe('customized');
   expect(preview.changes[0].before).toContain('My customized instructions');
   expect(preview.changes[0].after).toContain('Updated instructions');
   const edited = store.get<Worker>('workers', added.entityId);

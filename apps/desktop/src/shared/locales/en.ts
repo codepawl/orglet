@@ -4026,6 +4026,8 @@ export const en: Dictionary = {
   '{0} thay đổi quá lớn nên chỉ ở trên máy này.': '{0} changes are too large to sync and stay on this computer.',
   'Không gửi được cập nhật trạng thái đồng bộ.': 'Could not send the sync status update.',
   'Phản hồi đồng bộ quá lớn.': 'The sync reply is too large.',
+  // GH-479: an installed copy whose old baseline cannot say whether it was edited.
+  'Orglet không biết bản này đã được chỉnh sửa hay chưa. So sánh hai bên trước khi áp dụng; kết nối và quyền trên máy vẫn giữ nguyên.': 'Orglet cannot tell whether this copy was edited. Compare both sides before applying; connections and permissions on this computer stay as they are.',
   // GH-483: a file that is on another computer.
   'Tệp này ở máy khác và chưa có trên máy này.': 'This file is on another computer and not on this one yet.',
   'Tải về máy này': 'Download to this computer',

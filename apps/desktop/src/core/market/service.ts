@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ProviderId, type Worker, type Skill, type Team } from '../../shared/contracts';
-import { MARKET_BODY_LIMIT, MARKET_URL, MarketCatalog, MarketCatalogPageV2, MarketListing, MarketListingV2, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketUpdate, type MarketInstallation, type MarketDisplayListing } from '../../shared/market';
+import { MARKET_BODY_LIMIT, MARKET_URL, MarketCatalog, MarketCatalogPageV2, MarketListing, MarketListingV2, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketCustomization, type MarketUpdate, type MarketInstallation, type MarketDisplayListing } from '../../shared/market';
 import { MARKET_SEED_BODIES, seedCatalog } from '../../shared/market-seed';
 import { Store, id } from '../storage/database';
 import { KnowledgeBase } from '../context/knowledge';
@@ -86,11 +86,11 @@ export class Marketplace {
     const template = parseMarketTemplate(await this.body(listing), listing.kind);
     const prepared = await this.prepare(template);
     const entityId = prepared.team?.id ?? prepared.workers[0].id;
-    const origin: Origin = { entityId, listingId, version, kind: listing.kind, workerIds: prepared.workerIds, skillIds: prepared.skillIds, baseline: '' };
+    const origin: Origin = { entityId, listingId, version, kind: listing.kind, workerIds: prepared.workerIds, skillIds: prepared.skillIds, baseline: '', baselineKind: 'authoring-v1' };
     this.store.transaction(() => {
       this.store.versionRows(prepared.rows);
       if (prepared.team) new KnowledgeBase(this.store).importProposed(entityId, template.knowledge ?? []);
-      origin.baseline = this.fingerprint(origin);
+      origin.baseline = this.authoring(origin);
       this.store.setSetting('marketOrigins', [...this.origins(), Origin.parse(origin)]);
     });
     this.notify();
@@ -133,7 +133,7 @@ export class Marketplace {
       const { memberKeys, synthesizerKey, ...nextSettings } = template.team;
       changes.unshift({ name: template.team.name, before: JSON.stringify({ ...previousSettings, members: memberIds.map(workerId => this.store.get<Worker>('workers', workerId).name), lead: this.store.get<Worker>('workers', synthesizerId).name }, null, 2), after: JSON.stringify({ ...nextSettings, members: memberKeys.map(key => template.workers.find(worker => worker.key === key)!.name), lead: template.workers.find(worker => worker.key === synthesizerKey)!.name }, null, 2) });
     }
-    return { entityId, listing, installedVersion: origin.version, customized: fingerprint !== origin.baseline, token: hash(`${fingerprint}:${listing.sha256}:${origin.version}`), changes };
+    return { entityId, listing, installedVersion: origin.version, customization: this.customization(origin, fingerprint), token: hash(`${fingerprint}:${listing.sha256}:${origin.version}`), changes };
   }
 
   async applyUpdate(entityId: string, token: string): Promise<MarketAdded> {
@@ -149,8 +149,8 @@ export class Marketplace {
       this.store.versionRows(prepared.rows);
       if (prepared.team) this.runtime.followCrew?.(prepared.team);
       if (prepared.team) new KnowledgeBase(this.store).importProposed(entityId, template.knowledge ?? []);
-      const next = { ...origin, version: preview.listing.version, workerIds: prepared.workerIds, skillIds: prepared.skillIds };
-      next.baseline = this.fingerprint(next);
+      const next: Origin = { ...origin, version: preview.listing.version, workerIds: prepared.workerIds, skillIds: prepared.skillIds, baselineKind: 'authoring-v1' };
+      next.baseline = this.authoring(next);
       this.store.setSetting('marketOrigins', this.origins().map(item => item.entityId === entityId ? next : item));
     });
     this.notify();
@@ -221,6 +221,31 @@ export class Marketplace {
       if (member?.deletedAt || member?.archivedAt) throw new Error('Không cập nhật bạn đã lưu trữ hoặc xóa.');
     }
   }
+  /**
+   * A digest of the content an update replaces, the same on every computer of an account: no ids, no local revision
+   * numbers, no connection or permission choices. Each orglet goes with the skill it uses now, so switching skills
+   * counts as a change, and crew members are named by their template keys.
+   */
+  private authoring(origin: Origin) {
+    const keyOf = new Map(Object.entries(origin.workerIds).map(([key, workerId]) => [workerId, key]));
+    const workers = Object.entries(origin.workerIds).sort(([first], [second]) => first.localeCompare(second)).map(([key, workerId]) => {
+      const worker = this.store.get<Worker>('workers', workerId);
+      return { key, content: workerContent(worker), skill: skillContent(this.store.get<Skill>('skills', worker.skillId)) };
+    });
+    let team: unknown;
+    if (origin.kind === 'crew') {
+      const { id: _id, revision: _revision, memberIds, synthesizerId, ...settings } = this.store.get<Team>('teams', origin.entityId);
+      team = { ...settings, members: memberIds.map(workerId => keyOf.get(workerId) ?? workerId), lead: keyOf.get(synthesizerId) ?? synthesizerId };
+    }
+    return hash(JSON.stringify({ algorithm: 'authoring-v1', workers, team }));
+  }
+  private customization(origin: Origin, fingerprint: string): MarketCustomization {
+    if (origin.baselineKind === 'authoring-v1') return this.authoring(origin) === origin.baseline ? 'unchanged' : 'customized';
+    // An older origin hashed this computer's whole rows. A match still proves nothing changed; a mismatch may only
+    // mean the copy arrived from another computer, so it is not called an edit.
+    return fingerprint === origin.baseline ? 'unchanged' : 'unknown';
+  }
+  /** Exact local rows, revision numbers included: what the update card's token is checked against, never a baseline. */
   private fingerprint(origin: Origin) {
     const workers = Object.values(origin.workerIds).map(workerId => this.store.get<Worker>('workers', workerId));
     const skills = [...new Set(workers.map(worker => worker.skillId))].map(skillId => this.store.get<Skill>('skills', skillId));

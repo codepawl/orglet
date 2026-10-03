@@ -179,7 +179,9 @@ function MarketUpdateCard({ update, onClose, onApplied }: { update: MarketUpdate
   return <Drawer open title={t('Cập nhật {0}', [update.listing.name])} description={`v${update.installedVersion} → v${update.listing.version}`} onClose={onClose}>
     <div className="marketplace-update">
       <p>{update.listing.changelog}</p>
-      <p className="muted">{update.customized ? t('Bạn đã chỉnh sửa bản này. Áp dụng sẽ thay nội dung mẫu bằng bản bên phải; kết nối và quyền trên máy vẫn giữ nguyên.') : t('Áp dụng tạo bản sửa đổi mới. Lần chạy đang làm việc vẫn dùng bản đã bắt đầu.')}</p>
+      <p className="muted">{update.customization === 'customized' ? t('Bạn đã chỉnh sửa bản này. Áp dụng sẽ thay nội dung mẫu bằng bản bên phải; kết nối và quyền trên máy vẫn giữ nguyên.')
+        : update.customization === 'unknown' ? t('Orglet không biết bản này đã được chỉnh sửa hay chưa. So sánh hai bên trước khi áp dụng; kết nối và quyền trên máy vẫn giữ nguyên.')
+        : t('Áp dụng tạo bản sửa đổi mới. Lần chạy đang làm việc vẫn dùng bản đã bắt đầu.')}</p>
       {update.changes.map((change, index) => <section key={index} className="marketplace-comparison" aria-label={change.name}>
         <h3>{change.name}</h3>
         <div className="marketplace-comparison-columns"><div><p className="muted">{t('Bản của bạn')}</p><pre>{change.before || t('Chưa có')}</pre></div><div><p className="muted">{t('Bản mới')}</p><pre>{change.after}</pre></div></div>
