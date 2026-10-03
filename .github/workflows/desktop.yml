@@ -19,7 +19,8 @@ jobs:
   checks:
     name: typecheck and test
     runs-on: windows-latest
-    timeout-minutes: 15
+    # `pnpm test` alone takes 8 to 13 minutes on this runner, so 15 cancelled a run that was passing.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: pnpm/action-setup@v6
