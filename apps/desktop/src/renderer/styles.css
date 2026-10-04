@@ -56,6 +56,15 @@
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
+/* Dragging over the app's own controls (buttons, rows, panels, labels) selects nothing, the way a desktop app
+   behaves. What a person reads and may want to copy stays selectable: what they type, the thread's messages, files
+   and reports in their viewers, diffs, command output, code, errors and the values shown in monospace. Inside those,
+   a control is still a control. */
+body { user-select:none; -webkit-user-select:none; }
+input, textarea, [contenteditable]:not([contenteditable="false"]), pre, code, .prose, .mono, .hash,
+.thread-content, .report, .markdown-preview, .code-preview, .preview-table-scroll, .pdf-pages, .diff-view, .command-output,
+.org-viewer-scroll, .org-command-block-text, .error-banner, .run-error, .form-error, .error, .org-toast { user-select:text; -webkit-user-select:text; }
+button, [role="button"], [role="tab"], [role="menuitem"], summary, .message-actions, .message-byline { user-select:none; -webkit-user-select:none; }
 button,input,textarea,select { font:inherit; color:inherit; }
 button { cursor:pointer; }
 button:disabled { cursor:default; opacity:.5; }
