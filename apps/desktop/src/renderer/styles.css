@@ -109,8 +109,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Folding gives the sidebar's column to the chat; the area rail stays put. */
 .app.sidebar-hidden { --sidebar-column-width:0px; }
 /* Every panel has its place: the left column, the main card, the right panel. */
-.app > .area-rail { grid-column:1; grid-row:1; width:var(--area-rail-width); z-index:2; background:var(--window); border-radius:var(--panel-radius); }
-.app > .sidebar { grid-column:2; grid-row:1; width:var(--sidebar-width); justify-self:end; margin-right:var(--shell-gap); background:var(--window); }
+/* The rail has no ground of its own: its tiles sit on the window (user, 2026-10-04). */
+.app > .area-rail { grid-column:1; grid-row:1; width:var(--area-rail-width); z-index:2; background:transparent; }
+.app > .sidebar { grid-column:2; grid-row:1; width:var(--sidebar-width); justify-self:start; background:var(--window); }
 .app > .main-pane { grid-column:3; grid-row:1; }
 .app > .details-pane,.app > .members-pane { grid-column:4; grid-row:1; margin-left:var(--shell-gap); }
 /* The full-width sidebar slides as one piece, without fading its rows. It is pinned to the right edge of its
@@ -118,18 +119,17 @@ svg { flex-shrink:0; stroke-width:1.7; }
    edge, as a second transition on its transform could when the two started a frame apart. It remains mounted and
    inert while closing; the permanent area rail covers it as it leaves. Dragging follows the pointer. */
 .app.resizing { transition:none; }
-.sidebar { transition:visibility 0s linear 0s; }
-.sidebar.collapsed { pointer-events:none; visibility:hidden; transition:visibility 0s linear var(--motion-base); }
+.sidebar { transform-origin:calc(var(--shell-gap) * -1 - var(--area-rail-width) / 2) calc(var(--sidebar-origin-y, 48px) - var(--shell-gap)); transition:transform var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out), visibility 0s linear 0s; }
+.sidebar.collapsed { pointer-events:none; visibility:hidden; opacity:0; transform:scale(.2); transition:transform var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); }
 /* A folded sidebar shown for a look while the pointer is on the rail: over the chat, beside the rail, not in the grid. */
-.app.sidebar-hidden > .sidebar.peek { position:absolute; grid-column:auto; grid-row:auto; z-index:5; top:var(--shell-gap); bottom:var(--shell-gap); left:calc(var(--shell-gap) + var(--area-rail-width) + var(--shell-gap)); margin:0; box-shadow:8px 0 30px #0002; animation:sidebar-peek var(--motion-base) var(--ease-out); }
-@keyframes sidebar-peek { from { opacity:0; transform:translateX(-12px); } }
-@media(prefers-reduced-motion:reduce) { .app.sidebar-hidden > .sidebar.peek { animation:none; } }
-@media(prefers-reduced-motion:reduce) { .app,.sidebar,.sidebar.collapsed { transition:none; } .details-pane { animation:none; } }
+.app.sidebar-hidden > .sidebar.peek { position:absolute; grid-column:auto; grid-row:auto; z-index:5; top:var(--shell-gap); bottom:var(--shell-gap); left:calc(var(--shell-gap) + var(--area-rail-width) + var(--shell-gap)); margin:0; box-shadow:8px 0 30px #0002; transform-origin:calc(var(--area-rail-width) / -2 - var(--shell-gap)) calc(var(--sidebar-origin-y, 48px) - var(--shell-gap)); }
+@media(prefers-reduced-motion:reduce) { .app,.sidebar,.sidebar.collapsed { transition:none; } .details-pane,.members-pane { animation:none; } }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { --right-column-width:calc(var(--details-width) + var(--shell-gap)); }
 .app.with-members { --right-column-width:calc(var(--members-width) + var(--shell-gap)); }
-.details-pane { display:flex; flex-direction:column; min-height:0; background:transparent; border-radius:var(--panel-radius); overflow:hidden; animation:pane-in var(--motion-base) var(--ease-out); }
-@keyframes pane-in { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
+.details-pane { display:flex; flex-direction:column; min-height:0; background:transparent; border-radius:var(--panel-radius); overflow:hidden; transform-origin:-28px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
+/* The right panels open out of the header's end, where the controls that show them are. */
+@keyframes pane-in { from { opacity:0; transform:scale(.2); } to { opacity:1; transform:none; } }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
 .details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
 .details-head h2 { font-size:15px; font-weight:600; }
@@ -412,9 +412,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .task-cost svg { flex-shrink:0; }
 /* Which model answers this chat, beside its name in the top bar (user, 2026-09-19). Quiet, because it is context
    rather than a warning: the old Demo badge shouted, and only ever appeared for Demo. */
-.topbar-provider { display:inline-block; flex-shrink:0; font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; }
+.topbar-provider { display:inline-flex; align-items:center; align-self:center; gap:5px; flex-shrink:0; font-size:12px; font-weight:500; line-height:20px; color:var(--muted); white-space:nowrap; }
 /* Inline rather than a flex row, so the model's baseline is its text's, not its mark's; the mark sits on the text's middle. */
-.topbar-provider > .provider-mark { display:inline-flex; vertical-align:middle; margin:-2px 5px 0 0; }
+.topbar-provider > .provider-mark { display:inline-flex; flex-shrink:0; }
 /* Beside a byline: the role this worker played for the team, then the model that wrote the message. */
 .byline-role { font-size:11px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 8px; }
 .byline-provider { font-size:11px; font-weight:500; color:var(--muted); }
@@ -623,13 +623,20 @@ svg { flex-shrink:0; stroke-width:1.7; }
    over and the bar goes back to the bottom. */
 .team-chat-fresh { justify-content:center; overflow:auto; }
 .fresh-chat { width:100%; max-width:768px; margin:0 auto; padding:24px var(--page-x); display:flex; flex-direction:column; }
-.fresh-chat .thread-composer { max-width:100%; padding:0; }
 /* With no orglet left, the pane is the startup's orglet, the line, a hint and New orglet, centred (COD-356). */
 .no-orglets { align-items:center; text-align:center; }
 .no-orglets-hint { margin:8px 0 0; color:var(--muted); font-size:14px; }
 .no-orglets > .no-orglets-create { margin-top:20px; }
 /* Left edge shared with the prompt bar directly above, which is what the eye follows down the column. */
-.fresh-chat .suggestions { width:fit-content; max-width:100%; margin:14px auto 0 0; padding:0; text-align:left; }
+.fresh-chat .suggestions { width:fit-content; max-width:100%; margin:6px auto 0 -10px; padding:0; text-align:left; }
+/* An orglet's or a channel's empty chat (user, 2026-10-04): the same shape as a chat with messages. The greeting and
+   the starters end the thread's column, on its left edge, and the prompt bar is at the bottom where it always is. */
+.team-chat-start { justify-content:flex-end; overflow:hidden; }
+.team-chat-start > .fresh-chat { flex:1; min-height:0; max-width:960px; padding:22px var(--page-x) 12px; justify-content:flex-end; overflow:auto; }
+.team-chat-start .fresh-faces { justify-content:flex-start; margin-bottom:14px; }
+.team-chat-start .welcome { margin-bottom:4px; text-align:left; font-size:1.75rem; font-weight:700; letter-spacing:-.5px; line-height:1.2; overflow-wrap:anywhere; }
+.welcome-about { margin:0 0 6px; max-width:var(--bubble-max, 80ch); font-size:15px; text-wrap:pretty; }
+.welcome-start { margin:0 0 10px; color:var(--muted); font-size:14px; }
 /* The starters sit under a centred greeting. The block is only as wide as its widest row, so centring it
    centres what is actually drawn: a centred 440px box would leave the text hugging its left edge. */
 .thread-menu { flex-shrink:0; }
@@ -1527,7 +1534,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    adds must not shift the shell along: everything is one column here. */
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
-@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--window); box-shadow:8px 0 30px #0002; transition:transform var(--motion-base) var(--ease-out), visibility 0s linear 0s; } .sidebar.collapsed { transform:translateX(calc(-100% - var(--shell-gap))); transition:transform var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; justify-self:auto; margin-right:0; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
+@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; justify-self:auto; margin-right:0; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
 @media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 12px; } .finding-heading { flex-wrap:wrap; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
@@ -2047,7 +2054,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Unfinished crew jobs under the byline (team-chat.md). The name and the state share one line; the brief is a
    short line under them, cut with an ellipsis, until the row opens. Indented with the working line, so both sit
    under the name rather than running back to the face. */
-.team-progress { display:flex; flex-direction:column; gap:0; margin:0 0 2px; min-width:0; }
+/* Set 4px out like the trace row (`.turn-before`), so the chevrons of both sit on the message text's left edge. */
+.team-progress { display:flex; flex-direction:column; gap:0; margin:0 0 2px -4px; min-width:0; }
 .team-job { min-width:0; color:var(--muted); font-size:13px; line-height:20px; }
 /* A job is one line with the trace row's shape: chevron, who, state, brief. A job with nothing to open keeps the
    chevron's column empty, so every row above an answer starts its text at the same place. */
@@ -3086,7 +3094,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .saved-text { overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* The member column of a channel (COD-366), at the right where Discord keeps it, in the right panel's place. */
-.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; }
+.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; transform-origin:-60px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
 .members-head { display:flex; align-items:center; min-height:32px; padding:var(--panel-inset) 10px 8px 16px; }
 .members-head h2 { font-size:13px; font-weight:500; color:var(--muted); }
 .members-list { display:flex; flex-direction:column; flex:1; gap:2px; min-height:0; margin:0; padding:0 8px 16px; overflow:auto; list-style:none; }
