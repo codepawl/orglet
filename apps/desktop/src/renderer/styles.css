@@ -3174,3 +3174,8 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .local-only-form .actions { justify-content: flex-end; }
 .local-only-control.org-switch-field-disabled { opacity: 1; }
 .local-only-control.org-switch-field-disabled .org-switch { opacity: .55; }
+/* A saved message's bookmark is filled in the accent with its tick cut out in the accent's ink, so saved reads at a
+   glance and not only from a tick inside an outline (user, 2026-10-04). Named twice to beat the icon button's muted
+   resting colour. */
+.org-button.org-button-icon.message-saved, .org-button.org-button-icon.message-saved:hover:not(:disabled) { color:var(--accent); }
+.message-saved svg path:last-child { stroke:var(--accent-ink); fill:none; }
