@@ -2041,23 +2041,23 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Unfinished crew jobs under the byline (team-chat.md). The name and the state share one line; the brief is a
    short line under them, cut with an ellipsis, until the row opens. Indented with the working line, so both sit
    under the name rather than running back to the face. */
-.team-progress { display:flex; flex-direction:column; gap:10px; margin:2px 0 4px; min-width:0; }
-.team-job { display:flex; flex-direction:column; gap:2px; min-width:0; color:var(--muted); font-size:13px; line-height:1.45; }
-.team-job > summary { display:flex; align-items:flex-start; gap:8px; width:fit-content; max-width:100%; min-width:0; list-style:none; cursor:pointer; }
+.team-progress { display:flex; flex-direction:column; gap:0; margin:0 0 2px; min-width:0; }
+.team-job { min-width:0; color:var(--muted); font-size:13px; line-height:20px; }
+/* A job is one line with the trace row's shape: chevron, who, state, brief. A job with nothing to open keeps the
+   chevron's column empty, so every row above an answer starts its text at the same place. */
+.team-job-line { display:flex; align-items:center; gap:6px; min-width:0; max-width:100%; min-height:28px; box-sizing:border-box; padding:2px 8px 2px 24px; }
+.team-job > summary.team-job-line { width:fit-content; padding-left:4px; list-style:none; cursor:pointer; }
 .team-job > summary::-webkit-details-marker { display:none; }
-.team-job > summary:hover { color:var(--text); }
-.team-job-main { display:flex; flex-direction:column; gap:2px; min-width:0; max-width:100%; }
-.team-job-who { display:flex; align-items:baseline; gap:8px; min-width:0; }
+.team-job-who { display:flex; align-items:baseline; gap:6px; flex-shrink:0; min-width:0; max-width:60%; }
 .team-job-who strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:var(--text); }
-.team-job-state { flex-shrink:0; font-size:12px; }
-.team-job-preview { display:block; max-width:36ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-/* Open, the one-line preview gives way to the brief. With no name on the row, the preview itself wraps into the
-   brief, so the summary is never an empty chevron. */
-.team-job[open]:has(.team-job-who) .team-job-preview { display:none; }
-.team-job[open]:not(:has(.team-job-who)) .team-job-preview { max-width:none; overflow:visible; text-overflow:unset; white-space:pre-wrap; overflow-wrap:anywhere; }
+.team-job-state { flex-shrink:0; }
+.team-job-who + .team-job-preview::before, .team-job-who + .team-job-brief::before { content:'·'; margin-right:6px; }
+.team-job-preview { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.team-job-line > .team-job-brief { min-width:0; overflow-wrap:anywhere; }
+.team-job[open] .team-job-preview { visibility:hidden; }
 .team-job[open] > summary .activity-chevron { transform:rotate(90deg); }
-.team-job .activity-chevron { flex-shrink:0; margin-top:2px; }
-.team-job-brief { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.team-job .activity-chevron { flex-shrink:0; }
+.team-job > .team-job-brief { margin:2px 0 8px 24px; white-space:pre-wrap; overflow-wrap:anywhere; }
 /*
  * Workspace recovery in Details (COD-191): one row per attempt, newest first. The head is who and when on the left
  * and the files' fate on the right, centred on the same line; the state takes the colour of what it means (red
