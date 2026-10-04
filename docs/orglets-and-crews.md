@@ -78,6 +78,22 @@ And a **Limits & shifts** tab: **Channel limit / month**, **Limit per task**, **
 
 Switching a channel back to taking turns drops these settings. A schedule that still runs the channel the lead's way has to be turned off first.
 
+### Spaces
+
+A space groups channels with the orglets that work in them.
+
+1. Click **+** on the rail, then **Create space**.
+2. Type a name.
+3. Open **Members** and tick the orglets.
+4. Open **Categories** and add one for each group of channels, if you want any.
+5. Click **Create space**. Its tile appears on the rail.
+
+Click **+** at the top of the space's sidebar to add a channel. The channel has every orglet of the space. To give it only some, open **Channel settings → Members** and choose **Only the orglets you pick**. That channel then shows a lock.
+
+Take an orglet out of the space under **Space settings → Members**. It leaves every channel of the space. Its messages stay, and it stays your friend.
+
+Delete a space from its menu. Its channels stay, outside every space.
+
 ### Templates
 
 **Import template** in a new channel's settings creates a channel where the lead splits the work, from a template file, with a separate copy of its orglets and shared skills. A channel where the lead splits the work offers **Export template** on its **General** tab. Templates carry configuration, not keys, sources or chat history. The Research Review and Eris Review templates (the `orglet template` command) start on Demo and can bring a required checklist and a dataset check with them; a channel that has one says so under **How it works** and can drop it there.

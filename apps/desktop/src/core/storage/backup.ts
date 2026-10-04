@@ -25,6 +25,8 @@ import { MessageReaction, turnMessageId } from '../../shared/message-interaction
 import { ImprovementSignals } from '../../shared/self-improvement';
 import { CustomConnection, CustomProviderId, MAX_CUSTOM_CONNECTIONS } from '../../shared/custom-connections';
 import { readCustomConnections, writeCustomConnections } from './custom-connections';
+import { MAX_SPACES, Space } from '../../shared/spaces';
+import { storedSpaces } from './spaces';
 import { ChatSearch } from './chat-search';
 import { McpGrant, McpRunTool } from '../../shared/mcp';
 import { ChatQuote, MAX_CHAT_QUOTES, SideOf } from '../../shared/side-threads';
@@ -83,6 +85,8 @@ const Payload = z.object({
   syncIdentities: z.array(SyncRevisionIdentity).max(100_000).optional(),
   localOnly: z.object({ workers: z.array(Id).max(10_000), tasks: z.array(Id).max(100_000) }).strict().optional(),
   marketOrigins: MarketOrigins.optional(),
+  // The spaces that hold categories and channels (docs/spaces-design.md). Older backups lack them.
+  spaces: z.array(Space).max(MAX_SPACES).optional(),
   // Which orglets and crews were archived or deleted when the backup was saved (COD-281). Older backups lack it.
   entityState: EntityStates.optional(),
   routines: z.array(Routine).max(100).optional(),
@@ -486,6 +490,7 @@ function snapshot(store: Store): Payload {
     syncIdentities: store.sync.revisions.identities(),
     localOnly: { workers: store.sync.localOnlyState().workers, tasks: store.sync.localOnlyState().tasks },
     marketOrigins: MarketOrigins.parse(store.setting('marketOrigins', [])),
+    spaces: storedSpaces(store),
     entityState: store.entityState(),
     routines: store.all('routines'),
     customConnections: readCustomConnections(store),
@@ -779,6 +784,10 @@ export class Backups {
         origins.set(origin.entityId, origin);
       }
       merged.marketOrigins = MarketOrigins.parse([...origins.values()]);
+      // A space this computer already has stays as it is; the backup adds the ones it lacks, up to the limit.
+      const spaces = new Map((incoming.spaces ?? []).map(space => [space.id, space]));
+      for (const space of current.spaces ?? []) spaces.set(space.id, space);
+      merged.spaces = [...spaces.values()].slice(0, MAX_SPACES);
       validateRelations(merged);
       if ((merged.routines?.length ?? 0) > 100) fail('Tổng số lịch sau khôi phục vượt 100.');
       const connections = mergeCustomConnections(readCustomConnections(this.store), incoming.customConnections ?? []);
@@ -786,6 +795,7 @@ export class Backups {
       writeCustomConnections(this.store, connections);
       this.store.setSetting('entityState', merged.entityState);
       this.store.setSetting('marketOrigins', merged.marketOrigins);
+      this.store.setSetting('spaces', merged.spaces);
       for (const routine of merged.routines ?? []) this.store.put('routines', routine);
       for (const turnId of replacedTurnIds) this.store.db.prepare('DELETE FROM chat_turns WHERE id=?').run(turnId);
       for (const turn of restoredTurns) this.store.sync.turns.save(SyncTurn.strip().parse(turn), turn.localRevision);

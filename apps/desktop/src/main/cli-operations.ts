@@ -1,7 +1,7 @@
 import type { Source, Task, TaskDetail, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import type { CliChat } from '../cli/protocol';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
-import type { CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from '../cli/protocol';
+import type { CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, SpacesValue, StatusValue } from '../cli/protocol';
 import { connectionPricing, findCustomConnection } from '../shared/custom-connections';
 import { isHarness } from '../shared/harness';
 import { isLocalApi, isPlanApi } from '../shared/contracts';
@@ -64,6 +64,7 @@ export class CliOperations {
       case 'archive-entity': return this.chatAdmin.archiveEntity(request);
       case 'template': return this.chatAdmin.template(request);
       case 'schedules': return this.schedules.list();
+      case 'spaces': return this.spaces();
       case 'schedule-enable': return this.schedules.enable(request);
       case 'schedule-delete': return this.schedules.remove(request);
       case 'schedule-save': return this.schedules.save(request);
@@ -95,6 +96,25 @@ export class CliOperations {
     const running = workspace.tasks.filter(task => !task.deletedAt && !task.archivedAt && isTurnRunning(task)).length;
     const colors = workspace.workers.map(worker => defaultAvatarColor(worker));
     return { version: this.dependencies.version(), orglets: workspace.workers.length, crews: workspace.teams.length, running, colors };
+  }
+
+  /** The spaces with their orglets and channels (docs/spaces-design.md), by name. A channel whose space is gone is not in one. */
+  async spaces(): Promise<SpacesValue> {
+    const workspace = await this.workspace();
+    const nameOf = (orgletId: string) => workspace.workers.find(worker => worker.id === orgletId)?.name;
+    const names = (orgletIds: readonly string[]) => orgletIds.flatMap(orgletId => nameOf(orgletId) ?? []);
+    const records = [...workspace.tasks.flatMap(task => task.channel && !task.archivedAt ? [task.channel] : []), ...(workspace.emptyChannels ?? [])];
+    return {
+      spaces: (workspace.spaces ?? []).map(space => ({
+        name: space.name,
+        orglets: names(space.orgletIds),
+        categories: space.categories.map(category => category.name),
+        channels: records.filter(channel => channel.spaceId === space.id).map(channel => {
+          const category = space.categories.find(item => item.id === channel.categoryId)?.name;
+          return { name: channel.name, ...(category ? { category } : {}), access: channel.access ?? 'inherit', orglets: names(channel.members.map(member => member.id)) };
+        }),
+      })),
+    };
   }
 
   async list(): Promise<ListValue> {

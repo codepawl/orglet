@@ -41,6 +41,7 @@ Orglet is made for one person: freelancers, solo founders and anyone who uses Ch
 |---|---|
 | **Chat with an orglet** | Click an orglet to open its chat. A new message is a turn in that chat, not a new task. [Chat guide](docs/chat-guide.md) |
 | **Work together in a channel** | Put several orglets in one named chat. They take turns, or a lead splits the work and brings one report back. Type `@name` to pick who answers. [How it works](docs/team-chat.md) |
+| **Group channels in a space** | A space holds the channels of one piece of work and the orglets that do it. Each channel takes all of them, or its own few. [How it works](docs/chat-guide.md#the-area-rail-and-the-sidebar) |
 | **Give it files and a folder** | An orglet reads only the files you attach and the folder you grant. It edits a private copy, and you review the diff before your folder changes. [Tools and permissions](docs/agent-tools.md) |
 | **View and edit files** | Open text, code, tables, images and PDFs in the app. Edit or mark them up, and save the result as a new version. [How](docs/viewing-and-editing-files.md) |
 | **Repeat work on a schedule** | Send the same request every day, every week or every few hours while Orglet is open. [Schedules](docs/routines.md) |

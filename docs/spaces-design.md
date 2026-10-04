@@ -1,6 +1,6 @@
 # Spaces, categories and channels: design
 
-**Status: phase 1 built (the data and the rules in core, described in [team-chat.md](team-chat.md#spaces)); no screen shows a space yet.** Asked for by the owner on 2026-10-04: "take the idea of making a server like Discord, then split it into channels and categories, or leave a channel outside the server. Each category and channel can let different orglets in to see it and work with the user." The owner agreed to this plan on 2026-10-05.
+**Status: built, except sync, a marketplace listing for a space, and permission defaults for a new channel.** How it works is in [team-chat.md](team-chat.md#spaces). Asked for by the owner on 2026-10-04: "take the idea of making a server like Discord, then split it into channels and categories, or leave a channel outside the server. Each category and channel can let different orglets in to see it and work with the user." The owner agreed to this plan on 2026-10-05.
 
 The working name here is **space**. The owner said "server". The [README](../README.md) promises that no Orglet server holds your work, so the same word for a group of channels confuses people. The name is the first open question below.
 
@@ -78,10 +78,10 @@ Each phase is its own pull request. Each one leaves the app working.
 
 | Phase | What it adds | Proof |
 |---|---|---|
-| **1. Data and core** | The `spaces` table, the contracts, the new channel fields, resolving `assignees`, the two rules, **Make a space from this category** as a command. No screen changes. | Integration tests for resolving, narrowing, cascading, the refusal while a channel works, and an older row read unchanged. |
-| **2. Spaces in the shell** | Rail tiles, the space sidebar, New space, space settings, moving a channel. Channels in a space take every orglet of the space. | Packaged smoke: make a space, add a channel, send a message, the right orglets answer. Alignment check with the new screens. |
-| **3. Access on categories and channels** | `inherit` and `listed` in the dialogs, the lock mark, the dimmed group in the member column. | Smoke: an orglet outside a channel cannot be tagged and does not answer. |
-| **4. Around it** | The `orglet` command (`spaces`, `--space`), backup and restore, the sync projection, a space as a marketplace listing, defaults for a new channel's permissions, user pages. | Each surface's own tests. |
+| **1. Data and core** | The `spaces` table, the contracts, the new channel fields, resolving `assignees`, the two rules, **Make a space from this category** as a command. No screen changes. Built. | Integration tests for resolving, narrowing, cascading, the refusal while a channel works, and an older row read unchanged. |
+| **2. Spaces in the shell** | Rail tiles, the space sidebar, New space, space settings, moving a channel. Channels in a space take every orglet of the space. Built. Moving a channel is in its settings, not a drag. | Packaged smoke: make a space, add a channel, send a message, the right orglets answer. Alignment check with the new screens. |
+| **3. Access on categories and channels** | `inherit` and `listed` in the dialogs, the lock mark, the dimmed group in the member column. Built. | Smoke: an orglet outside a channel cannot be tagged and does not answer. |
+| **4. Around it** | The `orglet` command (`spaces`, `--space`), backup and restore, the sync projection, a space as a marketplace listing, defaults for a new channel's permissions, user pages. Built: `orglet spaces`, backup and restore, user pages. Not built: `--space` on other commands, the sync projection, a space as a marketplace listing, permission defaults. | Each surface's own tests. |
 
 ## Open
 

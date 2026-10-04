@@ -7,6 +7,8 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { Channel } from '../../apps/desktop/src/shared/channels';
 import { categoryOrgletIds, membersInSpace, membersOutsideScope, scopeOrgletIds, Space } from '../../apps/desktop/src/shared/spaces';
+import { parseArguments } from '../../apps/desktop/src/cli/arguments';
+import { formatSpaces } from '../../apps/desktop/src/cli/output';
 
 /*
  * Spaces (docs/spaces-design.md): a space holds categories and channels, and who is in a channel narrows from the
@@ -54,6 +56,22 @@ describe('who a place in a space has', () => {
     expect(Space.safeParse({ ...base, orgletIds: [] }).success).toBe(false);
     expect(Space.safeParse({ ...base, orgletIds: [ids.a, ids.a] }).success).toBe(false);
     expect(Space.safeParse({ ...base, categories: [{ id: ids.category, name: 'x' }, { id: ids.category, name: 'y' }] }).success).toBe(false);
+  });
+});
+
+describe('orglet spaces', () => {
+  it('parses the command and prints each space with its channels', () => {
+    expect(parseArguments(['spaces', '--json'])).toEqual({ kind: 'spaces', json: true });
+    expect(formatSpaces({ spaces: [] })).toBe('No spaces yet.');
+    const text = formatSpaces({ spaces: [{ name: 'Launch', orglets: ['Scout', 'Writer'], categories: ['Copy'], channels: [
+      { name: 'general', access: 'inherit', orglets: ['Scout', 'Writer'] },
+      { name: 'drafts', category: 'Copy', access: 'listed', orglets: ['Writer'] },
+    ] }] });
+    const lines = text.split('\n');
+    expect(lines[0]).toBe('Launch: Scout, Writer');
+    expect(lines[1]).toContain('#general');
+    expect(lines[1]).toContain('every orglet of its place');
+    expect(lines[2]).toMatch(/#drafts\s+Copy\s+Writer/);
   });
 });
 

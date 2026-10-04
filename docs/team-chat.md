@@ -86,7 +86,7 @@ Crews and channels are one concept since COD-369 (owner, 2026-10-01): a crew is 
 
 ### Spaces
 
-A **space** is a named group of orglets that holds categories and channels, the way a Discord server does (owner, 2026-10-04; the plan is [spaces-design.md](spaces-design.md)). Core has the data and the rules. No screen shows a space yet.
+A **space** is a named group of orglets that holds categories and channels, the way a Discord server does (owner, 2026-10-04; the plan is [spaces-design.md](spaces-design.md)).
 
 **Data.** The settings row `spaces` holds each space (`Space` in `apps/desktop/src/shared/spaces.ts`): `id`, `name`, an optional `color`, `orgletIds` and `categories`, each with an `id`, a `name` and an optional `orgletIds`. `Workspace.spaces` lists them. A channel record gains three optional fields: `spaceId`, `categoryId` and `access` (`inherit` or `listed`). A channel without a `spaceId` is outside every space and works as before.
 
@@ -98,7 +98,17 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 **Moving.** `updateChannel` with a `spaceId` moves a channel into a space. The channel keeps its own list, cut to the orglets that space has. `spaceId: null` takes it out with the orglets it had. `deleteSpace` does that for every channel of the space. `spaceFromCategory` makes a space from a category of channels outside every space: it takes the category's name and every orglet of those channels, and each channel keeps its own list.
 
-**Not yet.** Spaces are not in backups or in sync. A channel whose space is missing reads as a channel outside every space, with the members it last resolved.
+**The shell.** Each space has a tile on the rail, after Home (`areaEntries` in `App.tsx`, keyed `space:<id>`). The sidebar then lists that space: its name, **+** for a new channel, a menu (Space settings, Members, Categories, Delete space), the channels directly in the space, then one section per category. The `#` tile lists the channels outside every space. Which space is open is UI chrome (`orglet.space`, `readOpenSpace` in `renderer/areas.ts`). Opening a channel opens its space.
+
+**The dialogs.** `SpaceDialog` edits a space: its name, its orglets, and its categories, each with every orglet of the space or the ones picked. `ChannelDialog` gains **Space** and **Category** on its first tab, and on **Members** a choice between every orglet of the channel's place and the channel's own list, which offers only the orglets that place has. A channel with its own list wears a lock in place of its `#`.
+
+**The member column.** In a space, a channel with its own list shows a second, dimmed group: the orglets its place has that are not in the channel, with **Add to this channel**. **Remove from channel** gives the channel its own list first, or the space would put the orglet straight back.
+
+**From a category.** A category of channels outside every space has **Make a space from this category** in its menu.
+
+**Backups and the terminal.** A backup carries the spaces (`spaces` in its payload); restoring keeps a space this computer already has. `orglet spaces` lists each space with its orglets and channels.
+
+**Not yet.** Spaces do not sync. On another computer a synced channel whose space is missing reads as a channel outside every space, with the members it last resolved. A space is not a marketplace listing, and it sets no defaults for a new channel's permissions.
 
 Back and forward work like a browser. The side buttons on a mouse, or Alt+Left and Alt+Right, step through what you opened: a chat, then another chat, then back to the first; Library, a skill, back to Library, forward to the skill again; Settings tab to tab; Notifications open, then back closes it. Closing a panel is a step too, so back reopens it. A chat, skill or knowledge item deleted since is skipped. Alt+arrows do nothing while you type in a text box; the mouse buttons always work. Leaving a schedule you are editing asks about unsaved changes, the same as the panel's own Back.
 

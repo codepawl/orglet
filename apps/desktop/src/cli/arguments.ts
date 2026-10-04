@@ -11,7 +11,7 @@ import { Reaction } from '../shared/message-interactions';
 export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open' | 'run' | 'config' | 'create' | 'edit' | 'delete'
   | 'react' | 'forward' | 'answer' | 'revise' | ChatControl
   | 'chats' | 'side' | 'bring' | 'channel' | 'group' | 'members' | 'rename' | 'archive' | 'restore' | 'template'
-  | 'schedules' | 'schedule'
+  | 'schedules' | 'schedule' | 'spaces'
   | 'search' | 'running' | 'library' | 'memory' | 'usage' | 'models' | 'preferences';
 /** The fields `orglet schedule add` and `edit` may set (COD-354), as the protocol carries them. */
 export type ScheduleFields = Omit<Extract<CliRequestBody, { op: 'schedule-save' }>, 'op' | 'schedule'>;
@@ -44,6 +44,7 @@ export type ParsedCommand =
   | { kind: 'archive-entity'; entity: 'worker' | 'team'; name: string; archived: boolean; json: boolean }
   | { kind: 'template'; templateId: TemplateId; provider: 'demo' | 'openai'; json: boolean }
   | { kind: 'schedules'; json: boolean }
+  | { kind: 'spaces'; json: boolean }
   | { kind: 'schedule-enable'; schedule: string; enabled: boolean; json: boolean }
   | { kind: 'schedule-delete'; schedule: string; confirmName: string; json: boolean }
   | { kind: 'schedule-save'; schedule?: string; fields: ScheduleFields; json: boolean }
@@ -64,7 +65,7 @@ export class UsageError extends Error {}
 const CONTROL_COMMANDS: readonly ChatControl[] = ['stop', 'pause', 'resume', 'retry', 'continue'];
 const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run', 'config', 'create', 'edit', 'delete',
   'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'channel', 'group', 'members', 'rename', 'archive', 'restore', 'template',
-  'schedules', 'schedule', 'search', 'running', 'library', 'memory', 'usage', 'models', 'preferences'];
+  'schedules', 'schedule', 'spaces', 'search', 'running', 'library', 'memory', 'usage', 'models', 'preferences'];
 /** Commands that name an orglet or crew with --to; `schedule` names the one it runs for, `library` and `models` whose. */
 const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule', 'library', 'models'];
 /** Commands that name a chat with --chat, by the start of its id. */
@@ -108,6 +109,7 @@ Commands:
   template  Create a channel from one of the app's templates
   schedules List schedules with their timing and limits
   schedule  Create, edit, switch on or off, or delete a schedule
+  spaces    List spaces with their orglets and channels
   search    Search every chat, message and name
   running   Every run working or waiting across chats
   library   Memories or notes, optionally of one orglet or channel
@@ -213,6 +215,7 @@ Example:
   rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --title \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc kênh không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc kênh\n  --chat <mã>        Chat theo mã của orglet chats\n  --title <tên>      Tên mới (bắt buộc)\n  --json             In JSON cho máy đọc"),
   archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay kênh. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay kênh đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc kênh\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
   restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay kênh đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
+  spaces: t("Cách dùng: orglet spaces [--json]\n\nLiệt kê không gian: Tí trong đó, rồi từng kênh với nhóm của nó và những Tí ở trong kênh."),
   schedules: t("Cách dùng: orglet schedules [--json]\n\nLiệt kê lịch: bật hay tắt, Tí hoặc kênh chạy nó, khi nào chạy, lần tới, giới hạn mỗi\nlần và mỗi ngày. Số tiền trong --json là số nguyên phần triệu USD."),
   schedule: t("Cách dùng: orglet schedule add \"<tên>\" --to <tên> --brief \"<việc>\" --every <khi> --at <HH:MM> --budget <USD> [tùy chọn]\n       orglet schedule edit \"<tên>\" [tùy chọn]\n       orglet schedule on|off \"<tên>\"\n       orglet schedule delete \"<tên>\" --confirm \"<tên>\"\n\nTạo, sửa, bật, tắt hoặc xóa một lịch. Lịch tạo ở đây không có quyền công cụ,\ntrình duyệt hay thư mục; các provider của Tí hoặc kênh phải được cho phép sẵn\ntrong Cài đặt của app. Chọn những thứ đó trong app. Chạy ngay: orglet run.\n\nTùy chọn:\n  --to <tên>            Tí hoặc kênh chạy lịch\n  --brief <việc>        Brief gửi mỗi lần chạy\n  --every <khi>         daily, weekdays, weekly, hoặc số giờ như 2h\n  --at <HH:MM>          Giờ chạy; với số giờ là giờ đầu tiên trong ngày\n  --day <ngày>          Ngày trong tuần cho weekly: mon, tue, …, sun\n  --timezone <vùng>     Múi giờ, như Asia/Ho_Chi_Minh; mặc định là của máy\n  --budget <USD>        Giới hạn mỗi lần chạy\n  --daily-cap <USD>     Giới hạn mỗi ngày (không bắt buộc)\n  --called              Chỉ chạy khi gọi bằng orglet run\n  --off                 Tạo lịch ở trạng thái tắt (add)\n  --rename <tên>        Tên mới (edit)\n  --json                In JSON cho máy đọc"),
   search: t("Cách dùng: orglet search \"<từ cần tìm>\" [--json]\n\nTìm trong mọi tin nhắn, câu trả lời, tên chat, Tí và kênh, như ô tìm kiếm của app.\nKhông phân biệt hoa thường hay dấu. In mã chat để đọc bằng orglet read --chat.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
@@ -536,6 +539,7 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'restore': return parseArchive(command, options);
     case 'template': return parseTemplate(options);
     case 'schedules': return { kind: 'schedules', json };
+    case 'spaces': return { kind: 'spaces', json };
     case 'schedule': return parseSchedule(options);
     case 'search': return parseSearch(options);
     case 'running': return { kind: 'running', json };

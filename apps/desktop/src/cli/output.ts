@@ -1,4 +1,4 @@
-import type { CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, SearchValue, UsageValue } from './protocol';
+import type { CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, SearchValue, SpacesValue, UsageValue } from './protocol';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
 
@@ -135,6 +135,19 @@ export function formatSchedules(value: SchedulesValue): string {
     `${scheduleTiming(row)} (${row.timeZone})`,
     row.dailyCapMicros ? t('{0} mỗi lần, {1} mỗi ngày', formatUsd(row.budgetMicros), formatUsd(row.dailyCapMicros)) : t('{0} mỗi lần', formatUsd(row.budgetMicros)),
   ])).join('\n');
+}
+
+/** Spaces one after another: the space and its orglets, then each channel with its category and who is in it. */
+export function formatSpaces(value: SpacesValue): string {
+  if (value.spaces.length === 0) return t('Chưa có không gian nào.');
+  return value.spaces.map(space => {
+    const channels = padded(space.channels.map(channel => [
+      `  #${channel.name}`,
+      channel.category ?? '',
+      channel.access === 'inherit' ? t('mọi Tí của nơi nó nằm') : channel.orglets.join(', '),
+    ]));
+    return [`${space.name}: ${space.orglets.join(', ')}`, ...channels].join('\n');
+  }).join('\n\n');
 }
 
 export function formatScheduleChange(kind: 'schedule-enable' | 'schedule-delete' | 'schedule-save', value: ScheduleValue): string {
