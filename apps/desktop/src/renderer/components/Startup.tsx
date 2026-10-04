@@ -69,7 +69,7 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
   const waiting = wait === 'stuck' ? t('Mở lâu hơn bình thường. Nếu vẫn không xong, đóng rồi mở lại Orglet.') : wait === 'slow' ? t('Vẫn đang mở, chờ chút…') : t('Đang mở workspace…');
   return <div className={`app startup${sidebar ? '' : ' sidebar-hidden'}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} onPointerDown={tap}>
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
-      <div className="sidebar-head"><strong className="sidebar-title">Orglet</strong></div>
+      <div className="sidebar-head"><strong className="sidebar-title">{t('Trò chuyện')}</strong></div>
       <div className="sidebar-scroll">
         <SidebarSection id="workers" title={t('Tin riêng')}><RowShapes count={WORKER_ROW_SHAPES} label={t('Đang mở danh sách Tí…')} /></SidebarSection>
       </div>

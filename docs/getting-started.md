@@ -55,7 +55,7 @@ On first launch the window is US English. A **Researcher** worker is already the
 
 - The **rail** on the left shows each orglet as a face, with your channels behind a **#** button. There is no task list. Click a face to open that chat; hover it for the name. **Open sidebar** at the top switches to the full **sidebar**, which lists them by name.
 - Once you open a second chat, the chats you have open sit as **tabs** across the top.
-- The **main column** is the conversation, headed **Chatting with …**. The message box sits at the bottom.
+- The **main column** is the conversation. A chat with nothing in it yet starts the way a messenger does: the orglet's face, its name, what it does and a few starters, at the bottom left above the message box, which is always at the bottom.
 - The foot of the rail has **Notifications**, **Running**, **Schedules**, **Library** and **Settings**.
 
 <p align="center">

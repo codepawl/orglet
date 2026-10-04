@@ -574,7 +574,17 @@ export function App() {
     media.addEventListener('change', followWidth);
     return () => media.removeEventListener('change', followWidth);
   }, []);
+  // The sidebar folds into, and opens out of, the rail tile of what it lists, the way a window goes to its icon
+  // (user, 2026-10-04): this points the motion's origin at that tile.
+  const aimSidebarAtTile = () => {
+    const tile = document.querySelector('.area-tile.active') ?? document.querySelector('.area-tile');
+    const shell = document.querySelector<HTMLElement>('.app');
+    if (!tile || !shell) return;
+    const box = tile.getBoundingClientRect();
+    shell.style.setProperty('--sidebar-origin-y', `${Math.round(box.top + box.height / 2 - shell.getBoundingClientRect().top)}px`);
+  };
   const closeSidebar = () => {
+    aimSidebarAtTile();
     setSidebar(false);
     // Closing the sidebar laid over a narrow window is not a choice of mode; folding it in a wide one is.
     if (matchMedia('(max-width: 780px)').matches) return;
@@ -588,12 +598,16 @@ export function App() {
   const peekSidebar = (inside: boolean) => {
     clearTimeout(peekTimer.current);
     if (inside) {
-      if (!matchMedia('(max-width: 780px)').matches) setSidebarPeek(true);
+      if (!matchMedia('(max-width: 780px)').matches) {
+        aimSidebarAtTile();
+        setSidebarPeek(true);
+      }
       return;
     }
     peekTimer.current = setTimeout(() => setSidebarPeek(false), 220);
   };
   const openFullSidebar = () => {
+    aimSidebarAtTile();
     clearTimeout(peekTimer.current);
     setSidebarPeek(false);
     setSidebar(true);
@@ -1736,6 +1750,8 @@ export function App() {
   const chatProviders = [...new Set((selected && detail ? openTaskWorkers : executionWorkers).map(item => item.provider))];
   const headerProvider = chatProviders.length === 1 ? chatProviders[0] : undefined;
   const chatName = team?.name ?? emptyChannelName ?? worker?.name ?? 'Orglet';
+  // What the orglet does, or the channel's topic, under its name where the chat starts.
+  const chatIntro = (team ? undefined : emptyChannel ? emptyChannel.topic : worker?.description)?.trim();
   const openSideThread = selected && detail?.task.sideOf ? detail.task : undefined;
   // The header's ⋯ leads with the settings of whoever this chat talks to (COD-293); the chat's own name, assignees
   // and limit follow as "Thiết lập chat". A chat not loaded yet offers neither rather than guess from the sidebar.
@@ -2111,7 +2127,7 @@ export function App() {
     <aside className={`sidebar${sidebar ? '' : sidebarPeek ? ' peek' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={(!sidebar && !sidebarPeek) || undefined}
       onPointerEnter={sidebar ? undefined : () => peekSidebar(true)} onPointerLeave={sidebar ? undefined : () => peekSidebar(false)}>
       <div className="sidebar-head">
-        <strong className="sidebar-title">{sidebarFor === 'home' ? t('Orglet') : sidebarFor === 'channels' ? t('Kênh') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
+        <strong className="sidebar-title">{sidebarFor === 'home' ? t('Trò chuyện') : sidebarFor === 'channels' ? t('Kênh') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
         {sidebarFor === 'channels' && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={18} /></Button>}
         {(sidebarFor === 'channels' || sidebarFor === 'activity') && <Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button>}
         <Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={closeSidebar}><PanelLeft size={18} /></Button>
@@ -2233,9 +2249,9 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} harnesses={harnesses} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} modePicker={chatModePicker(detail)} /></> : <ThreadSkeleton />}</> : (team || emptyChannel || worker) ? <div className="team-chat team-chat-fresh">
-        {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
-            middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} harnesses={harnesses} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} modePicker={chatModePicker(detail)} /></> : <ThreadSkeleton />}</> : (team || emptyChannel || worker) ? <div className="team-chat team-chat-fresh team-chat-start">
+        {/* Nothing has been sent yet. The chat is still laid out like every other chat (user, 2026-10-04): the
+            greeting and the starters end the thread's column on the left, and the prompt bar is at the bottom. */}
         <div className="fresh-chat team-chat-empty">
           {/* The faces you are about to talk to, big and in 3D (COD-156): a worker alone, or a team or channel side by
               side. They hop in when the chat opens, turn to follow the pointer, and a team glances at each other
@@ -2247,15 +2263,19 @@ export function App() {
                 ? channelWorkers.slice(0, MAX_CREW_MEMBERS).map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size={freshFaceSize(channelWorkers.length)} motion={{ lead: true, greet: true, group: emptyChannelKey(emptyChannel) }} />)
                 : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xxl" motion={{ lead: true, greet: true }} /> : null}
           </div>
-          <h1 className="welcome">{t('Đang nhắn với {0}', [chatName])}</h1>
-          <div className="thread-composer">
-            {composerBar}
-            <ComposerFoot>{composerHint}</ComposerFoot>
-            <SkippedFiles items={skippedSources} />
-          </div>
+          {/* The start of a chat, the way a messenger opens one: who it is in large type, what they do, then one line
+              saying this is where the chat begins. Assistive technology still hears "Chatting with …". */}
+          <h1 className="welcome" aria-label={t('Đang nhắn với {0}', [chatName])}>{team || emptyChannel ? `#${chatName}` : chatName}</h1>
+          {chatIntro && <p className="welcome-about">{chatIntro}</p>}
+          <p className="welcome-start">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatName])}</p>
           <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}
             onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
+        </div>
+        <div className="thread-composer">
+          {composerBar}
+          <ComposerFoot>{composerHint}</ComposerFoot>
+          <SkippedFiles items={skippedSources} />
         </div>
       </div> : workspace.workers.length === 0
         // The last orglet can be deleted; the pane then offers to make one instead of standing empty.

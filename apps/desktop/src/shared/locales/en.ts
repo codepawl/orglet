@@ -2382,6 +2382,7 @@ export const en: Dictionary = {
   'Thêm tài khoản': 'Add account',
   'Thư mục đăng nhập': 'Sign-in folder',
   'Tài khoản': 'Account',
+  'Đây là khởi đầu cuộc trò chuyện của bạn với {0}.': 'This is the beginning of your chat with {0}.',
   'Đồng bộ ngay': 'Sync',
   'Dữ liệu trên máy này đã được xóa, nên đồng bộ đang chờ. Bấm Đồng bộ ngay để lấy lại dữ liệu trong tài khoản.': 'This computer was erased, so sync is waiting. Press Sync to bring back what is in your account.',
   'Tất cả lịch': 'All schedules',

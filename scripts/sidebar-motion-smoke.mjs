@@ -50,11 +50,18 @@ function checkMove(frames, opening, overlay) {
   assert.ok(frames.length > 5, 'motion is sampled over multiple rendered frames');
   for (const frame of frames) {
     assert.equal(frame.columns.length, 4, 'the shell keeps four tracks');
-    assert.equal(frame.opacity, 1, 'the sidebar never fades');
-    assert.ok(Math.abs(frame.sidebarWidth - first.sidebarWidth) < 1, 'sidebar rows retain their full width');
     assert.ok(Math.abs(frame.railLeft - first.railLeft) < 1, 'the permanent rail stays put');
-    if (!overlay) assert.ok(frame.sidebarRight <= frame.mainLeft + 1, 'the sidebar stays behind the moving chat edge');
   }
+  // The sidebar folds into its rail tile and opens out of it (user, 2026-10-04): shown, it is whole and in place;
+  // folded, it is gone; in between it is smaller and partly faded.
+  const shown = opening ? last : first;
+  const folded = opening ? first : last;
+  assert.equal(shown.opacity, 1, 'an open sidebar is fully shown');
+  assert.equal(shown.transform, 'none', 'an open sidebar is at its own size');
+  assert.ok(folded.opacity < 0.05, 'a folded sidebar is faded out');
+  assert.ok(folded.sidebarWidth < shown.sidebarWidth / 2, 'a folded sidebar has shrunk toward its tile');
+  assert.ok(frames.some(frame => frame.opacity > 0.05 && frame.opacity < 0.95), 'the fade is sampled part of the way');
+  assert.ok(frames.some(frame => frame.sidebarWidth > folded.sidebarWidth + 10 && frame.sidebarWidth < shown.sidebarWidth - 10), 'the size is sampled part of the way');
   if (overlay) {
     assert.ok(frames.every(frame => Math.abs(frame.mainLeft - first.mainLeft) < 1), 'overlay motion leaves the chat in place');
   } else {

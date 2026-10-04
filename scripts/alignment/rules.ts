@@ -12,7 +12,7 @@ export type Box = { left: number; top: number; right: number; bottom: number };
 
 export type FindingKind =
   | 'centre-line' | 'column-start' | 'icon-slot' | 'uneven-gap' | 'wrap' | 'clip' | 'overflow' | 'heading-action' | 'heading-wrap'
-  | 'family-heading' | 'family-edge' | 'family-lead' | 'island-seam';
+  | 'family-heading' | 'family-edge' | 'family-lead' | 'island-seam' | 'near-miss';
 
 export type Finding = {
   kind: FindingKind;
@@ -125,6 +125,28 @@ export function outliers<Item>(members: Item[], valueOf: (item: Item) => number,
   return members
     .map(item => ({ item, offset: valueOf(item) - referenceValue }))
     .filter(entry => Math.abs(entry.offset) > tolerance);
+}
+
+/** A step smaller than this between two left edges is not an indent anyone meant; it is two rows that missed each other. */
+export const SMALLEST_INDENT = 12;
+
+/**
+ * Members that almost share a left edge with the rest: further than `tolerance` from the edge most members start at,
+ * but nearer than `indent`. A real indent is at least `indent`, so anything between the two is a slip. With no
+ * majority, the member further right is measured against the one further left.
+ */
+export function nearMisses<Item>(members: Item[], valueOf: (item: Item) => number, tolerance: number, indent = SMALLEST_INDENT): { item: Item; offset: number }[] {
+  const clusters = clusterValues(members, valueOf, tolerance);
+  if (clusters.length < 2) return [];
+  let reference = clusters[0];
+  for (const cluster of clusters) {
+    if (cluster.length > reference.length) reference = cluster;
+  }
+  const referenceValue = valueOf(reference[0]);
+  return clusters
+    .filter(cluster => cluster !== reference)
+    .flatMap(cluster => cluster.map(item => ({ item, offset: valueOf(item) - referenceValue })))
+    .filter(entry => Math.abs(entry.offset) > tolerance && Math.abs(entry.offset) < indent);
 }
 
 /** Gaps between neighbouring boxes along one axis, in the order given. */
@@ -494,6 +516,34 @@ export function iconSlotFindings(column: ColumnItem[], tolerances: Tolerances): 
   });
 }
 
+
+/** One block a person reads top to bottom: a message, a card, a page's body. Rows in it are compared across containers. */
+export const READING_BLOCK_SELECTOR = '.message-main, .page-body, .org-drawer-scroll, .details-pane, [data-align-block]';
+/** A row that opens something or names a step: it leads with a mark, and the marks of such rows form one edge. */
+export const LED_ROW_SELECTOR = 'summary, .activity-summary, .team-job-line';
+
+/**
+ * Rows led by a mark anywhere in one reading block start their marks on one edge, or a clear indent apart. The
+ * column check compares only the children of one container, so two rows from different components stacked in one
+ * message (a crew job above the trace) could sit 4px apart and pass (user, 2026-10-04).
+ */
+export function checkNearMisses(block: Element, tolerances: Tolerances): Finding[] {
+  const rows: { element: Element; mark: Box }[] = [];
+  for (const element of block.querySelectorAll(LED_ROW_SELECTOR)) {
+    if (!isRendered(element) || inHiddenLayer(element) || ignoredFor(element, 'near-miss')) continue;
+    if (element.closest(READING_BLOCK_SELECTOR) !== block) continue;
+    const mark = leadingParts(element)?.mark;
+    if (mark) rows.push({ element, mark });
+  }
+  return nearMisses(rows, row => row.mark.left, tolerances.column).map(({ item, offset }) => ({
+    kind: 'near-miss' as const,
+    selector: describe(item.element),
+    text: snippet(item.element),
+    message: `mark starts ${round(Math.abs(offset))}px ${offset > 0 ? 'right' : 'left'} of the other rows' marks in this block; line them up or indent by at least ${SMALLEST_INDENT}px`,
+    offset: round(offset),
+    boxes: [item.mark],
+  }));
+}
 
 /** Siblings of one kind in a flex row or column should sit the same distance apart. */
 export function checkGaps(container: Element, tolerances: Tolerances): Finding[] {
@@ -893,6 +943,7 @@ export function measurePage(tolerances: Tolerances): Finding[] {
     findings.push(...checkSingleLine(element));
     findings.push(...checkOverflow(element));
     if (element.matches(PANEL_HEADING_SELECTOR)) findings.push(...checkHeadingAction(element, tolerances), ...checkHeadingWrap(element));
+    if (element.matches(READING_BLOCK_SELECTOR)) findings.push(...checkNearMisses(element, tolerances));
   }
   findings.push(...checkColumns(columns, tolerances));
   findings.push(...checkIslandSeam());

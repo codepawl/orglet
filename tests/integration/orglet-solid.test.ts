@@ -176,6 +176,8 @@ it('keeps the 3D canvas out of layout and out of the way of the pointer', () => 
   // turning can never shift the heading or the picker grid.
   expect(css).toMatch(/\.orglet-3d \{ position:absolute; left:50%; top:50%; display:block; pointer-events:none;/);
   expect(css).toContain('.fresh-faces { display:flex; justify-content:center; align-items:flex-end; gap:18px; min-height:96px;');
+  // An empty chat keeps its faces on the thread's left edge, above the prompt bar at the bottom.
+  expect(css).toContain('.team-chat-start .fresh-faces { justify-content:flex-start;');
   // The small faces keep their own motion, and their landing became the happy hop.
   expect(css).toContain('@keyframes mascot-cheer-eyes');
   expect(css).toMatch(/\.message-byline\.landed \.avatar \.mascot-eyes \{ animation:mascot-blink[^}]*mascot-cheer-eyes/);

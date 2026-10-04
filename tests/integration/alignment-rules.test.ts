@@ -9,6 +9,7 @@ import {
   isClippedWithoutEllipsis,
   islandSeamFindings,
   isShortLabel,
+  nearMisses,
   nextWordWouldFit,
   outliers,
   paintsColour,
@@ -57,6 +58,16 @@ describe('alignment check maths (COD-333)', () => {
     const items = [{ textStart: 302 }, { textStart: 304 }];
     expect(outliers(items, item => item.textStart, 1)).toEqual([{ item: items[1], offset: 2 }]);
     expect(outliers([{ textStart: 302 }, { textStart: 303 }], item => item.textStart, 1)).toEqual([]);
+  });
+
+  it('flags rows that almost share a left edge, and leaves real indents alone', () => {
+    // A crew job 4px right of the trace row and the changed-files row under it: a slip.
+    expect(nearMisses([376, 376, 380], value => value, 1)).toEqual([{ item: 380, offset: 4 }]);
+    // Rows nested one level in (24px) are an indent, not a slip; rows on the same edge are fine.
+    expect(nearMisses([376, 376, 400], value => value, 1)).toEqual([]);
+    expect(nearMisses([376, 376.5, 377], value => value, 1)).toEqual([]);
+    // Two rows and no majority: the one further right is measured against the other.
+    expect(nearMisses([372, 380], value => value, 1)).toEqual([{ item: 380, offset: 8 }]);
   });
 
   it('splits items into columns by their left edge', () => {
