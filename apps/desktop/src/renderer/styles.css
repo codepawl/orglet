@@ -637,6 +637,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .team-chat-start .welcome { margin-bottom:4px; text-align:left; font-size:1.75rem; font-weight:700; letter-spacing:-.5px; line-height:1.2; overflow-wrap:anywhere; }
 .welcome-about { margin:0 0 6px; max-width:var(--bubble-max, 80ch); font-size:15px; text-wrap:pretty; }
 .welcome-start { margin:0 0 10px; color:var(--muted); font-size:14px; }
+/* The same block above a chat's first message (`ThreadStart`): it scrolls away with the history. */
+.thread-start { display:flex; flex-direction:column; align-items:flex-start; margin:8px 0 26px; }
+.thread-start-faces { display:flex; align-items:flex-end; gap:10px; margin-bottom:12px; }
+.thread-start-name { margin:0 0 4px; font-size:1.75rem; font-weight:700; letter-spacing:-.5px; line-height:1.2; overflow-wrap:anywhere; }
+.thread-start-about { margin:0 0 6px; max-width:var(--bubble-max); font-size:15px; text-wrap:pretty; }
+.thread-start-line { margin:0; color:var(--muted); font-size:14px; }
 /* The starters sit under a centred greeting. The block is only as wide as its widest row, so centring it
    centres what is actually drawn: a centred 440px box would leave the text hugging its left edge. */
 .thread-menu { flex-shrink:0; }

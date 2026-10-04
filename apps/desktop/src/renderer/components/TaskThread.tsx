@@ -124,9 +124,9 @@ type Turn = { missingInput: boolean; revision: number; runs: Run[]; sentAt: stri
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward, islandDock = MAIN_DOCK, embedded = false }: {
+export function TaskThread({ start, detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward, islandDock = MAIN_DOCK, embedded = false }: {
   /** The prompt bar this chat's island docks on: the main chat's, or a side thread's in the right panel (COD-365). */ islandDock?: string;
-  /** Drawn inside the right panel beside its main chat (COD-365): the panel's own head says what the thread is. */ embedded?: boolean; detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
+  /** Drawn inside the right panel beside its main chat (COD-365): the panel's own head says what the thread is. */ embedded?: boolean; /** Where the chat begins: who it is with, shown above the first message the way a messenger starts a chat. */ start?: ThreadStartInfo; detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
   /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
@@ -442,6 +442,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
 
   return <div className="thread-scroll" ref={viewport}>
     <div className="thread-content" ref={threadContent}>
+      {start && !embedded && !detail.task.sideOf && <ThreadStart start={start} />}
       {detail.task.sideOf && !embedded && <p className="side-thread-origin">
         {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
         <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
@@ -818,6 +819,21 @@ function UnfinishedWork({ limitations, onRetry }: { limitations: readonly string
     </div>
     <Button className="limit-retry" variant="outline" onClick={onRetry}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>
   </div>;
+}
+
+export type ThreadStartInfo = { name: string; about?: string; faces: ReactNode };
+
+/**
+ * The top of a chat's history (user, 2026-10-04): the faces, the name in large type, what the orglet does, and one
+ * line saying the chat begins here. It is the same block an empty chat shows, kept above the first message.
+ */
+function ThreadStart({ start }: { start: ThreadStartInfo }) {
+  return <header className="thread-start">
+    <div className="thread-start-faces">{start.faces}</div>
+    <h2 className="thread-start-name">{start.name}</h2>
+    {start.about && <p className="thread-start-about">{start.about}</p>}
+    <p className="thread-start-line">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [start.name])}</p>
+  </header>;
 }
 
 /** Who wrote a forwarded message, as the chat names them. */
