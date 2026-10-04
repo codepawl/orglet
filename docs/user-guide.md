@@ -11,7 +11,7 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 | Page | What it covers |
 |---|---|
 | [Orglets and channels](orglets-and-crews.md) | Creating an orglet and a channel, how a lead splits the work, `@` tags, replies, reactions |
-| [Connections](connections.md) | Claude Code, Codex, Cursor Agent and Gemini CLI on this computer; API keys; Ollama; Demo; model IDs; cost limits |
+| [Connections](connections.md) | Claude Code, Codex, Cursor Agent and Gemini CLI on this computer; API keys; Ollama; model IDs; cost limits |
 | [In a chat](chat-guide.md) | Attaching files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, notifications |
 | [Permissions and learning](permissions-and-learning.md) | The permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
 | [Settings](settings.md) | Every settings tab, including backup, erasing data, and updates |
@@ -61,9 +61,9 @@ A build run from source does not update itself. How to run the checks: [CONTRIBU
 
 ## First chat
 
-1. Open Orglet. The window is in US English, and a **Researcher** orglet is already in the sidebar, on **Demo**.
+1. Open Orglet. The window is in US English, and a **Researcher** orglet is already in the sidebar, with no model yet.
 2. Click **Researcher**. The main column is that orglet's chat, with the message box at the bottom.
-3. Type a short message and send it. Demo answers with a labelled sample reply; it calls no model and reads no files.
+3. Click **Connect a model** in its chat and pick a connection. Then type a short message and send it.
 4. To get real answers, connect a model: [Connections](connections.md). Then open the orglet's settings and set **Model** to that connection.
 
 Every orglet and every channel has **one live chat**. A new message is a turn in that chat, not a new item in the sidebar. To start over, open **⋯** next to **Details** and choose **Archive**; search (Ctrl+K) still finds the old chat.

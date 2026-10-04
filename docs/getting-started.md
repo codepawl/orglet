@@ -47,11 +47,11 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The Researcher worker starts on **Demo**, so you can try the app without any account.
+The Researcher worker starts with no model. Connect one to chat.
 
 ## 2. First look
 
-On first launch the window is US English. A **Researcher** worker is already there, on **Demo**. The app uses your system's usual interface font.
+On first launch the window is US English. A **Researcher** worker is already there, with no model yet. The app uses your system's usual interface font.
 
 - The **rail** on the left shows each orglet as a face, with your channels behind a **#** button. There is no task list. Click a face to open that chat; hover it for the name. **Open sidebar** at the top switches to the full **sidebar**, which lists them by name.
 - Once you open a second chat, the chats you have open sit as **tabs** across the top.
@@ -66,13 +66,13 @@ To change language: **Settings** → **General** → **Language** (English (US),
 
 The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward through the chats and panels you opened, like a browser.
 
-## 3. Send a Demo message
+## 3. Connect a model
 
 1. Click **Researcher** on the rail.
 2. Type a short message in the box at the bottom.
 3. Send it.
 
-You get a labelled sample reply. Demo does not call a model and does not read files. That is enough to see the layout. The line under the message box says the chat is on Demo, with a **Connect a model** button:
+The orglet cannot answer until it has a model. Its chat says so and shows a **Connect a model** button:
 
 - If nothing is connected yet, it opens **Settings** → **API connections**. Add a key or a custom connection there, then close Settings. The orglet's settings open next, with that connection already chosen.
 - If something is already connected (a signed-in harness, a saved key, a custom connection), it opens the orglet's settings straight away, with the first one that can run chosen.
@@ -92,7 +92,7 @@ When you want real answers, pick one path. Do not paste keys into chat.
 1. Install that tool on this computer and sign in to it. Gemini CLI signs in when you run `gemini` and choose **Sign in with Google**.
 2. Open **Settings** → **Local harnesses**.
 3. Check the row: **not installed**, **found on disk**, **signed in (ready)**, or **sign-in error**. **Found on disk is not ready.**
-4. If it is not signed in, copy the login command from that row and run it, then choose **Rescan**. Orglet does not switch to Demo when sign-in fails.
+4. If it is not signed in, copy the login command from that row and run it, then choose **Rescan**. Orglet does not switch to another connection when sign-in fails.
 5. In Researcher's chat, choose **Connect a model** (or **⋯** → **Orglet settings**). Set **Model** to that harness if it is not the one already chosen. Choose **Save orglet**.
 
 Cost follows that tool's plan, not an Orglet API bill.
@@ -117,7 +117,7 @@ On a team, the lead plans, assigned members work as hidden jobs, and one report 
   <img src="images/chat-light.png" alt="A team chat after a Demo turn. One report is in the thread; member jobs stay under Details." width="720">
 </p>
 
-In a **team** chat, type `@` to pick a worker or `@all`. Tagged names highlight. Demo then asks those members. Leave it untagged, or type `@all`, to ask everyone. A 1:1 worker chat has no `@` picker.
+In a **team** chat, type `@` to pick a worker or `@all`. Tagged names highlight. Orglet then asks those members. Leave it untagged, or type `@all`, to ask everyone. A 1:1 worker chat has no `@` picker.
 
 <p align="center">
   <img src="images/mention-picker.png" alt="Typing @ in a team chat opens a list with all and each worker." width="720">
@@ -135,7 +135,7 @@ A worker only reads the files you attach to **that** chat.
 
 Attached files sit in a row of cards above your message, each with an icon for what it is (spreadsheet, document, data, code, plain text), its name and its size. The row scrolls sideways when there are many. Hover a card to remove it.
 
-Demo cannot analyze files. Switch **Model** off Demo first. Reports can open like a document: copy as plain text or Markdown, or download them.
+An orglet needs a model to analyze files. Reports can open like a document: copy as plain text or Markdown, or download them.
 
 ## What this page does not cover
 

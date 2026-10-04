@@ -1,3 +1,4 @@
+import { demoReplies } from './demoReplies';
 import type { Task, Team } from '../shared/contracts';
 import type { RunProgressUpdate } from '../shared/progress';
 import { waitsForPerson, type RunningItem, type RunWaitReason } from '../shared/running';
@@ -104,7 +105,7 @@ export function waitLine(wait: RunWaitReason): string {
  * A cost that is not known says so instead of reading as nothing spent; a floor says "at least".
  */
 export function runningMeta(item: RunningItem, now: number): { elapsed?: string; cost?: string; provider: string } {
-  const provider = item.provider === 'demo' ? 'Demo' : providerName(item.provider);
+  const provider = item.provider === 'demo' ? (demoReplies() ? 'Demo' : t('chưa kết nối model')) : providerName(item.provider);
   const elapsed = item.since !== undefined ? elapsedShort(now - item.since) : undefined;
   if (item.state !== 'running' && item.state !== 'pausing') return { elapsed, provider };
   return { elapsed, cost: costLabel(item.cost), provider };

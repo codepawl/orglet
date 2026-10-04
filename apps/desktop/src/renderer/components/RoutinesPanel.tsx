@@ -1,3 +1,4 @@
+import { demoReplies } from '../demoReplies';
 import { useEffect, useRef, useState } from 'react';
 import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
@@ -312,7 +313,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   }, [initial]);
   const workers = team ? workspace.workers.filter(worker => [...team.memberIds, team.synthesizerId].includes(worker.id)) : workspace.workers.filter(worker => worker.id === target);
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
-  const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo');
+  const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : demoReplies() ? t('ở chế độ Demo') : t('khi Tí đã kết nối model');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
   const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web, workFolder?.folderId, workLevel, review, everyHours, windowOn, windowFrom, windowTo, weekdaysOnly, dailyCap]);
   const budgetMicros = toMicros(budget);

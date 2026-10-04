@@ -14,7 +14,7 @@ SmartScreen shows this for a signed build whose certificate has not built up a r
 2. Run it in your own terminal and finish the sign-in in the browser it opens.
 3. Choose **Rescan**.
 
-If the row holds several accounts, the command signs in to the account selected on the row. Orglet never falls back to Demo when sign-in fails; the orglet stays on the harness and the chat says what is missing.
+If the row holds several accounts, the command signs in to the account selected on the row. Orglet never falls back to another connection when sign-in fails; the orglet stays on the harness and the chat says what is missing.
 
 Codex can look signed in with an expired token until a run fails; sign in again and rerun. The Claude desktop app's own session is not reused; Claude Code itself has to be signed in. On macOS, Claude Code may keep credentials in the Keychain, so separate accounts are only verified on Windows.
 

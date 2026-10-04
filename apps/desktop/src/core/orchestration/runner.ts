@@ -78,6 +78,7 @@ import type { McpCallResult, McpServers } from '../tools/mcp';
 import { approvalArguments, mcpCallGranted, McpApprovalChoice, MCP_CALL_TIMEOUT_MS, type McpRunTool } from '../../shared/mcp';
 import type { DecisionRequest } from '../../shared/work-decisions';
 import { isBrowserActTool, isBrowserTool, NOT_ASKED_HERE, trimOlderBrowserSnapshots, type BrowserAsking, type BrowserReadToolName, type BrowserStep, type BrowserTools } from '../tools/browser-tools';
+import { MODEL_NOT_CONNECTED, demoRepliesEnabled } from '../../shared/demo-replies';
 import { CLEAN_BROWSER_PROFILE } from '../../shared/browser';
 import { DESKTOP_BORROW_NOT_ASKED_HERE, DESKTOP_BORROW_TOOL, DESKTOP_NOT_ASKED_HERE, isDesktopActTool, isDesktopTool, trimOlderDesktopSnapshots, type DesktopAsking, type DesktopReadToolName, type DesktopStep, type DesktopTools } from '../tools/desktop-tools';
 
@@ -968,6 +969,8 @@ export class Runner {
         return compacted;
       };
       if (run.snapshot.worker.provider === 'demo') {
+        // An orglet with no model does not answer in an app a person runs; the sample reply is a test tool.
+        if (!demoRepliesEnabled()) throw new Error(MODEL_NOT_CONNECTED);
         freezeTranscript();
         this.checkpoints.save({ id: run.id, step: 0, phase: 'ready', messages: [], readIds: [] });
         await new Promise<void>((resolve, reject) => {

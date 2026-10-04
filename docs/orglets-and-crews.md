@@ -9,7 +9,7 @@ Part of the [user guide](user-guide.md). How a channel turn runs under the hood:
 ### Create one
 
 1. Click **+** next to **Orglets** in the sidebar.
-2. On **General**, give it a name and a short description, write its instructions, and pick its **Model**: a connection (Demo, a local harness, or an API provider) and, for everything but Demo, a model ID from that provider's list or one you type. The **Model** menu lists Demo first, then every connection that can run now (a signed-in harness, an API with a saved key, a custom connection), then the rest greyed under **Unavailable**. A new orglet starts on the first connection that can run now, in that order, and on Demo only when nothing else can. Set its **Limit per task** if you want a cap on what one chat may spend through an API connection. On Claude Code the limit is optional: leave it empty to run on your plan with no cap, or set one to stop Claude Code when its own estimate for a turn reaches it.
+2. On **General**, give it a name and a short description, write its instructions, and pick its **Model**: a connection (a local harness or an API provider) and a model ID from that provider's list or one you type. The **Model** menu lists every connection that can run now (a signed-in harness, an API with a saved key, a custom connection), then the rest greyed under **Unavailable**. A new orglet starts on the first connection that can run now, in that order, and on the first connection of the menu when none can yet. Set its **Limit per task** if you want a cap on what one chat may spend through an API connection. On Claude Code the limit is optional: leave it empty to run on your plan with no cap, or set one to stop Claude Code when its own estimate for a turn reaches it.
 3. Choose **Save orglet**. Orglet picks a face and a colour for it from its name and description; the colour can be changed in the same dialog. The new orglet's chat opens, ready for a first message.
 
 The dialog has four tabs:
@@ -131,6 +131,6 @@ Every saved message can take one reaction from you, and one from each orglet:
 
 The react button in a message's action row opens the picker. The reaction sits as a small pill on the message's corner; click a pill to take your reaction off or switch it. A reaction does not start a run and changes no permission. Your reaction on the latest answer is explained to the orglet on its next turn, and a 👎 counts as feedback for [self-improvement](self-improvement.md).
 
-Orglets react too, rarely, when it is natural: to your message, or in a channel to a colleague's answer. Their pill carries their name. Demo and scheduled runs never react.
+Orglets react too, rarely, when it is natural: to your message, or in a channel to a colleague's answer. Their pill carries their name. Scheduled runs never react.
 
 Reactions and reply links stay with the chat, survive restart and archive, and travel in a backup.

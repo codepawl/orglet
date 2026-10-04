@@ -25,6 +25,8 @@ export default defineConfig({
     // 42 to 47 seconds there before passing on a rerun; a real hang still fails, at 90 seconds instead of 30.
     testTimeout: process.env.CI ? 90_000 : 30_000,
     hookTimeout: process.env.CI ? 90_000 : 30_000,
+    // Sample replies stand in for a model here, as in the packaged smokes (apps/desktop/src/shared/demo-replies.ts).
+    env: { ORGLET_DEMO_REPLIES: '1' },
     projects: [
       {
         extends: true,

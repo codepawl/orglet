@@ -115,6 +115,7 @@ import { MemberColumn } from './components/MemberColumn';
 import { readArea, writeArea, readOpenSpace, writeOpenSpace, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { scopeOrgletIds } from '../shared/spaces';
+import { demoReplies, setDemoReplies } from './demoReplies';
 import { useSavedMessages } from './saved';
 import { reportFeature } from './analytics';
 import { chatKey, chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, shownOpenChats, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
@@ -1099,6 +1100,8 @@ export function App() {
     else await orglet.pickNewChatWorkspace(newChatTarget, permissionsForLevel(level));
   });
   const nativeProviders = [...new Set(executionWorkers.map(item => item.provider).filter(provider => provider !== 'demo'))];
+  // Labels far from the workspace ask this module whether sample replies are on; only tests and smokes turn them on.
+  setDemoReplies(workspace?.demoReplies);
   const isDemo = nativeProviders.length === 0;
   const ready = readiness(connections, harnesses, workspace?.customConnections);
   const missingConnections = nativeProviders.filter(provider => !ready[provider]);
@@ -1137,6 +1140,12 @@ export function App() {
    */
   const send = async () => {
     if (!brief.trim() || busy || (!team && !worker && !emptyChannel)) return;
+    // An orglet with no model does not answer: the way to connect one opens, and the text stays in the box.
+    const unconnected = demoReplies() ? undefined : demoWorkerToConnect(executionWorkers, team);
+    if (unconnected) {
+      connectModel(unconnected);
+      return;
+    }
     setBusy(true); setError('');
     const sentBrief = brief;
     setBrief('');
@@ -2327,9 +2336,9 @@ export function App() {
           {headerChannel?.topic && <span className="topbar-topic" title={headerChannel.topic}>{headerChannel.topic}</span>}
           {/* Which model is answering, not only whether it is Demo (user, 2026-09-19). A team running on several
               providers says nothing here; the details panel lists them one by one. */}
-          {headerProvider && <span className="topbar-provider" title={headerProvider === 'demo' ? t('Demo · không gọi API') : providerLabel(headerProvider)}>
+          {headerProvider && <span className="topbar-provider" title={headerProvider !== 'demo' ? providerLabel(headerProvider) : demoReplies() ? t('Demo · không gọi API') : t('Tí này chưa kết nối model.')}>
             {headerProvider !== 'demo' && <ProviderMark provider={headerProvider} size="small" decorative />}
-            {providerName(headerProvider)}
+            {headerProvider === 'demo' && !demoReplies() ? t('chưa kết nối model') : providerName(headerProvider)}
           </span>}
           </span>
         </>}
@@ -2364,6 +2373,8 @@ export function App() {
               saying this is where the chat begins. Assistive technology still hears "Chatting with …". */}
           <h1 className="welcome" aria-label={t('Đang nhắn với {0}', [chatName])}>{chatTitle}</h1>
           {chatIntro && <p className="welcome-about">{chatIntro}</p>}
+          {/* An orglet with no model: the one thing to do here is to connect one. */}
+          {!demoReplies() && emptyChatDemoWorker && <Button variant="primary" className="welcome-connect" onClick={() => connectModel(emptyChatDemoWorker)}><Plug size={16} />{t('Kết nối model')}</Button>}
           <p className="welcome-start">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatTitle])}</p>
           <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}

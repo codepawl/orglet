@@ -1,3 +1,4 @@
+import { demoReplies } from '../demoReplies';
 import { AppWindow, Database, FileDiff, FileText, FolderOpen, Globe, Lightbulb, MonitorSmartphone } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { permissionBlocker, permissionState, workspaceLevels, type PermissionBlocker, type WorkspaceLevel } from '../../shared/capability-status';
@@ -60,6 +61,10 @@ const blockedReasons: Record<PermissionBlocker, string> = translated({
   unsupported: 'Tí Demo không dùng công cụ, nên chưa bật được quyền.',
   connection: 'Model chưa kết nối, nên chưa bật được quyền.',
 });
+/** An orglet with no model reads as one whose model is not connected; "Demo" is said only where sample replies are on. */
+function wordedBlocker(blocker: PermissionBlocker): PermissionBlocker {
+  return blocker === 'unsupported' && !demoReplies() ? 'connection' : blocker;
+}
 
 /** A team where only some members are blocked keeps its controls; the note names who they will not reach. */
 const partlyBlockedNotes: Record<PermissionBlocker, string> = {
@@ -132,11 +137,11 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
 
   let reason: ReactNode = null;
   if (locked !== undefined) reason = locked;
-  else if (groupBlocker) reason = blockedReasons[groupBlocker];
+  else if (groupBlocker) reason = blockedReasons[wordedBlocker(groupBlocker)];
   else if (blocked.length > 0) {
     const byBlocker = (blocker: PermissionBlocker) => blocked.filter(item => item.blocker === blocker).map(item => item.worker.name);
     reason = (['unsupported', 'connection'] as const).filter(blocker => byBlocker(blocker).length > 0)
-      .map(blocker => t(partlyBlockedNotes[blocker], [byBlocker(blocker).join(', ')])).join(' ');
+      .map(blocker => t(partlyBlockedNotes[wordedBlocker(blocker)], [byBlocker(blocker).join(', ')])).join(' ');
   }
 
   return <div className="permissions" aria-busy={busy || undefined}>
