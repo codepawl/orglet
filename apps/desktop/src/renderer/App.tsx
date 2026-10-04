@@ -77,6 +77,7 @@ import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
 import { hasConnection, providerLabel, readiness, settingsTabFor, setupHint } from './components/providers';
 import { workerModelLabel, providerName } from './components/workerModel';
+import { customProviderId } from '../shared/custom-connections';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
@@ -116,6 +117,7 @@ import { readArea, writeArea, readOpenSpace, writeOpenSpace, workingOrgletIds, g
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { scopeOrgletIds } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
+import { ConnectWays, type ConnectWay } from './components/ConnectWays';
 import { useSavedMessages } from './saved';
 import { reportFeature } from './analytics';
 import { chatKey, chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, shownOpenChats, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
@@ -1207,6 +1209,32 @@ export function App() {
     }
     setConnectingWorker(target.id);
     openSettings('connections');
+  };
+  /**
+   * The ways to give an orglet with no model one, for its empty chat. A way with a connection that can run now opens
+   * the orglet's Model field; any other opens Settings where that kind of connection is set up, and comes back to the
+   * orglet once one can run.
+   */
+  const connectWays = (target: Worker): ConnectWay[] => {
+    const ready = readiness(connections, harnesses, workspace?.customConnections);
+    const readyNames = (providers: readonly Worker['provider'][]) => providers.filter(provider => ready[provider as keyof typeof ready]).map(providerName);
+    // Until the harnesses have been looked for, none of them counts as ready.
+    const plans = harnesses ? readyNames(['claude-code', 'codex', 'cursor', 'gemini']) : [];
+    const keys = readyNames(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', ...(workspace?.customConnections ?? []).map(connection => customProviderId(connection.id))]);
+    const local = readyNames(['ollama']);
+    const pick = (names: readonly string[], tab: SettingsTab) => () => {
+      if (names.length) {
+        openWorkerOnModel(target);
+        return;
+      }
+      setConnectingWorker(target.id);
+      openSettings(tab);
+    };
+    return [
+      { id: 'plan', ready: plans, onPick: pick(plans, 'harness') },
+      { id: 'key', ready: keys, onPick: pick(keys, 'connections') },
+      { id: 'local', ready: local, onPick: pick(local, 'connections') },
+    ];
   };
   // Back from Settings opened by "Kết nối model": the orglet's settings follow when a connection can run now, the
   // way an editor opened from the Library goes back to it. Closed without adding one, nothing more opens.
@@ -2373,12 +2401,11 @@ export function App() {
               saying this is where the chat begins. Assistive technology still hears "Chatting with …". */}
           <h1 className="welcome" aria-label={t('Đang nhắn với {0}', [chatName])}>{chatTitle}</h1>
           {chatIntro && <p className="welcome-about">{chatIntro}</p>}
-          {/* An orglet with no model: the one thing to do here is to connect one. */}
-          {!demoReplies() && emptyChatDemoWorker && <Button variant="primary" className="welcome-connect" onClick={() => connectModel(emptyChatDemoWorker)}><Plug size={16} />{t('Kết nối model')}</Button>}
           <p className="welcome-start">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatTitle])}</p>
-          <Starters starters={starters} onPick={pickStarter}
+          {/* An orglet with no model: the ways to give it one take the place of the starters, which need a model. */}
+          {!demoReplies() && emptyChatDemoWorker ? <ConnectWays orgletName={emptyChatDemoWorker.name} ways={connectWays(emptyChatDemoWorker)} /> : <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}
-            onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
+            onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />}
         </div>
         <div className="thread-composer">
           {composerBar}

@@ -637,8 +637,17 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .team-chat-start .welcome { margin-bottom:4px; text-align:left; font-size:1.75rem; font-weight:700; letter-spacing:-.5px; line-height:1.2; overflow-wrap:anywhere; }
 .welcome-about { margin:0 0 6px; max-width:var(--bubble-max, 80ch); font-size:15px; text-wrap:pretty; }
 .welcome-start { margin:0 0 10px; color:var(--muted); font-size:14px; }
-/* An orglet with no model: the one step that lets it answer, under its introduction. */
-.welcome-connect { align-self:flex-start; margin:4px 0 10px; }
+/* An orglet with no model: the ways to give it one, where the starters would be (components/ConnectWays.tsx). */
+.connect-ways { margin:12px 0 0; }
+.connect-ways h2 { margin:0 0 8px; font-size:15px; font-weight:600; }
+.connect-ways ul { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
+.connect-way { display:flex; align-items:flex-start; gap:12px; width:100%; padding:10px 12px; border:0; border-radius:12px; background:var(--surface); color:var(--text); font:inherit; text-align:left; cursor:pointer; }
+.connect-way:hover { background:color-mix(in srgb, var(--text) 9%, var(--bg)); }
+.connect-way-icon { display:grid; place-items:center; flex-shrink:0; height:20px; color:var(--muted); }
+.connect-way-text { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.connect-way-title { font-size:14px; font-weight:500; line-height:20px; }
+.connect-way-detail { font-size:13px; color:var(--muted); text-wrap:pretty; }
+.connect-way-ready { display:flex; align-items:center; gap:6px; margin-top:2px; font-size:13px; color:var(--success); }
 /* The same block above a chat's first message (`ThreadStart`): it scrolls away with the history. */
 .thread-start { display:flex; flex-direction:column; align-items:flex-start; margin:8px 0 26px; }
 .thread-start-faces { display:flex; align-items:flex-end; gap:10px; margin-bottom:12px; }
