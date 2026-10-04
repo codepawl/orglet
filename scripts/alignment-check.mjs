@@ -216,6 +216,13 @@ async function seedChannels(page, crew) {
   const taskId = await callCore(page, 'createTask', { workerId: writer.id, assignees: orgletIds, channelId, brief: 'What should go into Friday’s first issue?', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, taskId);
   await callCore(page, 'createChannel', { name: 'ideas', topic: '', members: [{ kind: 'orglet', id: workspace.workers[0].id }] });
+  // A space with a category (docs/spaces-design.md): one channel for everyone in it, one with its own list.
+  const spaceOrgletIds = workspace.workers.slice(0, 3).map(worker => worker.id);
+  const spaceId = await callCore(page, 'createSpace', { name: 'Studio', orgletIds: spaceOrgletIds, categories: [{ name: 'Copy' }] });
+  const copy = (await callCore(page, 'workspace', {})).spaces.find(space => space.id === spaceId).categories[0];
+  const everyone = [{ kind: 'orglet', id: spaceOrgletIds[0] }];
+  await callCore(page, 'createChannel', { name: 'general', topic: '', members: everyone, spaceId });
+  await callCore(page, 'createChannel', { name: 'drafts', topic: '', members: everyone, spaceId, categoryId: copy.id, access: 'listed' });
   return { launch: '#launch', ideas: '#ideas' };
 }
 
@@ -309,6 +316,13 @@ async function foldSidebar(page) {
 }
 
 /** The area rail (COD-366): Home lists the orglets, Channels the channels. */
+/** The seeded space's tile on the rail, which lists its channels in the sidebar. */
+async function openSpace(page) {
+  await openSidebar(page);
+  await page.locator('.area-tile[title="Studio"]').click();
+  await page.locator('.sidebar .channel-row').first().waitFor();
+}
+
 async function openArea(page, vietnamese) {
   await openSidebar(page);
   await page.locator(`.area-tile[title="${label(vietnamese)}"]`).click();
@@ -361,6 +375,11 @@ const SCREENS = [
   } },
   { name: 'channel-new', open: async page => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: label('Tạo kênh'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },
   { name: 'channel-empty', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: context.channels.ideas, exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
+  // A space: its sidebar with a category and a locked channel, its editor, and a channel being made in it.
+  { name: 'space-sidebar', open: async page => { await openSpace(page); } },
+  { name: 'space-dialog-members', open: async page => { await openSpace(page); await page.getByRole('button', { name: label('Tùy chọn không gian {0}', ['Studio']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Thành viên'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },
+  { name: 'space-dialog-categories', open: async page => { await openSpace(page); await page.getByRole('button', { name: label('Tùy chọn không gian {0}', ['Studio']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Nhóm'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },
+  { name: 'space-channel-dialog', open: async page => { await openSpace(page); await page.locator('.sidebar-head').getByRole('button', { name: label('Tạo kênh'), exact: true }).click(); await page.getByRole('dialog').getByRole('tab', { name: label('Thành viên'), exact: true }).click(); await page.locator('.channel-scope').waitFor(); } },
   // The area rail's pages (COD-366): Home's Add friend page, and Activity.
   { name: 'friends-add', open: async page => { await openArea(page, 'Bạn bè và tin nhắn'); await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click(); await page.locator('.friends-add').waitFor(); await page.locator('.marketplace-listing').first().waitFor(); } },
   { name: 'activity', open: async page => { await openArea(page, 'Hoạt động'); await page.locator('.page-body').waitFor(); } },

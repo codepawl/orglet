@@ -957,6 +957,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form fieldset { border:0; padding:0; margin:0; min-width:0; }
 .form legend { display:flex; font-size:13px; font-weight:500; padding:0 0 8px; }
 .fieldset-options { border:1px solid var(--border); border-radius:10px; padding:12px; }
+/* Who a channel that takes everyone of its place has: the same box as a group of choices, with nothing to tick. */
+.channel-scope { display:flex; flex-direction:column; gap:10px; margin:0; padding:12px; border:1px solid var(--border); border-radius:10px; list-style:none; }
+/* One category in the space editor: its name with the way to remove it, then who is in it. */
+.space-category { display:flex; flex-direction:column; gap:8px; }
+.space-category-head { display:flex; align-items:center; gap:8px; }
+.space-category-head .org-input { flex:1; min-width:0; }
 
 .form section { display:flex; flex-direction:column; gap:10px; }
 .form section+.form section { padding-top:8px; }
@@ -3108,6 +3114,12 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .member-card-about { margin:4px 0 0; font-size:13.5px; line-height:1.45; overflow-wrap:anywhere; }
 .member-card-actions { display:flex; align-items:center; gap:8px; align-self:stretch; margin-top:10px; }
 .member-card-actions .org-button { flex:1; justify-content:center; }
+/* In a space: the orglets the channel's place has that are not in the channel, quieter than the ones that are. */
+.members-head-others { padding-top:4px; }
+/* The second group follows the first directly, and takes the room that is left. */
+.members-pane:has(.members-others) .members-list:not(.members-others) { flex:0 0 auto; padding-bottom:8px; }
+.member-row.member-outside { box-sizing:border-box; cursor:default; opacity:.6; }
+.member-row.member-outside:hover { background:transparent; }
 /* The person's own row opens nothing, so it does not answer the pointer. */
 .member-row.member-you { box-sizing:border-box; cursor:default; }
 .member-row.member-you:hover { background:transparent; }

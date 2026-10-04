@@ -1,0 +1,111 @@
+import { _electron as electron } from 'playwright';
+import { mkdir, mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import assert from 'node:assert/strict';
+import { packagedExecutable } from './packaged-executable.mjs';
+import { useVietnamese } from './smoke-language.mjs';
+
+// Spaces (docs/spaces-design.md) in the packaged app: make a space with a category, add a channel, send a message and
+// see only the space's orglets answer, give the channel its own list, add an orglet back, then delete the space.
+const directory = await mkdtemp(join(tmpdir(), 'orglet-spaces-'));
+const environment = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' };
+delete environment.ELECTRON_RUN_AS_NODE;
+await mkdir('test-results', { recursive: true });
+const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env: environment });
+const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}));
+const shot = (page, name) => page.screenshot({ path: join('test-results', `spaces-${name}.png`) });
+
+try {
+  const page = await app.firstWindow();
+  await page.setViewportSize({ width: 1200, height: 820 });
+  await useVietnamese(page);
+  // Three more Demo orglets, and the channel their template makes, which stays outside every space.
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  const orglets = (await workspace(page)).workers.map(worker => worker.name);
+  assert.ok(orglets.length >= 3, 'the template added orglets');
+  const [first, second, third] = orglets;
+
+  // A new space from the rail's +, with two orglets and one category.
+  await page.getByRole('button', { name: 'Tạo mới', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Tạo không gian', exact: true }).click();
+  const spaceDialog = page.getByRole('dialog');
+  await spaceDialog.getByRole('textbox', { name: 'Tên không gian' }).fill('Launch');
+  await spaceDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
+  await spaceDialog.getByRole('checkbox', { name: first, exact: true }).check();
+  await spaceDialog.getByRole('checkbox', { name: second, exact: true }).check();
+  await spaceDialog.getByRole('tab', { name: 'Nhóm', exact: true }).click();
+  await spaceDialog.getByRole('button', { name: 'Thêm nhóm', exact: true }).click();
+  await spaceDialog.getByRole('textbox', { name: 'Tên nhóm' }).fill('Copy');
+  await shot(page, 'space-dialog');
+  await spaceDialog.getByRole('button', { name: 'Tạo không gian', exact: true }).click();
+  await spaceDialog.waitFor({ state: 'detached' });
+  await page.locator('.area-tile.active[title="Launch"]').waitFor();
+  assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch', 'the sidebar lists the new space');
+  const made = (await workspace(page)).spaces[0];
+  assert.equal(made.name, 'Launch');
+  assert.equal(made.orgletIds.length, 2);
+  assert.equal(made.categories[0].name, 'Copy');
+
+  // A channel in the space takes every orglet of the space, and only they answer.
+  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo kênh', exact: true }).click();
+  const channelDialog = page.getByRole('dialog');
+  await channelDialog.getByRole('textbox', { name: 'Tên kênh' }).fill('general');
+  await channelDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
+  assert.equal(await channelDialog.locator('.channel-scope li').count(), 2, 'the channel shows the two orglets of its space');
+  await shot(page, 'channel-dialog');
+  await channelDialog.getByRole('button', { name: 'Tạo kênh', exact: true }).click();
+  await channelDialog.waitFor({ state: 'detached' });
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Say hello in one word.');
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).press('Enter');
+  await page.locator('.chat-reply').nth(1).waitFor();
+  await page.waitForTimeout(1500);
+  const row = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
+  assert.equal(row.channel.spaceId, made.id);
+  assert.equal(row.channel.access, 'inherit');
+  assert.deepEqual(row.assignees, made.orgletIds, 'the space\'s orglets answer, in its order');
+  await page.locator('.members-pane').waitFor();
+  assert.equal(await page.locator('.members-pane .member-item').count(), 2, 'the member column lists the two orglets');
+  assert.equal(await page.locator('.members-others').count(), 0, 'a channel that takes everyone has nobody left out');
+  await shot(page, 'space-channel');
+
+  // The channel gets its own list: a lock in the sidebar, and the orglet left out is offered in the member column.
+  await page.locator('.members-pane .member-item').filter({ hasText: second }).locator('.member-row').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Xóa khỏi kênh', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Xóa khỏi kênh', exact: true }).click();
+  await page.locator('.members-others .member-item').waitFor();
+  await page.locator('.sidebar .channel-hash .lucide-lock').waitFor();
+  let listed = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
+  assert.equal(listed.channel.access, 'listed');
+  assert.equal(listed.assignees.length, 1);
+  await shot(page, 'listed-channel');
+  await page.locator('.members-others .member-item').first().locator('.member-row').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Thêm vào kênh này', exact: true }).click();
+  await page.locator('.members-others').waitFor({ state: 'detached' });
+  listed = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
+  assert.equal(listed.assignees.length, 2, 'the orglet is back in the channel');
+
+  // The template's channel is outside every space, under the # tile; the space's tile lists only its own.
+  assert.equal(await page.locator('.sidebar .channel-row').count(), 1, 'the space lists its one channel');
+  await page.locator('.area-tile[title="Kênh"]').click();
+  await page.locator('.sidebar .channel-row').first().waitFor();
+  assert.equal(await page.locator('.sidebar-title').textContent(), 'Kênh');
+  assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed with the loose ones');
+  void third;
+
+  // Deleting the space keeps its channel, outside every space.
+  await page.locator('.area-tile[title="Launch"]').click();
+  await page.getByRole('button', { name: 'Tùy chọn không gian Launch', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Xóa không gian', exact: true }).click();
+  await shot(page, 'delete-space');
+  await page.getByRole('menuitem', { name: 'Xóa không gian', exact: true }).click();
+  await page.locator('.area-tile[title="Launch"]').waitFor({ state: 'detached' });
+  const after = await workspace(page);
+  assert.equal(after.spaces.length, 0);
+  const kept = after.tasks.find(task => task.channel?.name === 'general');
+  assert.equal(kept.channel.spaceId, undefined);
+  assert.equal(kept.assignees.length, 2, 'the channel keeps the orglets it had');
+  console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer, own list and lock, add back, delete the space.');
+} finally {
+  await app.close();
+}
