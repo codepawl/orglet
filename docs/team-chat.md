@@ -70,7 +70,7 @@ Group chats became **channels** ([COD-361](https://linear.app/codepawl/issue/COD
 
 **Migration.** `migrateGroupChats` (`core/storage/channels.ts`) runs whenever the workspace opens and after a backup is restored. Every row that still looks like a group chat (several orglets or `'all'`, no crew, schedule or side thread, no `channel`) gets a channel: the same row and history, named by its `taskTitles` entry (which moves onto the channel) or its orglets' names, its orglets as members. A chat for every orglet becomes a channel of the orglets listed then; one with no orglet left stays as it was. It touches nothing else, so a second run changes nothing. Backups carry the `channel` record; they do not carry empty channels, which have no history.
 
-**The header.** A channel's header shows a muted `#`, its name (renamed in place), its topic in the muted colour, cut first when room runs out, and at its end the faces of the orglets that answer, which open the members to change. The header's **⋯** leads with **Channel settings**. The pure renderer parts live in `apps/desktop/src/renderer/channelChat.ts`.
+**The header.** A channel's header shows a muted `#`, its name (renamed in place), its topic in the muted colour, cut first when room runs out. Who is in the channel is changed from **Members** in the chat's menu, beside **Channel settings**; the header keeps only the toggle of the member column. The header's **⋯** leads with **Channel settings**. The pure renderer parts live in `apps/desktop/src/renderer/channelChat.ts`.
 
 ### Crews are channels
 

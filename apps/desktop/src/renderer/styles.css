@@ -399,8 +399,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .topbar-hash { flex-shrink:0; margin-right:-7px; color:var(--muted); font-weight:600; }
 .topbar-topic { flex:0 10 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; color:var(--muted); }
 /* The channel's members as faces at the header's end; pressing them opens the members to change. */
-.topbar-members { display:inline-flex; align-items:center; height:32px; padding:0 6px; border:0; border-radius:8px; background:transparent; cursor:pointer; }
-.topbar-members:hover { background:var(--row-hover); }
 .topbar-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:auto; }
 .task-cost {
   display:inline-flex; align-items:center; gap:6px; max-width:min(280px,46vw);
@@ -2269,7 +2267,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    2026-09-23). Switching overflow is what makes Chromium draw the bar: it does not repaint a ::-webkit-scrollbar
    thumb on :hover, and the standard scrollbar-color draws arrow buttons on Windows. The gutter is kept either way,
    so the list never shifts sideways; the pointer is over the list whenever the wheel scrolls it. Keyboard focus shows it too; a click leaves focus behind, so plain focus does not. */
-.sidebar-scroll { overflow:hidden; scrollbar-gutter:stable; }
+/* The gutter sits in the sidebar's own right padding (both 10px), so a row ends as far from the panel's edge as it
+   starts and lines up with the search box above the list. */
+.sidebar-scroll { overflow:hidden; scrollbar-gutter:stable; margin-right:-10px; }
+.sidebar-scroll::-webkit-scrollbar { width:10px; }
 .sidebar-scroll:hover,.sidebar-scroll:has(:focus-visible) { overflow-y:auto; }
 .sidebar-scroll::-webkit-scrollbar-track { margin-block:8px; }
 

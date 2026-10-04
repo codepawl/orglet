@@ -361,7 +361,8 @@ const SCREENS = [
   { name: 'channel-members', open: async (page, context) => {
     await openArea(page, 'Kênh');
     await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click();
-    await page.locator('.topbar-members').click();
+    await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+    await page.getByRole('menuitem', { name: label('Thành viên'), exact: true }).click();
     await page.getByRole('dialog').waitFor();
   } },
   { name: 'channel-new', open: async page => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: label('Tạo kênh'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },
