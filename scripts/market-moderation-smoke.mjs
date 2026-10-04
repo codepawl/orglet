@@ -138,8 +138,7 @@ async function explore(page) {
   await page.locator('.app').waitFor();
   await expandSidebar(page);
   await page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first().click();
-  await page.getByRole('button', { name: label('Bạn bè'), exact: true }).first().click();
-  await page.getByRole('tab', { name: label('Thêm bạn'), exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
   await page.locator('.marketplace-listing').filter({ hasText: 'Review fixture' }).waitFor();
 }
 async function openReview(page) {

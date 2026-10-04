@@ -3063,21 +3063,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .page-body { box-sizing:border-box; display:flex; flex-direction:column; gap:14px; width:min(760px, 100%); margin:0 auto; padding:8px var(--page-x) 32px; }
 .page-section { display:flex; flex-direction:column; gap:10px; margin-bottom:18px; }
 .page-section h2 { font-size:16px; font-weight:600; }
-.friends-search { display:flex; align-items:center; gap:8px; padding:0 12px; min-height:38px; border-radius:var(--radius); background:var(--surface); color:var(--muted); }
-.friends-search .org-input { flex:1; min-width:0; border:0; background:transparent; box-shadow:none; padding-left:0; }
-/* The pill is the field, so the focus ring goes round the pill and not round the input inside it. */
-.friends-search .org-input:focus-visible { outline:none; }
-.friends-search:has(.org-input:focus-visible) { outline:2px solid var(--focus); outline-offset:-1px; }
-.friends-count { font-size:13px; font-weight:500; color:var(--muted); }
-.friends-list, .friends-sources, .saved-list { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
-.friend-row, .friend-source { display:flex; align-items:center; gap:12px; min-height:56px; padding:6px 10px; border-radius:10px; }
-.friend-row:hover { background:color-mix(in srgb, var(--text) 6%, transparent); }
-.friend-text, .friend-source-text { display:flex; flex-direction:column; flex:1; min-width:0; gap:2px; }
+.friends-sources, .saved-list { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
+.friend-source { display:flex; align-items:center; gap:12px; min-height:56px; padding:6px 10px; border-radius:10px; }
+.friend-source-text { display:flex; flex-direction:column; flex:1; min-width:0; gap:2px; }
 .friend-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
 .friend-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:var(--muted); }
-.friend-actions { display:flex; align-items:center; gap:4px; }
-.friend-actions .row-action { opacity:1; }
-.friends-empty { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
 .friends-add-form { display:flex; align-items:center; gap:10px; margin-top:4px; }
 .friends-add-form .org-input { flex:1; min-width:0; }
 .activity-link { display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:10px; background:var(--surface); }
@@ -3098,7 +3088,29 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .members-head h2 { font-size:13px; font-weight:500; color:var(--muted); }
 .members-list { display:flex; flex-direction:column; flex:1; gap:2px; min-height:0; margin:0; padding:0 8px 16px; overflow:auto; list-style:none; }
 .member-row { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:4px 8px; border:0; border-radius:8px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
-.member-row:hover { background:var(--row-hover); }
+.member-row:hover, .member-row[aria-expanded="true"] { background:var(--row-hover); }
+/* The row's menu sits at its end and shows the way a sidebar row's does: on hover, on a visible focus ring, or open. */
+.member-item { position:relative; }
+.member-item > .org-row-menu { position:absolute; top:50%; right:2px; transform:translateY(-50%); }
+.member-item .row-action { opacity:0; color:var(--muted); margin-right:0; }
+.member-item:hover .row-action, .member-item:has(:focus-visible) .row-action, .member-item .row-action[aria-expanded=true] { opacity:1; }
+.member-item .row-action:hover:not(:disabled), .member-item .row-action:focus-visible, .member-item .row-action[aria-expanded=true] { background:transparent; border-color:transparent; color:var(--text); }
+.member-item:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .member-row { padding-right:36px; }
+@media (hover:none) { .member-item .row-action { opacity:1; } .member-item .member-row { padding-right:36px; } }
+/* An orglet's profile card, opened from its row: a strip in its own colour, the face over the strip's edge, then who
+   it is and the two things to do with it. */
+.member-card { width:280px; overflow:hidden; }
+.member-card-strip { height:52px; background:color-mix(in srgb, var(--member-ink) 32%, var(--surface)); }
+.member-card-body { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:0 16px 16px; }
+.member-card-face { display:grid; margin-top:-28px; border-radius:19px; box-shadow:0 0 0 3px var(--bg); background:var(--bg); }
+.member-card-name { display:flex; align-items:center; gap:8px; margin:4px 0 0; font-size:17px; font-weight:600; overflow-wrap:anywhere; }
+.member-card-runs-on { display:flex; align-items:center; gap:6px; margin:0; font-size:12.5px; color:var(--muted); overflow-wrap:anywhere; }
+.member-card-about { margin:4px 0 0; font-size:13.5px; line-height:1.45; overflow-wrap:anywhere; }
+.member-card-actions { display:flex; align-items:center; gap:8px; align-self:stretch; margin-top:10px; }
+.member-card-actions .org-button { flex:1; justify-content:center; }
+/* The person's own row opens nothing, so it does not answer the pointer. */
+.member-row.member-you { box-sizing:border-box; cursor:default; }
+.member-row.member-you:hover { background:transparent; }
 .member-text { display:flex; flex-direction:column; min-width:0; gap:1px; }
 .member-name { display:flex; align-items:center; gap:6px; font-weight:500; }
 .member-lead { padding:1px 6px; border-radius:999px; background:var(--row-active); color:var(--muted); font-size:11px; font-weight:500; }

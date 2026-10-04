@@ -148,6 +148,7 @@ async function appearance(page, nextLanguage, theme) {
   await page.locator(`.area-tile[title="${label('Bạn bè và tin nhắn')}"]`).waitFor();
 }
 
+/** Home with the full sidebar, where an orglet's row has its menu and Add friend opens the marketplace. */
 async function friends(page) {
   // Resize restores the saved full sidebar asynchronously. Wait for that real state before inspecting its opener.
   await page.waitForFunction(() => matchMedia('(max-width: 780px)').matches
@@ -156,13 +157,11 @@ async function friends(page) {
   await expandSidebar(page);
   const home = page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first();
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
-  await page.getByRole('button', { name: label('Bạn bè'), exact: true }).first().click();
-  await page.getByRole('tab', { name: new RegExp(`^${label('Tất cả')}`) }).click();
 }
 
 async function openPublishing(page, worker) {
   await friends(page);
-  await page.locator('.friend-row').filter({ hasText: worker.name }).first().getByRole('button', { name: label('Tùy chọn {0}').replace('{0}', worker.name), exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: label('Tùy chọn {0}').replace('{0}', worker.name), exact: true }).first().click();
   await page.getByRole('menuitem', { name: label('Xuất bản lên marketplace'), exact: true }).click();
   await page.getByRole('dialog').waitFor();
 }
@@ -261,7 +260,7 @@ try {
   const saved = await page.evaluate(id => window.orglet.marketPublishing({ action: 'inspect', operationId: id }), operation.id);
   assert.equal(saved.requestText, initialRequests[0].text);
   await friends(page);
-  await page.getByRole('tab', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
   await page.getByRole('tab', { name: 'Mục của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Làm mới mục của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Xem nội dung đã gửi', exact: true }).click();
@@ -286,7 +285,7 @@ try {
   await page.waitForFunction(() => window.orglet !== undefined);
   // Both refresh routes fail in the trusted core transport, while real SQLite retains pages 1 and 4–12.
   await friends(page);
-  await page.getByRole('tab', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
   const cachedPage = page.locator('.marketplace [role="combobox"]');
   await cachedPage.waitFor();
   await page.waitForFunction(() => document.querySelector('.marketplace [role="combobox"]')?.getAttribute('aria-disabled') !== 'true' && !document.querySelector('.marketplace [role="combobox"]')?.disabled);
@@ -312,7 +311,7 @@ try {
   page = await app.firstWindow();
   await page.waitForFunction(() => window.orglet !== undefined);
   await friends(page);
-  await page.getByRole('tab', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
   await page.locator('.marketplace [role="combobox"]').waitFor();
   const heldDeadline = Date.now() + 30_000;
   while (!existsSync(catalogHeld) && Date.now() < heldDeadline) await new Promise(resolve => setTimeout(resolve, 50));

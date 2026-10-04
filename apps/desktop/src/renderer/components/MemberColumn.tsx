@@ -1,33 +1,88 @@
+import { useRef, useState, type CSSProperties } from 'react';
+import { MessageCircle, Pencil, UserRound } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
-import { Avatar } from './Avatar';
+import { AnchoredPopover } from './AnchoredPopover';
+import { Avatar, workerInk } from './Avatar';
+import { ProviderMark } from './ProviderMark';
+import { RowMenu } from './RowMenu';
+import { Button } from './ui';
 
 /**
- * The members of the channel on screen (COD-366), the column Discord keeps at the right of a server channel: every
- * orglet that answers there with its face, whether it is at work, and the lead marked when the lead splits the work.
- * A row opens that orglet's DM. It takes the right panel's place while Details is closed, so the two never sit side by
+ * The members of the channel on screen (COD-366), the column Discord keeps at the right of a server channel: the
+ * person first (user, 2026-10-04: they write there too), then every orglet that answers there with its face, whether
+ * it is at work, and the lead marked when the lead splits the work. An orglet's row opens its profile card, and a
+ * right-click on it opens its menu. The person's row opens nothing. It takes the right panel's place while Details is closed, so the two never sit side by
  * side. It has no close button: the toggle in the channel's header shows and hides it (user, 2026-10-04).
  */
-export function MemberColumn({ members, working, leadId, onOpen }: {
+export function MemberColumn({ you, members, working, leadId, onMessage, onEdit }: {
+  /** The person's name, as their face in the rail has it. */
+  you: string;
   members: readonly Worker[];
   working: ReadonlySet<string>;
   leadId?: string;
-  onOpen: (worker: Worker) => void;
+  /** Opens that orglet's DM. */
+  onMessage: (worker: Worker) => void;
+  /** Opens that orglet's settings, where its role, model and memory are. */
+  onEdit: (worker: Worker) => void;
 }) {
+  const youWord = t('Bạn');
   return <aside className="members-pane" aria-label={t('Thành viên')}>
     <div className="members-head">
-      <h2>{t('Thành viên — {0}', [members.length])}</h2>
+      <h2>{t('Thành viên — {0}', [members.length + 1])}</h2>
     </div>
     <ul className="members-list">
-      {members.map(worker => <li key={worker.id}>
-        <button type="button" className="member-row" onClick={() => onOpen(worker)} aria-label={t('Nhắn tin cho {0}', [worker.name])}>
-          <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
+      <li>
+        <div className="member-row member-you">
+          <Avatar name={you} seed={you} size="sm" />
           <span className="member-text">
-            <span className="member-name">{worker.name}{worker.id === leadId && <span className="member-lead">{t('Trưởng')}</span>}</span>
-            <span className="member-status">{working.has(worker.id) ? t('Đang làm việc') : worker.description || t('Sẵn sàng')}</span>
+            <span className="member-name">{you}{you !== youWord && <span className="member-lead">{youWord}</span>}</span>
           </span>
-        </button>
+        </div>
+      </li>
+      {members.map(worker => <li key={worker.id}>
+        <MemberRow worker={worker} working={working.has(worker.id)} lead={worker.id === leadId} onMessage={() => onMessage(worker)} onEdit={() => onEdit(worker)} />
       </li>)}
     </ul>
   </aside>;
+}
+
+/**
+ * One orglet in the column and the profile card its row opens (user, 2026-10-04, from Discord's member card): a strip
+ * in the orglet's own colour, its face, its name, what it runs on, what it does, and the two things to do with it.
+ */
+function MemberRow({ worker, working, lead, onMessage, onEdit }: { worker: Worker; working: boolean; lead: boolean; onMessage: () => void; onEdit: () => void }) {
+  const row = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+  const face = (size: 'sm' | 'xl') => <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />;
+  const leadTag = lead && <span className="member-lead">{t('Trưởng')}</span>;
+  return <div className="member-item">
+    <button ref={row} type="button" className="member-row" aria-haspopup="dialog" aria-expanded={open} aria-label={t('Hồ sơ của {0}', [worker.name])} onClick={() => setOpen(current => !current)}>
+      {face('sm')}
+      <span className="member-text">
+        <span className="member-name">{worker.name}{leadTag}</span>
+        <span className="member-status">{working ? t('Đang làm việc') : worker.description || t('Sẵn sàng')}</span>
+      </span>
+    </button>
+    {/* A right-click anywhere on the row opens the same menu as the dots, the way a member's does in Discord. */}
+    <RowMenu label={t('Tùy chọn {0}', [worker.name])} contextMenuOf=".member-item" items={[
+      { label: t('Hồ sơ'), icon: UserRound, onSelect: () => setOpen(true) },
+      { label: t('Nhắn tin'), icon: MessageCircle, onSelect: onMessage },
+      { label: t('Chỉnh sửa'), icon: Pencil, onSelect: onEdit },
+    ]} />
+    <AnchoredPopover anchor={row} open={open} onClose={close} label={t('Hồ sơ của {0}', [worker.name])} className="member-card">
+      <div className="member-card-strip" style={{ '--member-ink': workerInk(worker) } as CSSProperties} />
+      <div className="member-card-body">
+        <span className="member-card-face">{face('xl')}</span>
+        <h3 className="member-card-name">{worker.name}{leadTag}</h3>
+        <p className="member-card-runs-on"><ProviderMark provider={worker.provider} size="small" decorative /><span>{worker.modelId ?? worker.provider}</span></p>
+        {worker.description && <p className="member-card-about">{worker.description}</p>}
+        <div className="member-card-actions">
+          <Button variant="primary" onClick={() => { close(); onMessage(); }}><MessageCircle size={16} />{t('Nhắn tin')}</Button>
+          <Button variant="outline" onClick={() => { close(); onEdit(); }}><Pencil size={16} />{t('Chỉnh sửa')}</Button>
+        </div>
+      </div>
+    </AnchoredPopover>
+  </div>;
 }
