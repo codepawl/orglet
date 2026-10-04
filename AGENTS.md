@@ -86,7 +86,7 @@ There is no ESLint/Prettier. Match the file you are in.
 
 ## Work in a structured way
 
-1. **Issue first** when the change is larger than a small fix (GitHub issue for public contributors; Linear `COD-xx` for maintainers).
+1. **Issue first** when the change is larger than a small fix: open a GitHub issue. `COD-xx` ids in docs, code and history are from an earlier tracker; do not make new ones.
 2. **One pull request, one change.** Do not bundle refactors, drive-by formatting, or unrelated files.
 3. **Stay in scope.** Do not take over someone else's in-flight PR or rewrite a subsystem to make your patch nicer.
 4. **Match nearby code** — naming, density, CSS variables, component patterns. Do not invent a new abstraction layer, state library, or UI kit.
@@ -100,7 +100,7 @@ There is no ESLint/Prettier. Match the file you are in.
 Process detail is [CONTRIBUTING.md](CONTRIBUTING.md). Fill [.github/pull_request_template.md](.github/pull_request_template.md).
 
 - Branch from `main`.
-- Title: maintainers prefix `COD-xx:`; public contributors write a specific, human title.
+- Title: specific and human, with no tracker prefix.
 - First PR from a person must include: `I have read the CLA and agree to it for all my contributions to Orglet.`
 - Do not push release tags or touch `.github/workflows/release.yml` to ship something. A release is a maintainer pushing an annotated `vX.Y.Z` tag on a green `main` commit; [release.yml](.github/workflows/release.yml) then publishes the GitHub Release from the build CI already made. Checklist: [docs/windows-release-gates.md](docs/windows-release-gates.md).
 

@@ -7,7 +7,7 @@
 
 **Status: proposed, not decided.** Nothing is being built. This page exists so "coming soon" stops standing in for a plan, and so the four questions that block any mobile work are written down with a recommended answer each.
 
-The optional Orglet account planned in [COD-329](https://linear.app/codepawl/issue/COD-329) changes the premise below that Orglet has no server. With an account, a phone could reach its desktop through Orglet's own relay away from home, and get push notifications. Without one, the local-network answers below still hold. Revisit this page with that design.
+The optional Orglet account planned in COD-329 changes the premise below that Orglet has no server. With an account, a phone could reach its desktop through Orglet's own relay away from home, and get push notifications. Without one, the local-network answers below still hold. Revisit this page with that design.
 
 ## Why mobile is not a port
 

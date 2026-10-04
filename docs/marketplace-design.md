@@ -1,10 +1,10 @@
 # Marketplace: technical design
 
-**Status: curated reads deployed; desktop publishing and moderation implemented; production writes await rollout** ([COD-373](https://linear.app/codepawl/issue/COD-373)). Decided with An on 2026-10-01: the marketplace moves out of [product.md](product.md)'s Not now, because the CodePawl account exists ([account.md](account.md)) and the marketplace should run on the same account and the same backend as sync ([account-sync-design.md](account-sync-design.md)).
+**Status: curated reads deployed; desktop publishing and moderation implemented; production writes await rollout** (COD-373). Decided with An on 2026-10-01: the marketplace moves out of [product.md](product.md)'s Not now, because the CodePawl account exists ([account.md](account.md)) and the marketplace should run on the same account and the same backend as sync ([account-sync-design.md](account-sync-design.md)).
 
 ## What we are building
 
-A place inside Orglet to find ready-made orglets and crews and add them. Adding one is **making a friend**: the orglet joins your Friends list (the Discord-style shell, [COD-366](https://linear.app/codepawl/issue/COD-366)), you can DM it at once and put it in a channel. A crew arrives with its orglets.
+A place inside Orglet to find ready-made orglets and crews and add them. Adding one is **making a friend**: the orglet joins your Friends list (the Discord-style shell, COD-366), you can DM it at once and put it in a channel. A crew arrives with its orglets.
 
 - **Browsing and adding need no account.** The catalog is public. Orglet keeps working fully without an account, and someone on a local profile can still add a friend.
 - **Publishing needs an account.** The listing carries the account's public name.

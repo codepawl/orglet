@@ -5,7 +5,7 @@
   <img src="images/orglets/model-list-fetch-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](https://linear.app/codepawl/issue/COD-27). **This page is the decision.** [COD-31](https://linear.app/codepawl/issue/COD-31) implements fetch + cache; [COD-28](https://linear.app/codepawl/issue/COD-28) is the picker UI; [COD-30](https://linear.app/codepawl/issue/COD-30) is the deprecated chip.
+Plan for COD-29 under epic COD-27. **This page is the decision.** COD-31 implements fetch + cache; COD-28 is the picker UI; COD-30 is the deprecated chip.
 
 **Shipped (COD-31):** `modelList` fetches each connection from its native API or CLI, caches the result in SQLite `settings.modelLists` (24h TTL, stale-while-revalidate), stores OpenAI `shutdown_date` and Codex `upgrade` when present, and always allows a typed custom model ID.
 
@@ -15,7 +15,7 @@ Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](
 
 **Shipped (COD-332):** Picker rows show the maker's mark and a versioned name ("Opus 5.5", "GPT-6-Astra") from the CLI or the provider's own list, never a hand-kept table. The model that runs when none is set wears a **Default** badge and saves no model, so an orglet keeps following the CLI's default. Older models sit under **More models**. Claude Code aliases are named by what the CLI itself starts with, Codex reads `model/list` from `codex app-server`, and Cursor Agent's `(current, default)` marks are read. See [Versions and the default](#versions-and-the-default-cod-332).
 
-It does not add feature UI, scrape HTML, or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20). Team chat ([COD-24](https://linear.app/codepawl/issue/COD-24)) is unrelated.
+It does not add feature UI, scrape HTML, or change signing / COD-19 / COD-20. Team chat (COD-24) is unrelated.
 
 ## Decision in one paragraph
 
