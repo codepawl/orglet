@@ -144,6 +144,7 @@ export class SyncReplica {
       cursor: account.cursor,
       // Data erased here on purpose counts too: the account's copy returns only when the person asks for it.
       ownData: account.held || !untouchedSeed(this.store),
+      held: account.held,
     };
   }
 

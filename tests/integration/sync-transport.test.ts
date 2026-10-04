@@ -61,7 +61,7 @@ const devices: Device[] = [];
 const accountKey = (owner: string) => createHash('sha256').update(owner).digest('hex');
 const DEFAULT_LIMITS: Limits = { storageBytes: 5_000_000, devices: 3, historyDays: 90 };
 
-function device(owner: string, options: { sockets?: boolean } = {}): Device {
+function device(owner: string, options: { sockets?: boolean; joinsOnItsOwn?: boolean } = {}): Device {
   // A real folder, so saved file versions have somewhere to live beside the database.
   const store = new Store(join(mkdtempSync(join(tmpdir(), 'orglet-sync-device-')), 'orglet.sqlite'));
   const created: Device = {
@@ -149,6 +149,7 @@ function device(owner: string, options: { sockets?: boolean } = {}): Device {
       created.checkpoint = checkpointBeforeReplace(store);
       eraseEverything(store);
     },
+    joinsOnItsOwn: options.joinsOnItsOwn,
     fetch: fixtureFetch,
     connect: fixtureConnect,
     onChange: status => created.statuses.push(status),
@@ -450,6 +451,39 @@ describe.skipIf(!installed && !required)('account sync through the local Worker'
     // Turning sync on again works from the same sign-in: the computer is still the same device to the server.
     await converge(second);
     expect(liveChats(second.store)).toEqual([task.id]);
+  }, 120_000);
+
+  it('joins on its own when the app says so, merging what it holds, and still waits after an erase', async () => {
+    const owner = randomUUID();
+    const first = device(owner, { joinsOnItsOwn: true });
+    const task = chat(first.store, 'Written before signing in');
+    // Signing in is enough: nobody pressed anything.
+    await first.transport.refresh();
+    await first.transport.settled();
+    expect(first.statuses.map(status => status.state)).not.toContain('link_required');
+    expect(first.transport.state().state).toBe('synced');
+    expect(first.requests).toContain('/v1/push');
+    expect((await inspect(owner)).records.length).toBeGreaterThan(0);
+
+    // A second computer with data of its own merges too, and both end with both chats.
+    const second = device(owner, { joinsOnItsOwn: true });
+    const other = chat(second.store, 'Written on the other computer');
+    await second.transport.refresh();
+    await second.transport.settled();
+    expect(second.statuses.map(status => status.state)).not.toContain('link_required');
+    await converge(second, first);
+    expect(liveChats(first.store).sort()).toEqual([task.id, other.id].sort());
+    expect(liveChats(second.store).sort()).toEqual([task.id, other.id].sort());
+
+    // Erase all data is not undone by the next sync: the account's copy comes back only when the person presses Sync.
+    eraseEverything(second.store);
+    await second.transport.stop();
+    await second.transport.refresh();
+    await second.transport.settled();
+    expect(second.transport.state()).toEqual({ state: 'link_required' });
+    expect(liveChats(second.store)).toEqual([]);
+    await converge(second);
+    expect(liveChats(second.store).sort()).toEqual([task.id, other.id].sort());
   }, 120_000);
 
   it('shows both sides before joining, and replace erases only this computer after saving a copy', async () => {

@@ -673,6 +673,7 @@ async function start() {
     account,
     core: action => request('syncReplica', action),
     replaceLocal: () => request('syncReplaceLocal', undefined),
+    joinsOnItsOwn: true,
     onChange: status => { if (window && !window.isDestroyed()) window.webContents.send('orglet:sync', status); },
   });
   void syncTransport.refresh();
