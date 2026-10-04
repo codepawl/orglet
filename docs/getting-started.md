@@ -72,7 +72,7 @@ The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward thro
 2. Type a short message in the box at the bottom.
 3. Send it.
 
-The orglet cannot answer until it has a model. Its chat says so and shows a **Connect a model** button:
+The orglet cannot answer until it has a model. Its chat lists three ways to give it one: the plan you already pay for (Claude Code, Codex, Cursor Agent or Gemini CLI signed in on this computer), an API key, or a model on this computer with Ollama. A way that can already run says **Ready** with the connection's name. The line under the message box has a **Connect a model** button too:
 
 - If nothing is connected yet, it opens **Settings** → **API connections**. Add a key or a custom connection there, then close Settings. The orglet's settings open next, with that connection already chosen.
 - If something is already connected (a signed-in harness, a saved key, a custom connection), it opens the orglet's settings straight away, with the first one that can run chosen.

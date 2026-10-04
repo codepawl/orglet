@@ -92,6 +92,10 @@ Click **+** at the top of the space's sidebar to add a channel. The channel has 
 
 Take an orglet out of the space under **Space settings → Members**. It leaves every channel of the space. Its messages stay, and it stays your friend.
 
+Drag a channel onto a category of its space to move it there, or onto the list above the categories to put it directly in the space.
+
+Under **Space settings → Permissions**, choose what a new channel in the space starts with: reading attached files, checking data, and reading the web. Each channel can still change its own.
+
 Delete a space from its menu. Its channels stay, outside every space.
 
 ### Templates

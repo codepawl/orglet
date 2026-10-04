@@ -89,6 +89,7 @@ Learned in phase 0 (measured on a deployed Worker):
 **Syncs**, unless marked "only on this computer":
 
 - Orglets, crews, skills and their revisions.
+- Spaces: name, orglets, categories and what a new channel starts with. A space travels only while every orglet it names does.
 - Chats: tasks, turns, runs, events, reports, reactions, quotes.
 - Knowledge notes and memories, schedules (the schedule, not its folder), custom connection names.
 - A few settings: theme, language, sidebar order, chat titles.
