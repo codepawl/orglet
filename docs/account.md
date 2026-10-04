@@ -49,7 +49,7 @@ The choice is saved on this computer and included in a workspace backup. It does
 
 Sync keeps your orglets, channels, chats, memories, schedules and a few settings the same on every computer signed in to the same account. Each computer keeps its own full copy and works offline; changes catch up when it is online again.
 
-Sync needs a sync server. CodePawl's is not running yet, so a normal install shows **Sync** as coming next and sends nothing. Someone running their own server starts Orglet with `ORGLET_SYNC_URL` set to its address (see the [technical guide](technical-guide.md#account-sync)).
+Sync needs a sync server. CodePawl's runs as a private trial only and no install points at it, so a normal install shows **Sync** as coming next and sends nothing. Someone running their own server starts Orglet with `ORGLET_SYNC_URL` set to its address (see the [technical guide](technical-guide.md#account-sync)).
 
 ### Turning it on
 
