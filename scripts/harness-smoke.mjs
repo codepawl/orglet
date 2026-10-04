@@ -134,7 +134,7 @@ try {
   await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).waitFor();
   await page.getByRole('region', { name: 'Harness trên máy' }).getByText('Claude Code', { exact: true }).waitFor();
   await page.keyboard.press('Escape');
-  if (await openSidebar.count()) await openSidebar.click();
+  await expandSidebar(page);
 
   // The login-probe failure path needs the fake Codex; a real one found first only reads as signed out.
   if (codex.status === 'auth_error') {
