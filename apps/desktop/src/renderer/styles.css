@@ -2030,7 +2030,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-limitations p { margin:6px 0 0; font-size:13px; line-height:1.5; }
 /* The same wash on the prompt bar (`UnfinishedWork` in Composer.tsx): the mark, the text, then Retry centred on them. */
 /* A plain surface, not a tinted wash: the warning mark alone carries the colour (user, 2026-10-04). */
-.unfinished-work { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; max-width:var(--bubble-max); margin:14px 0 0 calc(var(--message-gutter) + var(--message-gutter-gap)); padding:10px 12px 10px 14px; border-radius:14px; background:var(--surface); }
+/* The card spans the thread's column. Named under .thread-content so the rule for the thread's plain status lines
+   (right-aligned, muted) does not reach it: the card has role=status too. */
+.thread-content > .unfinished-work { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; margin:14px 0 0; padding:12px 12px 12px 16px; color:var(--text); font-size:inherit; text-align:left; border-radius:14px; background:var(--surface); }
 .unfinished-work-mark { flex-shrink:0; color:color-mix(in srgb, var(--working) 78%, var(--text)); }
 .unfinished-work-text { flex:1 1 260px; min-width:0; overflow-wrap:anywhere; }
 .unfinished-work-text strong { display:block; font-size:13px; font-weight:600; }
