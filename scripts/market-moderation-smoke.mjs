@@ -11,6 +11,7 @@ import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import * as rules from './alignment/rules.ts';
+import { expandSidebar } from './smoke-language.mjs';
 
 // Trusted transport fixtures installed before real constructors. This does not prove JWT/signature or authenticated Worker HTTP.
 // The packaged main, AccountService, utility core, preload and renderer are the actual application in an isolated profile.
@@ -135,15 +136,7 @@ async function close(page) {
 }
 async function explore(page) {
   await page.locator('.app').waitFor();
-  const opener = page.getByRole('button', { name: label('Mở sidebar'), exact: true });
-  // Just after the window widens from the narrow size, the opener can still be on screen and then leave as the
-  // sidebar comes back; a click that finds it gone has nothing left to do (it used to wait 30 s for it to return),
-  // as in the alignment check.
-  if (await opener.isVisible()) {
-    await opener.click({ timeout: 5_000 }).catch(async error => {
-      if (await opener.isVisible()) throw error;
-    });
-  }
+  await expandSidebar(page);
   await page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first().click();
   await page.getByRole('button', { name: label('Bạn bè'), exact: true }).first().click();
   await page.getByRole('tab', { name: label('Thêm bạn'), exact: true }).click();

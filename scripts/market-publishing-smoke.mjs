@@ -9,6 +9,7 @@ import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import * as rules from './alignment/rules.ts';
+import { expandSidebar } from './smoke-language.mjs';
 
 // Trusted in-process transport proof, not an issuer/signature or authenticated Worker HTTP proof.
 // Install fake services before requiring the actual packaged main so its AccountService and transport capture them.
@@ -152,8 +153,7 @@ async function friends(page) {
   await page.waitForFunction(() => matchMedia('(max-width: 780px)').matches
     ? document.querySelector('.app.sidebar-hidden') !== null
     : document.querySelector('.app:not(.sidebar-hidden)') !== null);
-  const opener = page.getByRole('button', { name: label('Mở sidebar'), exact: true });
-  if (await opener.isVisible()) await opener.click();
+  await expandSidebar(page);
   const home = page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first();
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
   await page.getByRole('button', { name: label('Bạn bè'), exact: true }).first().click();
@@ -205,8 +205,7 @@ try {
   await appearance(page, 'vi', 'light');
   await page.setViewportSize({ width: 1200, height: 820 });
   await call(page, 'createChannel', { name: 'Public crew', topic: 'A crew for the publishing fixture.', members: [{ kind: 'orglet', id: worker.id }], mode: 'lead', lead: { synthesizerId: worker.id, instructions: 'Combine the reviewed research.', workflow: 'parallel', monthlyBudgetMicros: 1000000 } });
-  const sidebar = page.getByRole('button', { name: 'Mở sidebar', exact: true });
-  if (await sidebar.isVisible()) await sidebar.click();
+  await expandSidebar(page);
   await page.locator('.area-tile[title="Kênh"]').click();
   await page.getByRole('button', { name: 'Tùy chọn kênh #Public crew', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Xuất bản lên marketplace', exact: true }).click();

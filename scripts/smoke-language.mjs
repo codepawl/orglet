@@ -19,9 +19,20 @@ export async function useVietnamese(page) {
  * included; a narrow one would only lay it over the chat, so there it stays folded.
  */
 export async function useFullSidebar(page) {
-  const opener = page.getByRole('button', { name: 'Mở sidebar', exact: true });
   const wide = await page.evaluate(() => innerWidth > 780);
-  if (wide && await opener.isVisible()) await opener.click();
+  if (wide) await expandSidebar(page);
+}
+
+/**
+ * A folded sidebar opens from the rail (user, 2026-10-04): the tile of the area on screen opens it and goes nowhere
+ * else. Answers whether it was folded.
+ */
+export async function expandSidebar(page) {
+  if (!await page.locator('.app.sidebar-hidden').count()) return false;
+  const active = page.locator('.area-tile.active');
+  await (await active.count() ? active : page.locator('.area-tile')).first().click();
+  await page.locator('.app:not(.sidebar-hidden)').waitFor();
+  return true;
 }
 
 /**
@@ -40,9 +51,7 @@ export async function openHome(page) {
 
 /** Open a specific under-the-hood task by its brief via search (sidebar no longer lists task rows). */
 export async function openThreadByBrief(page, brief) {
-  if (await page.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) {
-    await page.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
-  }
+  await expandSidebar(page);
   // Home has its search box ("Find or start a chat"); the other areas have the magnifier in the sidebar's head (COD-366).
   await page.getByRole('button', { name: /Tìm cuộc trò chuyện|Tìm hoặc bắt đầu trò chuyện/ }).first().click();
   await page.getByRole('combobox', { name: 'Tìm cuộc trò chuyện' }).fill(brief);

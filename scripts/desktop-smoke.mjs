@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import electronPath from 'electron';
-import { useVietnamese, openThreadByBrief, archiveCurrentChat, openChannels, openHome, openSettings } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, archiveCurrentChat, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
 
 const data = await mkdtemp(join(tmpdir(), 'orglet-desktop-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
@@ -241,13 +241,13 @@ try {
   await page.screenshot({ path: join(output, 'desktop-1024.png') });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(2));
-  await page.getByRole('button', { name: 'Mở sidebar', exact: true }).waitFor();
+  await page.locator('.app.sidebar-hidden').waitFor();
   const zoomCapture = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].capturePage()).toPNG().toString('base64'));
   await writeFile(join(output, 'desktop-zoom-200.png'), Buffer.from(zoomCapture, 'base64'));
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await app.close(); app = await launch();
   const reopened = await app.firstWindow(); await useVietnamese(reopened);
-  if (await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
+  await expandSidebar(reopened);
   await openThreadByBrief(reopened, 'Desktop smoke: persistent task');
   await reopened.locator('.chat-reply, .report').first().waitFor();
   const restored = await reopened.evaluate(id => window.orglet.call('task', { id }), taskId);
@@ -255,7 +255,7 @@ try {
   assert.deepEqual(restoredFolders.task.excludedSources, folderTask.excludedSources);
   assert.equal(restored.artifacts.length, 1); assert.equal(restored.artifacts[0].report.format, 'chat'); assert.equal(restored.task.status, 'completed');
   assert.equal(restored.task.messageReactions?.[0].emoji, 'agree');
-  if (await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
+  await expandSidebar(reopened);
   await openThreadByBrief(reopened, 'Desktop smoke: pause and resume');
   await reopened.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).click();
   await reopened.locator('.chat-reply, .report').first().waitFor();

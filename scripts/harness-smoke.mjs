@@ -3,7 +3,7 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openSettings } from './smoke-language.mjs';
+import { useVietnamese, openSettings, expandSidebar } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 
@@ -102,8 +102,7 @@ try {
   await page.screenshot({ path: 'test-results/settings-usage.png' });
   await page.keyboard.press('Escape');
   // The narrow viewport collapsed the sidebar; reopen it before using row menus.
-  const openSidebar = page.getByRole('button', { name: 'Mở sidebar', exact: true });
-  if (await openSidebar.count()) await openSidebar.click();
+  await expandSidebar(page);
 
   const editResearcher = async () => {
     await page.getByRole('button', { name: 'Tùy chọn Researcher', exact: true }).click();

@@ -28,7 +28,8 @@ async function measureMove(page, opening) {
         inert: sidebar.inert });
     };
     sample();
-    const button = document.querySelector(`[aria-label="${shouldOpen ? 'Mở sidebar' : 'Thu gọn sidebar'}"]`);
+    // A folded sidebar opens from the rail: the tile of the area on screen.
+    const button = shouldOpen ? document.querySelector('.area-tile.active') : document.querySelector('[aria-label="Thu gọn sidebar"]');
     button.click();
     const started = performance.now();
     await new Promise(resolve => {
@@ -98,7 +99,7 @@ try {
   // Interrupt a fold with reopening; the native transition reverses and the rows stay available afterward.
   await page.getByRole('button', { name: 'Thu gọn sidebar', exact: true }).click();
   await page.waitForTimeout(100);
-  await page.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
+  await page.locator('.area-tile.active').click();
   await page.waitForTimeout(800);
   assert.equal(await page.locator('.sidebar').evaluate(element => element.inert), false);
   assert.equal(await page.locator('.sidebar').evaluate(element => getComputedStyle(element).transform), 'none');
@@ -109,7 +110,7 @@ try {
   checkMove(await measureMove(page, false), false, true);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.getByRole('button', { name: 'Mở sidebar', exact: true }).focus();
+  await page.locator('.area-tile.active').focus();
   await page.keyboard.press('Enter');
   await page.getByRole('button', { name: 'Thu gọn sidebar', exact: true }).focus();
   await page.keyboard.press('Enter');

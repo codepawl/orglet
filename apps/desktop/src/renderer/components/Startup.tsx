@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
-import { Bell, BookOpen, CalendarClock, PanelLeft, Plus, Settings } from './icons';
+import { Bell, BookOpen, CalendarClock, Plus, Settings } from './icons';
 import { Hash, MessagesSquare } from 'lucide-react';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
@@ -29,7 +29,7 @@ const SLOW_AFTER_SECONDS = 3;
 const STUCK_AFTER_SECONDS = 15;
 // How many rows each sidebar section shows the shape of before the workspace says how many there are.
 const WORKER_ROW_SHAPES = 3;
-const DEFAULT_SIDEBAR_WIDTH = 228;
+const DEFAULT_SIDEBAR_WIDTH = 240;
 
 const areaIcons = [<MessagesSquare key="home" size={20} />, <Hash key="channels" size={20} />, <Bell key="activity" size={20} />, <BookOpen key="library" size={20} />, <CalendarClock key="schedules" size={20} />];
 
@@ -76,7 +76,6 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
     </aside>
     {/* The area rail and the user panel hold their places with disabled controls while the workspace opens (COD-366). */}
     <nav className="area-rail" aria-label={t('Khu vực')}>
-      {!sidebar && <Button size="icon" className="area-rail-fold" aria-label={t('Mở sidebar')} disabled><PanelLeft size={18} /></Button>}
       <ul className="area-rail-list">
         {areaIcons.map((icon, index) => <li key={index}><button type="button" className="area-tile" aria-label={areaLabels()[index]} disabled>{icon}</button></li>)}
       </ul>

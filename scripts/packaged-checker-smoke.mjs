@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
-import { useVietnamese, openThreadByBrief, openChannels, openSettings } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, openChannels, openSettings, expandSidebar } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
@@ -195,9 +195,7 @@ try {
   assert.ok(toolLayout.centerDifference < 1, 'Permission switch and its label block must share a vertical center');
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.getByRole('button', { name: 'Đóng panel', exact: true }).click();
-  if (await page.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) {
-    await page.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
-  }
+  await expandSidebar(page);
   await page.evaluate(taskId => window.orglet.pickWorkspace(taskId, ['read']), result.id);
   console.log(JSON.stringify({ taskToolPermissionsUI: 'passed', toolLayout }));
   const backupPath = join(directory, 'workspace.json');
