@@ -2382,6 +2382,7 @@ export const en: Dictionary = {
   'Thêm tài khoản': 'Add account',
   'Thư mục đăng nhập': 'Sign-in folder',
   'Tài khoản': 'Account',
+  'Tất cả lịch': 'All schedules',
   'Đồng bộ đang tắt': 'Sync is off',
   'Đồng bộ đang dừng': 'Sync is paused',
   'Đã đồng bộ xong': 'Synced',
