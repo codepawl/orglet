@@ -225,6 +225,25 @@ describe('spaces in the core', () => {
     await expect(core.command('spaceFromCategory', { category: 'Nothing here' })).rejects.toThrow('Không có kênh nào');
   });
 
+  it('starts a new channel with the permissions its space sets, unless the person chose some for that channel', async () => {
+    const spaceId = await core.command('createSpace', { name: 'Launch', orgletIds: [scout.id, writer.id], categories: [], defaults: { capabilities: ['network.web'] } }) as string;
+    expect(space(spaceId).defaults).toEqual({ capabilities: ['network.web'] });
+    const first = await core.command('createChannel', { name: 'general', topic: '', members: [orglet(scout.id)], spaceId }) as string;
+    const firstTask = await core.command('createTask', { workerId: scout.id, channelId: first, brief: 'Plan', ...message }) as string;
+    await settled(firstTask);
+    expect(store.get<Task>('tasks', firstTask).toolCapabilities).toEqual(['skill.read', 'app.propose', 'network.web']);
+    // A save that leaves the defaults out keeps them, and `null` goes back to the app's own.
+    await core.command('updateSpace', { id: spaceId, name: 'Launch', orgletIds: [scout.id, writer.id], categories: [] });
+    expect(space(spaceId).defaults).toEqual({ capabilities: ['network.web'] });
+    await core.command('updateSpace', { id: spaceId, name: 'Launch', orgletIds: [scout.id, writer.id], categories: [], defaults: null });
+    expect(space(spaceId).defaults).toBeUndefined();
+    const second = await core.command('createChannel', { name: 'plain', topic: '', members: [orglet(scout.id)], spaceId }) as string;
+    const secondTask = await core.command('createTask', { workerId: scout.id, channelId: second, brief: 'Plan', ...message }) as string;
+    await settled(secondTask);
+    expect(store.get<Task>('tasks', secondTask).toolCapabilities ?? []).not.toContain('network.web');
+    await expect(core.command('createSpace', { name: 'Wide', orgletIds: [scout.id], categories: [], defaults: { capabilities: ['browser.act'] } })).rejects.toThrow();
+  });
+
   it('refuses to save a space while one of its channels is working', async () => {
     const spaceId = await newSpace([scout.id, writer.id]);
     const channelId = await core.command('createChannel', { name: 'general', topic: '', members: [orglet(scout.id)], spaceId }) as string;

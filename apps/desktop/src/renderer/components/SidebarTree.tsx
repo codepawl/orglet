@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { Hash, Lock, Settings2, Upload } from 'lucide-react';
 import { GripVertical, Archive, CalendarClock, EllipsisVertical, Pencil, Trash } from './icons';
 import { t } from '../i18n';
@@ -147,6 +147,9 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
   </div>;
 }
 
+/** What a dragged channel row carries: its channel's id. A category of the channel's space takes the drop. */
+export const CHANNEL_DRAG_TYPE = 'application/x-orglet-channel';
+
 /**
  * One channel in the sidebar's Channels section (COD-361): its status mark, the `#` every channel wears where an
  * orglet's row has its face, its name, and a menu to edit, rename, archive or delete it. It has no reorder: the list
@@ -154,7 +157,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
  * leaves Archive out (`onArchive` absent). One where the lead splits the work lists its schedules' runs under it, the
  * way its crew's row did (COD-369).
  */
-export function ChannelRow({ name, locked = false, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, onPublish, deleteQuestion, children, childrenLabel }: { name: string; /** In a space, with its own list of orglets instead of everyone's: a lock in place of the hash. */ locked?: boolean; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; onPublish?: () => void; deleteQuestion: string;
+export function ChannelRow({ name, locked = false, dragId, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, onPublish, deleteQuestion, children, childrenLabel }: { name: string; /** In a space, with its own list of orglets instead of everyone's: a lock in place of the hash. */ locked?: boolean; /** Set for a channel in a space: the row can be dragged to another category of that space, and carries this id. */ dragId?: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; onPublish?: () => void; deleteQuestion: string;
   /** Rows listed under the channel: its schedules' newest runs, when the lead splits the work (COD-369). */ children?: ReactNode;
   /** What the rows under this one are, for assistive technology. */ childrenLabel?: string }) {
   const [editing, setEditing] = useState(false);
@@ -162,7 +165,11 @@ export function ChannelRow({ name, locked = false, active, status, onOpen, onDwe
   const row = useScrolledIntoViewWhenActive<HTMLDivElement>(active);
   const label = `#${name}`;
   if (editing) return <div className="tree-item channel-row"><div className="worker-row editing"><RenameField name={name} label={t('Tên mới cho kênh {0}', [label])} onSave={onRename} onDone={() => setEditing(false)} /></div></div>;
-  return <div ref={row} className="tree-item channel-row" {...dwell}>
+  const startDrag = dragId ? (event: DragEvent<HTMLDivElement>) => {
+    event.dataTransfer.setData(CHANNEL_DRAG_TYPE, dragId);
+    event.dataTransfer.effectAllowed = 'move';
+  } : undefined;
+  return <div ref={row} className="tree-item channel-row" draggable={Boolean(dragId)} onDragStart={startDrag} {...dwell}>
     <div className="worker-row">
       <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />
       <span className="row-disclosure channel-hash" aria-hidden="true">{locked ? <Lock size={16} /> : <Hash size={16} />}</span>

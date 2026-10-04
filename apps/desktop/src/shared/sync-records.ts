@@ -5,6 +5,7 @@ import { SyncRevision } from './sync-revisions';
 import { MessageReaction } from './message-interactions';
 import { ChatQuote, SideOf } from './side-threads';
 import { Channel, EmptyChannel } from './channels';
+import { Space } from './spaces';
 import { MarketOrigin } from './market';
 import { DataFormat } from './profiles';
 import { TeamMessage } from './team-messages';
@@ -58,6 +59,8 @@ export const SyncData = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('setting'), change: SyncSetting }).strict(),
   z.object({ kind: z.literal('origin'), value: MarketOrigin, deleted: z.boolean() }).strict(),
   z.object({ kind: z.literal('channel'), value: EmptyChannel, deleted: z.boolean() }).strict(),
+  // A space (docs/spaces-design.md): its name, orglets, categories and defaults. The newest save wins as a whole.
+  z.object({ kind: z.literal('space'), value: Space, deleted: z.boolean() }).strict(),
   z.object({ kind: z.literal('source'), value: SyncSource }).strict(),
   z.object({ kind: z.literal('routine'), value: SyncRoutine }).strict(),
   z.object({ kind: z.literal('connectionName'), id: Id, name: z.string().trim().min(1).max(60) }).strict(),
@@ -87,6 +90,7 @@ export function syncRecordKey(data: SyncData): string {
     case 'setting': return `setting:${data.change.key}`;
     case 'origin': return `origin:${data.value.entityId}`;
     case 'channel': return `channel:${data.value.id}`;
+    case 'space': return `space:${data.value.id}`;
     case 'source': return `source:${data.value.id}`;
     case 'routine': return `routine:${data.value.id}`;
     case 'connectionName': return `connection:${data.id}`;

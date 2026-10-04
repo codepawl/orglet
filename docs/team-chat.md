@@ -108,7 +108,13 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 **Backups and the terminal.** A backup carries the spaces (`spaces` in its payload); restoring keeps a space this computer already has. `orglet spaces` lists each space with its orglets and channels.
 
-**Not yet.** Spaces do not sync. On another computer a synced channel whose space is missing reads as a channel outside every space, with the members it last resolved. A space is not a marketplace listing, and it sets no defaults for a new channel's permissions.
+**Moving by dragging.** A channel row in a space is draggable (`dragId` on `ChannelRow`). A category of that space, or the list directly in the space, takes the drop and saves the channel with its new `categoryId`, so its orglets are resolved again for the new place.
+
+**What a new channel starts with.** A space can set `defaults.capabilities`: whether a new channel in it reads attached files, checks data and reads the web (`SPACE_DEFAULT_CAPABILITIES`). The space dialog's **Permissions** tab edits them, and sends them only once the space has a setting or the person touched one. A channel with no choice of its own takes them on its first message (`spaceChatCapabilities` in `createTask`), and its empty chat shows them. The browser, desktop apps and the working folder stay each chat's own choice.
+
+**Sync.** A space is its own sync record (`kind: 'space'` in `shared/sync-records.ts`), sent in the scope of every orglet it names, so a space with an orglet that stays on this computer is not sent. The newest save of a space wins as a whole. A synced channel whose space has not arrived, or was not sent, reads as a channel outside every space.
+
+**Not yet.** A space is not a marketplace listing.
 
 Back and forward work like a browser. The side buttons on a mouse, or Alt+Left and Alt+Right, step through what you opened: a chat, then another chat, then back to the first; Library, a skill, back to Library, forward to the skill again; Settings tab to tab; Notifications open, then back closes it. Closing a panel is a step too, so back reopens it. A chat, skill or knowledge item deleted since is skipped. Alt+arrows do nothing while you type in a text box; the mouse buttons always work. Leaving a schedule you are editing asks about unsaved changes, the same as the panel's own Back.
 

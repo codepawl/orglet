@@ -11,6 +11,7 @@ import { SYNC_RECORD_BYTES } from '../../shared/sync-protocol';
 import { Id, RunInput, Routine, TeamInput, type Task, type Worker, type Skill, type Team, type Run, type Artifact, type Activity } from '../../shared/contracts';
 import { MarketOrigins } from '../../shared/market';
 import { Channel, EmptyChannel } from '../../shared/channels';
+import { Space } from '../../shared/spaces';
 import { MessageReaction } from '../../shared/message-interactions';
 import { ChatQuote, SideOf } from '../../shared/side-threads';
 import { ChatSearch } from './chat-search';
@@ -65,7 +66,7 @@ export class LocalSync {
         for (const table of ['sources', 'routines', 'runs', 'events', 'artifacts']) {
           for (const value of this.store.all(table)) this.captureWrite(table, value);
         }
-        for (const key of ['theme', 'language', 'sidebarOrder', 'taskTitles', 'marketOrigins', 'emptyChannels', 'entityState', 'customConnections']) {
+        for (const key of ['theme', 'language', 'sidebarOrder', 'taskTitles', 'marketOrigins', 'emptyChannels', 'spaces', 'entityState', 'customConnections']) {
           const row = this.store.db.prepare('SELECT data FROM settings WHERE id=?').get(key);
           if (row) this.captureSetting(key, JSON.parse(String(row.data)), undefined);
         }
@@ -203,6 +204,8 @@ export class LocalSync {
     else if (data.kind === 'origin') roots = Object.values(data.value.workerIds).map(id => ({ kind: 'worker', id }));
     else if (data.kind === 'channel') roots = data.value.members.flatMap(member => member.kind === 'orglet' ? [member.id] : this.teamWorkers(member.id))
       .map(id => ({ kind: 'worker', id }));
+    // A space names its orglets, so it travels only while every one of them does.
+    else if (data.kind === 'space') roots = data.value.orgletIds.map(id => ({ kind: 'worker', id }));
     else if (data.kind === 'routine') roots = [data.value.task.workerId, ...this.teamWorkers(data.value.task.teamId)].map(id => ({ kind: 'worker', id }));
     else if (data.kind === 'source') {
       const owners = this.store.db.prepare("SELECT data FROM tasks WHERE EXISTS (SELECT 1 FROM json_each(json_extract(tasks.data,'$.sourceIds')) WHERE value=?)")
@@ -477,6 +480,13 @@ export class LocalSync {
       for (const channel of channels) this.record({ kind: 'channel', value: channel, deleted: false });
       for (const channel of before) {
         if (!channels.some(current => current.id === channel.id)) this.record({ kind: 'channel', value: channel, deleted: true });
+      }
+    } else if (key === 'spaces') {
+      const spaces = z.array(Space).parse(value ?? []);
+      const before = z.array(Space).parse(previous ?? []);
+      for (const space of spaces) this.record({ kind: 'space', value: space, deleted: false });
+      for (const space of before) {
+        if (!spaces.some(current => current.id === space.id)) this.record({ kind: 'space', value: space, deleted: true });
       }
     } else if (key === 'entityState') {
       const State = z.object({ workers: z.record(Id, z.object({ archivedAt: z.string().optional(), deletedAt: z.string().optional() })),
@@ -796,6 +806,9 @@ export class LocalSync {
     } else if (data.kind === 'channel') {
       const channels = z.array(EmptyChannel).parse(this.store.setting('emptyChannels', [])).filter(channel => channel.id !== data.value.id);
       this.store.setSetting('emptyChannels', data.deleted ? channels : [...channels, data.value]);
+    } else if (data.kind === 'space') {
+      const spaces = z.array(Space).parse(this.store.setting('spaces', [])).filter(space => space.id !== data.value.id);
+      this.store.setSetting('spaces', data.deleted ? spaces : [...spaces, data.value]);
     } else if (data.kind === 'entityState') {
       const state = this.store.entityState();
       const group = data.entity === 'worker' ? state.workers : state.teams;

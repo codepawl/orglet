@@ -1,5 +1,5 @@
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
@@ -43,7 +43,7 @@ import { suggestStarters } from '../shared/starters';
 import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
-import { ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
+import { CHANNEL_DRAG_TYPE, ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
 import { chatsUnder, type ChatOwner } from '../shared/schedule-runs';
 import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
@@ -77,6 +77,7 @@ import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
 import { hasConnection, providerLabel, readiness, settingsTabFor, setupHint } from './components/providers';
 import { workerModelLabel, providerName } from './components/workerModel';
+import { customProviderId } from '../shared/custom-connections';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
@@ -114,8 +115,9 @@ import { ActivityPage, activityTabLabel, activityCounts } from './components/Act
 import { MemberColumn } from './components/MemberColumn';
 import { readArea, writeArea, readOpenSpace, writeOpenSpace, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
-import { scopeOrgletIds } from '../shared/spaces';
+import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
+import { ConnectWays, type ConnectWay } from './components/ConnectWays';
 import { useSavedMessages } from './saved';
 import { reportFeature } from './analytics';
 import { chatKey, chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, shownOpenChats, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
@@ -350,6 +352,8 @@ export function App() {
   const [openSpaceId, setOpenSpaceState] = useState(readOpenSpace);
   const setOpenSpace = (spaceId: string) => { setOpenSpaceState(spaceId); writeOpenSpace(spaceId); };
   const [spaceDraft, setSpaceDraft] = useState<SpaceDraft>();
+  // Where a dragged channel would land in the open space: a category's id, or `root` for directly in the space.
+  const [channelDropAt, setChannelDropAt] = useState<string>();
   const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [activityTab, setActivityTab] = useState<ActivityTab>('needs');
@@ -1085,7 +1089,9 @@ export function App() {
   // An empty chat has no row yet, so its permissions wait under the worker, team or a channel's orglets until the
   // first message (COD-178, COD-215, COD-361), and so does its working folder (COD-186).
   const newChatTarget: NewChatTarget | undefined = team ? { teamId: team.id } : emptyChannel ? { workerIds: emptyChannel.workerIds } : worker ? { workerId: worker.id } : undefined;
-  const newChatCapabilities = newChatTarget ? workspace?.newChatCapabilities[newChatKey(newChatTarget)] : undefined;
+  // An empty channel in a space with no choice of its own shows what its space sets, which is what its first message takes.
+  const emptyChannelSpace = workspace?.spaces.find(space => space.id === workspace.emptyChannels.find(channel => channel.id === emptyChannelId)?.spaceId);
+  const newChatCapabilities = newChatTarget ? workspace?.newChatCapabilities[newChatKey(newChatTarget)] ?? (emptyChannel ? spaceChatCapabilities(emptyChannelSpace) : undefined) : undefined;
   const newChatWorkspace = newChatTarget ? workspace?.newChatWorkspace[newChatKey(newChatTarget)] : undefined;
   const changeNewChatCapability = (capability: ToolCapability, enabled: boolean) => toolAction(() => {
     if (!newChatTarget) return Promise.resolve();
@@ -1207,6 +1213,32 @@ export function App() {
     }
     setConnectingWorker(target.id);
     openSettings('connections');
+  };
+  /**
+   * The ways to give an orglet with no model one, for its empty chat. A way with a connection that can run now opens
+   * the orglet's Model field; any other opens Settings where that kind of connection is set up, and comes back to the
+   * orglet once one can run.
+   */
+  const connectWays = (target: Worker): ConnectWay[] => {
+    const ready = readiness(connections, harnesses, workspace?.customConnections);
+    const readyNames = (providers: readonly Worker['provider'][]) => providers.filter(provider => ready[provider as keyof typeof ready]).map(providerName);
+    // Until the harnesses have been looked for, none of them counts as ready.
+    const plans = harnesses ? readyNames(['claude-code', 'codex', 'cursor', 'gemini']) : [];
+    const keys = readyNames(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', ...(workspace?.customConnections ?? []).map(connection => customProviderId(connection.id))]);
+    const local = readyNames(['ollama']);
+    const pick = (names: readonly string[], tab: SettingsTab) => () => {
+      if (names.length) {
+        openWorkerOnModel(target);
+        return;
+      }
+      setConnectingWorker(target.id);
+      openSettings(tab);
+    };
+    return [
+      { id: 'plan', ready: plans, onPick: pick(plans, 'harness') },
+      { id: 'key', ready: keys, onPick: pick(keys, 'connections') },
+      { id: 'local', ready: local, onPick: pick(local, 'connections') },
+    ];
   };
   // Back from Settings opened by "Kết nối model": the orglet's settings follow when a connection can run now, the
   // way an editor opened from the Library goes back to it. Closed without adding one, nothing more opens.
@@ -2063,7 +2095,7 @@ export function App() {
   const renderChannelEntry = (entry: (typeof channelEntries)[number]) => {
           if (entry.kind === 'empty') {
             const channel = entry.channel;
-            return <ChannelRow key={channel.id} name={channel.name} locked={Boolean(channel.spaceId) && channel.access === 'listed'} active={emptyChannelActive(channel)} status={rollupStatusMarks([])}
+            return <ChannelRow key={channel.id} name={channel.name} locked={Boolean(channel.spaceId) && channel.access === 'listed'} dragId={channel.spaceId ? channel.id : undefined} active={emptyChannelActive(channel)} status={rollupStatusMarks([])}
               onOpen={() => { clearSelection(); showEmptyChannel(channel.id); }}
               onEdit={() => setChannelDraft({ id: channel.id, name: channel.name, topic: channel.topic, members: channel.members, crewId: channel.crewId, category: channel.category, spaceId: channel.spaceId, categoryId: channel.categoryId, access: channel.access })}
               onPublish={workspace.teams.some(team => team.id === channel.crewId) ? () => {
@@ -2075,7 +2107,7 @@ export function App() {
           }
           const chat = entry.task;
           const name = channelNameOf(chat, taskWorkers(chat, workspace).map(member => member.name));
-          return <ChannelRow key={chat.id} name={name} locked={Boolean(chat.channel?.spaceId) && chat.channel?.access === 'listed'} active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
+          return <ChannelRow key={chat.id} name={name} locked={Boolean(chat.channel?.spaceId) && chat.channel?.access === 'listed'} dragId={chat.channel?.spaceId ? chat.channel.id : undefined} active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
             onOpen={() => { clearSelection(); openTask(chat.id); }} onDwell={resting => dwellChat(chat.id, resting)}
             onEdit={() => chat.channel && setChannelDraft({ id: chat.channel.id, name: chat.channel.name, topic: chat.channel.topic, members: chat.channel.members, crewId: chat.channel.crewId, category: chat.channel.category, spaceId: chat.channel.spaceId, categoryId: chat.channel.categoryId, access: chat.channel.access })}
             onPublish={workspace.teams.some(team => team.id === chat.channel?.crewId) ? () => {
@@ -2176,6 +2208,26 @@ export function App() {
   const sidebarSpace = workspace.spaces.find(space => `space:${space.id}` === sidebarFor);
   const sidebarSpaceEntries = sidebarSpace ? channelEntries.filter(entry => spaceOfEntry(entry)?.id === sidebarSpace.id) : [];
   const categoryOfEntry = (entry: (typeof channelEntries)[number]) => sidebarSpace?.categories.find(category => category.id === channelOfEntry(entry)?.categoryId);
+  /** Moves a channel of the listed space to another of its categories, or directly into the space. */
+  const moveChannelTo = (channelId: string, categoryId: string | null) => {
+    const channel = sidebarSpaceEntries.map(channelOfEntry).find(item => item?.id === channelId);
+    if (!channel || (channel.categoryId ?? null) === categoryId) return;
+    action(() => orglet.call('updateChannel', { id: channel.id, name: channel.name, topic: channel.topic ?? '', members: channel.members, categoryId }), channelLabel(channel.name));
+  };
+  const channelDrop = (key: string, categoryId: string | null) => ({
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (!event.dataTransfer.types.includes(CHANNEL_DRAG_TYPE)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setChannelDropAt(key);
+    },
+    onDragLeave: () => setChannelDropAt(current => current === key ? undefined : current),
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      setChannelDropAt(undefined);
+      moveChannelTo(event.dataTransfer.getData(CHANNEL_DRAG_TYPE), categoryId);
+    },
+  });
   const deleteSpace = (space: { id: string; name: string }) => action(async () => {
     await orglet.call('deleteSpace', { id: space.id });
     setOpenSpace('');
@@ -2248,11 +2300,12 @@ export function App() {
       </>}
       {sidebarSpace && <>
         {sidebarSpaceEntries.length === 0 && sidebarSpace.categories.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
-        {sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) && <div className="channel-uncategorized">{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(renderChannelEntry)}</div>}
-        {sidebarSpace.categories.map(category => <SidebarSection key={category.id} id={`space-category-${category.id}`} title={category.name}
+        {/* The channels directly in the space. With categories it is also where a dragged channel leaves its category. */}
+        {(sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) || sidebarSpace.categories.length > 0) && <div className={`channel-uncategorized channel-drop${channelDropAt === 'root' ? ' over' : ''}`} {...channelDrop('root', null)}>{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(renderChannelEntry)}</div>}
+        {sidebarSpace.categories.map(category => <div key={category.id} className={`channel-drop${channelDropAt === category.id ? ' over' : ''}`} {...channelDrop(category.id, category.id)}><SidebarSection id={`space-category-${category.id}`} title={category.name}
           action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [category.name])} title={t('Tạo kênh trong {0}', [category.name])} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id, categoryId: category.id })}><Plus size={16} /></Button>}>
           {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(renderChannelEntry)}
-        </SidebarSection>)}
+        </SidebarSection></div>)}
       </>}
       {sidebarFor === 'channels' && <>
         {channelGroupList.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({})}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
@@ -2373,12 +2426,11 @@ export function App() {
               saying this is where the chat begins. Assistive technology still hears "Chatting with …". */}
           <h1 className="welcome" aria-label={t('Đang nhắn với {0}', [chatName])}>{chatTitle}</h1>
           {chatIntro && <p className="welcome-about">{chatIntro}</p>}
-          {/* An orglet with no model: the one thing to do here is to connect one. */}
-          {!demoReplies() && emptyChatDemoWorker && <Button variant="primary" className="welcome-connect" onClick={() => connectModel(emptyChatDemoWorker)}><Plug size={16} />{t('Kết nối model')}</Button>}
           <p className="welcome-start">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatTitle])}</p>
-          <Starters starters={starters} onPick={pickStarter}
+          {/* An orglet with no model: the ways to give it one take the place of the starters, which need a model. */}
+          {!demoReplies() && emptyChatDemoWorker ? <ConnectWays orgletName={emptyChatDemoWorker.name} ways={connectWays(emptyChatDemoWorker)} /> : <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}
-            onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
+            onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />}
         </div>
         <div className="thread-composer">
           {composerBar}

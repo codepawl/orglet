@@ -96,6 +96,7 @@ export class Spaces {
       return { id, name: category.name, ...(category.orgletIds ? { orgletIds: category.orgletIds } : {}) };
     });
     const color = fields.color?.trim();
-    return Space.parse({ id: spaceId, name: fields.name, ...(color ? { color } : {}), orgletIds: fields.orgletIds, categories });
+    const defaults = fields.defaults === undefined ? current?.defaults : fields.defaults ?? undefined;
+    return Space.parse({ id: spaceId, name: fields.name, ...(color ? { color } : {}), orgletIds: fields.orgletIds, categories, ...(defaults ? { defaults } : {}) });
   }
 }

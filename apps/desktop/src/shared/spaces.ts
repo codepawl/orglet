@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ToolCapability } from './tool-policy';
 import { CHANNEL_CATEGORY_LIMIT, MAX_CHANNEL_MEMBERS, type Channel, type ChannelAccess, type ChannelMember } from './channels';
 
 /**
@@ -26,6 +27,20 @@ export const SpaceCategory = z.object({
 }).strict();
 export type SpaceCategory = z.infer<typeof SpaceCategory>;
 
+/**
+ * The permissions a space can set for a new channel in it: the switches with nothing to pick for each chat. The
+ * browser, desktop apps and the working folder stay each chat's own choice, since they name sites, programs and a
+ * folder on this computer.
+ */
+export const SPACE_DEFAULT_CAPABILITIES = ['source.read', 'dataset.check', 'network.web'] as const;
+export type SpaceDefaultCapability = (typeof SPACE_DEFAULT_CAPABILITIES)[number];
+
+export const SpaceDefaults = z.object({
+  capabilities: z.array(z.enum(SPACE_DEFAULT_CAPABILITIES)).max(SPACE_DEFAULT_CAPABILITIES.length)
+    .refine(capabilities => new Set(capabilities).size === capabilities.length, 'Quyền công cụ bị trùng.'),
+}).strict();
+export type SpaceDefaults = z.infer<typeof SpaceDefaults>;
+
 export const Space = z.object({
   id: z.uuid(),
   name: z.string().trim().min(1, 'Không gian cần một tên.').max(SPACE_NAME_LIMIT),
@@ -34,8 +49,19 @@ export const Space = z.object({
   orgletIds: OrgletIds.min(1, 'Không gian cần ít nhất một Tí.'),
   categories: z.array(SpaceCategory).max(MAX_SPACE_CATEGORIES)
     .refine(categories => new Set(categories.map(category => category.id)).size === categories.length, 'Mục bị trùng.'),
+  /** What a new channel in the space starts with; none leaves a new channel the app's own defaults. */
+  defaults: SpaceDefaults.optional(),
 }).strict();
 export type Space = z.infer<typeof Space>;
+
+/**
+ * The permissions a new channel of this space starts with, when the space sets any and the person chose none for
+ * that channel: the two every chat has, then the space's switches.
+ */
+export function spaceChatCapabilities(space: Pick<Space, 'defaults'> | undefined): ToolCapability[] | undefined {
+  if (!space?.defaults) return undefined;
+  return ['skill.read', 'app.propose', ...space.defaults.capabilities];
+}
 
 /** What the create and edit commands take. A category without an id is a new one. */
 export const SpaceFields = z.object({
@@ -43,6 +69,8 @@ export const SpaceFields = z.object({
   color: Space.shape.color,
   orgletIds: Space.shape.orgletIds,
   categories: z.array(SpaceCategory.extend({ id: z.uuid().optional() }).strict()).max(MAX_SPACE_CATEGORIES).default([]),
+  /** Left out keeps what the space has; `null` goes back to the app's own defaults. */
+  defaults: SpaceDefaults.nullable().optional(),
 }).strict();
 export type SpaceFields = z.infer<typeof SpaceFields>;
 
