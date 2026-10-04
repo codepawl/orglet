@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Boxes, FolderTree, Lock, Plus, SlidersHorizontal, Trash, UserRound, UsersRound } from 'lucide-react';
+import { Boxes, Database, FileText, FolderTree, Globe, Lock, Plus, ShieldCheck, SlidersHorizontal, Trash, UserRound, UsersRound } from 'lucide-react';
 import { Input } from '@codepawl/orglet-ui';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { CHANNEL_CATEGORY_LIMIT, MAX_CHANNEL_MEMBERS } from '../../shared/channels';
-import { MAX_SPACE_CATEGORIES, SPACE_NAME_LIMIT, type Space } from '../../shared/spaces';
+import { MAX_SPACE_CATEGORIES, SPACE_NAME_LIMIT, type Space, type SpaceDefaultCapability } from '../../shared/spaces';
+import { SwitchField } from './Switch';
 import { Button, FieldLabel } from './ui';
 import { Avatar } from './Avatar';
 import { ProviderMark } from './ProviderMark';
@@ -15,12 +16,15 @@ import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
 
-type Tab = 'general' | 'members' | 'categories';
+type Tab = 'general' | 'members' | 'categories' | 'permissions';
 type InvalidField = 'name' | 'members' | 'category';
 
 const generalTab = { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> };
 const membersTab = { id: 'members' as const, label: 'Thành viên', icon: <UsersRound size={16} /> };
 const categoriesTab = { id: 'categories' as const, label: 'Nhóm', icon: <FolderTree size={16} /> };
+const permissionsTab = { id: 'permissions' as const, label: 'Quyền', icon: <ShieldCheck size={16} /> };
+/** What a new channel has when its space sets nothing, so the switches start where the app itself would. */
+const APP_DEFAULTS: readonly SpaceDefaultCapability[] = ['source.read', 'dataset.check'];
 
 /** A category while the dialog is open: `key` tells the rows apart, `id` is set for one the space already has. */
 type CategoryDraft = { key: string; id?: string; name: string; listed: boolean; orgletIds: string[] };
@@ -45,6 +49,14 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
   const [name, setName] = useState(editing?.name ?? '');
   const [orgletIds, setOrgletIds] = useState<string[]>(() => editing ? editing.orgletIds.filter(id => workspace.workers.some(worker => worker.id === id)) : []);
   const [categories, setCategories] = useState<CategoryDraft[]>(() => (editing?.categories ?? []).map(category => ({ key: category.id, id: category.id, name: category.name, listed: Boolean(category.orgletIds), orgletIds: category.orgletIds ?? [] })));
+  // What a new channel in the space starts with. Sent only once the space has a setting or the person touched one,
+  // so opening and saving a space never changes what its next channel gets.
+  const [defaults, setDefaults] = useState<readonly SpaceDefaultCapability[]>(editing?.defaults?.capabilities ?? APP_DEFAULTS);
+  const [defaultsSet, setDefaultsSet] = useState(Boolean(editing?.defaults));
+  const changeDefault = (capability: SpaceDefaultCapability, enabled: boolean) => {
+    setDefaults(current => enabled ? [...current.filter(item => item !== capability), capability] : current.filter(item => item !== capability));
+    setDefaultsSet(true);
+  };
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<InvalidField>();
@@ -68,6 +80,7 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
     const fields = {
       name: trimmed,
       orgletIds,
+      ...(defaultsSet ? { defaults: { capabilities: [...defaults] } } : {}),
       categories: categories.map(category => ({
         ...(category.id ? { id: category.id } : {}),
         name: category.name.trim(),
@@ -95,7 +108,7 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
     })();
   };
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={editing ? t('Thiết lập không gian') : t('Không gian mới')} tabs={[generalTab, membersTab, categoriesTab]} tab={tab} onTab={next => { setTab(next); clearError(); }}
+  return <TabbedFormDialog open={open} onClose={onClose} title={editing ? t('Thiết lập không gian') : t('Không gian mới')} tabs={[generalTab, membersTab, categoriesTab, permissionsTab]} tab={tab} onTab={next => { setTab(next); clearError(); }}
     panelId="space-panel" onSubmit={submit} submitLabel={editing ? t('Lưu không gian') : t('Tạo không gian')} busy={busy} error={error}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Boxes} required>{t('Tên không gian')}</FieldLabel>
@@ -135,6 +148,18 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
         </div>}
       </div>)}
       <Button type="button" variant="outline" disabled={categories.length >= MAX_SPACE_CATEGORIES} onClick={() => setCategories(current => [...current, { key: categoryKey(), name: '', listed: false, orgletIds: [] }])}><Plus size={16} />{t('Thêm nhóm')}</Button>
+    </>}
+    {tab === 'permissions' && <>
+      <p className="muted">{t('Kênh mới trong không gian bắt đầu với những quyền này. Từng kênh vẫn đổi được quyền của riêng nó. Trình duyệt, ứng dụng và thư mục làm việc luôn chọn theo từng kênh.')}</p>
+      <SwitchField checked={defaults.includes('source.read')} onChange={enabled => changeDefault('source.read', enabled)} description={t('Đọc các tệp đính kèm trong chat này.')}>
+        <FileText size={15} aria-hidden="true" />{t('Đọc nguồn đính kèm')}
+      </SwitchField>
+      <SwitchField checked={defaults.includes('dataset.check')} onChange={enabled => changeDefault('dataset.check', enabled)} description={t('Kiểm tra cấu trúc dữ liệu đã đính kèm.')}>
+        <Database size={15} aria-hidden="true" />{t('Kiểm tra dữ liệu')}
+      </SwitchField>
+      <SwitchField checked={defaults.includes('network.web')} onChange={enabled => changeDefault('network.web', enabled)} description={t('Tìm và đọc trang web công khai.')}>
+        <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
+      </SwitchField>
     </>}
   </TabbedFormDialog>;
 }

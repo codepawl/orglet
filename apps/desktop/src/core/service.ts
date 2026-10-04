@@ -64,7 +64,8 @@ import { MessageInteractions, type MessageTarget } from './orchestration/message
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
 import { adoptCrews, Channels, channelForGroup } from './storage/channels';
-import { Spaces } from './storage/spaces';
+import { Spaces, storedSpaces } from './storage/spaces';
+import { spaceChatCapabilities } from '../shared/spaces';
 import { isLegacyGroupChat } from '../shared/channels';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
 import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
@@ -2089,7 +2090,9 @@ export class CoreService {
     const input = this.firstMessageInput(given, waiting);
     // The first message of a worker, team or group chat takes the permissions chosen while the chat was still empty.
     const liveChat = this.isLiveChatStart(input, routine) && input.toolCapabilities === undefined;
-    const chosen = liveChat ? this.pendingNewChatCapabilities(this.newChatTarget(input)) : undefined;
+    // A channel in a space with no choice of its own starts with what its space sets (docs/spaces-design.md).
+    const spaceSet = waiting?.channel.spaceId ? spaceChatCapabilities(storedSpaces(this.store).find(space => space.id === waiting.channel.spaceId)) : undefined;
+    const chosen = liveChat ? this.pendingNewChatCapabilities(this.newChatTarget(input)) ?? spaceSet : undefined;
     const task = this.prepareTask(chosen ? { ...input, toolCapabilities: chosen } : input);
     const workerIds = task.teamSnapshot ? [...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId] : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id) : task.assignees ?? [task.workerId];
     for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, task.toolCapabilities);

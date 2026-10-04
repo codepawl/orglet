@@ -115,7 +115,7 @@ import { ActivityPage, activityTabLabel, activityCounts } from './components/Act
 import { MemberColumn } from './components/MemberColumn';
 import { readArea, writeArea, readOpenSpace, writeOpenSpace, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
-import { scopeOrgletIds } from '../shared/spaces';
+import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
 import { ConnectWays, type ConnectWay } from './components/ConnectWays';
 import { useSavedMessages } from './saved';
@@ -1089,7 +1089,9 @@ export function App() {
   // An empty chat has no row yet, so its permissions wait under the worker, team or a channel's orglets until the
   // first message (COD-178, COD-215, COD-361), and so does its working folder (COD-186).
   const newChatTarget: NewChatTarget | undefined = team ? { teamId: team.id } : emptyChannel ? { workerIds: emptyChannel.workerIds } : worker ? { workerId: worker.id } : undefined;
-  const newChatCapabilities = newChatTarget ? workspace?.newChatCapabilities[newChatKey(newChatTarget)] : undefined;
+  // An empty channel in a space with no choice of its own shows what its space sets, which is what its first message takes.
+  const emptyChannelSpace = workspace?.spaces.find(space => space.id === workspace.emptyChannels.find(channel => channel.id === emptyChannelId)?.spaceId);
+  const newChatCapabilities = newChatTarget ? workspace?.newChatCapabilities[newChatKey(newChatTarget)] ?? (emptyChannel ? spaceChatCapabilities(emptyChannelSpace) : undefined) : undefined;
   const newChatWorkspace = newChatTarget ? workspace?.newChatWorkspace[newChatKey(newChatTarget)] : undefined;
   const changeNewChatCapability = (capability: ToolCapability, enabled: boolean) => toolAction(() => {
     if (!newChatTarget) return Promise.resolve();
