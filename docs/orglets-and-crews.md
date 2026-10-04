@@ -52,7 +52,7 @@ A channel is a named conversation, like **#launch** or **#research**, with a top
 
 You can also pick two or more orglets in the sidebar (the pencil next to the section, or Ctrl-click) and choose the **#** button in the bar that appears. The dialog opens with them ticked.
 
-The channel opens empty, with its orglets' faces above the message box, and waits in **Channels** until you write in it. Its header shows **#name**, the topic and the members' faces; click the faces to change who is in it. **Channel settings** in the header's **⋯** or the row's menu changes the name, topic, members and how it works; a change applies from the next message. Rename it in place from the row's menu or by clicking its name in the header. Archive and delete are in the same menus. A channel with no messages yet has nothing to archive, so it can only be deleted.
+The channel opens empty, with its orglets' faces above the message box, and waits in **Channels** until you write in it. Its header shows **#name** and the topic; **Members** in the chat's menu (⋮) changes who is in it. **Channel settings** in the header's **⋯** or the row's menu changes the name, topic, members and how it works; a change applies from the next message. Rename it in place from the row's menu or by clicking its name in the header. Archive and delete are in the same menus. A channel with no messages yet has nothing to archive, so it can only be deleted.
 
 A channel is its own conversation. It never becomes an orglet's DM, and search finds it by its name. Permissions and a working folder set in **Details** before the first message apply to it the same way as for an orglet.
 
