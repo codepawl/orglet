@@ -1,6 +1,7 @@
 import { chatTurnRevisions, chatTurnInput, chatTurnMessageId, chatTurnCreatedAt } from '../../shared/chat-turns';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight, ListTodo, Play, UserRound } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight, ListTodo, Play, UserRound, TriangleAlert } from 'lucide-react';
+import { unfinishedWork } from '../unfinishedWork';
 import { answersWithPlan, canFollowPlan } from '../../shared/approval-mode';
 import { setPlanFirst } from '../planFirst';
 import { taskDraftKey } from '../drafts';
@@ -149,6 +150,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const [savedReportId, setSavedReportId] = useState<string>();
   const savedReport = savedReportId ? detail.artifacts.find(artifact => artifact.id === savedReportId) : undefined;
   const current = detail.task.inputRevision ?? 0;
+  const unfinished = unfinishedWork(detail);
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === current && !request.answer && !request.interruptedAt);
   const turns: Turn[] = chatTurnRevisions(detail).map(revision => {
     const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
@@ -640,6 +642,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           </Message>)}
         </div>;
       })}
+      {/* The chat's state, not something an orglet said: it ends the thread as a card of its own, under the last
+          message and outside it, and scrolls with the thread. */}
+      {unfinished && <UnfinishedWork limitations={unfinished.limitations} onRetry={() => action(() => orglet.call('retry', { id: detail.task.id }))} />}
     </div>
     {diff.dialog}
     {outputCommand && <CommandOutputDialog taskId={detail.task.id} command={outputCommand} onClose={() => setOutputCommand(undefined)} />}
@@ -765,8 +770,8 @@ function MessageFoot({ badges, receipts }: { badges?: ReactNode; receipts?: Reac
 /**
  * A normal chat answer: the text, what came out of it, its limitations, then its reactions and read faces.
  * Notices stay in their order (COD-217): what was loaded before writing above the text, what came out of it below.
- * While the chat still waits on the unfinished parts they are on the prompt bar with Retry (`unfinishedWork`), not
- * here: that is the chat's state, and inside the thread it read as part of what the orglet said.
+ * While the chat still waits on the unfinished parts they end the thread as a card of their own with Retry
+ * (`unfinishedWork`), not here: that is the chat's state, and inside the thread it read as part of what the orglet said.
  */
 function ChatReply({ artifact, text, notices, badges, receipts, toolbar, limitationsOnBar }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; limitationsOnBar: boolean }) {
   return <div className="chat-reply">
@@ -797,6 +802,21 @@ function HeldReply({ runId, title, text, limitations, notices }: { runId: string
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       {limitations.map((limitation, index) => <p key={index}>{tMessage(limitation)}</p>)}
     </div>}
+  </div>;
+}
+
+/**
+ * What the latest answer left unfinished, with the way to try again. It leads with a warning mark, so it is told
+ * from an answer at a glance.
+ */
+function UnfinishedWork({ limitations, onRetry }: { limitations: readonly string[]; onRetry: () => void }) {
+  return <div className="unfinished-work" role="status">
+    <TriangleAlert className="unfinished-work-mark" size={18} aria-hidden="true" />
+    <div className="unfinished-work-text">
+      <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
+      {limitations.map((limitation, index) => <p key={index}>{tMessage(limitation)}</p>)}
+    </div>
+    <Button className="limit-retry" variant="outline" onClick={onRetry}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>
   </div>;
 }
 

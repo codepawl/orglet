@@ -1443,6 +1443,9 @@ button.notice-body { cursor:pointer; }
 .sync-join-counts dt { color:var(--muted); font-size:13px; }
 .sync-join-counts dd { margin:0; font-size:14px; font-variant-numeric:tabular-nums; }
 .sync-join-note { margin:0; color:var(--muted); font-size:13px; text-wrap:pretty; }
+.sync-title { display:inline-flex; align-items:center; gap:8px; }
+.outcome-line { display:flex; align-items:flex-start; gap:8px; margin:0; text-wrap:pretty; }
+.outcome-line > .org-status-mark { flex-shrink:0; margin-top:2px; }
 /* Two versions of one thing, side by side, each with its own choice under it (GH-484). */
 .sync-conflicts { display:flex; flex-direction:column; gap:28px; }
 .sync-conflict-version { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
@@ -2027,15 +2030,14 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-limitations p { margin:6px 0 0; font-size:13px; line-height:1.5; }
 /* The same wash on the prompt bar (`UnfinishedWork` in Composer.tsx): the mark, the text, then Retry centred on them. */
 /* A plain surface, not a tinted wash: the warning mark alone carries the colour (user, 2026-10-04). */
-.unfinished-work { display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:10px 12px 10px 14px; border-radius:14px; background:var(--surface); }
+.unfinished-work { display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; max-width:var(--bubble-max); margin:14px 0 0 calc(var(--message-gutter) + var(--message-gutter-gap)); padding:10px 12px 10px 14px; border-radius:14px; background:var(--surface); }
 .unfinished-work-mark { flex-shrink:0; color:color-mix(in srgb, var(--working) 78%, var(--text)); }
-.unfinished-work-text { flex:1; min-width:0; max-height:96px; overflow-y:auto; overflow-wrap:anywhere; }
+.unfinished-work-text { flex:1 1 260px; min-width:0; overflow-wrap:anywhere; }
 .unfinished-work-text strong { display:block; font-size:13px; font-weight:600; }
 .unfinished-work-text p { margin:2px 0 0; font-size:13px; line-height:1.5; color:var(--muted); }
 /* The button is the page's ground on the notice's surface, so it reads as a control without a second tint. */
 .unfinished-work .limit-retry { flex-shrink:0; background:var(--bg); color:var(--text); }
 .unfinished-work .limit-retry:hover:not(:disabled) { background:color-mix(in srgb, var(--text) 6%, var(--bg)); }
-@container (max-width:520px) { .unfinished-work { flex-wrap:wrap; } .unfinished-work .limit-retry { margin-left:30px; } }
 /* Unfinished crew jobs under the byline (team-chat.md). The name and the state share one line; the brief is a
    short line under them, cut with an ellipsis, until the row opens. Indented with the working line, so both sit
    under the name rather than running back to the face. */

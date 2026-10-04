@@ -1,6 +1,5 @@
 import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Plug, Reply, RotateCcw, Square, TriangleAlert, X } from 'lucide-react';
-import { unfinishedWork } from '../unfinishedWork';
+import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Run, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
 import { MessageBoxFocus, SourcePicker } from './SourcePicker';
@@ -553,9 +552,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   };
   const sendOptions = sideThreads ? <RowMenu className="composer-send-options" label={t('Tùy chọn gửi')} icon={ChevronUp} disabled={!text.trim() || blocked || submitting}
     items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
-  const unfinished = unfinishedWork(detail);
   return <div className="thread-composer">
-    {unfinished && <UnfinishedWork limitations={unfinished.limitations} onRetry={() => action(() => orglet.call('retry', { id: detail.task.id }))} />}
     <IslandDock dock={islandDock} />
     <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} usage={planUsage.ring} label={t('Tin nhắn')} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(readOnly)} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
@@ -577,20 +574,5 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
     {permissionHint && !planUsage.out && <ComposerPermissionHint text={text} controls={{ ...permissionHint, enabled: permissionHint.enabled && !readOnly && !blocked && !demoWorker }}
       fallback={!readOnly && !blocked && !demoWorker ? planUsage.note : undefined} />}
     </ComposerFoot>
-  </div>;
-}
-
-/**
- * What the latest answer left unfinished, above the prompt bar with the way to try again. It leads with a warning
- * mark, so it is told from an answer at a glance, and it stays put while the thread scrolls.
- */
-function UnfinishedWork({ limitations, onRetry }: { limitations: readonly string[]; onRetry: () => void }) {
-  return <div className="unfinished-work" role="status">
-    <TriangleAlert className="unfinished-work-mark" size={18} aria-hidden="true" />
-    <div className="unfinished-work-text">
-      <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
-      {limitations.map((limitation, index) => <p key={index}>{tMessage(limitation)}</p>)}
-    </div>
-    <Button className="limit-retry" variant="outline" onClick={onRetry}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>
   </div>;
 }
