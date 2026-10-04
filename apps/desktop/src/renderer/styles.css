@@ -111,7 +111,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Every panel has its place: the left column, the main card, the right panel. */
 /* The rail has no ground of its own: its tiles sit on the window (user, 2026-10-04). */
 .app > .area-rail { grid-column:1; grid-row:1; width:var(--area-rail-width); z-index:2; background:transparent; }
-/* The sidebar is a card like the chat beside it, on the same ground (user, 2026-10-04). It ends above the user panel. */
+/* The sidebar is a card like the chat beside it, on the same ground (user, 2026-10-04). */
 .app > .sidebar { grid-column:2; grid-row:1; width:var(--sidebar-width); justify-self:start; background:var(--bg); box-shadow:var(--panel-shadow); }
 .app > .main-pane { grid-column:3; grid-row:1; }
 .app > .details-pane,.app > .members-pane { grid-column:4; grid-row:1; margin-left:var(--shell-gap); }
@@ -1540,7 +1540,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    adds must not shift the shell along: everything is one column here. */
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
-@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--bg); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; justify-self:auto; margin-right:0; margin-bottom:0; box-shadow:8px 0 30px #0002; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
+@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--bg); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; justify-self:auto; margin-right:0; box-shadow:8px 0 30px #0002; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
 @media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 12px; } .finding-heading { flex-wrap:wrap; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
@@ -3019,7 +3019,7 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 
 /* COD-366: the far-left area rail, the way Discord's rail lists its servers. Like the sidebar it has no ground of its own and
    takes the sidebar's hover and selected pair; the open area wears the selected tint, never a line. Home first, then the
-   areas, then Library and Schedules, then the one + Create. It stops short of the user panel at the bottom left. */
+   areas, then Library and Schedules, then the one + Create. It stops short of the person's face at its bottom. */
 .area-rail, .members-pane, .user-panel { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent); }
 .area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:var(--panel-inset) 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
 .area-rail::-webkit-scrollbar { width:0; height:0; }
@@ -3035,7 +3035,6 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 
 /* The sidebar's head and the lists the areas put in it (COD-366): a title with its buttons, Home's search box and Friends
    item, Activity's views, and the channels without a category, which sit above the categories. */
-.app > .sidebar { margin-bottom:calc(52px + var(--shell-gap)); }
 .sidebar-head { display:flex; align-items:center; gap:8px; min-height:34px; padding:0 6px 10px; }
 .sidebar-title { min-width:0; margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:600; letter-spacing:-.4px; }
 .sidebar-head > .org-button { flex-shrink:0; }
@@ -3051,22 +3050,13 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .channel-uncategorized { display:flex; flex-direction:column; gap:2px; margin-bottom:6px; }
 .sidebar-empty { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:4px 12px; }
 
-/* The user panel (COD-366), Discord's at the bottom left: it spans the rail and the sidebar, and folds to the rail's width,
-   the face alone, while the sidebar is folded. It sits on the surface colour, a card among cards. */
-.user-panel { position:absolute; z-index:6; left:var(--shell-gap); bottom:var(--shell-gap); display:flex; align-items:center; gap:4px; box-sizing:border-box; width:calc(var(--area-rail-width) + var(--shell-gap) + var(--sidebar-width)); height:52px; padding:0 6px; border-radius:14px; background:var(--surface); }
-.app.sidebar-hidden .user-panel, .user-panel.compact { width:var(--area-rail-width); justify-content:center; padding:0; }
-.user-panel.compact > .org-row-menu { flex:0 0 auto; }
-.user-panel.compact .user-panel-who { width:40px; justify-content:center; padding:0; }
-.user-panel > .org-row-menu { flex:1; min-width:0; }
-.user-panel-who { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-width:0; height:40px; padding:0 8px 0 10px; border-radius:10px; text-align:left; }
+/* The person sits in the rail, under the areas: a face the size of a tile that opens their menu (user, 2026-10-04).
+   A waiting update stacks above it. Like the rail, it has no ground of its own. */
+.user-panel { position:absolute; z-index:6; left:var(--shell-gap); bottom:var(--shell-gap); display:flex; flex-direction:column; align-items:center; gap:6px; width:var(--area-rail-width); }
+.user-panel-who { display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border-radius:14px; }
 .user-panel-who:hover:not(:disabled), .user-panel-who[aria-expanded="true"] { background:var(--row-hover); }
-.user-panel-more { flex-shrink:0; margin-left:auto; color:var(--muted); }
 .user-panel-face { position:relative; display:grid; place-items:center; flex-shrink:0; }
-.user-panel-face .connection-dot { position:absolute; right:-2px; bottom:-2px; box-shadow:0 0 0 2px var(--surface); }
-.user-panel-text { display:flex; flex-direction:column; flex:1; min-width:0; line-height:1.25; }
-.user-panel-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; font-weight:600; }
-.user-panel-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted); }
-@media(max-width:780px) { .user-panel { width:var(--area-rail-width); justify-content:center; padding:0; } }
+.user-panel-face .connection-dot { position:absolute; right:-2px; bottom:-2px; box-shadow:0 0 0 2px var(--window); }
 
 /* Pages in the main card (COD-366): Friends and Activity. The header is the chat's own, with the page's tabs on it. */
 .page-scroll { flex:1; min-height:0; overflow:auto; }
