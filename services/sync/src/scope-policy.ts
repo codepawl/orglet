@@ -151,6 +151,8 @@ export function assessScope(record: SyncRecord, records: readonly SyncRecord[], 
   } else if (data.kind === 'entityState') roots = data.entity === 'worker' ? [{ kind: 'worker', id: data.id }] : control ? [] : teamRoots(data.id);
   else if (data.kind === 'origin') roots = Object.values(data.value.workerIds).map(id => ({ kind: 'worker', id }));
   else if (data.kind === 'channel') roots = members(data.value);
+  // A space names its orglets, so it is accepted only in the scope of every one of them.
+  else if (data.kind === 'space') roots = data.value.orgletIds.map(id => ({ kind: 'worker' as const, id }));
   else if (data.kind === 'routine') roots = [{ kind: 'worker', id: data.value.task.workerId }, ...(data.value.task.teamId ? teamRoots(data.value.task.teamId) : [])];
   else if (data.kind === 'source') {
     const owners = new Set(all.flatMap(row => row.data.kind === 'turn' && row.data.value.input.sourceIds.includes(data.value.id) ? [row.data.value.taskId] : []));
