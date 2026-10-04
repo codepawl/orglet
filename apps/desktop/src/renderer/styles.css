@@ -3075,6 +3075,9 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .page-section h2 { font-size:16px; font-weight:600; }
 .friends-search { display:flex; align-items:center; gap:8px; padding:0 12px; min-height:38px; border-radius:var(--radius); background:var(--surface); color:var(--muted); }
 .friends-search .org-input { flex:1; min-width:0; border:0; background:transparent; box-shadow:none; padding-left:0; }
+/* The pill is the field, so the focus ring goes round the pill and not round the input inside it. */
+.friends-search .org-input:focus-visible { outline:none; }
+.friends-search:has(.org-input:focus-visible) { outline:2px solid var(--focus); outline-offset:-1px; }
 .friends-count { font-size:13px; font-weight:500; color:var(--muted); }
 .friends-list, .friends-sources, .saved-list { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
 .friend-row, .friend-source { display:flex; align-items:center; gap:12px; min-height:56px; padding:6px 10px; border-radius:10px; }
