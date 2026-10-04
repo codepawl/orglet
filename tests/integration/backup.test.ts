@@ -173,6 +173,23 @@ describe('workspace backup and additive restore', () => {
     expect(target.sync.turns.list(saved.task.id)[0].input.brief).toBe('Restore history');
   });
 
+  it('carries spaces, and keeps a space the restoring computer already has', () => {
+    const original = create();
+    const saved = fixture(original);
+    const space = { id: id(), name: 'Launch', orgletIds: [saved.task.workerId], categories: [{ id: id(), name: 'Copy' }] };
+    original.setSetting('spaces', [space]);
+    const text = backups(original).export();
+    const restored = create();
+    const manager = backups(restored);
+    manager.restore(manager.preview(text).token);
+    expect(restored.workspace().spaces).toEqual([space]);
+    // A second restore of a backup that names the same space differently leaves the space on this computer alone.
+    original.setSetting('spaces', [{ ...space, name: 'Renamed elsewhere' }]);
+    const later = backups(original).export();
+    manager.restore(manager.preview(later).token);
+    expect(restored.workspace().spaces).toEqual([space]);
+  });
+
   it('keeps an answer attached to its durable message ID after a second user message', () => {
     const original = create();
     const saved = fixture(original);

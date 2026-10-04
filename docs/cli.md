@@ -49,6 +49,7 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet models <provider>` | The models a connection offers; `--to <orglet>` uses that orglet's |
 | `orglet preferences [--language …] [--theme …]` | Shows or changes the app's language and theme |
 | `orglet schedules` | Lists schedules with their timing and limits |
+| `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category and who is in it |
 | `orglet schedule add\|edit\|on\|off\|delete "<name>"` | Creates, changes, switches or deletes a schedule. See [Schedules](#schedules). |
 
 It can create, edit and remove orglets and channels, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.

@@ -142,6 +142,7 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('archive-entity'), token: CliToken, kind: z.enum(['worker', 'team']), name: ChatName, archived: z.boolean() }).strict(),
   z.object({ op: z.literal('template'), token: CliToken, templateId: z.enum(TEMPLATE_IDS), provider: z.enum(['demo', 'openai']) }).strict(),
   z.object({ op: z.literal('schedules'), token: CliToken }).strict(),
+  z.object({ op: z.literal('spaces'), token: CliToken }).strict(),
   z.object({ op: z.literal('schedule-enable'), token: CliToken, schedule: ScheduleName, enabled: z.boolean() }).strict(),
   z.object({ op: z.literal('schedule-delete'), token: CliToken, schedule: ScheduleName, confirmName: ScheduleName }).strict(),
   /**
@@ -313,6 +314,14 @@ export type CliScheduleRow = {
   spentTodayMicros?: number;
 };
 export type SchedulesValue = { schedules: CliScheduleRow[] };
+/** One space as `orglet spaces` lists it (docs/spaces-design.md): its orglets, then each channel with who is in it. */
+export type CliSpaceRow = {
+  name: string;
+  orglets: string[];
+  categories: string[];
+  channels: { name: string; category?: string; access: 'inherit' | 'listed'; orglets: string[] }[];
+};
+export type SpacesValue = { spaces: CliSpaceRow[] };
 /** What `orglet search` found (COD-354): names that match, and one message per chat with the words around the match. */
 export type SearchValue = {
   orglets: string[];

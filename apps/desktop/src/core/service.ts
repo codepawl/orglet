@@ -64,6 +64,7 @@ import { MessageInteractions, type MessageTarget } from './orchestration/message
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
 import { adoptCrews, Channels, channelForGroup } from './storage/channels';
+import { Spaces } from './storage/spaces';
 import { isLegacyGroupChat } from '../shared/channels';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
 import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
@@ -172,6 +173,8 @@ export class CoreService {
   readonly sideThreads: SideThreads;
   /** Channels: named chats of orglets and crews, and the empty ones waiting for a first message (COD-361). */
   readonly channels: Channels;
+  /** Spaces: named groups of orglets that hold categories and channels (docs/spaces-design.md). */
+  readonly spaces: Spaces;
   /** Reads the message a forward carries out of saved history (COD-257). */
   readonly forwards: Forwards;
   /** Search across every message, answer and name (COD-267). */
@@ -224,6 +227,7 @@ export class CoreService {
     this.workspaceGrants = new WorkspaceGrants(store);
     this.sideThreads = new SideThreads(store, this.workspaceGrants);
     this.channels = new Channels(store, clock, { save: input => this.saveTeam(input), retire: teamId => this.deleteEntity('team', teamId) });
+    this.spaces = new Spaces(store, this.channels, channelId => this.assertChannelIdle(channelId));
     this.forwards = new Forwards(store);
     this.templates = new TeamTemplates(store, this.notify);
     this.market = new Marketplace(store, this.notify, {
@@ -935,6 +939,25 @@ export class CoreService {
         this.notify(); return;
       }
       case 'deleteTask': this.deleteTask(commands.deleteTask.parse(args).id); this.notify(); return;
+      case 'createSpace': {
+        const spaceId = this.spaces.create(commands.createSpace.parse(args));
+        this.notify();
+        return spaceId;
+      }
+      case 'updateSpace': {
+        const { id: spaceId, ...fields } = commands.updateSpace.parse(args);
+        this.spaces.update(spaceId, fields);
+        this.notify(); return;
+      }
+      case 'deleteSpace': {
+        this.spaces.delete(commands.deleteSpace.parse(args).id);
+        this.notify(); return;
+      }
+      case 'spaceFromCategory': {
+        const spaceId = this.spaces.fromCategory(commands.spaceFromCategory.parse(args).category);
+        this.notify();
+        return spaceId;
+      }
       case 'createChannel': {
         const channelId = this.channels.create(commands.createChannel.parse(args));
         this.notify();

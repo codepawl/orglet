@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties } from 'react';
-import { MessageCircle, Pencil, UserRound, UserRoundMinus } from 'lucide-react';
+import { MessageCircle, Pencil, UserRound, UserRoundMinus, UserRoundPlus } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 import { AnchoredPopover } from './AnchoredPopover';
@@ -15,10 +15,12 @@ import { Button } from './ui';
  * right-click on it opens its menu. The person's row opens nothing. It takes the right panel's place while Details is closed, so the two never sit side by
  * side. It has no close button: the toggle in the channel's header shows and hides it (user, 2026-10-04).
  */
-export function MemberColumn({ you, members, working, leadId, onMessage, onEdit, removable, onRemove }: {
+export function MemberColumn({ you, members, others, working, leadId, onMessage, onEdit, removable, onRemove, onAdd }: {
   /** The person's name, as their face in the rail has it. */
   you: string;
   members: readonly Worker[];
+  /** In a space, the orglets the channel's place has that are not in the channel: listed dimmed, with a way in. */
+  others: readonly Worker[];
   working: ReadonlySet<string>;
   leadId?: string;
   /** Opens that orglet's DM. */
@@ -29,6 +31,8 @@ export function MemberColumn({ you, members, working, leadId, onMessage, onEdit,
   removable: (worker: Worker) => boolean;
   /** Takes the orglet out of the channel. Its messages stay, and it stays an orglet. */
   onRemove: (worker: Worker) => void;
+  /** Puts one of `others` into the channel. */
+  onAdd: (worker: Worker) => void;
 }) {
   const youWord = t('Bạn');
   return <aside className="members-pane" aria-label={t('Thành viên')}>
@@ -49,6 +53,25 @@ export function MemberColumn({ you, members, working, leadId, onMessage, onEdit,
           onRemove={removable(worker) ? () => onRemove(worker) : undefined} />
       </li>)}
     </ul>
+    {others.length > 0 && <>
+      <div className="members-head members-head-others">
+        <h2>{t('Trong không gian — {0}', [others.length])}</h2>
+      </div>
+      <ul className="members-list members-others">
+        {others.map(worker => <li key={worker.id}>
+          <div className="member-item">
+            <div className="member-row member-outside">
+              <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
+              <span className="member-text"><span className="member-name">{worker.name}</span></span>
+            </div>
+            <RowMenu label={t('Tùy chọn {0}', [worker.name])} contextMenuOf=".member-item" items={[
+              { label: t('Thêm vào kênh này'), icon: UserRoundPlus, onSelect: () => onAdd(worker) },
+              { label: t('Nhắn tin'), icon: MessageCircle, onSelect: () => onMessage(worker) },
+            ]} />
+          </div>
+        </li>)}
+      </ul>
+    </>}
   </aside>;
 }
 

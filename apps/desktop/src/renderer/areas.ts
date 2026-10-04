@@ -33,6 +33,25 @@ export function writeArea(area: Area) {
   }
 }
 
+const openSpaceKey = 'orglet.space';
+
+/** The space whose channels the Channels area lists (docs/spaces-design.md); none lists the channels outside every space. UI chrome. */
+export function readOpenSpace(): string {
+  try {
+    return localStorage.getItem(openSpaceKey) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function writeOpenSpace(spaceId: string) {
+  try {
+    localStorage.setItem(openSpaceKey, spaceId);
+  } catch {
+    /* storage unavailable: the open space is kept in memory only */
+  }
+}
+
 /** The orglets that have a run going right now, which the sidebar and the member column mark. */
 export function workingOrgletIds(running: readonly RunningItem[]): Set<string> {
   return new Set(running.filter(item => item.state === 'running' || item.state === 'pausing').map(item => item.worker.id));

@@ -50,7 +50,7 @@ The packaged smokes drive a real Electron window and are CI's job after typechec
 | `pnpm build` then `pnpm test:market-moderation` | Real packaged report/reviewer UI with trusted transports: full inert text, previous approved version, keyboard/focus, conflicts, service pauses, revoked reviewer hints and exact retry after SQLite/app restart. Measures VI/EN, both themes and window sizes; does not verify authenticated Worker HTTP. |
 | `pnpm build` then `pnpm test:sync-privacy` | Real packaged renderer, preload, core and SQLite: keyboard saves for orglet/chat privacy, side-thread inheritance, restart persistence and VI/EN layouts in both themes and window sizes. Uses Demo; no account transport or live provider. |
 | `pnpm test:isolation` (`--packaged` after `pnpm build`) | The Windows sandbox for workspace files and commands; needs a supported Windows host |
-| `pnpm test:routines`, `pnpm test:skills`, `pnpm test:knowledge`, `pnpm test:run-audit`, `pnpm test:findings`, `pnpm test:revisions`, `pnpm test:sidebar`, `pnpm test:i18n`, `pnpm test:custom-connections` | One packaged flow each; see the [technical guide](docs/technical-guide.md#checks-and-packaging) |
+| `pnpm test:routines`, `pnpm test:skills`, `pnpm test:knowledge`, `pnpm test:run-audit`, `pnpm test:findings`, `pnpm test:revisions`, `pnpm test:sidebar`, `pnpm test:spaces`, `pnpm test:i18n`, `pnpm test:custom-connections` | One packaged flow each; see the [technical guide](docs/technical-guide.md#checks-and-packaging) |
 
 Do not run `pnpm test:live` unless you have set `ORGLET_LIVE_KEY_FILE` to your own key; it makes one paid request. Never search a machine for keys to make it run.
 

@@ -181,6 +181,7 @@ jobs:
       - run: pnpm test:knowledge
       - run: pnpm test:harness
       - run: pnpm test:sidebar
+      - run: pnpm test:spaces
       - run: pnpm test:market-publishing
       - run: pnpm test:market-moderation
       - run: pnpm test:sync-privacy

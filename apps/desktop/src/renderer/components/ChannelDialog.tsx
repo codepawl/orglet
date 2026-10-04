@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
-import { CalendarDays, Clock, Columns2, Combine, Download, FileUp, FolderTree, Globe, Hash, Layers, ListOrdered, MessageSquareQuote, MessagesSquare, ScrollText, SlidersHorizontal, UserRound, UsersRound, Wallet, Workflow } from 'lucide-react';
+import { Boxes, CalendarDays, Clock, Columns2, Combine, Download, FileUp, FolderTree, Globe, Hash, Layers, ListOrdered, Lock, MessageSquareQuote, MessagesSquare, ScrollText, SlidersHorizontal, UserRound, UsersRound, Wallet, Workflow } from 'lucide-react';
 import { Input, Textarea } from '@codepawl/orglet-ui';
 import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type ChannelLeadSettings, type Team, type Worker, type Workspace } from '../../shared/contracts';
-import { CHANNEL_CATEGORY_LIMIT, CHANNEL_NAME_LIMIT, CHANNEL_TOPIC_LIMIT, MAX_CHANNEL_MEMBERS, type ChannelMember, type ChannelMode } from '../../shared/channels';
+import { CHANNEL_CATEGORY_LIMIT, CHANNEL_NAME_LIMIT, CHANNEL_TOPIC_LIMIT, MAX_CHANNEL_MEMBERS, type ChannelAccess, type ChannelMember, type ChannelMode } from '../../shared/channels';
+import { scopeOrgletIds } from '../../shared/spaces';
 import { TimeZone } from '../../shared/schedule';
 import { Button, FieldLabel, MoneyInput } from './ui';
 import { Avatar } from './Avatar';
@@ -29,9 +30,12 @@ const limitsTab = { id: 'limits' as const, label: 'Giới hạn & ca', icon: <Wa
 /**
  * The channel being edited, or the members a new one starts with (orglets picked in the sidebar). `crewId` names the
  * crew record that holds how the lead splits the work (COD-369). `initialTab` opens the members straight away, as the
- * header's faces do.
+ * header's faces do. `spaceId`, `categoryId` and `access` say where the channel sits in a space, or where a new one
+ * starts (docs/spaces-design.md).
  */
-export type ChannelDraft = { id: string; name: string; topic?: string; category?: string; members: ChannelMember[]; crewId?: string; initialTab?: 'members' } | { id?: undefined; members?: ChannelMember[]; category?: string; initialTab?: undefined };
+type Placed = { spaceId?: string; categoryId?: string; access?: ChannelAccess };
+export type ChannelDraft = (Placed & { id: string; name: string; topic?: string; category?: string; members: ChannelMember[]; crewId?: string; initialTab?: 'members' })
+  | (Placed & { id?: undefined; members?: ChannelMember[]; category?: string; initialTab?: undefined });
 
 /** A new channel's lead while the person has not picked one: kept while it is still a member, else the first member. */
 export function nextLead(current: string, members: readonly string[]): string {
@@ -56,7 +60,23 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
   const knownCategories = categoryNames([...workspace.tasks.map(task => task.channel?.category), ...workspace.emptyChannels.map(channel => channel.category)]);
   // Members are orglets; a crew picked before crews became channels joins as its orglets, and one that left the
   // workspace is not offered again, so saving drops it.
-  const [orgletIds, setOrgletIds] = useState<string[]>(() => startingOrglets(draft.members ?? [], workspace));
+  const [pickedIds, setOrgletIds] = useState<string[]>(() => startingOrglets(draft.members ?? [], workspace));
+  // Where the channel sits. In a space its orglets are the space's (or its category's), or some of them.
+  const [spaceId, setSpaceId] = useState(draft.spaceId ?? '');
+  const [categoryId, setCategoryId] = useState(draft.categoryId ?? '');
+  const [access, setAccess] = useState<ChannelAccess>(draft.access ?? 'inherit');
+  const space = workspace.spaces.find(item => item.id === spaceId);
+  const placeCategory = space?.categories.find(item => item.id === categoryId);
+  const scopeIds = space ? scopeOrgletIds(space, placeCategory?.id) : undefined;
+  const offered = scopeIds ? workspace.workers.filter(worker => scopeIds.includes(worker.id)) : workspace.workers;
+  const orgletIds = !scopeIds ? pickedIds : access === 'inherit' ? offered.map(worker => worker.id) : pickedIds.filter(id => scopeIds.includes(id));
+  const changeSpace = (next: string) => {
+    setSpaceId(next);
+    setCategoryId('');
+    // A channel that had its own orglets keeps them when it moves into a space; a new one takes the space's.
+    setAccess(editing && !draft.spaceId ? 'listed' : 'inherit');
+    if (invalid === 'members') clearError();
+  };
   const [mode, setMode] = useState<ChannelMode>(crew ? 'lead' : 'turns');
   const lead = useLeadSettings(crew, orgletIds);
   const [error, setError] = useState('');
@@ -84,7 +104,10 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
     if (!orgletIds.length) return fail('members', t('Chọn ít nhất một Tí.'), 'members');
     const leadSettings = mode === 'lead' ? lead.validate(orgletIds, fail) : undefined;
     if (mode === 'lead' && !leadSettings) return;
-    const fields = { name: trimmed, topic: topic.trim(), category: category.trim(), members: orgletIds.map(id => ({ kind: 'orglet' as const, id })), mode, ...(leadSettings ? { lead: leadSettings } : {}) };
+    const place = space
+      ? { spaceId: space.id, categoryId: placeCategory?.id ?? null, access }
+      : editing && draft.spaceId ? { spaceId: null } : {};
+    const fields = { name: trimmed, topic: topic.trim(), category: space ? '' : category.trim(), ...place, members: orgletIds.map(id => ({ kind: 'orglet' as const, id })), mode, ...(leadSettings ? { lead: leadSettings } : {}) };
     void run(async () => {
       if (editing) {
         await orglet.call('updateChannel', { id: draft.id, ...fields });
@@ -112,20 +135,35 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
         <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={CHANNEL_NAME_LIMIT + 1} placeholder={t('ví dụ: ra-mắt')} invalid={invalid === 'name'} flash={flash} /></label>
       <label><FieldLabel icon={MessageSquareQuote}>{t('Chủ đề')}</FieldLabel>
         <Input value={topic} onChange={event => setTopic(event.target.value)} maxLength={CHANNEL_TOPIC_LIMIT} placeholder={t('Kênh này để làm gì')} /></label>
-      <label><FieldLabel icon={FolderTree}>{t('Nhóm')}</FieldLabel>
-        <Input value={category} onChange={event => setCategory(event.target.value)} maxLength={CHANNEL_CATEGORY_LIMIT} list="channel-categories" placeholder={t('Không nhóm')} />
-        <datalist id="channel-categories">{knownCategories.map(name => <option key={name} value={name} />)}</datalist></label>
+      {workspace.spaces.length > 0 && <Select label={<FieldLabel icon={Boxes}>{t('Không gian')}</FieldLabel>} value={spaceId} onChange={changeSpace}
+        options={[{ value: '', label: t('Ngoài mọi không gian') }, ...workspace.spaces.map(item => ({ value: item.id, label: item.name }))]} />}
+      {space
+        ? space.categories.length > 0 && <Select label={<FieldLabel icon={FolderTree}>{t('Nhóm')}</FieldLabel>} value={placeCategory?.id ?? ''} onChange={value => { setCategoryId(value); if (invalid === 'members') clearError(); }}
+          options={[{ value: '', label: t('Không nhóm') }, ...space.categories.map(item => ({ value: item.id, label: item.name }))]} />
+        : <label><FieldLabel icon={FolderTree}>{t('Nhóm')}</FieldLabel>
+          <Input value={category} onChange={event => setCategory(event.target.value)} maxLength={CHANNEL_CATEGORY_LIMIT} list="channel-categories" placeholder={t('Không nhóm')} />
+          <datalist id="channel-categories">{knownCategories.map(name => <option key={name} value={name} />)}</datalist></label>}
       {editing && !crew && <p className="muted">{t('Template lưu cách Tí trưởng chia việc. Chọn cách đó trong Cách làm việc để xuất template.')}</p>}
       {crew && <p className="muted">{t('Template gồm kênh, Tí và skill đã lưu; không có API key.')}</p>}
     </>}
     {tab === 'members' && <>
-      <fieldset><legend><FieldLabel icon={UserRound} required>{t('Tí trong kênh')}</FieldLabel></legend><div className="fieldset-options">
-        {workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={orgletIds.includes(worker.id)}
+      {space && <Select label={<FieldLabel icon={Lock} required>{t('Ai ở trong kênh')}</FieldLabel>} value={access} onChange={value => { setAccess(value as ChannelAccess); if (invalid === 'members') clearError(); }} menuMinWidth={320}
+        options={[
+          { value: 'inherit', label: placeCategory ? t('Mọi Tí của nhóm {0}', [placeCategory.name]) : t('Mọi Tí của không gian {0}', [space.name]), detail: t('Tí mới vào đó cũng vào kênh này'), icon: <UsersRound size={16} /> },
+          { value: 'listed', label: t('Chỉ những Tí được chọn'), detail: t('Kênh giữ danh sách riêng'), icon: <Lock size={16} /> },
+        ]} />}
+      {space && access === 'inherit'
+        ? <ul className="channel-scope" aria-label={t('Tí trong kênh')} data-field={invalid === 'members' ? 'members' : undefined} tabIndex={-1}>
+          {offered.map(worker => <li key={worker.id} className="inline-mark">{orgletFace(worker)}{worker.name}</li>)}
+          {!offered.length && <li className="muted">{t('Chưa có Tí nào ở đó.')}</li>}
+        </ul>
+        : <fieldset><legend><FieldLabel icon={UserRound} required>{t('Tí trong kênh')}</FieldLabel></legend><div className="fieldset-options">
+        {offered.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={orgletIds.includes(worker.id)}
           disabled={!orgletIds.includes(worker.id) && orgletIds.length >= MAX_CHANNEL_MEMBERS} onChange={event => changeMembers(event.target.checked ? [...orgletIds, worker.id] : orgletIds.filter(id => id !== worker.id))} {...fieldInvalid(invalid === 'members', flash)}>
           <span className="inline-mark">{orgletFace(worker)}{worker.name}</span>
         </Checkbox>)}
         {!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}
-      </div></fieldset>
+      </div></fieldset>}
       {mode === 'lead' && orgletIds.length > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Mỗi Tí là một lượt gọi model, nên kênh đông hơn thì mỗi tin nhắn tốn hơn.')}</p>}
     </>}
     {tab === 'how' && <>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
-import { Hash, Settings2, Upload } from 'lucide-react';
+import { Hash, Lock, Settings2, Upload } from 'lucide-react';
 import { GripVertical, Archive, CalendarClock, EllipsisVertical, Pencil, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
@@ -154,7 +154,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
  * leaves Archive out (`onArchive` absent). One where the lead splits the work lists its schedules' runs under it, the
  * way its crew's row did (COD-369).
  */
-export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, onPublish, deleteQuestion, children, childrenLabel }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; onPublish?: () => void; deleteQuestion: string;
+export function ChannelRow({ name, locked = false, active, status, onOpen, onDwell, onEdit, onRename, onArchive, onDelete, onPublish, deleteQuestion, children, childrenLabel }: { name: string; /** In a space, with its own list of orglets instead of everyone's: a lock in place of the hash. */ locked?: boolean; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onEdit: () => void; onRename: (name: string) => void; onArchive?: () => void; onDelete: () => void; onPublish?: () => void; deleteQuestion: string;
   /** Rows listed under the channel: its schedules' newest runs, when the lead splits the work (COD-369). */ children?: ReactNode;
   /** What the rows under this one are, for assistive technology. */ childrenLabel?: string }) {
   const [editing, setEditing] = useState(false);
@@ -165,7 +165,7 @@ export function ChannelRow({ name, active, status, onOpen, onDwell, onEdit, onRe
   return <div ref={row} className="tree-item channel-row" {...dwell}>
     <div className="worker-row">
       <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />
-      <span className="row-disclosure channel-hash" aria-hidden="true"><Hash size={16} /></span>
+      <span className="row-disclosure channel-hash" aria-hidden="true">{locked ? <Lock size={16} /> : <Hash size={16} />}</span>
       <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} aria-label={label} title={label} onClick={onOpen}>
         <span>{name}</span>
       </button>
