@@ -1,5 +1,5 @@
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
@@ -43,7 +43,7 @@ import { suggestStarters } from '../shared/starters';
 import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
-import { ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
+import { CHANNEL_DRAG_TYPE, ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
 import { chatsUnder, type ChatOwner } from '../shared/schedule-runs';
 import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
@@ -352,6 +352,8 @@ export function App() {
   const [openSpaceId, setOpenSpaceState] = useState(readOpenSpace);
   const setOpenSpace = (spaceId: string) => { setOpenSpaceState(spaceId); writeOpenSpace(spaceId); };
   const [spaceDraft, setSpaceDraft] = useState<SpaceDraft>();
+  // Where a dragged channel would land in the open space: a category's id, or `root` for directly in the space.
+  const [channelDropAt, setChannelDropAt] = useState<string>();
   const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [activityTab, setActivityTab] = useState<ActivityTab>('needs');
@@ -2091,7 +2093,7 @@ export function App() {
   const renderChannelEntry = (entry: (typeof channelEntries)[number]) => {
           if (entry.kind === 'empty') {
             const channel = entry.channel;
-            return <ChannelRow key={channel.id} name={channel.name} locked={Boolean(channel.spaceId) && channel.access === 'listed'} active={emptyChannelActive(channel)} status={rollupStatusMarks([])}
+            return <ChannelRow key={channel.id} name={channel.name} locked={Boolean(channel.spaceId) && channel.access === 'listed'} dragId={channel.spaceId ? channel.id : undefined} active={emptyChannelActive(channel)} status={rollupStatusMarks([])}
               onOpen={() => { clearSelection(); showEmptyChannel(channel.id); }}
               onEdit={() => setChannelDraft({ id: channel.id, name: channel.name, topic: channel.topic, members: channel.members, crewId: channel.crewId, category: channel.category, spaceId: channel.spaceId, categoryId: channel.categoryId, access: channel.access })}
               onPublish={workspace.teams.some(team => team.id === channel.crewId) ? () => {
@@ -2103,7 +2105,7 @@ export function App() {
           }
           const chat = entry.task;
           const name = channelNameOf(chat, taskWorkers(chat, workspace).map(member => member.name));
-          return <ChannelRow key={chat.id} name={name} locked={Boolean(chat.channel?.spaceId) && chat.channel?.access === 'listed'} active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
+          return <ChannelRow key={chat.id} name={name} locked={Boolean(chat.channel?.spaceId) && chat.channel?.access === 'listed'} dragId={chat.channel?.spaceId ? chat.channel.id : undefined} active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
             onOpen={() => { clearSelection(); openTask(chat.id); }} onDwell={resting => dwellChat(chat.id, resting)}
             onEdit={() => chat.channel && setChannelDraft({ id: chat.channel.id, name: chat.channel.name, topic: chat.channel.topic, members: chat.channel.members, crewId: chat.channel.crewId, category: chat.channel.category, spaceId: chat.channel.spaceId, categoryId: chat.channel.categoryId, access: chat.channel.access })}
             onPublish={workspace.teams.some(team => team.id === chat.channel?.crewId) ? () => {
@@ -2204,6 +2206,26 @@ export function App() {
   const sidebarSpace = workspace.spaces.find(space => `space:${space.id}` === sidebarFor);
   const sidebarSpaceEntries = sidebarSpace ? channelEntries.filter(entry => spaceOfEntry(entry)?.id === sidebarSpace.id) : [];
   const categoryOfEntry = (entry: (typeof channelEntries)[number]) => sidebarSpace?.categories.find(category => category.id === channelOfEntry(entry)?.categoryId);
+  /** Moves a channel of the listed space to another of its categories, or directly into the space. */
+  const moveChannelTo = (channelId: string, categoryId: string | null) => {
+    const channel = sidebarSpaceEntries.map(channelOfEntry).find(item => item?.id === channelId);
+    if (!channel || (channel.categoryId ?? null) === categoryId) return;
+    action(() => orglet.call('updateChannel', { id: channel.id, name: channel.name, topic: channel.topic ?? '', members: channel.members, categoryId }), channelLabel(channel.name));
+  };
+  const channelDrop = (key: string, categoryId: string | null) => ({
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (!event.dataTransfer.types.includes(CHANNEL_DRAG_TYPE)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setChannelDropAt(key);
+    },
+    onDragLeave: () => setChannelDropAt(current => current === key ? undefined : current),
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      setChannelDropAt(undefined);
+      moveChannelTo(event.dataTransfer.getData(CHANNEL_DRAG_TYPE), categoryId);
+    },
+  });
   const deleteSpace = (space: { id: string; name: string }) => action(async () => {
     await orglet.call('deleteSpace', { id: space.id });
     setOpenSpace('');
@@ -2276,11 +2298,12 @@ export function App() {
       </>}
       {sidebarSpace && <>
         {sidebarSpaceEntries.length === 0 && sidebarSpace.categories.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
-        {sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) && <div className="channel-uncategorized">{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(renderChannelEntry)}</div>}
-        {sidebarSpace.categories.map(category => <SidebarSection key={category.id} id={`space-category-${category.id}`} title={category.name}
+        {/* The channels directly in the space. With categories it is also where a dragged channel leaves its category. */}
+        {(sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) || sidebarSpace.categories.length > 0) && <div className={`channel-uncategorized channel-drop${channelDropAt === 'root' ? ' over' : ''}`} {...channelDrop('root', null)}>{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(renderChannelEntry)}</div>}
+        {sidebarSpace.categories.map(category => <div key={category.id} className={`channel-drop${channelDropAt === category.id ? ' over' : ''}`} {...channelDrop(category.id, category.id)}><SidebarSection id={`space-category-${category.id}`} title={category.name}
           action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [category.name])} title={t('Tạo kênh trong {0}', [category.name])} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id, categoryId: category.id })}><Plus size={16} /></Button>}>
           {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(renderChannelEntry)}
-        </SidebarSection>)}
+        </SidebarSection></div>)}
       </>}
       {sidebarFor === 'channels' && <>
         {channelGroupList.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({})}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
