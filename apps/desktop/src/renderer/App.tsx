@@ -138,6 +138,8 @@ function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string
 const SIDEBAR_WIDTH = { min: 240, max: 420, default: 240, step: 16 };
 // The right panel takes the room the list column gave up to the tab strip (COD-340).
 const DETAILS_WIDTH = { min: 280, max: 720, default: 400, step: 16 };
+/** Whose rows the sidebar lists: an area's, or those of a page opened from the rail. */
+type SidebarList = Area | 'library' | 'schedules';
 /** The folded left column, the same as --rail-width in styles.css. */
 const RAIL_WIDTH = 52;
 /** The chat column never gets narrower than this for the right panel's sake; past it the panel stops growing. */
@@ -594,12 +596,16 @@ export function App() {
   // A folded sidebar shows itself over the chat while the pointer is on the rail or on it, and goes when the pointer
   // leaves both (user, 2026-10-04). The short delay lets the pointer cross the gap between the two.
   const [sidebarPeek, setSidebarPeek] = useState(false);
+  // The look lists the tile the pointer is on, or was last on, not only the area on screen. It is kept while the
+  // look closes, so the list does not change on its way out, and forgotten when the next look starts.
+  const [peekList, setPeekList] = useState<SidebarList>();
   const peekTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const peekSidebar = (inside: boolean) => {
     clearTimeout(peekTimer.current);
     if (inside) {
       if (!matchMedia('(max-width: 780px)').matches) {
         aimSidebarAtTile();
+        if (!sidebarPeek) setPeekList(undefined);
         setSidebarPeek(true);
       }
       return;
@@ -610,6 +616,7 @@ export function App() {
     aimSidebarAtTile();
     clearTimeout(peekTimer.current);
     setSidebarPeek(false);
+    setPeekList(undefined);
     setSidebar(true);
     // A narrow window lays the full sidebar over the chat for a moment; only a wide one makes it the mode.
     if (!matchMedia('(max-width: 780px)').matches) writeSidebarMode('full');
@@ -2096,7 +2103,10 @@ export function App() {
           else openTeam(result.entityId);
         }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
       : null;
-  const areaEntries: AreaRailEntry[] = [
+  const goToActivity = () => {
+    if (!leavingPage(goToActivity)) setArea('activity');
+  };
+  const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
     { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: area === 'home' && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
       clearSelection();
@@ -2107,21 +2117,29 @@ export function App() {
       setArea('home');
     } },
     { key: 'channels', icon: <Hash size={20} />, label: t('Kênh'), active: area === 'channels' && !pagePanelOpen, onSelect: function goToChannels() { if (!leavingPage(goToChannels)) setArea('channels'); } },
-    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: function goToActivity() { if (!leavingPage(goToActivity)) setArea('activity'); } },
+    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },
     { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
     { key: 'schedules', icon: <CalendarClock size={20} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
   ];
-  // What the sidebar lists: the open page's own rows, else the area's.
-  const sidebarFor = !pagePanelOpen ? area : panel === 'routines' ? 'schedules' : 'library';
+  // What the sidebar lists: the open page's own rows, else the area's. A folded sidebar taking a look lists the tile
+  // under the pointer instead.
+  const shownList: SidebarList = !pagePanelOpen ? area : panel === 'routines' ? 'schedules' : 'library';
+  const sidebarFor = !sidebar && peekList ? peekList : shownList;
   // While the sidebar is folded, a tile opens it for good. The tile of the area already on screen only opens it, so
   // Home there does not also jump to Friends.
-  const railEntries = areaEntries.map(entry => ({ ...entry, onSelect: () => {
-    if (!sidebar) {
-      openFullSidebar();
-      if (entry.active) return;
-    }
-    entry.onSelect();
-  } }));
+  const railEntries = areaEntries.map(entry => ({
+    ...entry,
+    onSelect: () => {
+      if (!sidebar) {
+        openFullSidebar();
+        if (entry.active) return;
+      }
+      entry.onSelect();
+    },
+    onDwell: sidebar ? undefined : (resting: boolean) => {
+      if (resting) setPeekList(entry.key);
+    },
+  }));
   const createItems = [
     { label: t('Thêm bạn (tạo Tí)'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
     { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({}) },
@@ -2169,7 +2187,7 @@ export function App() {
       </>}
       {/* A page's own list: the sidebar always belongs to what the main panel shows, never to the area left behind. */}
       {sidebarFor === 'library' && <nav className="sidebar-nav" aria-label={t('Thư viện')}>
-        {(['skills', 'knowledge'] as const).map(tab => <button key={tab} type="button" className={`sidebar-nav-item${libraryTab === tab ? ' active' : ''}`} aria-current={libraryTab === tab ? 'page' : undefined} onClick={() => { setLibraryTab(tab); setPanel('library'); }}>
+        {(['skills', 'knowledge'] as const).map(tab => <button key={tab} type="button" className={`sidebar-nav-item${libraryTab === tab ? ' active' : ''}`} aria-current={libraryTab === tab ? 'page' : undefined} onClick={() => void leaveRoutine(() => { setLibraryTab(tab); setPanel('library'); })}>
           {tab === 'skills' ? <Sparkles size={18} aria-hidden="true" /> : <NotebookText size={18} aria-hidden="true" />}
           <span className="sidebar-nav-name">{tab === 'skills' ? 'Skills' : 'Knowledge'}</span>
           <span className="sidebar-nav-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span>
@@ -2187,7 +2205,7 @@ export function App() {
         })}
       </nav>}
       {sidebarFor === 'activity' && <nav className="sidebar-nav" aria-label={t('Hoạt động')}>
-        {activityTabs.map(tab => <button key={tab} type="button" className={`sidebar-nav-item${activityTab === tab ? ' active' : ''}`} aria-current={activityTab === tab ? 'page' : undefined} onClick={() => setActivityTab(tab)}>
+        {activityTabs.map(tab => <button key={tab} type="button" className={`sidebar-nav-item${activityTab === tab ? ' active' : ''}`} aria-current={activityTab === tab ? 'page' : undefined} onClick={() => { setActivityTab(tab); if (shownList !== 'activity') goToActivity(); }}>
           {tab === 'needs' ? <BellRing size={18} aria-hidden="true" /> : tab === 'running' ? <Activity size={18} aria-hidden="true" /> : tab === 'done' ? <CircleCheck size={18} aria-hidden="true" /> : <Bookmark size={18} aria-hidden="true" />}
           <span className="sidebar-nav-name">{activityTabLabel(tab)}</span>
           {tab !== 'done' && activityCountsNow[tab] > 0 && <span className="sidebar-nav-count" aria-hidden="true">{activityCountsNow[tab]}</span>}

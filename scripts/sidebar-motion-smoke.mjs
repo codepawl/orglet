@@ -89,6 +89,27 @@ try {
     checkMove(await measureMove(page, true), true, false);
   }
 
+  // A folded sidebar's look lists the tile under the pointer, not only the area on screen, and opening it for good
+  // from the tile of the area on screen lists that area again.
+  await page.getByRole('button', { name: 'Thu gọn sidebar', exact: true }).click();
+  await page.waitForTimeout(800);
+  const sidebarTitle = () => page.locator('.sidebar-title').textContent();
+  await page.locator('.area-tile.active').hover();
+  await page.locator('.sidebar.peek').waitFor();
+  const openAreaTitle = await sidebarTitle();
+  await page.locator('.area-tile[aria-label="Kênh"]').hover();
+  await page.waitForTimeout(100);
+  assert.equal(await sidebarTitle(), 'Kênh', 'the look follows the pointer to another tile');
+  await page.locator('.area-tile[aria-label="Lịch chạy"]').hover();
+  await page.waitForTimeout(100);
+  assert.equal(await sidebarTitle(), 'Lịch chạy', 'the look lists a page tile too');
+  await page.locator('.sidebar-title').hover();
+  await page.waitForTimeout(400);
+  assert.equal(await sidebarTitle(), 'Lịch chạy', 'the list stays while the pointer is on it');
+  await page.locator('.area-tile.active').click();
+  await page.waitForTimeout(800);
+  assert.equal(await sidebarTitle(), openAreaTitle, 'the opened sidebar lists the area on screen');
+
   await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
   await page.waitForTimeout(800);
