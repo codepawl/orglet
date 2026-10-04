@@ -75,6 +75,7 @@ These pages are the contract. Keep their precise language. Do not rewrite them i
 | [linux-packaging.md](linux-packaging.md) | Linux ZIP and its headless CI job |
 | [mobile.md](mobile.md) | Proposed shape for a mobile companion, not decided |
 | [account-sync-design.md](account-sync-design.md) | Technical design for the optional CodePawl account and sync, not built |
+| [spaces-design.md](spaces-design.md) | Proposed, not built: spaces that hold categories and channels, and which orglets are in each |
 | [marketplace-design.md](marketplace-design.md) | Ready-made orglets and crews, Discover and My listings, publishing/review contracts and production rollout limits |
 
 ## Status and history
