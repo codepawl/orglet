@@ -5,7 +5,7 @@
   "compatibility_date": "2026-10-03",
   "workers_dev": false,
   "vars": {
-    "SYNC_ENABLED": "false",
+    "SYNC_ENABLED": "true",
     "SYNC_ISSUER": "https://accounts.codepawl.com/api/auth",
     "SYNC_AUDIENCE": "https://sync.orglet.codepawl.com",
     "SYNC_MAX_ACCOUNT_BYTES": "33554432",
@@ -16,6 +16,7 @@
     "SYNC_RATE_FILES": "60",
     "SYNC_RATE_DEVICES": "10"
   },
+  "routes": [{ "pattern": "sync.orglet.codepawl.com", "custom_domain": true }],
   "r2_buckets": [{ "binding": "SYNC_FILES", "bucket_name": "orglet-sync-files" }],
   "durable_objects": { "bindings": [{ "name": "SYNC_ACCOUNTS", "class_name": "AccountSync" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountSync"] }],

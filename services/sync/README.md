@@ -1,6 +1,6 @@
 # Orglet sync service
 
-This Worker replicates Orglet's explicit public records into one SQLite Durable Object per verified account. It never runs an orglet, enables a schedule or grants access to a computer. File bytes go to an R2 bucket (below). The checked-in configuration has no public route and keeps `SYNC_ENABLED=false`; it does not deploy or connect a user's local profile. The desktop connects only when started with `ORGLET_SYNC_URL` naming a server ([technical guide](../../docs/technical-guide.md#account-sync)).
+This Worker replicates Orglet's explicit public records into one SQLite Durable Object per verified account. It never runs an orglet, enables a schedule or grants access to a computer. File bytes go to an R2 bucket (below). The checked-in configuration is the one CodePawl runs as a private trial: `SYNC_ENABLED=true` on `sync.orglet.codepawl.com`. Nothing connects a user's local profile to it by default. The desktop connects only when started with `ORGLET_SYNC_URL` naming a server ([technical guide](../../docs/technical-guide.md#account-sync)).
 
 ## Protocol
 
