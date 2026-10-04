@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties } from 'react';
-import { MessageCircle, Pencil, UserRound } from 'lucide-react';
+import { MessageCircle, Pencil, UserRound, UserRoundMinus } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 import { AnchoredPopover } from './AnchoredPopover';
@@ -15,7 +15,7 @@ import { Button } from './ui';
  * right-click on it opens its menu. The person's row opens nothing. It takes the right panel's place while Details is closed, so the two never sit side by
  * side. It has no close button: the toggle in the channel's header shows and hides it (user, 2026-10-04).
  */
-export function MemberColumn({ you, members, working, leadId, onMessage, onEdit }: {
+export function MemberColumn({ you, members, working, leadId, onMessage, onEdit, removable, onRemove }: {
   /** The person's name, as their face in the rail has it. */
   you: string;
   members: readonly Worker[];
@@ -25,6 +25,10 @@ export function MemberColumn({ you, members, working, leadId, onMessage, onEdit 
   onMessage: (worker: Worker) => void;
   /** Opens that orglet's settings, where its role, model and memory are. */
   onEdit: (worker: Worker) => void;
+  /** Whether this orglet can be taken out of the channel: not the lead, and not the last one in it. */
+  removable: (worker: Worker) => boolean;
+  /** Takes the orglet out of the channel. Its messages stay, and it stays an orglet. */
+  onRemove: (worker: Worker) => void;
 }) {
   const youWord = t('Bạn');
   return <aside className="members-pane" aria-label={t('Thành viên')}>
@@ -41,7 +45,8 @@ export function MemberColumn({ you, members, working, leadId, onMessage, onEdit 
         </div>
       </li>
       {members.map(worker => <li key={worker.id}>
-        <MemberRow worker={worker} working={working.has(worker.id)} lead={worker.id === leadId} onMessage={() => onMessage(worker)} onEdit={() => onEdit(worker)} />
+        <MemberRow worker={worker} working={working.has(worker.id)} lead={worker.id === leadId} onMessage={() => onMessage(worker)} onEdit={() => onEdit(worker)}
+          onRemove={removable(worker) ? () => onRemove(worker) : undefined} />
       </li>)}
     </ul>
   </aside>;
@@ -51,7 +56,7 @@ export function MemberColumn({ you, members, working, leadId, onMessage, onEdit 
  * One orglet in the column and the profile card its row opens (user, 2026-10-04, from Discord's member card): a strip
  * in the orglet's own colour, its face, its name, what it runs on, what it does, and the two things to do with it.
  */
-function MemberRow({ worker, working, lead, onMessage, onEdit }: { worker: Worker; working: boolean; lead: boolean; onMessage: () => void; onEdit: () => void }) {
+function MemberRow({ worker, working, lead, onMessage, onEdit, onRemove }: { worker: Worker; working: boolean; lead: boolean; onMessage: () => void; onEdit: () => void; onRemove?: () => void }) {
   const row = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -70,6 +75,7 @@ function MemberRow({ worker, working, lead, onMessage, onEdit }: { worker: Worke
       { label: t('Hồ sơ'), icon: UserRound, onSelect: () => setOpen(true) },
       { label: t('Nhắn tin'), icon: MessageCircle, onSelect: onMessage },
       { label: t('Chỉnh sửa'), icon: Pencil, onSelect: onEdit },
+      ...(onRemove ? [{ label: t('Xóa khỏi kênh'), icon: UserRoundMinus, danger: true, onSelect: onRemove, confirm: { question: t('Xóa {0} khỏi kênh này?', [worker.name]), label: t('Xóa khỏi kênh') } }] : []),
     ]} />
     <AnchoredPopover anchor={row} open={open} onClose={close} label={t('Hồ sơ của {0}', [worker.name])} className="member-card">
       <div className="member-card-strip" style={{ '--member-ink': workerInk(worker) } as CSSProperties} />

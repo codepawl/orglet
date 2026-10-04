@@ -2316,7 +2316,14 @@ export function App() {
       </>}
     </main>
     {membersShown && headerChannel && <MemberColumn you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
-      onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }} />}
+      onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
+      removable={member => member.id !== crewLeadId && headerChannel.workers.length > (headerChannel.crewId ? 2 : 1)}
+      onRemove={member => action(async () => {
+        // The channel may have been made from a crew as one member: the orglets left are listed one by one.
+        const staying = headerChannel.workers.filter(item => item.id !== member.id).map(item => ({ kind: 'orglet' as const, id: item.id }));
+        await orglet.call('updateChannel', { id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic ?? '', members: staying });
+        toast(t('Đã xóa {0} khỏi kênh', [member.name]), 'success', channelLabel(headerChannel.name));
+      }, channelLabel(headerChannel.name))} />}
     {threadOpen && sideThread && sideThreadRow && <SideThreadPanel key={sideThread.taskId} taskId={sideThread.taskId} focusMessageId={sideThread.messageId}
       title={taskName(sideThread.taskId) ?? sideThreadRow.brief}
       orgletName={workspace.workers.find(item => item.id === sideThreadRow.workerId)?.name ?? 'Orglet'}
