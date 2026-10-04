@@ -3083,7 +3083,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 
 /* The member column of a channel (COD-366), at the right where Discord keeps it, in the right panel's place. */
 .members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; }
-.members-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
+.members-head { display:flex; align-items:center; min-height:32px; padding:var(--panel-inset) 10px 8px 16px; }
 .members-head h2 { font-size:13px; font-weight:500; color:var(--muted); }
 .members-list { display:flex; flex-direction:column; flex:1; gap:2px; min-height:0; margin:0; padding:0 8px 16px; overflow:auto; list-style:none; }
 .member-row { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:4px 8px; border:0; border-radius:8px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
