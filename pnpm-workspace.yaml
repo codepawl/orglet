@@ -13,6 +13,10 @@ overrides:
   # Security fixes for build-tool dependencies (Dependabot alerts); both are only used while packaging.
   tar: '7.5.22'
   tmp: '0.2.7'
+  # GHSA-ch52-4w7c-c8xp (max-stale could hand out another user's cached response): every release up to 4.2.0 is
+  # affected. 4.3.0 is the maintainer's release of 2026-10-04 from the upstream repository; it is exempt from the
+  # minimum release age below so the fix is not held back. Only build tools use this package.
+  'http-cache-semantics': '4.3.0'
   # extract-zip has no patched release for GHSA-jmr9-qjv8-65gv / GHSA-7pqw-9j4j-h8q3. Electron's own fork is a
   # drop-in replacement hardened against Zip Slip and symlink escapes; electron itself already uses it (COD-151).
   extract-zip: 'npm:@electron-internal/extract-zip@1.0.5'
@@ -27,3 +31,4 @@ minimumReleaseAgeExclude:
   - '@duckdb/node-bindings-win32-arm64@1.5.5-r.5'
   - '@duckdb/node-bindings-win32-x64@1.5.5-r.5'
   - '@duckdb/node-bindings@1.5.5-r.5'
+  - http-cache-semantics@4.3.0
