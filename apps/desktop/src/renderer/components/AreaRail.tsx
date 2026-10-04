@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
-import { PanelLeft, Plus } from './icons';
+import { Plus } from './icons';
 import { t } from '../i18n';
-import { Button } from './ui';
 import { RowMenu, type RowMenuItem } from './RowMenu';
 import type { Area } from '../areas';
 
@@ -27,14 +26,13 @@ export type AreaRailEntry = {
  * beside it shows the chosen area's list. While the sidebar is folded the rail starts with the way to open it. It has
  * no ground of its own, like the sidebar, and the open area is told by the sidebar's selected tint, never by a line.
  */
-export function AreaRail({ entries, createItems, sidebarOpen, onOpenSidebar }: {
+export function AreaRail({ entries, createItems, onHover }: {
   entries: readonly AreaRailEntry[];
   createItems: RowMenuItem[];
-  sidebarOpen: boolean;
-  onOpenSidebar: () => void;
+  /** The pointer came over the rail or left it, so a folded sidebar can show itself for a look. */
+  onHover?: (inside: boolean) => void;
 }) {
-  return <nav className="area-rail" aria-label={t('Khu vực')}>
-    {!sidebarOpen && <Button size="icon" className="area-rail-fold" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={onOpenSidebar}><PanelLeft size={18} /></Button>}
+  return <nav className="area-rail" aria-label={t('Khu vực')} onPointerEnter={onHover ? () => onHover(true) : undefined} onPointerLeave={onHover ? () => onHover(false) : undefined}>
     <ul className="area-rail-list">
       {entries.map(entry => <li key={entry.key}>
         <button type="button" className={`area-tile${entry.active ? ' active' : ''}`} aria-label={entry.ariaLabel ?? entry.label} title={entry.label} aria-current={entry.active ? 'page' : undefined}

@@ -134,7 +134,8 @@ function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string
   return task.title || chatHeadline(task);
 }
 
-const SIDEBAR_WIDTH = { min: 190, max: 420, default: 228, step: 16 };
+// The narrowest sidebar still fits its head: the title and three icon buttons (user, 2026-10-04).
+const SIDEBAR_WIDTH = { min: 240, max: 420, default: 240, step: 16 };
 // The right panel takes the room the list column gave up to the tab strip (COD-340).
 const DETAILS_WIDTH = { min: 280, max: 720, default: 400, step: 16 };
 /** The folded left column, the same as --rail-width in styles.css. */
@@ -580,7 +581,21 @@ export function App() {
     writeSidebarMode('rail');
     reportFeature('rail');
   };
+  // A folded sidebar shows itself over the chat while the pointer is on the rail or on it, and goes when the pointer
+  // leaves both (user, 2026-10-04). The short delay lets the pointer cross the gap between the two.
+  const [sidebarPeek, setSidebarPeek] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const peekSidebar = (inside: boolean) => {
+    clearTimeout(peekTimer.current);
+    if (inside) {
+      if (!matchMedia('(max-width: 780px)').matches) setSidebarPeek(true);
+      return;
+    }
+    peekTimer.current = setTimeout(() => setSidebarPeek(false), 220);
+  };
   const openFullSidebar = () => {
+    clearTimeout(peekTimer.current);
+    setSidebarPeek(false);
     setSidebar(true);
     // A narrow window lays the full sidebar over the chat for a moment; only a wide one makes it the mode.
     if (!matchMedia('(max-width: 780px)').matches) writeSidebarMode('full');
@@ -2075,6 +2090,15 @@ export function App() {
   ];
   // What the sidebar lists: the open page's own rows, else the area's.
   const sidebarFor = !pagePanelOpen ? area : panel === 'routines' ? 'schedules' : 'library';
+  // While the sidebar is folded, a tile opens it for good. The tile of the area already on screen only opens it, so
+  // Home there does not also jump to Friends.
+  const railEntries = areaEntries.map(entry => ({ ...entry, onSelect: () => {
+    if (!sidebar) {
+      openFullSidebar();
+      if (entry.active) return;
+    }
+    entry.onSelect();
+  } }));
   const createItems = [
     { label: t('Thêm bạn (tạo Tí)'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
     { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({}) },
@@ -2084,7 +2108,8 @@ export function App() {
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
-    <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
+    <aside className={`sidebar${sidebar ? '' : sidebarPeek ? ' peek' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={(!sidebar && !sidebarPeek) || undefined}
+      onPointerEnter={sidebar ? undefined : () => peekSidebar(true)} onPointerLeave={sidebar ? undefined : () => peekSidebar(false)}>
       <div className="sidebar-head">
         <strong className="sidebar-title">{sidebarFor === 'home' ? t('Orglet') : sidebarFor === 'channels' ? t('Kênh') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
         {sidebarFor === 'channels' && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={18} /></Button>}
@@ -2148,7 +2173,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={areaEntries} createItems={createItems} sidebarOpen={sidebar} onOpenSidebar={openFullSidebar} />
+    <AreaRail entries={railEntries} createItems={createItems} onHover={sidebar ? undefined : peekSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)} compact={!sidebar || narrowWindow}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },

@@ -7,7 +7,7 @@ import * as rules from './alignment/rules.ts';
 import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
-import { openSettings } from './smoke-language.mjs';
+import { openSettings, expandSidebar } from './smoke-language.mjs';
 
 // Measures alignment on the packaged app's main screens instead of trusting a screenshot (COD-333). It seeds a
 // throwaway workspace on Demo (no provider is called; one crew member runs on a local stand-in for Ollama that holds
@@ -258,13 +258,7 @@ async function settle(page) {
 }
 
 async function openSidebar(page) {
-  const opener = page.getByRole('button', { name: label('Mở sidebar'), exact: true });
-  if (!await opener.isVisible()) return;
-  // Just after the window widens, the collapsed sidebar's opener can still be on screen and then leave as the sidebar
-  // comes back; a click that finds it gone has nothing left to do (it used to wait 30 s for it to return).
-  await opener.click({ timeout: 5_000 }).catch(async error => {
-    if (await opener.isVisible()) throw error;
-  });
+  await expandSidebar(page);
 }
 
 /** Back to a known state: no dialog, no menu, the sidebar showing the orglet's chat. */
@@ -314,7 +308,7 @@ async function openOpenChats(page, context) {
 async function foldSidebar(page) {
   const fold = page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true });
   if (await fold.isVisible()) await fold.click();
-  await page.locator('.area-rail-fold').waitFor();
+  await page.locator('.app.sidebar-hidden').waitFor();
 }
 
 /** The area rail (COD-366): Home lists the orglets, Channels the channels. */

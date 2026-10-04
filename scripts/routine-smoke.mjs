@@ -114,7 +114,7 @@ try {
   await page.getByRole('alert').filter({ hasText: 'Kênh đang ngoài khung giờ' }).waitFor();
   await page.screenshot({ path: join(output, 'shift-handoff.png') });
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 640));
-  await page.getByRole('button', { name: 'Mở sidebar', exact: true }).click(); await page.getByRole('button', { name: /Lịch chạy/ }).click();
+  await page.getByRole('button', { name: /Lịch chạy/ }).click();
   await page.getByRole('button', { name: 'Sửa lịch Morning routine', exact: true }).click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.screenshot({ path: join(output, 'routine-narrow.png') });
