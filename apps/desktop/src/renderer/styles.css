@@ -111,7 +111,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Every panel has its place: the left column, the main card, the right panel. */
 /* The rail has no ground of its own: its tiles sit on the window (user, 2026-10-04). */
 .app > .area-rail { grid-column:1; grid-row:1; width:var(--area-rail-width); z-index:2; background:transparent; }
-.app > .sidebar { grid-column:2; grid-row:1; width:var(--sidebar-width); justify-self:start; background:var(--window); }
+/* The sidebar is a card like the chat beside it, on the same ground (user, 2026-10-04). It ends above the user panel. */
+.app > .sidebar { grid-column:2; grid-row:1; width:var(--sidebar-width); justify-self:start; background:var(--bg); box-shadow:var(--panel-shadow); }
 .app > .main-pane { grid-column:3; grid-row:1; }
 .app > .details-pane,.app > .members-pane { grid-column:4; grid-row:1; margin-left:var(--shell-gap); }
 /* The full-width sidebar slides as one piece, without fading its rows. It is pinned to the right edge of its
@@ -251,13 +252,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @media(max-width:1000px) { .app.with-details:not(.sidebar-hidden) { --right-column-width:0px; } .app:not(.sidebar-hidden) > .details-pane { display:none; } }
 @media(max-width:860px) { .app.with-details { --right-column-width:0px; } .details-pane { display:none; } }
 /* Top and bottom clear the corner curve, because the brand row and the footer buttons sit right in it. */
-/* The side panels have no ground of their own: they sit straight on the window, and the chat is the one card
-   (user, 2026-09-19). The radius stays so a hovered row still rounds inside the corner. */
+/* The right-hand panels have no ground of their own: they sit straight on the window (user, 2026-09-19). The
+   sidebar gets the chat's ground where the shell places it. */
 .sidebar { background:transparent; border-radius:var(--panel-radius); padding:var(--panel-inset) 10px; display:flex; flex-direction:column; overflow:hidden; }
-/* The sidebar lost its own ground, so its rows now sit on the window. --row-hover and --row-active were mixed
-   against the old #f7f7f8 panel and all but vanish on the lighter window (user, 2026-09-20: hovering the footer
-   showed nothing). The sidebar gets its own pair, tinted from the text colour rather than named as a flat value,
-   so it reads over the wash whichever blob is behind it, and in dark mode too. */
+/* --row-hover and --row-active were mixed against the old #f7f7f8 panel and all but vanish on a lighter ground
+   (user, 2026-09-20: hovering the footer showed nothing). The sidebar gets its own pair, tinted from the text
+   colour rather than named as a flat value, so it reads on its card in light and in dark. */
 .sidebar { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent); }
 .sidebar .org-button:hover:not(:disabled) { background:var(--row-hover); }
 .brand { display:flex; align-items:center; gap:8px; padding:0 6px 14px; }
@@ -1540,7 +1540,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    adds must not shift the shell along: everything is one column here. */
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
-@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; justify-self:auto; margin-right:0; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
+@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); background:var(--bg); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; width:232px; justify-self:auto; margin-right:0; margin-bottom:0; box-shadow:8px 0 30px #0002; } .app > .area-rail { z-index:6; } .app,.app.with-details,.app.with-members { --sidebar-column-width:0px; --right-column-width:0px; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
 @media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 12px; } .finding-heading { flex-wrap:wrap; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
@@ -3035,7 +3035,7 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 
 /* The sidebar's head and the lists the areas put in it (COD-366): a title with its buttons, Home's search box and Friends
    item, Activity's views, and the channels without a category, which sit above the categories. */
-.app > .sidebar { padding-bottom:calc(52px + var(--shell-gap) * 2); }
+.app > .sidebar { margin-bottom:calc(52px + var(--shell-gap)); }
 .sidebar-head { display:flex; align-items:center; gap:8px; min-height:34px; padding:0 6px 10px; }
 .sidebar-title { min-width:0; margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:600; letter-spacing:-.4px; }
 .sidebar-head > .org-button { flex-shrink:0; }

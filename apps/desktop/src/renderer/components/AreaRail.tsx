@@ -24,7 +24,7 @@ export type AreaRailEntry = {
  * The far-left column (COD-366), the way Discord's rail lists its servers: Home first, then the areas, then Library and
  * Schedules, which open as pages in the main panel, and one **+** that creates an orglet, a channel or a schedule. The sidebar
  * beside it shows the chosen area's list. While the sidebar is folded the rail starts with the way to open it. It has
- * no ground of its own, like the sidebar, and the open area is told by the sidebar's selected tint, never by a line.
+ * no ground of its own, unlike the sidebar's card, and the open area is told by the sidebar's selected tint, never by a line.
  */
 export function AreaRail({ entries, createItems, onHover }: {
   entries: readonly AreaRailEntry[];
