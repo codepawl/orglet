@@ -53,7 +53,7 @@ export function MessageActions({ taskId, messageId, author, text, reactions, act
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
     {onForward && <Button size="icon" aria-label={t('Chuyển tiếp tin này')} title={t('Chuyển tiếp tin này')} onClick={onForward}><Forward size={15} /></Button>}
     <ReactionBar options={reactionOptions()} picked={current} onPick={pick} label={t('Thả react')} icon={<SmilePlus size={15} />} />
-    <Button size="icon" aria-label={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} title={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} aria-pressed={isSaved} onClick={toggleSaved}>{isSaved ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}</Button>
+    <Button size="icon" aria-label={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} title={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} aria-pressed={isSaved} className={isSaved ? 'message-saved' : undefined} onClick={toggleSaved}>{isSaved ? <BookmarkCheck size={15} fill="currentColor" /> : <Bookmark size={15} />}</Button>
   </div>;
 }
 
