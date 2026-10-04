@@ -44,6 +44,12 @@ export type SyncTransportDependencies = {
   core: (action: SyncReplicaAction) => Promise<unknown>;
   /** Saves a copy of the database, then erases this computer's workspace. Rejects, erasing nothing, when it cannot. */
   replaceLocal?: () => Promise<unknown>;
+  /**
+   * A signed-in computer joins without being asked, merging what it holds with the account (owner, 2026-10-04). The
+   * one that still waits is a computer erased on purpose, so Erase all data is not undone by the next sync; Sync
+   * there joins it again. Without this, any computer that holds data waits for `start`.
+   */
+  joinsOnItsOwn?: boolean;
   fetch?: typeof fetch;
   connect?: SyncConnect;
   /** Reads a file Orglet saved under its own data folder; the tests pass a reader of their own. */
@@ -327,7 +333,8 @@ export class SyncTransport {
     if (!this.alive(session)) return;
     session.deviceId = state.deviceId;
     session.cursor = state.cursor;
-    if (!state.linked && state.ownData) {
+    const waits = this.dependencies.joinsOnItsOwn ? state.held : state.ownData;
+    if (!state.linked && waits) {
       session.waitingForConsent = true;
       this.set({ state: 'link_required' });
       return;

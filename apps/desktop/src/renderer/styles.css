@@ -1446,12 +1446,6 @@ button.notice-body { cursor:pointer; }
 .source-restored>p { margin:0; max-width:420px; text-wrap:pretty; }
 .source-restored-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
 /* Joining an account from a computer that holds data (GH-484): both sides' counts, then the choice. */
-.sync-join { display:flex; flex-direction:column; gap:12px; margin:-4px 0 12px; padding:14px 16px; border-radius:12px; background:var(--surface); }
-.sync-join-counts { display:grid; gap:8px; margin:0; }
-.sync-join-counts>div { display:flex; align-items:baseline; justify-content:space-between; gap:16px; }
-.sync-join-counts dt { color:var(--muted); font-size:13px; }
-.sync-join-counts dd { margin:0; font-size:14px; font-variant-numeric:tabular-nums; }
-.sync-join-note { margin:0; color:var(--muted); font-size:13px; text-wrap:pretty; }
 .sync-title { display:inline-flex; align-items:center; gap:8px; }
 .outcome-line { display:flex; align-items:flex-start; gap:8px; margin:0; text-wrap:pretty; }
 .outcome-line > .org-status-mark { flex-shrink:0; margin-top:2px; }
@@ -1459,7 +1453,6 @@ button.notice-body { cursor:pointer; }
 .sync-conflicts { display:flex; flex-direction:column; gap:28px; }
 .sync-conflict-version { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
 .sync-conflict-version pre { align-self:stretch; max-height:260px; overflow:auto; }
-.sync-join-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; }
 /* The shape of a source or a diff on its way, at the width the content will take. */
 .source-stage>.source-shape,.source-stage>.diff-shape { width:100%; max-width:720px; padding:24px 0; font-size:14px; }
 .source-shape-media { height:240px; }

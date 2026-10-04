@@ -53,12 +53,10 @@ Sync needs a sync server. CodePawl's runs as a private trial only and no install
 
 ### Turning it on
 
-- **A new computer** with nothing of yours on it yet joins the account by itself when you sign in. The Researcher it started with makes way for your own orglets.
-- **A computer that already has chats or orglets** asks first: **Settings → Account → Sync** says sync is off here. **Turn on sync** shows how many orglets and chats are on this computer and in your account, then offers two ways to join. Nothing leaves the computer before you choose, and **Cancel** changes nothing.
-  - **Merge with account** sends what is here and brings what the account has. Two orglets with the same name stay two orglets; nothing is matched by name. Anything marked **Only on this computer** stays here.
-  - **Replace with account** erases every orglet and chat on this computer, including the ones marked **Only on this computer**, and brings what the account has. Orglet first saves a copy of the whole database beside it (`orglet.sqlite.before-replace-<time>.bak`, only the newest is kept); if the copy cannot be saved, nothing is erased. Your connections, keys and MCP servers stay. Nothing is deleted from your account.
-- After **Erase all data**, sync stays off on that computer until you turn it on again, so the account's copy does not come straight back.
-- **Erase all data** and **Replace** change only this computer. Neither deletes your account or anything in it.
+- **Sync turns itself on when you sign in.** A new computer joins the account and the Researcher it started with makes way for your own orglets. A computer that already has chats or orglets joins too and merges: what is here goes to the account, and what the account has comes here. Two orglets with the same name stay two orglets; nothing is matched by name. Anything marked **Only on this computer** stays here.
+- **Sync** in **Settings → Account** runs a sync right now. It rests for three seconds after each press.
+- After **Erase all data**, sync waits on that computer until you press **Sync**, so the account's copy does not come straight back.
+- **Erase all data** changes only this computer. It does not delete your account or anything in it.
 
 ### When two computers changed the same thing
 

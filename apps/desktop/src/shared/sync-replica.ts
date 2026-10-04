@@ -42,6 +42,8 @@ export const SyncReplicaState = z.object({
   cursor: SyncServerCursor.nullable(),
   /** Whether this computer holds anything beyond the Researcher a new install starts with. */
   ownData: z.boolean(),
+  /** Whether this computer's data was erased on purpose while it was joined: the account's copy then waits for the person. */
+  held: z.boolean().default(false),
 }).strict();
 export type SyncReplicaState = z.infer<typeof SyncReplicaState>;
 

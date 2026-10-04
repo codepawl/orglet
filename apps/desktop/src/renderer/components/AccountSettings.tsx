@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ChartNoAxesColumn, ExternalLink, LogIn, LogOut, RefreshCw, Smartphone, UserRound, X } from 'lucide-react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import type { AccountState } from '../../shared/account';
-import type { SyncPauseReason, SyncPreview, SyncStatus } from '../../shared/sync-status';
+import type { SyncPauseReason, SyncStatus } from '../../shared/sync-status';
 import type { SyncConflict, SyncConflictVersion } from '../../shared/sync-conflicts';
 import { useSync } from '../account';
 import type { AnalyticsState } from '../../shared/analytics';
@@ -13,7 +13,6 @@ import { toast } from './toast';
 import { Avatar } from './Avatar';
 import { Button, Drawer } from './ui';
 import { StatusMark, type StatusMarkState } from './StatusMark';
-import { confirmAction } from './confirm';
 import { InfoTip } from './InfoTip';
 import { Switch } from './Switch';
 import { maskEmail } from '../../shared/pii';
@@ -129,64 +128,12 @@ function pauseText(reason: SyncPauseReason | undefined): string {
 }
 
 function syncText(status: SyncStatus): string {
-  if (status.state === 'link_required') return t('Đồng bộ đang tắt trên máy này. Bật lên rồi chọn gộp hay thay dữ liệu ở đây.');
+  if (status.state === 'link_required') return t('Dữ liệu trên máy này đã được xóa, nên đồng bộ đang chờ. Bấm Đồng bộ ngay để lấy lại dữ liệu trong tài khoản.');
   if (status.state === 'syncing') return t('Đang đồng bộ…');
   if (status.state === 'synced') return t('Đã đồng bộ. Mục đặt "Chỉ trên máy này" không rời khỏi máy.');
   if (status.state === 'offline') return t('Không kết nối được máy chủ đồng bộ. Orglet sẽ tự thử lại.');
   if (status.state === 'paused') return pauseText(status.reason);
   return t('Sắp có. Hiện chưa có chat hay tệp nào rời khỏi máy này.');
-}
-
-/**
- * A computer that already holds data joins only after the person saw both sides and chose (GH-484): merge what is
- * here with the account, or replace it with the account's. It opens under the Sync row, the size of what it has to
- * say; cancelling sends nothing.
- */
-function JoinChoice({ onClose }: { onClose: () => void }) {
-  const [preview, setPreview] = useState<SyncPreview>();
-  const [error, setError] = useState('');
-  const [working, setWorking] = useState(false);
-  useEffect(() => {
-    let current = true;
-    void orglet.syncPreview().then(value => { if (current) setPreview(value); }).catch(reason => { if (current) setError(reason instanceof Error ? reason.message : String(reason)); });
-    return () => { current = false; };
-  }, []);
-  const join = async (choice: 'merge' | 'replace') => {
-    if (choice === 'replace') {
-      const confirmed = await confirmAction({
-        title: t('Thay dữ liệu trên máy này?'),
-        description: preview?.localOnly
-          ? t('Mọi Tí và cuộc trò chuyện trên máy này bị xóa, kể cả {0} mục "Chỉ trên máy này". Orglet lưu một bản sao cạnh dữ liệu trước khi xóa. Tài khoản không bị xóa gì.', [preview.localOnly])
-          : t('Mọi Tí và cuộc trò chuyện trên máy này bị xóa. Orglet lưu một bản sao cạnh dữ liệu trước khi xóa. Tài khoản không bị xóa gì.'),
-        confirmLabel: t('Thay thế'), cancelLabel: t('Hủy'),
-      });
-      if (!confirmed) return;
-    }
-    setWorking(true);
-    setError('');
-    try {
-      await orglet.syncStart(choice);
-      onClose();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-      setWorking(false);
-    }
-  };
-  const counts = (side: SyncPreview['local']) => t('{0} Tí · {1} cuộc trò chuyện', [side.orglets, side.chats]);
-  return <div className="sync-join" role="group" aria-label={t('Bật đồng bộ trên máy này')}>
-      <p className="sync-join-note">{t('Máy này đã có dữ liệu. Chọn cách nó tham gia tài khoản.')}</p>
-      {preview ? <dl className="sync-join-counts">
-        <div><dt>{t('Trên máy này')}</dt><dd>{counts(preview.local)}</dd></div>
-        <div><dt>{t('Trong tài khoản')}</dt><dd>{counts(preview.account)}</dd></div>
-      </dl> : !error && <SkeletonGroup label={t('Đang đọc tài khoản…')}><Skeleton width="58%" /><Skeleton width="52%" delay={0.04} /></SkeletonGroup>}
-      {preview && preview.localOnly > 0 && <p className="sync-join-note">{t('{0} mục "Chỉ trên máy này" không được gửi đi khi gộp.', [preview.localOnly])}</p>}
-      {error && <ErrorLine text={error} />}
-      <div className="sync-join-actions">
-        <Button variant="outline" disabled={working} onClick={onClose}>{t('Hủy')}</Button>
-        <Button variant="outline" disabled={!preview || working} onClick={() => void join('replace')}>{t('Thay bằng tài khoản')}</Button>
-        <Button variant="primary" disabled={!preview || working} onClick={() => void join('merge')}><RefreshCw size={14} />{t('Gộp với tài khoản')}</Button>
-      </div>
-  </div>;
 }
 
 const conflictKind = (conflict: SyncConflict) => conflict.entity === 'worker' ? t('Tí') : conflict.entity === 'skill' ? t('Kỹ năng') : conflict.entity === 'team' ? t('Kênh') : t('Ghi chú');
@@ -241,23 +188,35 @@ function ConflictsRow({ busy }: { busy: boolean }) {
   </>;
 }
 
-/** Sync in one row: what it is doing, and one button when the person can do something about it. */
+/** How long the Sync button rests after a press, so a run of clicks is one request. */
+const SYNC_COOLDOWN_MS = 3000;
+
+/**
+ * Sync in one row: what it is doing, and Sync to run it now. Sync turns itself on when the person signs in; the
+ * button is for a sync right now, and rests for three seconds after each press.
+ */
 function SyncRow({ busy }: { busy: boolean }) {
   const status = useSync() ?? { state: 'off' as const };
-  const [joining, setJoining] = useState(false);
-  const start = () => void orglet.syncStart().catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Đồng bộ')));
+  const [resting, setResting] = useState(false);
+  useEffect(() => {
+    if (!resting) return;
+    const timer = setTimeout(() => setResting(false), SYNC_COOLDOWN_MS);
+    return () => clearTimeout(timer);
+  }, [resting]);
+  const syncNow = () => {
+    setResting(true);
+    void orglet.syncStart().catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Đồng bộ')));
+  };
   const stuck = status.reason === 'update_required' || status.reason === 'device_released' || status.reason === 'account_deleted';
-  const canRetry = status.state === 'offline' || (status.state === 'paused' && !stuck);
+  const canSync = status.state !== 'off' && !(status.state === 'paused' && stuck);
   const description = <span role="status">
     {syncText(status)}
     {status.skipped ? <>{' '}{t('{0} thay đổi quá lớn nên chỉ ở trên máy này.', [status.skipped])}</> : null}
   </span>;
   return <>
     <Row title={<span className="sync-title"><StatusMark {...syncMark(status)} decorative />{t('Đồng bộ')}</span>} description={description}>
-      {status.state === 'link_required' ? !joining && <Button variant="primary" disabled={busy} onClick={() => setJoining(true)}><RefreshCw size={14} />{t('Bật đồng bộ')}</Button>
-        : canRetry ? <Button variant="outline" disabled={busy} onClick={start}><RefreshCw size={14} />{t('Thử lại')}</Button> : null}
+      {canSync ? <Button variant="outline" disabled={busy || resting || status.state === 'syncing'} onClick={syncNow}><RefreshCw size={14} />{t('Đồng bộ ngay')}</Button> : null}
     </Row>
-    {joining && status.state === 'link_required' && <JoinChoice onClose={() => setJoining(false)} />}
     <ConflictsRow busy={busy} />
   </>;
 }
