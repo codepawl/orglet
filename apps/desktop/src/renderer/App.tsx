@@ -11,7 +11,7 @@ import { SkillEditor } from './components/Editors';
 import { WorkerDialog, workerProviderOptions } from './components/WorkerDialog';
 import { chatSettingsTarget, connectModelStep, demoWorkerToConnect } from './chatSettings';
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog';
-import { TaskThread, ThreadSkeleton } from './components/TaskThread';
+import { TaskThread, ThreadSkeleton, type ThreadStartInfo } from './components/TaskThread';
 import { SideThreadPanel } from './components/SideThreadPanel';
 import { focusMessage } from './components/messageMarks';
 import { SourcePanel, type SourceTarget } from './components/SourcePanel';
@@ -1789,6 +1789,13 @@ export function App() {
     : openSideThread ? taskName(openSideThread.id) ?? openSideThread.brief
     : openScheduleName ? openScheduleName
     : selected ? (detail && assigneeLabel(detail.task, workspace!, { all: t('Toàn bộ Tí'), many: count => memberNames(openTaskWorkers.map(item => item.name)) ?? t('{0} Tí', [count]) })) ?? team?.name ?? closedOwnerName ?? t('Công việc') : chatName;
+  // Where the open chat begins, shown above its first message: the orglet's or the channel's name, what it is for
+  // and its faces. A side thread and a schedule's run say what they are in their own line instead.
+  const threadStart: ThreadStartInfo | undefined = !selected || openSideThread || openScheduleRun ? undefined : {
+    name: headerChannel ? `#${headerChannel.name}` : headerName,
+    about: (headerChannel ? headerChannel.topic : headerSettings?.kind === 'worker' ? headerSettings.worker.description : undefined)?.trim() || undefined,
+    faces: openTaskWorkers.slice(0, 5).map(item => <Avatar key={item.id} name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot color={item.avatar?.color} size="xl" />),
+  };
   /** The line at the top of a schedule's run: which schedule, who ran it, and the way to the schedule. */
   const scheduleRunOrigin = openScheduleRun && openScheduleName ? {
     name: openScheduleName,
@@ -2245,7 +2252,7 @@ export function App() {
         </>} />
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><LucideCalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã lỡ một lần chạy khi app tắt. Có thể chạy bù một lần.', [singleCatchUp.name]) : t('{0} lịch đã lỡ lần chạy khi app tắt. Mỗi lịch chạy bù được một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}
-      {chatView !== 'chat' ? <ChatViewPanel view={chatView}>{chatViewContent}</ChatViewPanel> : selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} workspace={workspace} recovery={workspaceRecovery} action={action} showSources={openSources} reviewRecovery={runId => { setRecoveryFocus({ runId, at: Date.now() }); setPanel('activity'); }} openMessage={messageId => {
+      {chatView !== 'chat' ? <ChatViewPanel view={chatView}>{chatViewContent}</ChatViewPanel> : selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} start={threadStart} detail={detail} workspace={workspace} recovery={workspaceRecovery} action={action} showSources={openSources} reviewRecovery={runId => { setRecoveryFocus({ runId, at: Date.now() }); setPanel('activity'); }} openMessage={messageId => {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
