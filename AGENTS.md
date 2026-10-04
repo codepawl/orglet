@@ -46,7 +46,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 
 | Feature | Page | Code entry |
 |---|---|---|
-| Orglet chat, side threads, channels (named chats of orglets, where they take turns or a lead splits the work; crews are channels, COD-361 and COD-369), `@` tags, replies, reactions | [docs/team-chat.md](docs/team-chat.md) | `core/orchestration/team.ts`, `shared/live-task.ts`, `shared/channels.ts`, `core/storage/channels.ts`, `shared/message-interactions.ts` |
+| Orglet chat, side threads, channels (named chats of orglets, where they take turns or a lead splits the work; crews are channels, COD-361 and COD-369), `@` tags, replies, reactions | [docs/team-chat.md](docs/team-chat.md) | `core/orchestration/team.ts`, `shared/live-task.ts`, `shared/channels.ts`, `shared/spaces.ts`, `core/storage/channels.ts`, `core/storage/spaces.ts`, `shared/message-interactions.ts` |
 | Permissions, working folder, commands, web tools, app-change proposals | [docs/agent-tools.md](docs/agent-tools.md) | `core/tools/catalog.ts`, `core/orchestration/app-proposals.ts` |
 | MCP servers, per-orglet choice, approving calls, secrets in main | [docs/mcp.md](docs/mcp.md) | `core/tools/mcp.ts`, `shared/mcp.ts`, `main/mcp-secrets.ts` |
 | Orglet's browser: reading pages, profiles, site lists, the journal | [docs/browser.md](docs/browser.md) | `core/tools/browser-tools.ts`, `core/tools/browser-policy.ts`, `browser/` (host process), `main/browser-*.ts` |

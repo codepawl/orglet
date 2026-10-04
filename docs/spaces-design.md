@@ -1,6 +1,6 @@
 # Spaces, categories and channels: design
 
-**Status: proposed, not built.** Asked for by the owner on 2026-10-04: "take the idea of making a server like Discord, then split it into channels and categories, or leave a channel outside the server. Each category and channel can let different orglets in to see it and work with the user." This page is the plan to agree on before any code.
+**Status: phase 1 built (the data and the rules in core, described in [team-chat.md](team-chat.md#spaces)); no screen shows a space yet.** Asked for by the owner on 2026-10-04: "take the idea of making a server like Discord, then split it into channels and categories, or leave a channel outside the server. Each category and channel can let different orglets in to see it and work with the user." The owner agreed to this plan on 2026-10-05.
 
 The working name here is **space**. The owner said "server". The [README](../README.md) promises that no Orglet server holds your work, so the same word for a group of channels confuses people. The name is the first open question below.
 
@@ -45,11 +45,11 @@ Permissions, the working folder and MCP grants stay on the channel's chat. A spa
 
 ## Data
 
-- **`spaces` table**, one JSON row per space, like `workers` and `teams`. A row holds `id`, `name`, `color`, `orgletIds` and `categories` (`id`, `name`, optional `orgletIds`). It also holds the order of its categories and channels. Archive and delete go through `entityState`, like orglets.
+- **The settings row `spaces`**, beside the one for empty channels. A space holds `id`, `name`, `color`, `orgletIds` and `categories` (`id`, `name`, optional `orgletIds`). A table of its own, with revisions, comes with sync in phase 4.
 - **`Channel` record** ([`shared/channels.ts`](../apps/desktop/src/shared/channels.ts)) gains `spaceId` and `categoryId`, both optional, and `access`: `inherit` or `listed`. With `listed`, `members` is the list, as today. The `category` string stays for channels outside a space.
 - **`assignees` stays the resolved list** on the chat's row. The runner, `@` tags, Tacet's routing, permissions and the Running view read a channel as they do now. Core resolves the list again when a message is sent and when a space, category or channel is edited. An edit is refused while that channel is working, as `updateChannel` is today.
-- Every new field is optional JSON. An older build opens the workspace and reads each channel with the members it last resolved.
-- Zod contracts at the IPC edge: `createSpace`, `updateSpace`, `archiveEntity` and `deleteEntity` with kind `space`, `moveChannel`.
+- Every new field is optional JSON on the channel's record. A channel whose space is missing reads as a channel outside every space, with the members it last resolved.
+- Zod contracts at the IPC edge: `createSpace`, `updateSpace`, `deleteSpace` and `spaceFromCategory`. `updateChannel` with a `spaceId` moves a channel in, and `spaceId: null` moves it out.
 
 ## Migration
 

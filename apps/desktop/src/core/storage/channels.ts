@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
 import { MAX_CREW_MEMBERS, type ChannelLeadSettings, type Task, type Team, type TeamInput, type Worker } from '../../shared/contracts';
-import { Channel, channelMode, channelNameFrom, channelOrgletIds, EmptyChannel, isLegacyGroupChat, MAX_CHANNEL_MEMBERS, orgletMembers, type ChannelFields, type ChannelMember } from '../../shared/channels';
+import { Channel, channelMode, channelNameFrom, channelOrgletIds, EmptyChannel, isLegacyGroupChat, MAX_CHANNEL_MEMBERS, orgletMembers, type ChannelAccess, type ChannelFields, type ChannelMember } from '../../shared/channels';
+import { membersOutsideScope, scopeOrgletIds } from '../../shared/spaces';
+import { SPACE_NOT_FOUND, storedSpaces } from './spaces';
 import { liveTeamTask } from '../../shared/live-task';
 import type { Store } from './database';
 
@@ -11,6 +13,9 @@ const EMPTY_CHANNELS = 'emptyChannels';
 const CHANNEL_HAS_NO_ORGLETS = 'Kênh chưa có Tí nào để trả lời. Thêm một Tí.';
 const LEAD_NOT_A_MEMBER = 'Tí trưởng phải là một thành viên của kênh.';
 const TOO_MANY_FOR_A_LEAD = 'Khi Tí trưởng chia việc, kênh có tối đa 8 Tí làm phần việc.';
+const LEAD_LEAVES_WITH_THE_SPACE = 'Một kênh trong không gian sẽ mất Tí trưởng. Đổi Tí trưởng của kênh đó trước.';
+const CATEGORY_NOT_FOUND ='Không tìm thấy mục này trong không gian.';
+const WIDER_THAN_ITS_PLACE = 'Kênh chỉ có thể có những Tí mà mục hoặc không gian của nó có.';
 
 /** The lead's instructions a channel starts with when it is switched to the lead splitting the work. */
 export const DEFAULT_LEAD_INSTRUCTIONS = 'Gộp phần việc của từng Tí thành một câu trả lời. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.';
@@ -243,6 +248,9 @@ export type CrewRecords = {
 
 type ChannelCommand = ChannelFields & { lead?: ChannelLeadSettings };
 
+/** Where a channel sits and the members that place leaves it with. Outside a space, only the members. */
+type Placement = { spaceId?: string; categoryId?: string; access?: ChannelAccess; members: ChannelMember[] };
+
 /**
  * The person's channels (COD-361): the empty ones in settings, and those written in on their `tasks` rows. A channel
  * keeps its id from creation to deletion, so the window edits it by that id whether it has a row yet or not. A channel
@@ -253,10 +261,10 @@ export class Channels {
 
   /** A new channel with no message yet; only listed orglets can join it, and a crew joins as its orglets. */
   create(fields: ChannelCommand): string {
-    const members = this.listedOrglets(fields.members);
-    const orgletIds = answeringOrglets(this.store, members);
+    const place = this.placed(fields, undefined, false);
+    const orgletIds = answeringOrglets(this.store, place.members);
     const crew = fields.mode === 'lead' ? this.crews.save(crewForChannel(fields.name, orgletIds, fields.lead)) : undefined;
-    const record = this.recordOf(randomUUID(), { ...fields, members }, crew?.id, undefined);
+    const record = this.recordOf(randomUUID(), fields, place, crew?.id, undefined);
     const channel = EmptyChannel.parse({ ...record, createdAt: this.clock().toISOString() });
     saveEmptyChannels(this.store, [...emptyChannels(this.store), channel]);
     return channel.id;
@@ -269,14 +277,60 @@ export class Channels {
    * `teamId`; switching back gives the row its orglets as `assignees` and retires the crew record.
    */
   update(channelId: string, fields: ChannelCommand): Task | undefined {
+    return this.save(channelId, fields, false);
+  }
+
+  /** The channels of a space, written in or empty. */
+  inSpace(spaceId: string): string[] {
+    const onRows = this.store.all<Task>('tasks').flatMap(task => !task.deletedAt && task.channel?.spaceId === spaceId ? [task.channel.id] : []);
+    const waiting = emptyChannels(this.store).flatMap(channel => channel.spaceId === spaceId ? [channel.id] : []);
+    return [...onRows, ...waiting];
+  }
+
+  /** The channels outside every space that are listed under this category, written in or empty. */
+  looseInCategory(category: string): Channel[] {
+    const named = (channel: Channel) => !channel.spaceId && channel.category?.toLowerCase() === category.toLowerCase();
+    const onRows = this.store.all<Task>('tasks').flatMap(task => !task.deletedAt && task.channel && named(task.channel) ? [task.channel] : []);
+    return [...onRows, ...emptyChannels(this.store).filter(named)];
+  }
+
+  /**
+   * The channel's space was saved: its orglets are resolved again. An orglet its category or space no longer has
+   * leaves the channel, and a category that is gone puts the channel directly in the space.
+   */
+  followSpace(channelId: string) {
     const current = this.recordById(channelId);
-    const members = this.listedOrglets(fields.members);
+    const space = storedSpaces(this.store).find(item => item.id === current.spaceId);
+    const categoryGone = Boolean(current.categoryId) && !space?.categories.some(category => category.id === current.categoryId);
+    this.save(channelId, { ...this.unchanged(current), ...(categoryGone ? { categoryId: null } : {}) }, true);
+  }
+
+  /** Puts a channel outside every space into one, keeping its own list of the orglets the space has. */
+  joinSpace(channelId: string, spaceId: string) {
+    this.save(channelId, { ...this.unchanged(this.recordById(channelId)), spaceId, access: 'listed' }, true);
+  }
+
+  /** Takes a channel out of its space with the orglets it had, which become its own list. */
+  leaveSpace(channelId: string) {
+    this.save(channelId, { ...this.unchanged(this.recordById(channelId)), spaceId: null }, true);
+  }
+
+  /**
+   * Saves a channel. `prune` is for a save the channel's space caused: members the channel's place does not allow,
+   * or that are no longer listed, are dropped instead of refusing the save.
+   */
+  private save(channelId: string, fields: ChannelCommand, prune: boolean): Task | undefined {
+    const current = this.recordById(channelId);
+    const place = this.placed(fields, current, prune);
+    const members = place.members;
     const orgletIds = answeringOrglets(this.store, members);
     const mode = fields.mode ?? channelMode(current);
     const existingCrew = current.crewId ? this.store.get<Team>('teams', current.crewId) : undefined;
+    // A space's save never picks a new lead by itself: the person changes the lead in the channel first.
+    if (prune && mode === 'lead' && existingCrew && !orgletIds.includes(existingCrew.synthesizerId)) throw new Error(LEAD_LEAVES_WITH_THE_SPACE);
     if (mode === 'turns' && existingCrew && this.onlyChannelOf(existingCrew.id, channelId)) this.crews.retire(existingCrew.id);
     const crew = mode === 'lead' ? this.crews.save(crewForChannel(fields.name, orgletIds, fields.lead, existingCrew)) : undefined;
-    const record = Channel.parse(this.recordOf(channelId, { ...fields, members }, crew?.id, current));
+    const record = Channel.parse(this.recordOf(channelId, fields, place, crew?.id, current));
     const waiting = emptyChannels(this.store);
     const empty = waiting.find(channel => channel.id === channelId);
     if (empty) {
@@ -372,10 +426,62 @@ export class Channels {
     return !onRows && !waiting;
   }
 
-  private recordOf(channelId: string, fields: ChannelFields, crewId: string | undefined, current: Channel | undefined): Channel {
+  private recordOf(channelId: string, fields: ChannelFields, place: Placement, crewId: string | undefined, current: Channel | undefined): Channel {
     const topic = fields.topic.trim();
-    const category = fields.category === undefined ? current?.category : fields.category.trim();
-    return Channel.parse({ id: channelId, name: fields.name, ...(topic ? { topic } : {}), ...(category ? { category } : {}), members: fields.members, ...(crewId ? { crewId } : {}) });
+    // A category by name sorts channels outside a space; inside one, the space's own categories do.
+    const category = place.spaceId ? undefined : fields.category === undefined ? current?.category : fields.category.trim();
+    return Channel.parse({
+      id: channelId,
+      name: fields.name,
+      ...(topic ? { topic } : {}),
+      ...(category ? { category } : {}),
+      ...(place.spaceId ? { spaceId: place.spaceId, access: place.access } : {}),
+      ...(place.categoryId ? { categoryId: place.categoryId } : {}),
+      members: place.members,
+      ...(crewId ? { crewId } : {}),
+    });
+  }
+
+  /** The fields that save a channel as it is. */
+  private unchanged(channel: Channel): ChannelCommand {
+    return { name: channel.name, topic: channel.topic ?? '', members: channel.members };
+  }
+
+  /**
+   * Where the channel being saved sits and who its place leaves in it (docs/spaces-design.md). Outside a space the
+   * channel keeps the list it was given. In a space it takes every orglet of its category or space when it
+   * inherits, else its own list, which must not hold an orglet its place does not have. A channel that moves into a
+   * space keeps only the orglets that space has.
+   */
+  private placed(fields: ChannelCommand, current: Channel | undefined, prune: boolean): Placement {
+    const listed = prune ? this.stillListed(fields.members) : this.listedOrglets(fields.members);
+    const spaceId = fields.spaceId === undefined ? current?.spaceId : fields.spaceId ?? undefined;
+    const space = spaceId ? storedSpaces(this.store).find(item => item.id === spaceId) : undefined;
+    if (!space) {
+      // A space the caller names must exist. One that only a restored row still names is gone: the channel is loose.
+      if (fields.spaceId) throw new Error(SPACE_NOT_FOUND);
+      return { members: listed };
+    }
+    const moved = space.id !== current?.spaceId;
+    const keptCategoryId = moved ? undefined : current?.categoryId;
+    const categoryId = fields.categoryId === undefined ? keptCategoryId : fields.categoryId ?? undefined;
+    if (categoryId && !space.categories.some(category => category.id === categoryId)) throw new Error(CATEGORY_NOT_FOUND);
+    const keptAccess = moved ? (current ? 'listed' : 'inherit') : current?.access ?? 'inherit';
+    const access = fields.access ?? keptAccess;
+    const workers = new Set(this.store.workspace().workers.map(worker => worker.id));
+    const scope = scopeOrgletIds(space, categoryId).filter(orgletId => workers.has(orgletId));
+    const placement = { spaceId: space.id, categoryId, access };
+    if (access === 'inherit') return { ...placement, members: scope.map(orgletId => ({ kind: 'orglet', id: orgletId })) };
+    const outside = membersOutsideScope(listed, scope);
+    const movedIn = moved && Boolean(current);
+    if (outside.length && !movedIn && !prune) throw new Error(WIDER_THAN_ITS_PLACE);
+    return { ...placement, members: listed.filter(member => !outside.includes(member)) };
+  }
+
+  /** The members as orglets, without the ones that left the workspace. */
+  private stillListed(members: readonly ChannelMember[]): ChannelMember[] {
+    const workspace = this.store.workspace();
+    return orgletMembers(members, { workers: workspace.workers, teams: workspace.teams });
   }
 
   /** The members as listed orglets: a crew joins as its orglets, and one that left the workspace is refused. */

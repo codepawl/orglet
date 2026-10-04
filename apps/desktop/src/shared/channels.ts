@@ -39,12 +39,25 @@ export const ChannelMembers = z.array(ChannelMember).min(1, 'Kênh cần ít nh�
 export const ChannelMode = z.enum(['turns', 'lead']);
 export type ChannelMode = z.infer<typeof ChannelMode>;
 
+/**
+ * How a channel in a space gets its orglets (docs/spaces-design.md): `inherit` takes every orglet of its category, or
+ * of its space when it has no category; `listed` keeps its own list, each one an orglet its category (or space) has.
+ */
+export const ChannelAccess = z.enum(['inherit', 'listed']);
+export type ChannelAccess = z.infer<typeof ChannelAccess>;
+
 export const Channel = z.object({
   id: z.uuid(),
   name: ChannelName,
   topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(),
-  /** The category the channel is listed under (COD-366); none lists it above the categories. */
+  /** The category the channel is listed under (COD-366); none lists it above the categories. Only outside a space. */
   category: z.string().trim().min(1).max(CHANNEL_CATEGORY_LIMIT).optional(),
+  /** The space the channel is in; none is a channel outside every space, which keeps its own members. */
+  spaceId: z.uuid().optional(),
+  /** The space's category the channel sits in; none puts it directly in the space. */
+  categoryId: z.uuid().optional(),
+  /** Set with `spaceId`. `members` is then the list these rules resolved to when the channel or its space was saved. */
+  access: ChannelAccess.optional(),
   members: ChannelMembers,
   /**
    * Set when the lead splits the work (COD-369): the crew record that holds the lead, the workflow, the budget and the
@@ -72,6 +85,13 @@ export const ChannelFields = z.object({
   topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT),
   /** Left out keeps the channel's category; an empty one takes it out of its category. */
   category: z.string().trim().max(CHANNEL_CATEGORY_LIMIT).optional(),
+  /** Left out keeps the channel where it is; `null` takes it out of its space. */
+  spaceId: z.uuid().nullable().optional(),
+  /** Left out keeps the category while the space stays the same; `null` puts the channel directly in its space. */
+  categoryId: z.uuid().nullable().optional(),
+  /** Left out keeps how the channel gets its orglets; a channel new to a space inherits. */
+  access: ChannelAccess.optional(),
+  /** With `inherit` in a space the list sent is replaced by the orglets of the channel's category or space. */
   members: ChannelMembers,
   mode: ChannelMode.optional(),
 }).strict();
