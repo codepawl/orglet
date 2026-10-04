@@ -122,7 +122,7 @@ async function photograph(page, stage, size) {
   await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => undefined))));
   await page.evaluate(`${measuringSource}\nwindow.__moderationAlignment = { measurePage };`);
   const findings = await page.evaluate(tolerances => window.__moderationAlignment.measurePage(tolerances), rules.DEFAULT_TOLERANCES);
-  assert.equal(findings.length, 0, `${stage} fits the real shell`);
+  assert.equal(findings.length, 0, `${stage} fits the real shell: ${JSON.stringify(findings)}`);
   const drawer = page.locator('.org-drawer-scroll');
   if (await drawer.count()) await drawer.evaluate(element => { element.scrollTop = 0; });
   await page.screenshot({ path: join(output, `${language}-${await page.evaluate(() => document.documentElement.dataset.theme)}-${size.width}-${stage}.png`) });
@@ -166,6 +166,9 @@ try {
     await page.setViewportSize({ width: 1200, height: 820 });
     await explore(page);
     await page.getByRole('button', { name: label('Duyệt marketplace'), exact: true }).waitFor();
+    // The catalog refreshes behind the page it opened with. While it does, the button reads "Refreshing", which is
+    // wider and wraps the heading's description: photograph the settled page, not that moment.
+    await page.getByRole('button', { name: label('Làm mới'), exact: true }).waitFor();
     for (const size of [{ width: 1200, height: 820 }, { width: 740, height: 600 }]) await photograph(page, 'catalog', size);
     await openReport(page);
     await page.getByRole('textbox', { name: label('Giải thích ngắn'), exact: true }).fill('Please inspect the exact public version.');
