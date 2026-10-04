@@ -1,3 +1,4 @@
+import { demoReplies } from '../demoReplies';
 import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Run, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
@@ -340,7 +341,8 @@ export function withPrefill(current: string, prefill: string): string {
  * words the answer uses. `onConnect` decides where it leads (`connectModelStep`).
  */
 export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some of the chat's orglets are on Demo. */ someOnDemo?: string; /** A crew with a local check before its sample report. */ preflight?: boolean; onConnect: () => void }) {
-  const sentence = someOnDemo ? t('{0} đang dùng Demo: câu trả lời mẫu, chưa đọc tệp.', [someOnDemo])
+  const sentence = !demoReplies() ? (someOnDemo ? t('{0} chưa kết nối model.', [someOnDemo]) : t('Tí này chưa kết nối model.'))
+    : someOnDemo ? t('{0} đang dùng Demo: câu trả lời mẫu, chưa đọc tệp.', [someOnDemo])
     : preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.')
     : t('Đang dùng Demo: câu trả lời mẫu, chưa đọc tệp.');
   return <div className="demo-note">
@@ -468,6 +470,11 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   const send = () => {
     const extra = text.trim();
     if (!extra || blocked || detail.task.pendingStart || submitting) return;
+    // An orglet with no model does not answer: the way to connect one opens, and the text stays in the box.
+    if (!demoReplies() && demoWorker && onConnectModel) {
+      onConnectModel(demoWorker);
+      return;
+    }
     setSubmitting(true);
     const putBack = takeUnsent();
     // A question is answered in words; a message that brings files is a new message instead.

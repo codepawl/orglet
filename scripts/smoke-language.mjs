@@ -1,3 +1,4 @@
+import './sample-replies.mjs';
 // Orglet starts in English. The smokes were written against the Vietnamese interface, so each switches the fresh
 // workspace to Vietnamese first and then waits for the empty worker chat. Returns the language it started in.
 export async function useVietnamese(page) {

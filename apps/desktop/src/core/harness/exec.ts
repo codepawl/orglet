@@ -127,7 +127,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
 
 const authHint = (harness: HarnessId) => {
   const name = harnessNames[harness];
-  return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy, sao chép lệnh đăng nhập, rồi thử lại. Orglet không chuyển sang Demo.`;
+  return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy, sao chép lệnh đăng nhập, rồi thử lại. Orglet không tự đổi sang kết nối khác.`;
 };
 /**
  * A sign-in the CLI says is missing or refused. Claude Code 2.1 also prints "Authentication error · This may be a

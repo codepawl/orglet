@@ -93,7 +93,7 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
   archive: 'Khôi phục để đưa lại về chỗ cũ trong sidebar.',
   connections: 'Key được mã hóa trên máy này và không vào bản sao lưu.',
   search: 'Tí chỉ gửi câu tìm kiếm đi, không gửi nội dung chat hay tệp.',
-  harness: 'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.',
+  harness: 'Đăng nhập lỗi thì Orglet dừng lại, không tự đổi sang kết nối khác.',
   mcp: 'Tí hỏi bạn trước mỗi lần gọi công cụ.',
   browser: 'Tí đọc trang trong cửa sổ riêng, không dùng hồ sơ của bạn.',
   usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',

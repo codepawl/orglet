@@ -155,7 +155,7 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
   const name = harnessNames[id];
   // Also the error a chat shows when it tries to run this harness, so it points at Settings rather than "below".
   const signedOut = `Đã thấy ${name} trên máy nhưng chưa đăng nhập. Lấy lệnh đăng nhập ở Cài đặt → Harness trên máy.`;
-  const unread = `${name} có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy lệnh bên dưới rồi bấm Dò lại. Orglet không chuyển sang Demo.`;
+  const unread = `${name} có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy lệnh bên dưới rồi bấm Dò lại. Orglet không tự đổi sang kết nối khác.`;
   let info: Omit<HarnessInfo, 'version'>;
   if (id === 'claude-code') {
     const status = await run(executable, ['auth', 'status'], accountEnv);

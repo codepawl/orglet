@@ -1,3 +1,4 @@
+import { demoReplies } from '../demoReplies';
 import { harnessNames, isHarness } from '../../shared/harness';
 import { isLocalApi, type Worker } from '../../shared/contracts';
 import { CATALOG_HINT_IDS, type ModelEntry } from '../../shared/models';
@@ -29,7 +30,7 @@ export function providerName(provider: Worker['provider']) {
 
 /** Short model line for the new-task recipient strip and composer notes. */
 export function workerModelLabel(worker: Pick<Worker, 'provider' | 'modelId'>) {
-  if (worker.provider === 'demo') return t('không gọi API');
+  if (worker.provider === 'demo') return demoReplies() ? t('không gọi API') : t('chưa kết nối model');
   const name = providerName(worker.provider);
   if (worker.modelId) return `${name} · ${worker.modelId}`;
   const suggestion = suggestions[worker.provider];

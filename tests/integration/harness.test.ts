@@ -144,7 +144,7 @@ describe('detection', () => {
       expect.objectContaining({ id: 'gemini', status: 'not_installed', auth: 'missing' }),
     ]);
     expect(found[2].authDetail).toContain('không đọc được trạng thái đăng nhập');
-    expect(found[2].authDetail).toContain('không chuyển sang Demo');
+    expect(found[2].authDetail).toContain('không tự đổi sang kết nối khác');
     expect(found[2].installCommand).toBe("irm 'https://cursor.com/install?win32=true' | iex");
     expect(harnessReady(found[2])).toBe(false);
   });
@@ -236,7 +236,7 @@ describe('command contract', () => {
   it('parses real CLI failure shapes into actionable login messages', () => {
     const notLoggedIn = JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Not logged in · Please run /login', total_cost_usd: 0 });
     expect(() => parseClaudeOutput(notLoggedIn)).toThrow('chưa đăng nhập');
-    expect(() => parseClaudeOutput(notLoggedIn)).toThrow('không chuyển sang Demo');
+    expect(() => parseClaudeOutput(notLoggedIn)).toThrow('không tự đổi sang kết nối khác');
     expect(parseClaudeOutput(JSON.stringify({ is_error: false, result: '', structured_output: { title: 'x' }, total_cost_usd: 0.01 }))).toEqual({ output: { title: 'x' }, costUsd: 0.01 });
     expect(parseClaudeOutput(JSON.stringify({ is_error: false, result: '{"title":"y"}' })).output).toEqual({ title: 'y' });
     const expired = ['{"type":"thread.started"}', 'ERROR 401 Unauthorized: Provided authentication token is expired. token_expired', '{"type":"turn.failed","error":{"message":"The model is not supported"}}'].join('\n');
@@ -708,12 +708,12 @@ describe('runner integration', () => {
   });
 
   it('fails a signed-out auth probe as an auth error and does not fall back to Demo', async () => {
-    detected = [{ ...detected[0], auth: 'unknown', status: 'auth_error', authDetail: 'Claude Code có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy claude auth login rồi bấm Dò lại. Orglet không chuyển sang Demo.' }];
+    detected = [{ ...detected[0], auth: 'unknown', status: 'auth_error', authDetail: 'Claude Code có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy claude auth login rồi bấm Dò lại. Orglet không tự đổi sang kết nối khác.' }];
     const failed = await run('claude-code');
     expect(failed.task.status).toBe('failed');
     expect(failed.artifacts).toEqual([]);
     expect(failed.runs[0].snapshot.worker.provider).toBe('claude-code');
-    expect(failed.runs[0].error).toContain('không chuyển sang Demo');
+    expect(failed.runs[0].error).toContain('không tự đổi sang kết nối khác');
     expect(failed.runs[0].error).toContain('claude auth login');
     expect(requests).toEqual([]);
   });

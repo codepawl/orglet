@@ -1,3 +1,4 @@
+import { demoReplies } from '../demoReplies';
 import { useEffect, useState, type ReactNode } from 'react';
 import { AlignLeft, Brain, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
 import { isMemory } from '../../shared/knowledge';
@@ -89,7 +90,8 @@ export function workerProviderOptions(ready: Readiness, harnesses: HarnessInfo[]
     ready: available,
   });
   const choices = [
-    choice('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true),
+    // Sample replies are a test tool: a person never picks them (shared/demo-replies.ts).
+    ...(demoReplies() ? [choice('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true)] : []),
     choice('openai', 'OpenAI', t('gợi ý {0}', [CATALOG_HINT_IDS.openai]), t('API trả phí'), ready.openai),
     choice('anthropic', 'Anthropic', t('gợi ý {0}', [CATALOG_HINT_IDS.anthropic]), t('API trả phí'), ready.anthropic),
     choice('xai', 'Grok', t('gợi ý {0}', [CATALOG_HINT_IDS.xai]), t('API trả phí'), ready.xai),
@@ -119,11 +121,14 @@ export function workerProviderOptions(ready: Readiness, harnesses: HarnessInfo[]
 
 /**
  * Where a new worker starts on the Model menu (dogfood, 2026-09-26): the first connection that can run right now, in
- * the menu's own order, past Demo, which is always ready and always first. Demo only when nothing else is ready.
+ * the menu's own order. With nothing ready it is the first connection on the menu, which the person then sets up;
+ * `demo`, an orglet with no model, only when the menu is empty.
  */
 export function defaultWorkerProvider(options: readonly SelectOption[]): Worker['provider'] {
-  const firstReady = options.find(option => option.value !== 'demo' && !option.dimmed);
-  return (firstReady?.value as Worker['provider'] | undefined) ?? 'demo';
+  const real = options.filter(option => option.value !== 'demo');
+  const firstReady = real.find(option => !option.dimmed);
+  const fallback = demoReplies() ? undefined : real[0];
+  return ((firstReady ?? fallback)?.value as Worker['provider'] | undefined) ?? 'demo';
 }
 
 /** Worker create/edit. Remount (via key) to reset the draft. */
@@ -136,7 +141,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const ready = readiness(connections, harnesses, workspace.customConnections);
   const providerOptions = workerProviderOptions(ready, harnesses, workspace.customConnections);
   const suggestedProvider = defaultWorkerProvider(providerOptions);
-  const startsOnSuggestion = !worker || (connectModel === true && worker.provider === 'demo');
+  const startsOnSuggestion = !worker || (worker.provider === 'demo' && (connectModel === true || !demoReplies()));
   const [provider, setProvider] = useState<Worker['provider']>(startsOnSuggestion ? suggestedProvider : worker.provider);
   // Until the person picks a model for a new worker (or a Demo one opened to connect a model), the start follows what
   // is ready: harness detection finishes after the dialog opens, and a harness signed in then should not leave it on Demo.

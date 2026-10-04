@@ -72,7 +72,7 @@ Node **24.19+**, pnpm **11.19.0**, Windows or macOS.
 
 ```
 pnpm install --frozen-lockfile
-pnpm dev              # Electron app; Researcher starts on Demo
+pnpm dev              # Electron app; Researcher starts with no model
 pnpm typecheck
 pnpm test             # required locally before a PR
 pnpm i18n:keys        # missing/unused English keys (Vietnamese source strings)
@@ -110,7 +110,7 @@ Process detail is [CONTRIBUTING.md](CONTRIBUTING.md). Fill [.github/pull_request
 
 **UI feel.** Quiet ChatGPT-like shell: sidebar, one main column, composer at the bottom, details on demand. Use tokens in `apps/desktop/src/renderer/styles.css` and the components in `packages/orglet-ui`. No neon, gradients-as-brand, org charts, or extra marketing chrome. Tight spacing already landed; do not inflate it. No spinners after the first frame: waits show the shape of what is coming ([technical guide → Loading](docs/technical-guide.md#loading)).
 
-**Trust boundaries.** `contextIsolation` on, `nodeIntegration` off, renderer sandboxed. Keys use Electron `safeStorage` in main; the renderer never reads a saved key back. Backups, templates and logs must not grow secrets. Workers read only files attached to that chat or inside its granted folder, and edit a private copy. Do not execute imported skill scripts. Do not add `--force` / `--yolo` to the Cursor harness or loosen the restricted flags of any harness. Do not silently fall back to Demo when a harness is logged out. Workspace commands have no network, not even loopback; do not add an exemption.
+**Trust boundaries.** `contextIsolation` on, `nodeIntegration` off, renderer sandboxed. Keys use Electron `safeStorage` in main; the renderer never reads a saved key back. Backups, templates and logs must not grow secrets. Workers read only files attached to that chat or inside its granted folder, and edit a private copy. Do not execute imported skill scripts. Do not add `--force` / `--yolo` to the Cursor harness or loosen the restricted flags of any harness. Do not silently fall back to another connection when a harness is logged out. Sample replies (`provider: 'demo'`) are a test tool behind `ORGLET_DEMO_REPLIES=1` (`shared/demo-replies.ts`): never offer them to a person, and never turn them on outside tests and smokes. Workspace commands have no network, not even loopback; do not add an exemption.
 
 **Data.** Zod at the IPC and storage edge. Integer money (micros), atomic budget reservation. Orglet, channel, skill and instruction edits create a new revision; in-flight runs keep the snapshot they started with. Missing evidence, unknown usage and partial failure stay visible — do not paint them as success.
 

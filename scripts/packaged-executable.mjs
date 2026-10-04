@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import './sample-replies.mjs';
 
 /** Packaged binary produced by `pnpm make` / `pnpm build` on this OS. */
 export function packagedExecutable() {

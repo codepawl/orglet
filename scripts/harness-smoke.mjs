@@ -63,7 +63,7 @@ try {
   const section = page.getByRole('region', { name: 'Harness trên máy' });
   await section.waitFor();
   // The no-Demo note lives on the settings panel heading. Auth-fail rows also mention it, so do not search the whole panel.
-  await page.locator('#settings-panel p.org-panel-heading-description').getByText('không chuyển sang Demo', { exact: false }).waitFor();
+  await page.locator('#settings-panel p.org-panel-heading-description').getByText('không tự đổi sang kết nối khác', { exact: false }).waitFor();
   for (const item of detected) {
     const row = section.locator('.harness-row', { hasText: item.name });
     await row.getByText(item.name, { exact: true }).waitFor();
@@ -82,7 +82,7 @@ try {
   assert.equal(await claudeRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
   if (codex.status === 'auth_error') {
     await codexRow.getByText('Lỗi đăng nhập', { exact: true }).waitFor();
-    await codexRow.getByText('không chuyển sang Demo', { exact: false }).waitFor();
+    await codexRow.getByText('không tự đổi sang kết nối khác', { exact: false }).waitFor();
   }
   assert.equal(await codexRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
   const geminiRow = section.locator('.harness-row', { hasText: 'Gemini CLI' });

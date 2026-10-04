@@ -168,7 +168,7 @@ describe('detection', () => {
     await mkdir(join(brokenHome, '.gemini', 'settings.json'), { recursive: true });
     const broken = await detectGemini(detectionEnvironment(brokenHome));
     expect(broken).toEqual(expect.objectContaining({ auth: 'unknown', status: 'auth_error' }));
-    expect(broken.authDetail).toContain('không chuyển sang Demo');
+    expect(broken.authDetail).toContain('không tự đổi sang kết nối khác');
   });
 
   it('reads and signs in an added account through GEMINI_CLI_HOME', async () => {
@@ -237,7 +237,7 @@ describe('outcomes', () => {
     process.env.FAKE_GEMINI_MODE = 'signed-out';
     const failure = executeHarness(await request());
     await expect(failure).rejects.toThrow('Gemini CLI chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy');
-    await expect(failure).rejects.toThrow('Orglet không chuyển sang Demo.');
+    await expect(failure).rejects.toThrow('Orglet không tự đổi sang kết nối khác.');
   });
 
   it('marks a used-up plan as a plan limit, so the chat can offer another account', async () => {

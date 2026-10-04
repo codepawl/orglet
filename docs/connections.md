@@ -1,6 +1,6 @@
 # Connections
 
-A **connection** is what runs an orglet's model: a coding CLI already signed in on this computer, an API key, a local Ollama, or Demo. Each orglet has one, chosen under **Model** in its settings. Nothing runs through an Orglet server; requests go from this computer to the provider or tool you picked.
+A **connection** is what runs an orglet's model: a coding CLI already signed in on this computer, an API key or a local Ollama. An orglet with no connection cannot answer; its chat shows **Connect a model**. Each orglet has one, chosen under **Model** in its settings. Nothing runs through an Orglet server; requests go from this computer to the provider or tool you picked.
 
 Part of the [user guide](user-guide.md). The full technical detail, including the exact flags each CLI runs with, is in the [technical guide](technical-guide.md#local-harnesses-claude-code-codex-cursor-agent-gemini-cli); what each connection can and cannot do is in the [capability catalog](capabilities.md).
 
@@ -14,7 +14,6 @@ Part of the [user guide](user-guide.md). The full technical detail, including th
 | OpenCode Zen, OpenCode Go | A Zen or Go key saved in Settings (two separate connections) | Your Zen balance or Go subscription; Orglet does not track or cap this spending |
 | Ollama on this computer | Ollama running at `127.0.0.1:11434` | Local, free |
 | A custom connection | A name, a base URL and, if the server needs one, an API key; optionally its price | Free on this computer or a private network; otherwise the price you enter, or unknown until you reconcile it |
-| Demo | Nothing | Free, sample replies only |
 
 ## Local harnesses (Claude Code, Codex, Cursor Agent, Gemini CLI)
 
@@ -84,7 +83,7 @@ A reply that comes back without token counts stays unknown in **Charges to recon
 
 ## Model IDs
 
-For everything but Demo, an orglet has a model ID. The picker lists that provider's own models, fetched from the provider's API or CLI and cached on this computer for 24 hours; you can also type any ID. Built-in names such as GPT-4.1 mini are suggestions, not a lock. If the list fails to load, typing still works.
+An orglet has a model ID. The picker lists that provider's own models, fetched from the provider's API or CLI and cached on this computer for 24 hours; you can also type any ID. Built-in names such as GPT-4.1 mini are suggestions, not a lock. If the list fails to load, typing still works.
 
 Some connections have no model to fall back on: a custom connection, OpenCode Zen and OpenCode Go. There **Model ID** is marked required, and an empty field starts on the first model the connection lists (the only one, when it lists one). Ollama does the same when its suggestion, llama3.2, is not installed. You can change the ID or clear it. Saving with it empty turns the field red and scrolls it into view.
 

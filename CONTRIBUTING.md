@@ -20,7 +20,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`pnpm dev` opens the Electron app with a Researcher orglet on Demo, so nothing needs a key. `pnpm dev:web` serves the renderer alone with no desktop data bridge; it cannot prove a change to the core or IPC.
+`pnpm dev` opens the Electron app with a Researcher orglet that has no model yet; connect one to chat. The tests and the packaged smokes need no key: they run on sample replies, which the test setup and the smoke launcher turn on with `ORGLET_DEMO_REPLIES=1`. `pnpm dev:web` serves the renderer alone with no desktop data bridge; it cannot prove a change to the core or IPC.
 
 The layout of `apps/desktop/src` (main, preload, renderer, core, shared, profiler) is described in [AGENTS.md](AGENTS.md#understand-the-repo); the rules for each layer are in the [technical guide](docs/technical-guide.md).
 

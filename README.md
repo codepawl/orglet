@@ -63,7 +63,6 @@ The interface is in US English by default, with UK English and Vietnamese in Set
 | OpenCode Zen or OpenCode Go API | A Zen or Go API key saved in Settings | Your Zen balance or Go subscription |
 | Ollama on this computer | Ollama running locally | Local |
 | Any OpenAI-compatible server | A name, a base URL and, if the server needs one, an API key | Free on this computer or a private network, otherwise the price you enter |
-| Demo | Nothing | Free, sample replies only |
 
 API keys are encrypted with your system's secure storage. Requests go only to the provider or local tool you choose for an orglet. Details: [connections](docs/connections.md), [capabilities](docs/capabilities.md).
 
@@ -93,7 +92,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The Researcher orglet starts on **Demo**, so you can try the app without an account. **Connect a model** under the message box leads to a real one.
+The Researcher orglet starts with no model. **Connect a model** in its chat leads to one. The tests and the packaged smokes run on sample replies, which the app gives only when `ORGLET_DEMO_REPLIES=1`.
 
 Run the checks and build a package under `out/make`:
 
