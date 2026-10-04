@@ -2239,7 +2239,7 @@ export function App() {
       </>}
     </main>
     {membersShown && headerChannel && <MemberColumn members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
-      onOpen={member => { clearSelection(); openWorker(member.id); }} onClose={toggleMembers} />}
+      onOpen={member => { clearSelection(); openWorker(member.id); }} />}
     {threadOpen && sideThread && sideThreadRow && <SideThreadPanel key={sideThread.taskId} taskId={sideThread.taskId} focusMessageId={sideThread.messageId}
       title={taskName(sideThread.taskId) ?? sideThreadRow.brief}
       orgletName={workspace.workers.find(item => item.id === sideThreadRow.workerId)?.name ?? 'Orglet'}
