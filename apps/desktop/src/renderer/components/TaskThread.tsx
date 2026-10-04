@@ -678,16 +678,16 @@ function TeamJob({ run, waitingFor, hideWho }: { run: Run; waitingFor: string[];
   const state = waiting ? `${statusLabel[run.status]} · ${waiting}` : statusLabel[run.status];
   const who = hideWho ? null : <span className="team-job-who"><strong>{run.snapshot.worker.name}</strong><span className="team-job-state">{state}</span></span>;
   const folded = Array.from(brief.trim()).length > JOB_LINE || /[\r\n]/.test(brief);
-  if (!folded) return <div className="team-job">{who}{brief.trim() && <p className="team-job-brief">{brief}</p>}</div>;
+  // One line per job, shaped like the trace row under it: the chevron leads, then who, the state and the brief, so
+  // the rows above an answer share one left edge instead of each having its own layout.
+  if (!folded) return <div className="team-job"><span className="team-job-line">{who}{brief.trim() && <span className="team-job-brief">{brief}</span>}</span></div>;
   return <details className="team-job">
-    <summary>
-      <span className="team-job-main">
-        {who}
-        <span className="team-job-preview">{brief.replace(/\s+/g, ' ').trim()}</span>
-      </span>
+    <summary className="activity-summary team-job-line">
       <ChevronRight size={14} aria-hidden="true" className="activity-chevron" />
+      {who}
+      <span className="team-job-preview">{brief.replace(/\s+/g, ' ').trim()}</span>
     </summary>
-    {who && <p className="team-job-brief">{brief}</p>}
+    <p className="team-job-brief">{brief}</p>
   </details>;
 }
 
