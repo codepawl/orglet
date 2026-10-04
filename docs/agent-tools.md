@@ -188,7 +188,7 @@ Integration runs the steps in order with a two-minute total deadline, and each s
 
 ## Reviewing changes before they reach the folder
 
-Decided 2026-09-26 ([COD-279](https://linear.app/codepawl/issue/COD-279)), after dogfooding: developers expect to read a run's changes before their folder has them. Orglet's copy-then-hand-in model makes this a pause, not a new mechanism. The integration above is unchanged; only when it runs moves.
+Decided 2026-09-26 (COD-279), after dogfooding: developers expect to read a run's changes before their folder has them. Orglet's copy-then-hand-in model makes this a pause, not a new mechanism. The integration above is unchanged; only when it runs moves.
 
 **The switch.** Under the working folder, once its level allows editing, the permissions show **Xem trước khi áp dụng / Review before applying**. It is the capability `workspace.apply` read the other way round: on (the default) means the chat does not have `workspace.apply`; off adds it. Being a capability, it rides on everything capabilities already do: an empty chat keeps it in `newChatCapabilities`, a run freezes it and is intersected with the chat's current set, a side thread starts with the main chat's and can never be wider (so it follows a main chat that turned review back on), and a restored backup has none of it, so restored chats review. Removing it is the one reduction that stops nothing (`removalStopsWork` in `shared/tool-policy.ts`): a run already working meets the intersection at its hand-in and waits. Adding it does not upgrade a run that already started, so that run still waits. No tool is gated by it, and no model can set it.
 
@@ -212,7 +212,7 @@ Decided 2026-09-26 ([COD-279](https://linear.app/codepawl/issue/COD-279)), after
 
 ## The approval mode under the prompt bar
 
-Decided 2026-10-01 ([COD-367](https://linear.app/codepawl/issue/COD-367)), from the owner's reference of Claude Code's mode menu. A button beside the add button under the prompt bar names the current mode and opens a **Mode** menu with three rows, each with a one-line description, a number key and a check on the current one. It adds no new permission; it maps onto what exists.
+Decided 2026-10-01 (COD-367), from the owner's reference of Claude Code's mode menu. A button beside the add button under the prompt bar names the current mode and opens a **Mode** menu with three rows, each with a one-line description, a number key and a check on the current one. It adds no new permission; it maps onto what exists.
 
 | Mode | What it is | Where it lives |
 |---|---|---|

@@ -66,7 +66,7 @@ Do not run `pnpm test:live` unless you have set `ORGLET_LIVE_KEY_FILE` to your o
 
 1. Branch from `main` and keep the pull request to one change. No drive-by refactors, formatting, or unrelated files.
 2. Fill in the [pull request template](.github/pull_request_template.md): what changed, why it fits, and exactly which checks you ran.
-3. Write a specific title. Maintainers prefix theirs with the Linear issue (`COD-xx:`); public contributors do not need one.
+3. Write a specific title. It needs no issue prefix.
 4. On your first pull request, include the CLA sentence from [License and CLA](#license-and-cla).
 
 ### CI

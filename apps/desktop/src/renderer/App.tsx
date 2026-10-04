@@ -107,12 +107,12 @@ import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry } from './components/AreaRail';
 import { UserPanel } from './components/UserPanel';
-import { CircleUserRound, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles } from 'lucide-react';
+import { CircleUserRound, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
-import { readArea, writeArea, workingOrgletIds, groupChannels, type Area, type FriendsTab, type ActivityTab, activityTabs } from './areas';
+import { readArea, writeArea, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
 import { useSavedMessages } from './saved';
 import { reportFeature } from './analytics';
 import { chatKey, chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, shownOpenChats, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
@@ -138,6 +138,8 @@ function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string
 const SIDEBAR_WIDTH = { min: 240, max: 420, default: 240, step: 16 };
 // The right panel takes the room the list column gave up to the tab strip (COD-340).
 const DETAILS_WIDTH = { min: 280, max: 720, default: 400, step: 16 };
+/** Whose rows the sidebar lists: an area's, or those of a page opened from the rail. */
+type SidebarList = Area | 'library' | 'schedules';
 /** The folded left column, the same as --rail-width in styles.css. */
 const RAIL_WIDTH = 52;
 /** The chat column never gets narrower than this for the right panel's sake; past it the panel stops growing. */
@@ -343,7 +345,6 @@ export function App() {
   const [area, setAreaState] = useState<Area>(readArea);
   const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
   const [friendsOpen, setFriendsOpen] = useState(false);
-  const [friendsTab, setFriendsTab] = useState<FriendsTab>('all');
   const [activityTab, setActivityTab] = useState<ActivityTab>('needs');
   const [membersOpen, setMembersOpen] = useState(() => { try { return localStorage.getItem('orglet.members') !== 'hidden'; } catch { return true; } });
   const toggleMembers = () => setMembersOpen(current => { try { localStorage.setItem('orglet.members', current ? 'hidden' : 'shown'); } catch { /* chrome only */ } return !current; });
@@ -594,12 +595,16 @@ export function App() {
   // A folded sidebar shows itself over the chat while the pointer is on the rail or on it, and goes when the pointer
   // leaves both (user, 2026-10-04). The short delay lets the pointer cross the gap between the two.
   const [sidebarPeek, setSidebarPeek] = useState(false);
+  // The look lists the tile the pointer is on, or was last on, not only the area on screen. It is kept while the
+  // look closes, so the list does not change on its way out, and forgotten when the next look starts.
+  const [peekList, setPeekList] = useState<SidebarList>();
   const peekTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const peekSidebar = (inside: boolean) => {
     clearTimeout(peekTimer.current);
     if (inside) {
       if (!matchMedia('(max-width: 780px)').matches) {
         aimSidebarAtTile();
+        if (!sidebarPeek) setPeekList(undefined);
         setSidebarPeek(true);
       }
       return;
@@ -610,6 +615,7 @@ export function App() {
     aimSidebarAtTile();
     clearTimeout(peekTimer.current);
     setSidebarPeek(false);
+    setPeekList(undefined);
     setSidebar(true);
     // A narrow window lays the full sidebar over the chat for a moment; only a wide one makes it the mode.
     if (!matchMedia('(max-width: 780px)').matches) writeSidebarMode('full');
@@ -1750,6 +1756,8 @@ export function App() {
   const chatProviders = [...new Set((selected && detail ? openTaskWorkers : executionWorkers).map(item => item.provider))];
   const headerProvider = chatProviders.length === 1 ? chatProviders[0] : undefined;
   const chatName = team?.name ?? emptyChannelName ?? worker?.name ?? 'Orglet';
+  // The name as a title: a channel's without its hash, which is its icon in a list (user, 2026-10-04).
+  const chatTitle = team?.name ?? emptyChannel?.name ?? worker?.name ?? 'Orglet';
   // What the orglet does, or the channel's topic, under its name where the chat starts.
   const chatIntro = (team ? undefined : emptyChannel ? emptyChannel.topic : worker?.description)?.trim();
   const openSideThread = selected && detail?.task.sideOf ? detail.task : undefined;
@@ -1792,7 +1800,8 @@ export function App() {
   // Where the open chat begins, shown above its first message: the orglet's or the channel's name, what it is for
   // and its faces. A side thread and a schedule's run say what they are in their own line instead.
   const threadStart: ThreadStartInfo | undefined = !selected || openSideThread || openScheduleRun ? undefined : {
-    name: headerChannel ? `#${headerChannel.name}` : headerName,
+    // The hash is the channel's icon in a list, not part of its name (user, 2026-10-04).
+    name: headerChannel ? headerChannel.name : headerName,
     about: (headerChannel ? headerChannel.topic : headerSettings?.kind === 'worker' ? headerSettings.worker.description : undefined)?.trim() || undefined,
     faces: openTaskWorkers.slice(0, 5).map(item => <Avatar key={item.id} name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot color={item.avatar?.color} size="xl" />),
   };
@@ -2084,10 +2093,7 @@ export function App() {
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
       onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     : area === 'home' && friendsOpen
-      ? <FriendsPage orglets={orderedWorkers} archived={workspace.archivedWorkers} working={workingIds} tab={friendsTab} onTab={setFriendsTab} busy={friendsBusy}
-        onPublish={member => setPublishingSource({ kind: 'orglet', entityId: member.id, name: member.name })}
-        onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
-        onArchive={member => archiveEntity('worker', member.id, true)} onDelete={member => deleteEntityNow('worker', member.id)}
+      ? <FriendsPage archived={workspace.archivedWorkers} busy={friendsBusy}
         onCreate={name => { setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }} onRestore={member => archiveEntity('worker', member.id, false)}
         onMarketAdded={async result => {
           await refresh();
@@ -2096,32 +2102,51 @@ export function App() {
           else openTeam(result.entityId);
         }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
       : null;
-  const areaEntries: AreaRailEntry[] = [
+  const goToActivity = () => {
+    if (!leavingPage(goToActivity)) setArea('activity');
+  };
+  const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
     { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: area === 'home' && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
       clearSelection();
-      // From another area Home comes back to the DM that was open; on Home itself the button is the way to Friends.
+      // Home is always a chat (user, 2026-10-04): the DM that was open, else the last orglet written to, else the
+      // first one. Only a workspace with no orglet lands on Add friend.
       const openTaskRow = selectedRef.current ? workspaceRef.current?.tasks.find(task => task.id === selectedRef.current) : undefined;
       const dmOpen = selectedRef.current ? areaOfTask(openTaskRow) === 'home' : !teamIdRef.current && !emptyChannelIdRef.current;
-      setFriendsOpen(area === 'home' || !dmOpen);
+      const friend = orderedWorkers.find(worker => worker.id === workerId) ?? orderedWorkers[0];
+      if (!dmOpen && friend) {
+        openWorker(friend.id);
+        // Opening a chat closes the sidebar laid over a narrow window; the Home tile was a way to its list, so it stays.
+        if (matchMedia('(max-width: 780px)').matches) setSidebar(true);
+        return;
+      }
+      setFriendsOpen(!friend);
       setArea('home');
     } },
     { key: 'channels', icon: <Hash size={20} />, label: t('Kênh'), active: area === 'channels' && !pagePanelOpen, onSelect: function goToChannels() { if (!leavingPage(goToChannels)) setArea('channels'); } },
-    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: function goToActivity() { if (!leavingPage(goToActivity)) setArea('activity'); } },
+    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },
     { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
     { key: 'schedules', icon: <CalendarClock size={20} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
   ];
-  // What the sidebar lists: the open page's own rows, else the area's.
-  const sidebarFor = !pagePanelOpen ? area : panel === 'routines' ? 'schedules' : 'library';
+  // What the sidebar lists: the open page's own rows, else the area's. A folded sidebar taking a look lists the tile
+  // under the pointer instead.
+  const shownList: SidebarList = !pagePanelOpen ? area : panel === 'routines' ? 'schedules' : 'library';
+  const sidebarFor = !sidebar && peekList ? peekList : shownList;
   // While the sidebar is folded, a tile opens it for good. The tile of the area already on screen only opens it, so
   // Home there does not also jump to Friends.
-  const railEntries = areaEntries.map(entry => ({ ...entry, onSelect: () => {
-    if (!sidebar) {
-      openFullSidebar();
-      if (entry.active) return;
-    }
-    entry.onSelect();
-  } }));
+  const railEntries = areaEntries.map(entry => ({
+    ...entry,
+    onSelect: () => {
+      if (!sidebar) {
+        openFullSidebar();
+        if (entry.active) return;
+      }
+      entry.onSelect();
+    },
+    onDwell: sidebar ? undefined : (resting: boolean) => {
+      if (resting) setPeekList(entry.key);
+    },
+  }));
   const createItems = [
     { label: t('Thêm bạn (tạo Tí)'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
     { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({}) },
@@ -2142,9 +2167,9 @@ export function App() {
       {sidebarFor === 'home' && <button type="button" className="sidebar-search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={16} aria-hidden="true" /><span>{t('Tìm hoặc bắt đầu trò chuyện')}</span></button>}
       <div className="sidebar-scroll">
       {sidebarFor === 'home' && <>
-      <nav className="sidebar-nav" aria-label={t('Bạn bè')}>
+      <nav className="sidebar-nav" aria-label={t('Thêm bạn')}>
         <button type="button" className={`sidebar-nav-item${friendsOpen ? ' active' : ''}`} aria-current={friendsOpen ? 'page' : undefined} onClick={() => { clearSelection(); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
-          <Users size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Bạn bè')}</span><span className="sidebar-nav-count" aria-hidden="true">{workspace.workers.length}</span>
+          <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm bạn')}</span>
         </button>
       </nav>
       {/* The chats kept at hand that have no row anywhere else in the sidebar (COD-355), so no chat is listed twice. */}
@@ -2154,7 +2179,7 @@ export function App() {
       <SidebarSection id="workers" title={t('Tin riêng')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
         {selection.section === 'workers' && selectionBar}
         {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
-          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
+          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
       </>}
@@ -2169,7 +2194,7 @@ export function App() {
       </>}
       {/* A page's own list: the sidebar always belongs to what the main panel shows, never to the area left behind. */}
       {sidebarFor === 'library' && <nav className="sidebar-nav" aria-label={t('Thư viện')}>
-        {(['skills', 'knowledge'] as const).map(tab => <button key={tab} type="button" className={`sidebar-nav-item${libraryTab === tab ? ' active' : ''}`} aria-current={libraryTab === tab ? 'page' : undefined} onClick={() => { setLibraryTab(tab); setPanel('library'); }}>
+        {(['skills', 'knowledge'] as const).map(tab => <button key={tab} type="button" className={`sidebar-nav-item${libraryTab === tab ? ' active' : ''}`} aria-current={libraryTab === tab ? 'page' : undefined} onClick={() => void leaveRoutine(() => { setLibraryTab(tab); setPanel('library'); })}>
           {tab === 'skills' ? <Sparkles size={18} aria-hidden="true" /> : <NotebookText size={18} aria-hidden="true" />}
           <span className="sidebar-nav-name">{tab === 'skills' ? 'Skills' : 'Knowledge'}</span>
           <span className="sidebar-nav-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span>
@@ -2187,7 +2212,7 @@ export function App() {
         })}
       </nav>}
       {sidebarFor === 'activity' && <nav className="sidebar-nav" aria-label={t('Hoạt động')}>
-        {activityTabs.map(tab => <button key={tab} type="button" className={`sidebar-nav-item${activityTab === tab ? ' active' : ''}`} aria-current={activityTab === tab ? 'page' : undefined} onClick={() => setActivityTab(tab)}>
+        {activityTabs.map(tab => <button key={tab} type="button" className={`sidebar-nav-item${activityTab === tab ? ' active' : ''}`} aria-current={activityTab === tab ? 'page' : undefined} onClick={() => { setActivityTab(tab); if (shownList !== 'activity') goToActivity(); }}>
           {tab === 'needs' ? <BellRing size={18} aria-hidden="true" /> : tab === 'running' ? <Activity size={18} aria-hidden="true" /> : tab === 'done' ? <CircleCheck size={18} aria-hidden="true" /> : <Bookmark size={18} aria-hidden="true" />}
           <span className="sidebar-nav-name">{activityTabLabel(tab)}</span>
           {tab !== 'done' && activityCountsNow[tab] > 0 && <span className="sidebar-nav-count" aria-hidden="true">{activityCountsNow[tab]}</span>}
@@ -2197,7 +2222,7 @@ export function App() {
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
     <AreaRail entries={railEntries} createItems={createItems} onHover={sidebar ? undefined : peekSidebar} />
-    <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)} compact={!sidebar || narrowWindow}
+    <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
         { label: t('Cài đặt'), icon: SlidersHorizontal, onSelect: () => openSettings() },
@@ -2207,7 +2232,7 @@ export function App() {
         { label: t('Giới thiệu'), icon: Info, onSelect: () => openSettings('about') },
       ]}
       onDwell={dwellAbout}
-      trailing={sidebar && !narrowWindow && updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
+      trailing={updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
     <main className="main-pane" id="main-content" tabIndex={-1}>
       {pagePanelOpen ? <PanelPage pageKey={`${panel}:${libraryTab}:${routineView.editing}`} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
         icon={panel === 'routines' ? <CalendarClock size={16} aria-hidden="true" /> : <BookOpen size={16} aria-hidden="true" />}
@@ -2272,9 +2297,9 @@ export function App() {
           </div>
           {/* The start of a chat, the way a messenger opens one: who it is in large type, what they do, then one line
               saying this is where the chat begins. Assistive technology still hears "Chatting with …". */}
-          <h1 className="welcome" aria-label={t('Đang nhắn với {0}', [chatName])}>{team || emptyChannel ? `#${chatName}` : chatName}</h1>
+          <h1 className="welcome" aria-label={t('Đang nhắn với {0}', [chatName])}>{chatTitle}</h1>
           {chatIntro && <p className="welcome-about">{chatIntro}</p>}
-          <p className="welcome-start">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatName])}</p>
+          <p className="welcome-start">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatTitle])}</p>
           <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}
             onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
@@ -2290,8 +2315,15 @@ export function App() {
         : null}
       </>}
     </main>
-    {membersShown && headerChannel && <MemberColumn members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
-      onOpen={member => { clearSelection(); openWorker(member.id); }} />}
+    {membersShown && headerChannel && <MemberColumn you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
+      onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
+      removable={member => member.id !== crewLeadId && headerChannel.workers.length > (headerChannel.crewId ? 2 : 1)}
+      onRemove={member => action(async () => {
+        // The channel may have been made from a crew as one member: the orglets left are listed one by one.
+        const staying = headerChannel.workers.filter(item => item.id !== member.id).map(item => ({ kind: 'orglet' as const, id: item.id }));
+        await orglet.call('updateChannel', { id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic ?? '', members: staying });
+        toast(t('Đã xóa {0} khỏi kênh', [member.name]), 'success', channelLabel(headerChannel.name));
+      }, channelLabel(headerChannel.name))} />}
     {threadOpen && sideThread && sideThreadRow && <SideThreadPanel key={sideThread.taskId} taskId={sideThread.taskId} focusMessageId={sideThread.messageId}
       title={taskName(sideThread.taskId) ?? sideThreadRow.brief}
       orgletName={workspace.workers.find(item => item.id === sideThreadRow.workerId)?.name ?? 'Orglet'}

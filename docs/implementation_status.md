@@ -448,7 +448,7 @@ Not verified here: a real workspace from an older build upgraded on another mach
 
 ## The area rail (COD-366)
 
-A rail at the far left picks the area (Home, Channels, Activity; Library and Schedules open their panels), the sidebar lists it, and a user panel at the bottom left holds Settings. How it works: [chat-guide.md](chat-guide.md#the-area-rail-and-the-sidebar), [technical-guide.md](technical-guide.md#shell-areas-tabs-and-the-right-panel).
+A rail at the far left picks the area (Home, Channels, Activity; Library and Schedules open their panels), the sidebar lists it, and the person's face at the bottom of the rail opens Settings. How it works: [chat-guide.md](chat-guide.md#the-area-rail-and-the-sidebar), [technical-guide.md](technical-guide.md#shell-areas-tabs-and-the-right-panel).
 
 - Pure parts tested in `tests/integration/areas.test.ts`: Friends tabs and search, channels grouped under categories, what Saved keeps, Activity's counts, and a channel's category through the core (set, kept by a change that leaves it out, cleared, refused past 40 characters). `startup-shell.test.ts` covers the first-frame shell.
 - Checked on a packaged Windows build from the branch at 1400x880, light and dark, and at 740 wide: Home with Friends (All, Working, Add friend) and the DMs, Channels with two categories and the member column, Activity's four views, the folded sidebar and the narrow overlay.

@@ -56,9 +56,7 @@ try {
   const worker = (await workspace(page)).workers.find(worker => worker.provider === 'demo');
   assert.ok(worker);
   await openHome(page);
-  await page.getByRole('button', { name: 'Bạn bè', exact: true }).first().click();
-  await page.getByRole('tab', { name: /^Tất cả/ }).click();
-  await page.locator('.friend-row').filter({ hasText: worker.name }).first().getByRole('button', { name: `Tùy chọn ${worker.name}`, exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: `Tùy chọn ${worker.name}`, exact: true }).first().click();
   await page.getByRole('menuitem', { name: 'Chỉnh sửa', exact: true }).click();
   const privacy = page.getByRole('switch', { name: 'Chỉ trên máy này', exact: true });
   await privacy.focus();

@@ -81,7 +81,7 @@ A new certificate has no SmartScreen reputation, so **Windows protected your PC*
 
 CI builds the installer (`pnpm make`) and runs packaged Playwright smokes against that build with an isolated `--user-data-dir`. It does **not** run Squirrel Setup, does not install like a user, and does not uninstall. After `pnpm make`, it uploads Setup and ZIP as Actions artifacts.
 
-The maintainer decision in [COD-12](https://linear.app/codepawl/issue/COD-12/release-gate-windows-installer-smoke-checklist-ship) makes green Windows packaged CI sufficient for a public 0.2.x tag. The steps below are useful additional validation on a clean Windows machine or VM; they do not block the tag. Packaged CI smokes are not a Setup installation or uninstall test.
+The maintainer decision in COD-12 makes green Windows packaged CI sufficient for a public 0.2.x tag. The steps below are useful additional validation on a clean Windows machine or VM; they do not block the tag. Packaged CI smokes are not a Setup installation or uninstall test.
 
 This page is the procedure, not a completed tick. Do not treat the existence of this list as evidence that someone already installed Setup.
 
@@ -125,7 +125,7 @@ Copy this list into the release issue or tag notes and tick a step only after yo
 8. **Uninstall**  
    Quit Orglet. Uninstall from **Settings → Apps → Installed apps** (Orglet / orglet). Confirm it is gone from the Start Menu and that the old shortcut no longer launches. `%APPDATA%\orglet` may remain; that is leftover workspace data, not a failed uninstall. Remove it by hand if the VM will be reused.
 
-When a human has actually done these steps, record the VM/machine, OS, commit SHA and date on the Linear issue or in the Release draft. This document is not that record.
+When a human has actually done these steps, record the VM/machine, OS, commit SHA and date in the Release draft. This document is not that record.
 
 ## Validation not covered by release CI
 

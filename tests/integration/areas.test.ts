@@ -6,7 +6,7 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunningItem } from '../../apps/desktop/src/shared/running';
-import { categoryNames, friendsMatching, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
+import { categoryNames, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
 import { SAVED_LIMIT, SAVED_TEXT_LIMIT, savedExcerpt, withSaved, withoutSaved, type SavedMessage } from '../../apps/desktop/src/renderer/saved';
 import { activityCounts } from '../../apps/desktop/src/renderer/components/ActivityPage';
 
@@ -24,19 +24,11 @@ const running = (worker: Worker, state: RunningItem['state']): RunningItem => ({
 describe('Friends', () => {
   const friends = [orglet('Kế toán', 'Làm sổ sách'), orglet('Researcher', 'Reads sources'), orglet('Writer', 'Drafts')];
 
-  it('lists every orglet on All and only the ones with a run going on Working', () => {
+  it('counts only the orglets with a run going as working', () => {
     const working = workingOrgletIds([running(friends[1], 'running'), running(friends[2], 'queued'), running(friends[0], 'paused')]);
     expect([...working]).toEqual(['researcher']);
-    expect(friendsMatching(friends, 'all', '', working).map(item => item.name)).toEqual(['Kế toán', 'Researcher', 'Writer']);
-    expect(friendsMatching(friends, 'working', '', working).map(item => item.name)).toEqual(['Researcher']);
   });
 
-  it('searches names and descriptions without caring for case or accents, every word having to match', () => {
-    const none = new Set<string>();
-    expect(friendsMatching(friends, 'all', 'ke toan', none).map(item => item.name)).toEqual(['Kế toán']);
-    expect(friendsMatching(friends, 'all', 'DRAFTS', none).map(item => item.name)).toEqual(['Writer']);
-    expect(friendsMatching(friends, 'all', 'reads writer', none)).toEqual([]);
-  });
 });
 
 describe('channels under categories', () => {

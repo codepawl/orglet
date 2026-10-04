@@ -19,11 +19,12 @@ it('draws the whole shell before any workspace exists: area rail, sidebar, user 
   expect(html).toContain('DMs');
   expect(html.match(/class="row-shape"/g)).toHaveLength(3);
   expect(html).toContain('Opening the orglet list…');
-  // The area rail keeps its places with disabled tiles and the user panel its Settings button (COD-366); the prompt bar
-  // is there and asleep until the workspace lands.
+  // The area rail keeps its places with disabled tiles and the person's face its place under them (COD-366); the
+  // prompt bar is there and asleep until the workspace lands.
   expect(html).toContain('class="area-rail"');
   expect(html).toContain('class="user-panel"');
-  for (const label of ['Friends and direct messages', 'Channels', 'Activity', 'Library', 'Schedules', 'Settings']) expect(html).toContain(label);
+  expect(html).toContain('class="user-panel-face"');
+  for (const label of ['Friends and direct messages', 'Channels', 'Activity', 'Library', 'Schedules']) expect(html).toContain(label);
   expect(html).toContain('<form class="composer"');
   expect(html).toMatch(/<textarea[^>]*disabled/);
   // The face does the waiting where the chat's face will be, and the copy says what is happening.

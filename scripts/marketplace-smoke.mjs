@@ -17,8 +17,7 @@ const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}
 const settle = page => page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => undefined))));
 async function openDiscover(page) {
   await openHome(page);
-  await page.getByRole('button', { name: 'Bạn bè', exact: true }).first().click();
-  await page.getByRole('tab', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Thêm bạn', exact: true }).click();
   await page.locator('.marketplace-listing').first().waitFor();
 }
 let app = await launch();
@@ -89,9 +88,7 @@ try {
   const after = await page.evaluate(() => window.orglet.call('marketInstallations', {}));
   assert.deepEqual(after.map(item => ({ ...item, updateAvailable: false })), before, 'origin links survive a packaged app restart');
   await openHome(page);
-  await page.getByRole('button', { name: 'Bạn bè', exact: true }).first().click();
-  await page.getByRole('tab', { name: /^Tất cả/ }).click();
-  await page.locator('.friend-row').filter({ hasText: 'Research friend' }).first().getByRole('button', { name: 'Tùy chọn Research friend', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Tùy chọn Research friend', exact: true }).first().click();
   await page.getByRole('menuitem', { name: 'Chỉnh sửa', exact: true }).click();
   await page.locator('.marketplace-profile').waitFor();
   await settle(page);

@@ -45,7 +45,7 @@ export async function openChannels(page) {
 
 export async function openHome(page) {
   const home = page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first();
-  // On Home already, the button opens Friends and would hide the chat the smoke is in.
+  // On Home already there is nothing to do; a click would only go back to the DM that is open.
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
 }
 

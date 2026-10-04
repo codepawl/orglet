@@ -25,7 +25,7 @@ it('gives an orglet\'s side threads the same air under them as over them (dogfoo
 });
 
 it('gives the sidebar a background when it floats over the chat at the minimum window', () => {
-  expect(css).toMatch(/@media\(max-width:780px\) \{ \.sidebar \{[^}]*background:var\(--window\);/);
+  expect(css).toMatch(/@media\(max-width:780px\) \{ \.sidebar \{[^}]*background:var\(--bg\);/);
 });
 
 it('puts a group of choices\' title above its box, never on the box\'s edge (dogfood, 2026-09-26)', () => {

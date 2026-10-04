@@ -5,11 +5,11 @@
   <img src="images/orglets/team-chat-context-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-Policy for epic [COD-22](https://linear.app/codepawl/issue/COD-22), written with [COD-23](https://linear.app/codepawl/issue/COD-23). **The five approval questions below are yes.** Numbers are defaults to implement, not a new settings screen.
+Policy for epic COD-22, written with COD-23. **The five approval questions below are yes.** Numbers are defaults to implement, not a new settings screen.
 
-**Shipped:** team chat shell ([COD-24](https://linear.app/codepawl/issue/COD-24)), orchestrator ([COD-25](https://linear.app/codepawl/issue/COD-25)), hide-task-pile UX ([COD-26](https://linear.app/codepawl/issue/COD-26)) — click worker or team → live thread, find-or-create one `tasks` row. User-facing behavior: [team-chat.md](team-chat.md).
+**Shipped:** team chat shell (COD-24), orchestrator (COD-25), hide-task-pile UX (COD-26) — click worker or team → live thread, find-or-create one `tasks` row. User-facing behavior: [team-chat.md](team-chat.md).
 
-This page is still the long-chat policy (bounded prompt, extractive summary, retrieval, refuse-the-send, fail-closed). Transcript layers 3–4 and the refuse path shipped in [COD-32](https://linear.app/codepawl/issue/COD-32). It does not ship signing, [COD-19](https://linear.app/codepawl/issue/COD-19) release assets, or [COD-20](https://linear.app/codepawl/issue/COD-20) notarize.
+This page is still the long-chat policy (bounded prompt, extractive summary, retrieval, refuse-the-send, fail-closed). Transcript layers 3–4 and the refuse path shipped in COD-32. It does not ship signing, COD-19 release assets, or COD-20 notarize.
 
 ## Decision in one paragraph
 
@@ -22,17 +22,17 @@ Keep **one live thread per worker** and **one live thread per team**. The user t
 | Worker chat or team chat (the open conversation) | One non-archived `tasks` row keyed by `workerId` (no `teamId`, no `assignees`) or by `teamId` | `Store.usage(taskId)` is the thread total. Cancel aborts active runs of that task. |
 | One user message | `inputRevision` / `currentInput` (today's follow-up) | Fresh consent when providers or sources change, same as `reviseTask`. |
 | Quiet work, then a reply or a report document | `runs` + `artifacts` | Retry starts **new** runs for unfinished jobs of **this turn**; completed artifacts stay. Resume uses the same run + checkpoint. |
-| Chi tiết | `events`, reservations, ledger, checkpoints, context manifest | Dollars next to Chi tiết ([COD-21](https://linear.app/codepawl/issue/COD-21)); token count on the latest turn. |
+| Chi tiết | `events`, reservations, ledger, checkpoints, context manifest | Dollars next to Chi tiết (COD-21); token count on the latest turn. |
 
 Routines stay discrete tasks under **Lịch chạy**. They are not merged into the infinite chat.
 
-The sidebar is **workers** and **teams**, not a task pile ([COD-26](https://linear.app/codepawl/issue/COD-26)). Identity: find-or-create the live thread for that worker or team; do not create a new `tasks` row on every message. Archive a thread to start over. Routines stay on **Lịch chạy**.
+The sidebar is **workers** and **teams**, not a task pile (COD-26). Identity: find-or-create the live thread for that worker or team; do not create a new `tasks` row on every message. Archive a thread to start over. Routines stay on **Lịch chạy**.
 
 Job stages:
 
 - Worker chat: one run, no `stage` (today's standalone path).
 - Group chat: sequential `stage: 'group'` replies. Not a team.
-- Team orchestrator ([COD-25](https://linear.app/codepawl/issue/COD-25)): `plan` job → `member` jobs → `synthesis` report back to the user. Internal member chatter is **not** the user-facing transcript; the orchestrator report (and optional short status) is.
+- Team orchestrator (COD-25): `plan` job → `member` jobs → `synthesis` report back to the user. Internal member chatter is **not** the user-facing transcript; the orchestrator report (and optional short status) is.
 
 ```
 Thread (worker | team)           = tasks row
@@ -133,7 +133,7 @@ Do **not** do this list in the COD-23 PR.
 **Shared core (before or with COD-25; COD-24 may stub):**
 
 1. Treat find-or-create live `tasks` row as the thread id; `reviseTask` remains “new message”. **Done** for team chat (`liveTeamTask`) and worker chat (`liveWorkerTask`).
-2. Extend the frozen context manifest with transcript layers (`verbatimTurns`, `summaryChars`, `retrievedSnippets`, omission reasons). **Done** ([COD-32](https://linear.app/codepawl/issue/COD-32)).
+2. Extend the frozen context manifest with transcript layers (`verbatimTurns`, `summaryChars`, `retrievedSnippets`, omission reasons). **Done** (COD-32).
 3. Extractive rolling summary + refuse path when over 200 000 bytes after compact (`runner.ts` / `context/thread.ts`). **Done** (COD-32).
 4. Keyword retrieval over this thread's older turns; 4 snippets / 8 KB; no cross-thread hits. **Done** (COD-32).
 5. Tests: window of 10; 11th turn summarized not inlined; retrieval misses other workers' threads; refuse when still over cap; no dispatch on retrieval failure; budget not reserved on refuse. **Done** (`tests/integration/thread-context.test.ts`).
@@ -168,4 +168,4 @@ Answered **yes** (COD-24 may implement against these defaults):
 - Not permission to stuff the full chat into every request.
 - Not a cloud memory service.
 - Not a change to source consent, checksums, or the step limits (6, 16 with web access, 40 with a working folder) or the 4 096-output-token worker limit.
-- Not a substitute for [team-chat.md](team-chat.md) (the shipped click-team shell, orchestrator, and hide-task-pile UX). Context layers 3–4 and the refuse path are [COD-32](https://linear.app/codepawl/issue/COD-32).
+- Not a substitute for [team-chat.md](team-chat.md) (the shipped click-team shell, orchestrator, and hide-task-pile UX). Context layers 3–4 and the refuse path are COD-32.

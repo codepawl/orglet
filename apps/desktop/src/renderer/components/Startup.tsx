@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
-import { Bell, BookOpen, CalendarClock, Plus, Settings } from './icons';
+import { Bell, BookOpen, CalendarClock, Plus } from './icons';
 import { Hash, MessagesSquare } from 'lucide-react';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
@@ -74,15 +74,14 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
         <SidebarSection id="workers" title={t('Tin riêng')}><RowShapes count={WORKER_ROW_SHAPES} label={t('Đang mở danh sách Tí…')} /></SidebarSection>
       </div>
     </aside>
-    {/* The area rail and the user panel hold their places with disabled controls while the workspace opens (COD-366). */}
+    {/* The area rail and the person's face hold their places with disabled controls while the workspace opens (COD-366). */}
     <nav className="area-rail" aria-label={t('Khu vực')}>
       <ul className="area-rail-list">
         {areaIcons.map((icon, index) => <li key={index}><button type="button" className="area-tile" aria-label={areaLabels()[index]} disabled>{icon}</button></li>)}
       </ul>
     </nav>
-    <div className={`user-panel${sidebar ? '' : ' compact'}`}>
+    <div className="user-panel">
       <span className="user-panel-face"><Skeleton shape="circle" className="row-shape-face" /></span>
-      {sidebar && <Button size="icon" aria-label={t('Cài đặt')} disabled><Settings size={18} /></Button>}
     </div>
     <main className="main-pane" id="main-content" tabIndex={-1}>
       <header className="topbar"><div /></header>
