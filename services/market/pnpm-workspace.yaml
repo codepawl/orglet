@@ -3,3 +3,6 @@ packages:
 allowBuilds:
   esbuild: true
   workerd: true
+overrides:
+  # Security fix for a build-tool dependency (Dependabot alerts); undici comes in through miniflare and wrangler only.
+  undici: '7.29.1'
