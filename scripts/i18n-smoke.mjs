@@ -50,9 +50,9 @@ try {
   await page.keyboard.press('Escape');
 
   // Validation text in dialogs follows the language too.
-  await page.getByRole('button', { name: 'Create channel', exact: true }).first().click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Create channel', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'Give the channel a name.' }).waitFor();
+  await page.getByRole('button', { name: 'Create space', exact: true }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Create space', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Give the space a name.' }).waitFor();
   await page.keyboard.press('Escape');
   await page.screenshot({ path: 'test-results/i18n-home-en.png' });
 
