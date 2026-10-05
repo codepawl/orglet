@@ -64,3 +64,11 @@ it('puts the chat header name, its model and the view tabs on one baseline', () 
   expect(css).toMatch(/\.chat-views \{ display:flex; flex-wrap:wrap; align-items:baseline;/);
   expect(css).toMatch(/\.chat-view-tab \{ display:inline-flex; align-items:baseline;[^}]*padding:4px 10px;[^}]*line-height:20px;/);
 });
+
+// User, 2026-10-05: with the sidebar folded the message box stood 30px in from the thread above it.
+it('keeps the message box as wide as the thread and the chat\'s opening lines, so their left edges meet', () => {
+  const widthOf = (selector: string) => new RegExp(`${selector.replace(/[.>]/g, '\\$&')} \\{[^}]*?max-width:(\\d+px)`).exec(css)?.[1];
+  expect(widthOf('.thread-content')).toBe('960px');
+  expect(widthOf('.thread-composer')).toBe(widthOf('.thread-content'));
+  expect(widthOf('.team-chat-start > .fresh-chat')).toBe(widthOf('.thread-content'));
+});

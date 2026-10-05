@@ -615,8 +615,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* A size container, so the island's label can be capped from the bar's width (`cqw` in `.live-island-label`)
    rather than from the island's own measured width, which would let a measurement of zero lock it at zero. */
 /* The bar's bottom edge keeps the panel's inset from the card's rounded corner (the disclaimer line that used to sit
-   below it is gone, owner 2026-10-01), so the add button and the ring never sit in the curve. */
-.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) var(--panel-inset); container-type:inline-size; }
+   below it is gone, owner 2026-10-01), so the add button and the ring never sit in the curve. The bar is as wide as
+   the thread above it (user, 2026-10-05): at 900px against the thread's 960px it stood 30px in from the messages
+   and the chat's opening lines once the main card was wider than both, which is the case with the sidebar folded. */
+.thread-composer { width:100%; max-width:960px; margin:0 auto; padding:8px var(--page-x) var(--panel-inset); container-type:inline-size; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
    the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
