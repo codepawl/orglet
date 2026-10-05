@@ -737,6 +737,8 @@ export class LocalSync {
       || Boolean(this.store.db.prepare("SELECT entity_id FROM sync_deletions WHERE kind='source' AND entity_id=?").get(id)));
     if (data.kind === 'quote') return this.turns.list(data.taskId).some(turn => turn.id === data.value.afterTurnId);
     if (data.kind === 'chatField' || data.kind === 'reaction') return this.exists('tasks', data.taskId);
+    // A space's origin waits for the orglets the listing made; the space itself is a setting that may arrive after it.
+    if (data.kind === 'origin' && data.value.kind === 'space') return Object.values(data.value.workerIds).every(workerId => this.exists('workers', workerId));
     if (data.kind === 'origin') return this.exists(data.value.kind === 'orglet' ? 'workers' : 'teams', data.value.entityId);
     if (data.kind === 'routine') return this.exists('workers', data.value.task.workerId) && (!data.value.task.teamId || this.exists('teams', data.value.task.teamId));
     if (data.kind === 'source' && data.value.editedFrom) return this.exists('sources', data.value.editedFrom);

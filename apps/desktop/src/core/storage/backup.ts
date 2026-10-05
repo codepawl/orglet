@@ -111,7 +111,9 @@ function validateRelations(data: Payload) {
   const map = <T extends { id: string }>(rows: T[]) => { const result = new Map(rows.map(row => [row.id, row])); if (result.size !== rows.length) fail('ID bị trùng.'); return result; };
   const workers = map(data.workers); const skills = map(data.skills); const teams = map(data.teams);
   for (const origin of data.marketOrigins ?? []) {
-    const targets = origin.kind === 'orglet' ? workers : teams;
+    // A space's origin names the space; a crew's the crew; an orglet's the orglet.
+    const spaces = new Map((data.spaces ?? []).map(space => [space.id, space]));
+    const targets: { has(id: string): boolean } = origin.kind === 'orglet' ? workers : origin.kind === 'crew' ? teams : spaces;
     const originWorkers = Object.values(origin.workerIds);
     if (!targets.has(origin.entityId) || originWorkers.some(workerId => !workers.has(workerId)) || Object.values(origin.skillIds).some(skillId => !skills.has(skillId)) || new Set(originWorkers).size !== originWorkers.length || (origin.kind === 'orglet' && (originWorkers.length !== 1 || originWorkers[0] !== origin.entityId))) fail('Nguồn danh mục thiếu Tí, nhóm hoặc kỹ năng.');
   }

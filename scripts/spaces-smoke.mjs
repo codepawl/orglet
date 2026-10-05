@@ -114,7 +114,21 @@ try {
   const kept = after.tasks.find(task => task.channel?.name === 'general');
   assert.equal(kept.channel.spaceId, undefined);
   assert.equal(kept.assignees.length, 2, 'the channel keeps the orglets it had');
-  console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space.');
+  // A space from the marketplace: its orglets, its categories and its channels arrive together, and nothing else.
+  // The profile has not opened the marketplace, so the catalog is the one that ships with the app.
+  const orgletsBefore = after.workers.length;
+  const added = await page.evaluate(() => window.orglet.call('marketAdd', { listingId: 'launch-space', version: 1 }));
+  assert.equal(added.kind, 'space');
+  await page.locator('.area-tile[title="Launch"]').click();
+  await page.locator('.sidebar .channel-row').nth(2).waitFor();
+  assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch');
+  assert.deepEqual((await page.locator('.sidebar .section-toggle').allTextContents()).map(text => text.trim()), ['Research', 'Writing']);
+  assert.equal(await page.locator('.sidebar .channel-hash .lucide-lock').count(), 2, 'the two channels with their own orglets wear a lock');
+  const withListing = await workspace(page);
+  assert.equal(withListing.workers.length, orgletsBefore + 3);
+  assert.equal(withListing.tasks.length, after.tasks.length, 'adding a space sends no message');
+  await shot(page, 'market-space');
+  console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace.');
 } finally {
   await app.close();
 }

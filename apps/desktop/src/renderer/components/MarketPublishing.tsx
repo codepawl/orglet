@@ -51,7 +51,7 @@ function capabilityLabel(status: string): string {
 
 function decodedPreviewFiles(requestText: string): { path: string; text: string }[] {
   const submission = JSON.parse(requestText);
-  const skills = submission.kind === 'crew' ? submission.template.skills : [submission.template.skill];
+  const skills = submission.kind === 'orglet' ? [submission.template.skill] : submission.template.skills;
   return skills.flatMap((skill: { name: string; package?: { files: { path: string; base64: string }[] } }) =>
     (skill.package?.files ?? []).map(file => ({
       path: `${skill.name}/${file.path}`,
@@ -63,10 +63,20 @@ function decodedPreviewFiles(requestText: string): { path: string; text: string 
 /** Readable public prose first; the complete original request remains inspectable without reconstruction. */
 export function PublicContentPreview({ requestText }: { requestText: string }) {
   const submission = JSON.parse(requestText) as MarketSubmission;
-  const workers = submission.kind === 'crew' ? submission.template.workers : [submission.template.worker];
-  const skills = submission.kind === 'crew' ? submission.template.skills : [submission.template.skill];
+  const workers = submission.kind === 'orglet' ? [submission.template.worker] : submission.template.workers;
+  const skills = submission.kind === 'orglet' ? [submission.template.skill] : submission.template.skills;
+  const kindName = submission.kind === 'space' ? t('Không gian') : submission.kind === 'crew' ? t('Nhóm Tí') : t('Tí');
   return <div className="market-content-preview">
-    <section className="market-preview-summary"><h3>{submission.name}</h3><p>{submission.summary}</p><p className="muted">{submission.kind === 'crew' ? t('Nhóm Tí') : t('Tí')} · {submission.language.toUpperCase()} · {submission.license}{submission.tags.length > 0 && ` · ${submission.tags.join(', ')}`}</p>{submission.changelog && <p>{submission.changelog}</p>}</section>
+    <section className="market-preview-summary"><h3>{submission.name}</h3><p>{submission.summary}</p><p className="muted">{kindName} · {submission.language.toUpperCase()} · {submission.license}{submission.tags.length > 0 && ` · ${submission.tags.join(', ')}`}</p>{submission.changelog && <p>{submission.changelog}</p>}</section>
+    {submission.kind === 'space' && <section><h3>{submission.template.space.name}</h3>
+      <ul className="market-space-channels">
+        {submission.template.space.channels.map((channel, index) => {
+          const category = submission.template.space.categories.find(item => item.key === channel.categoryKey)?.name;
+          const members = channel.memberKeys?.map(key => submission.template.workers.find(worker => worker.key === key)?.name ?? key).join(', ');
+          return <li key={index}><span className="market-space-channel">#{channel.name}</span>{category && <span className="muted">{category}</span>}<span className="muted">{members ?? t('Mọi Tí của không gian')}</span>{channel.topic && <span>{channel.topic}</span>}</li>;
+        })}
+      </ul>
+    </section>}
     {submission.kind === 'crew' && <section><h3>{t('Hướng dẫn crew')}</h3><pre className="market-public-prose">{submission.template.team.instructions}</pre></section>}
     {workers.map((worker, index) => <section key={index}><h3>{worker.name}</h3>{worker.description && <p>{worker.description}</p>}<p className="muted">{providerName(worker.provider)}{worker.modelId && ` · ${worker.modelId}`}</p><pre className="market-public-prose">{worker.instructions}</pre></section>)}
     {skills.map((skill, index) => <section key={index}><h3>{skill.name}</h3><pre className="market-public-prose">{skill.content}</pre></section>)}

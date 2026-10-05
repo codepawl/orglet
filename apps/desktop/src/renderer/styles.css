@@ -3203,6 +3203,10 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-content-preview section { display: grid; gap: 6px; }
 .market-content-preview :is(h3, p), .market-own-content p { margin: 0; }
 .market-content-preview h3 { font-size: 14px; font-weight: 600; }
+/* A space listing's channels: the name, then its category, who is in it and what it is for, wrapping as one row. */
+.market-space-channels { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.market-space-channels li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; overflow-wrap: anywhere; }
+.market-space-channel { font-weight: 500; }
 .market-content-preview .market-preview-summary h3 { font-size: 17px; }
 .market-public-prose { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; font-size: 13px; line-height: 1.6; }
 .marketplace-pagination { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

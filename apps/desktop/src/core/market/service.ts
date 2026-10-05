@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ProviderId, type Worker, type Skill, type Team } from '../../shared/contracts';
-import { MARKET_BODY_LIMIT, MARKET_URL, MarketCatalog, MarketCatalogPageV2, MarketListing, MarketListingV2, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketCustomization, type MarketUpdate, type MarketInstallation, type MarketDisplayListing } from '../../shared/market';
+import { MARKET_BODY_LIMIT, MARKET_KINDS_QUERY, MARKET_URL, MarketCatalog, MarketCatalogPageV2, MarketListing, MarketListingV2, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketCustomization, type MarketUpdate, type MarketInstallation, type MarketDisplayListing } from '../../shared/market';
 import { MARKET_SEED_BODIES, seedCatalog } from '../../shared/market-seed';
 import { Store, id } from '../storage/database';
 import { KnowledgeBase } from '../context/knowledge';
 import { packageForImport } from '../skill-package';
 import { parseMarketTemplate } from './templates';
+import type { SpaceTemplate } from '../../shared/space-template';
+import { storedSpaces } from '../storage/spaces';
 
 const Model = z.object({ provider: ProviderId, modelId: z.string().max(200).optional() }).strict();
 type Model = z.infer<typeof Model>;
@@ -16,12 +18,18 @@ const CachedPage = z.object({ cursor: z.string().min(1).max(256), catalog: Displ
 const CachedCatalog = z.object({ catalog: DisplayCatalog, fetchedAt: z.iso.datetime(), pages: z.array(CachedPage).max(9).optional() }).strict()
   .refine(cache => cache.catalog.listings.length + (cache.pages ?? []).reduce((total, page) => total + page.catalog.listings.length, 0) <= 200);
 class UnsupportedMarketRoute extends Error {}
+/** The server refused the query itself: a catalog from before spaces does not know `kinds`. */
+class RefusedMarketQuery extends Error {}
+/** CodePawl's own listings, whose bodies ship with the app: read from the v1 routes or from the bundled seed. */
+const CURATED_LISTINGS = new Set(Object.keys(MARKET_SEED_BODIES).map(key => key.slice(0, key.lastIndexOf(':'))));
 
 export type MarketRuntime = {
   fetch?: typeof fetch;
   connected?: (provider: Worker['provider']) => Promise<boolean>;
   defaultModel?: () => Promise<Model>;
   followCrew?: (team: Team) => void;
+  /** Makes the space a listing carries, with its categories and channels, for orglets already written; answers its id. */
+  addSpace?: (space: SpaceTemplate['space'], workerIds: Record<string, string>) => string;
 };
 
 export class Marketplace {
@@ -43,7 +51,15 @@ export class Marketplace {
       try {
         // Twenty complete 16-KiB metadata records plus server fields fit the bounded 512-KiB page envelope.
         const query = cursor ? `?limit=20&cursor=${encodeURIComponent(cursor)}` : '?limit=20';
-        catalog = MarketCatalogPageV2.parse(JSON.parse(await this.read(`/v2/catalog${query}`, 512 * 1024)));
+        let text: string;
+        try {
+          // Naming the kinds this app understands is what lets the catalog list a space for it.
+          text = await this.read(`/v2/catalog${query}&kinds=${MARKET_KINDS_QUERY}`, 512 * 1024);
+        } catch (reason) {
+          if (!(reason instanceof RefusedMarketQuery)) throw reason;
+          text = await this.read(`/v2/catalog${query}`, 512 * 1024);
+        }
+        catalog = MarketCatalogPageV2.parse(JSON.parse(text));
       } catch (reason) {
         if (cursor || !(reason instanceof UnsupportedMarketRoute)) throw new Error('Không tải được trang danh mục.');
         catalog = MarketCatalog.parse(JSON.parse(await this.read('/v1/catalog', 512 * 1024)));
@@ -71,11 +87,14 @@ export class Marketplace {
   installations(): MarketInstallation[] {
     const saved = CachedCatalog.safeParse(this.store.setting<unknown>('marketCatalog', null));
     const state = this.store.entityState();
+    const spaces = storedSpaces(this.store);
     return this.origins().filter(origin => {
+      // A space is listed while it exists; a deleted one leaves its orglets and channels and no installation.
+      if (origin.kind === 'space') return spaces.some(space => space.id === origin.entityId);
       const table = origin.kind === 'orglet' ? 'workers' : 'teams';
       return !state[table][origin.entityId]?.deletedAt && !state[table][origin.entityId]?.archivedAt;
     }).map(origin => {
-      const entity = this.store.get<Worker | Team>(origin.kind === 'orglet' ? 'workers' : 'teams', origin.entityId);
+      const entity = origin.kind === 'space' ? spaces.find(space => space.id === origin.entityId)! : this.store.get<Worker | Team>(origin.kind === 'orglet' ? 'workers' : 'teams', origin.entityId);
       const latest = saved.success ? [saved.data.catalog, ...(saved.data.pages ?? []).map(page => page.catalog)].flatMap(page => page.listings).find(item => item.listingId === origin.listingId) : undefined;
       return { entityId: entity.id, kind: origin.kind, listingId: origin.listingId, version: origin.version, name: entity.name, updateAvailable: !!latest && latest.version > origin.version };
     });
@@ -85,10 +104,16 @@ export class Marketplace {
     const listing = await this.listing(listingId, version);
     const template = parseMarketTemplate(await this.body(listing), listing.kind);
     const prepared = await this.prepare(template);
-    const entityId = prepared.team?.id ?? prepared.workers[0].id;
+    if (template.space && !this.runtime.addSpace) throw new Error('Không thêm được không gian ở đây.');
+    let entityId = prepared.team?.id ?? prepared.workers[0].id;
     const origin: Origin = { entityId, listingId, version, kind: listing.kind, workerIds: prepared.workerIds, skillIds: prepared.skillIds, baseline: '', baselineKind: 'authoring-v1' };
     this.store.transaction(() => {
       this.store.versionRows(prepared.rows);
+      // The space is made once its orglets exist, in the same transaction, and is what the listing's origin names.
+      if (template.space) {
+        entityId = this.runtime.addSpace!(template.space, prepared.workerIds);
+        origin.entityId = entityId;
+      }
       if (prepared.team) new KnowledgeBase(this.store).importProposed(entityId, template.knowledge ?? []);
       origin.baseline = this.authoring(origin);
       this.store.setSetting('marketOrigins', [...this.origins(), Origin.parse(origin)]);
@@ -102,7 +127,7 @@ export class Marketplace {
     this.assertUpdateable(origin);
     const catalog = await this.catalog(false);
     let listing = catalog.listings.find(item => item.listingId === origin.listingId && item.version > origin.version);
-    const curated = origin.listingId === 'research-friend' || origin.listingId === 'research-review';
+    const curated = CURATED_LISTINGS.has(origin.listingId);
     if (!curated) {
       try {
         const current = MarketListingV2.parse(JSON.parse(await this.read(`/v2/listings/${origin.listingId}`, 32 * 1024)));
@@ -214,7 +239,8 @@ export class Marketplace {
   }
   private assertUpdateable(origin: Origin) {
     const lifecycle = this.store.entityState();
-    const state = lifecycle[origin.kind === 'orglet' ? 'workers' : 'teams'][origin.entityId];
+    if (origin.kind === 'space' && !storedSpaces(this.store).some(space => space.id === origin.entityId)) throw new Error('Không gian này đã bị xóa.');
+    const state = origin.kind === 'space' ? undefined : lifecycle[origin.kind === 'orglet' ? 'workers' : 'teams'][origin.entityId];
     if (state?.deletedAt || state?.archivedAt) throw new Error('Không cập nhật bạn đã lưu trữ hoặc xóa.');
     for (const workerId of Object.values(origin.workerIds)) {
       const member = lifecycle.workers[workerId];
@@ -263,7 +289,7 @@ export class Marketplace {
   private async body(listing: MarketDisplayListing): Promise<string> {
     const key = `${listing.listingId}:${listing.version}:${listing.sha256}`;
     const cached = this.store.setting<unknown>(`marketBody:${key}`, null);
-    const curated = listing.listingId === 'research-friend' || listing.listingId === 'research-review';
+    const curated = CURATED_LISTINGS.has(listing.listingId);
     let text: string;
     if (!curated) text = await this.read(`/v2/listings/${listing.listingId}/versions/${listing.version}`, MARKET_BODY_LIMIT);
     else if (typeof cached === 'string' && Buffer.byteLength(cached) <= MARKET_BODY_LIMIT && hash(cached) === listing.sha256) text = cached;
@@ -280,6 +306,7 @@ export class Marketplace {
   private async read(path: string, limit: number) {
     const response = await (this.runtime.fetch ?? fetch)(`${MARKET_URL}${path}`, { redirect: 'error', signal: AbortSignal.timeout(10_000), headers: { Accept: 'application/json' } });
     if (response.status === 404 || response.status === 501) throw new UnsupportedMarketRoute('Không tải được danh mục.');
+    if (response.status === 400) throw new RefusedMarketQuery('Không tải được danh mục.');
     if (!response.ok || !response.body) throw new Error('Không tải được danh mục.');
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];

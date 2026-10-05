@@ -66,6 +66,7 @@ import { SideThreads } from './orchestration/side-threads';
 import { adoptCrews, Channels, channelForGroup } from './storage/channels';
 import { Spaces, storedSpaces } from './storage/spaces';
 import { spaceChatCapabilities } from '../shared/spaces';
+import type { SpaceTemplate } from '../shared/space-template';
 import { isLegacyGroupChat } from '../shared/channels';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
 import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
@@ -235,6 +236,7 @@ export class CoreService {
       connected: provider => this.marketConnected(provider),
       defaultModel: () => this.marketDefaultModel(),
       followCrew: team => this.channels.followCrew(team),
+      addSpace: (space, workerIds) => this.addMarketSpace(space, workerIds),
     });
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
@@ -1879,6 +1881,28 @@ export class CoreService {
     this.channels.update(channel.id, { name, topic: channel.topic ?? '', members: channel.members });
   }
   /** Members change from the next message on, so a channel with a turn under way waits, as a group chat's settings did. */
+  /**
+   * The space a marketplace listing carries: its orglets by their keys, its categories, then each channel in its
+   * category, with every orglet of its place or the ones the listing names. It sets no permission and no folder.
+   */
+  private addMarketSpace(space: SpaceTemplate['space'], workerIds: Record<string, string>): string {
+    const spaceId = this.spaces.create({ name: space.name, orgletIds: Object.values(workerIds), categories: space.categories.map(category => ({ name: category.name })) });
+    const saved = storedSpaces(this.store).find(item => item.id === spaceId)!;
+    const categoryIds = new Map(space.categories.map((category, index) => [category.key, saved.categories[index].id]));
+    for (const channel of space.channels) {
+      const listed = channel.memberKeys?.map(key => ({ kind: 'orglet' as const, id: workerIds[key] }));
+      this.channels.create({
+        name: channel.name,
+        topic: channel.topic ?? '',
+        spaceId,
+        ...(channel.categoryKey ? { categoryId: categoryIds.get(channel.categoryKey) } : {}),
+        access: listed ? 'listed' : 'inherit',
+        // A channel that takes everyone of its place still names one member, which its place then replaces.
+        members: listed ?? [{ kind: 'orglet', id: saved.orgletIds[0] }],
+      });
+    }
+    return spaceId;
+  }
   private assertChannelIdle(channelId: string) {
     const row = this.store.all<Task>('tasks').find(task => task.channel?.id === channelId && !task.deletedAt);
     if (row) this.assertIdle(row, 'Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.');

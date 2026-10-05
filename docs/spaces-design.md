@@ -1,6 +1,6 @@
 # Spaces, categories and channels: design
 
-**Status: built, except a marketplace listing for a space.** How it works is in [team-chat.md](team-chat.md#spaces). Asked for by the owner on 2026-10-04: "take the idea of making a server like Discord, then split it into channels and categories, or leave a channel outside the server. Each category and channel can let different orglets in to see it and work with the user." The owner agreed to this plan on 2026-10-05.
+**Status: built. A space can be added from the marketplace; publishing one is not built.** How it works is in [team-chat.md](team-chat.md#spaces). Asked for by the owner on 2026-10-04: "take the idea of making a server like Discord, then split it into channels and categories, or leave a channel outside the server. Each category and channel can let different orglets in to see it and work with the user." The owner agreed to this plan on 2026-10-05.
 
 The working name here is **space**. The owner said "server". The [README](../README.md) promises that no Orglet server holds your work, so the same word for a group of channels confuses people. The name is the first open question below.
 
