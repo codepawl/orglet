@@ -3048,12 +3048,13 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 /* A space's tile is filled with its own gradient and carries no letter (user, 2026-10-05), so it reads as a place
    of the person's own beside the rail's icons. The gradient is shaded the way the mascots and the Orglet mark are:
    lit from the top left, the first colour through the middle, the second in the bottom right, with a thin light
-   edge on top. The fill is the whole tile: hover brightens it and the open space wears a ring, since a tint behind
-   a fill would be a background inside a background. */
-.space-mark { --space-mark-from:hsl(var(--space-hue-from) 64% 55%); --space-mark-to:hsl(var(--space-hue-to) 68% 36%); display:block; width:100%; height:100%; border-radius:inherit; background:linear-gradient(135deg, color-mix(in srgb, var(--space-mark-from) 80%, white), var(--space-mark-from) 42%, var(--space-mark-to)); box-shadow:inset 0 1px 0 #ffffff4d, inset 0 -1px 0 #00000024; }
+   edge on top. The fill is smaller than the tile (user, 2026-10-05: the whole tile read too big beside the icons),
+   and the tile keeps no ground of its own: hover brightens the fill and the open space wears a ring around it,
+   since a tint behind a fill would be a background inside a background. */
+.space-mark { --space-mark-from:hsl(var(--space-hue-from) 64% 55%); --space-mark-to:hsl(var(--space-hue-to) 68% 36%); --space-mark-edge:inset 0 1px 0 #ffffff4d, inset 0 -1px 0 #00000024; display:block; width:32px; height:32px; border-radius:10px; background:linear-gradient(135deg, color-mix(in srgb, var(--space-mark-from) 80%, white), var(--space-mark-from) 42%, var(--space-mark-to)); box-shadow:var(--space-mark-edge); }
 .area-tile:has(> .space-mark), .area-tile:has(> .space-mark):hover:not(:disabled), .area-tile.active:has(> .space-mark) { background:transparent; }
 .area-tile:has(> .space-mark):hover:not(:disabled) > .space-mark { filter:brightness(1.1); }
-.area-tile.active:has(> .space-mark) { box-shadow:0 0 0 2px var(--window), 0 0 0 4px var(--text); }
+.area-tile.active > .space-mark { box-shadow:var(--space-mark-edge), 0 0 0 2px var(--window), 0 0 0 4px var(--text); }
 /* A tile's name, beside it while the pointer is on it. It is placed on the window because the rail scrolls and would
    clip it, and it takes no pointer so it never stands between the pointer and the sidebar. */
 .area-tip { position:fixed; z-index:30; transform:translateY(-50%); max-width:260px; padding:6px 10px; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--bg); box-shadow:0 8px 24px #0000001f; color:var(--text); font-size:13px; font-weight:600; line-height:1.3; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
