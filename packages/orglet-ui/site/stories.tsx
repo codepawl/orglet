@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react';
+import { useMemo, type ComponentType, type ReactNode } from 'react';
 
 // The stories are written for Storybook, but a story is only data: a component, some args, perhaps a render
 // function and a decorator or two. Drawing one takes a few lines, so the site does it itself and never loads
@@ -38,17 +38,18 @@ function StoryBody({ meta, story, args }: { meta: StoryMeta; story: StoryObject;
 
 /** One story, drawn the way Storybook would: args merged, the render function or the component, decorators around it. */
 export function StoryView({ storyModule, exportName }: { storyModule: StoryModule; exportName: string }) {
-  const meta = storyModule.default;
-  const story = storyOf(storyModule, exportName);
-  if (!story) return null;
-  const args = { ...meta.args, ...story.args };
-  const decorators = [...(story.decorators ?? []), ...(meta.decorators ?? [])];
-  let Wrapped: ComponentType = () => <StoryBody meta={meta} story={story} args={args} />;
-  for (const decorator of decorators) {
-    const Inner = Wrapped;
-    Wrapped = () => <>{decorator(Inner, { args })}</>;
-  }
-  return <Wrapped />;
+  // Built once per story: a component made anew on every render would remount, and a story would lose its state
+  // each time the page around it redraws.
+  const Wrapped = useMemo(() => {
+    const meta = storyModule.default;
+    const story = storyOf(storyModule, exportName);
+    if (!story) return null;
+    const args = { ...meta.args, ...story.args };
+    const decorators = [...(story.decorators ?? []), ...(meta.decorators ?? [])];
+    const Body: ComponentType = () => <StoryBody meta={meta} story={story} args={args} />;
+    return decorators.reduce<ComponentType>((Inner, decorator) => () => <>{decorator(Inner, { args })}</>, Body);
+  }, [storyModule, exportName]);
+  return Wrapped ? <Wrapped /> : null;
 }
 
 /** Runs the story's `play` function, which a few stories use to open their menu or dialog. */

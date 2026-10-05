@@ -2,7 +2,7 @@
 name: Icons
 exports: AlertIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, BellIcon, BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, CloseIcon, CodeIcon, CopyIcon, DownloadIcon, ErrorIcon, EyeIcon, FileIcon, FileTextIcon, GitHubIcon, IconProps, InfoIcon, MenuIcon, MinusIcon, MonitorIcon, MoonIcon, MoreHorizontalIcon, MoreVerticalIcon, PackageIcon, PencilIcon, PlusIcon, SearchIcon, SettingsIcon, SuccessIcon, SunIcon, TrashIcon, UserIcon
 group: Foundations
-summary: The basic icons an application needs, drawn on one grid with one stroke, so no icon library is required.
+summary: Pips, the kit's own icons: the basics an application needs, drawn on one grid with one stroke.
 ---
 
 ## When to use

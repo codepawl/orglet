@@ -3,9 +3,9 @@ name: orglet-ui
 description: Use when building, changing or reviewing React UI in a project that depends on @codepawlhq/orglet-ui. Picks the kit component for each control, shows where its reference page is, and lists the rules the kit's design follows.
 ---
 
-# Orglet UI
+# OUI (Orglet UI)
 
-`@codepawlhq/orglet-ui` is a small set of accessible React 19 components and the `--org-` tokens they read. Use one of
+OUI is `@codepawlhq/orglet-ui`, a small set of accessible React 19 components and the `--org-` tokens they read. Use one of
 its components before writing a raw `<button>`, `<input>`, `<select>`, dialog, menu, tooltip or toast.
 
 ## Set up
@@ -28,7 +28,7 @@ accessibility notes. In an installed package the pages are in `node_modules/@cod
 <!-- components:start -->
 | Need | Use | Page |
 |---|---|---|
-| The basic icons an application needs, drawn on one grid with one stroke, so no icon library is required. | `AlertIcon`, `ArrowLeftIcon`, `ArrowRightIcon`, `ArrowUpRightIcon`, `BellIcon`, `BookIcon`, `CalendarIcon`, `CheckIcon`, `ChevronDownIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronUpIcon`, `CloseIcon`, `CodeIcon`, `CopyIcon`, `DownloadIcon`, `ErrorIcon`, `EyeIcon`, `FileIcon`, `FileTextIcon`, `GitHubIcon`, `InfoIcon`, `MenuIcon`, `MinusIcon`, `MonitorIcon`, `MoonIcon`, `MoreHorizontalIcon`, `MoreVerticalIcon`, `PackageIcon`, `PencilIcon`, `PlusIcon`, `SearchIcon`, `SettingsIcon`, `SuccessIcon`, `SunIcon`, `TrashIcon`, `UserIcon` | [Icons](../../docs/components/Icons.md) |
+| Pips, the kit's own icons: the basics an application needs, drawn on one grid with one stroke. | `AlertIcon`, `ArrowLeftIcon`, `ArrowRightIcon`, `ArrowUpRightIcon`, `BellIcon`, `BookIcon`, `CalendarIcon`, `CheckIcon`, `ChevronDownIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronUpIcon`, `CloseIcon`, `CodeIcon`, `CopyIcon`, `DownloadIcon`, `ErrorIcon`, `EyeIcon`, `FileIcon`, `FileTextIcon`, `GitHubIcon`, `InfoIcon`, `MenuIcon`, `MinusIcon`, `MonitorIcon`, `MoonIcon`, `MoreHorizontalIcon`, `MoreVerticalIcon`, `PackageIcon`, `PencilIcon`, `PlusIcon`, `SearchIcon`, `SettingsIcon`, `SuccessIcon`, `SunIcon`, `TrashIcon`, `UserIcon` | [Icons](../../docs/components/Icons.md) |
 | A button in four looks, or a square holding one icon. | `Button` | [Button](../../docs/components/Button.md) |
 | A menu of a row's actions behind one icon button, with an in-panel question for destructive items. | `RowMenu` | [RowMenu](../../docs/components/RowMenu.md) |
 | One choice out of a few small icon buttons, such as the tool or colour of a drawing bar. | `ToolbarToggleGroup` | [ToolbarToggleGroup](../../docs/components/ToolbarToggleGroup.md) |
@@ -79,10 +79,13 @@ accessibility notes. In an installed package the pages are in `node_modules/@cod
 7. **No separator lines and no alert with a coloured left border.** Separate with spacing, grouping or a quiet
    background (`Card`).
 8. **One primary action per place.** The rest step down to `outline` and `ghost`. Icons sit left of the text.
-9. **A hover label is a `Tooltip`**, not a `title` attribute. Detail a person may copy goes in an `InfoTip`.
-10. **A close button belongs to a centred dialog** (`Drawer`, `Viewer`, `TabbedDialog`). A panel or page is left by
+9. **Icons come from the kit first.** Its own set, Pips (`CheckIcon`, `CopyIcon`, `SearchIcon` and the rest, see the
+   Icons page), is decorative by default and sits left of the text. Another icon set still works anywhere the kit
+   takes an icon.
+10. **A hover label is a `Tooltip`**, not a `title` attribute. Detail a person may copy goes in an `InfoTip`.
+11. **A close button belongs to a centred dialog** (`Drawer`, `Viewer`, `TabbedDialog`). A panel or page is left by
     navigating or by the toggle that opened it.
-11. **Do not rebuild keyboard handling.** Focus return, Escape order inside dialogs, arrow keys and roles are part of
+12. **Do not rebuild keyboard handling.** Focus return, Escape order inside dialogs, arrow keys and roles are part of
     each component. If one is missing something, fix the component.
 
 ## When nothing fits

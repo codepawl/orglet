@@ -95,9 +95,9 @@ function componentTable(pages, linkPrefix) {
 
 function llmsIndex(pages) {
   const lines = [
-    '# Orglet UI',
+    '# OUI (Orglet UI)',
     '',
-    '> @codepawlhq/orglet-ui: a small set of accessible React 19 components and the `--org-` tokens they read.',
+    '> OUI is @codepawlhq/orglet-ui: a small set of accessible React 19 components and the `--org-` tokens they read.',
     '> Import `@codepawlhq/orglet-ui/tokens.css` once, then import components by name from `@codepawlhq/orglet-ui`.',
     '',
     'Rules that hold for every component: text comes in as props, `className` is applied last, colours come from',

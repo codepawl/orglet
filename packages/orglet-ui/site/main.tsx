@@ -235,7 +235,9 @@ function OnThisPage({ sections }: { sections: string[] }) {
 function importLine(page: ComponentPage): string {
   const typeNames = /(Props|Labels|Option|Item|Row|Tone|Variant|State|Size|Action|Kind|Tab|Side)$/;
   const values = page.exports.filter(name => name === page.name || !typeNames.test(name));
-  return `import { ${values.join(', ')} } from '${packageManifest.name}';`;
+  // A page with dozens of exports, such as the icons, shows a few: the line is an example, not the list.
+  const shown = values.length > 6 ? values.slice(0, 3) : values;
+  return `import { ${shown.join(', ')} } from '${packageManifest.name}';`;
 }
 
 function ComponentView({ page, theme, zoom, navigate }: { page: ComponentPage; theme: Theme; zoom: number; navigate: (path: string) => void }) {

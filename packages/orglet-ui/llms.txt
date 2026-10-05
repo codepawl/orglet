@@ -1,6 +1,6 @@
-# Orglet UI
+# OUI (Orglet UI)
 
-> @codepawlhq/orglet-ui: a small set of accessible React 19 components and the `--org-` tokens they read.
+> OUI is @codepawlhq/orglet-ui: a small set of accessible React 19 components and the `--org-` tokens they read.
 > Import `@codepawlhq/orglet-ui/tokens.css` once, then import components by name from `@codepawlhq/orglet-ui`.
 
 Rules that hold for every component: text comes in as props, `className` is applied last, colours come from
@@ -9,7 +9,7 @@ Rules that hold for every component: text comes in as props, `className` is appl
 
 ## Foundations
 
-- [Icons](docs/components/Icons.md): The basic icons an application needs, drawn on one grid with one stroke, so no icon library is required.
+- [Icons](docs/components/Icons.md): Pips, the kit's own icons: the basics an application needs, drawn on one grid with one stroke.
 
 ## Actions
 

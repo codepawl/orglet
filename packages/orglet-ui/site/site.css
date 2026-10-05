@@ -882,3 +882,24 @@ pre:focus-visible,
     gap: 0.9rem;
   }
 }
+
+/* On a phone the header holds the mark, two links and the theme switch: the links drop their glyphs to fit. */
+@media (max-width: 560px) {
+  .site-nav a svg {
+    display: none;
+  }
+
+  .site-header-inner {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .site-nav {
+    gap: 0.6rem;
+  }
+
+  .site-brand {
+    gap: 0.4rem;
+  }
+}
