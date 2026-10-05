@@ -30,10 +30,10 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet forward --to <name> --target <name>` | Forwards a message to up to five other chats. See [forward](#forward). |
 | `orglet answer "<answer>" --to <name>` | Answers the question an orglet is waiting on. See [answer](#answer). |
 | `orglet stop\|pause\|resume\|retry\|continue --to <name>` | The buttons under a chat's latest turn. See [Stop, pause, resume, retry, continue](#stop-pause-resume-retry-continue). |
-| `orglet chats [--archived]` | Lists chats, side threads and channels with the short id `--chat` takes. See [Chats by id](#chats-by-id). |
+| `orglet chats [--archived] [--space <name>]` | Lists chats, side threads and channels with the short id `--chat` takes; `--space` lists only that space's channels. See [Chats by id](#chats-by-id). |
 | `orglet side "message" --to <orglet>` | Sends a message in a new side thread of that orglet |
 | `orglet bring --chat <id>` | Brings a side thread's answer into its main chat |
-| `orglet channel "message" --with <name> [--name <name>] [--topic <topic>]` | Creates a channel of those orglets and sends its first message (`group` is the older name) |
+| `orglet channel "message" --with <name> [--name <name>] [--topic <topic>] [--space <name> [--category <name>]]` | Creates a channel of those orglets and sends its first message (`group` is the older name). With `--space` the channel is in that space. |
 | `orglet members --chat <id> --with <name> …` | Changes who is in a channel |
 | `orglet rename\|archive --to <name> \| --chat <id>` | Renames or archives a chat; `restore --chat <id>` brings it back |
 | `orglet delete --chat <id> --confirm "<chat name>"` | Deletes a chat after its exact name |
@@ -383,7 +383,7 @@ orglet send "And the budget?" --chat c41d0e88
 orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 ```
 
-`channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
+`channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. `--space <name>` puts the channel in that space, and `--category <name>` in one of its categories; a space is found by its name or the start of it. In a space `--with` can be left out: the channel then takes every orglet of its category or space and follows that list when it changes. With `--with` it keeps the orglets named. `orglet chats --space <name>` lists only the channels of that space. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
 
 ### Rename, archive, restore and delete chats
 

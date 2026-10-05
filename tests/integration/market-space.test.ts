@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { parseMarketTemplate } from '../../apps/desktop/src/core/market/templates';
+import { projectPublishingSource } from '../../apps/desktop/src/core/market/projection';
+import { validateMarketSubmission } from '../../apps/desktop/src/shared/market-publishing';
 import { MARKET_SEED_BODIES, seedCatalog } from '../../apps/desktop/src/shared/market-seed';
 import { MarketOrigins, type MarketAdded, type MarketInstallation } from '../../apps/desktop/src/shared/market';
 
@@ -68,6 +70,40 @@ describe('a space listing', () => {
     expect(channels.drafts.members.map(member => nameOf(member.id))).toEqual(['Writing friend', 'Review friend']);
     // The listing sets no permission and no folder for the person who adds it.
     expect(workspace.newChatCapabilities).toEqual({});
+  });
+
+  it('is projected for publishing with its categories, channels and orglets, and nothing private', async () => {
+    const added = await core.command('marketAdd', { listingId: 'launch-space', version: 1 }) as MarketAdded;
+    const space = store.workspace().spaces.find(item => item.id === added.entityId)!;
+    await core.command('updateSpace', { id: space.id, name: space.name, orgletIds: space.orgletIds, categories: space.categories, defaults: { capabilities: ['network.web'] } });
+    const { template, fingerprint } = projectPublishingSource(store, { kind: 'space', entityId: added.entityId });
+    if (!('space' in template)) throw new Error('Expected a space projection');
+    const keyOf = (name: string) => template.workers.find(worker => worker.name === name)!.key;
+    expect(template.space.name).toBe('Launch');
+    expect(template.space.categories).toEqual([{ key: 'category-1', name: 'Research' }, { key: 'category-2', name: 'Writing' }]);
+    expect(template.space.channels).toEqual([
+      { name: 'general', topic: 'Plan the launch and decide what happens next' },
+      { name: 'sources', topic: 'Find and check the evidence', categoryKey: 'category-1', memberKeys: [keyOf('Research friend'), keyOf('Review friend')] },
+      { name: 'drafts', topic: 'Write and review the copy', categoryKey: 'category-2', memberKeys: [keyOf('Writing friend'), keyOf('Review friend')] },
+    ]);
+    expect(template.workers).toHaveLength(3);
+    // Local ids, the space's permission defaults and its colour stay on this computer.
+    const text = JSON.stringify(template);
+    expect(text).not.toContain(added.entityId);
+    for (const workerId of added.workerIds) expect(text).not.toContain(workerId);
+    expect(text).not.toMatch(/network\.web|capabilities|defaults/);
+    const checked = await validateMarketSubmission(JSON.stringify({ kind: 'space', name: 'Launch', summary: 'A space for a launch.', tags: [], language: 'en', license: 'CC-BY-4.0', changelog: '', template }));
+    expect(checked.ok).toBe(true);
+    // Renaming a channel changes what a preview was made from.
+    const general = store.workspace().emptyChannels.find(channel => channel.spaceId === added.entityId && channel.name === 'general')!;
+    await core.command('updateChannel', { id: general.id, name: 'plans', topic: general.topic ?? '', members: general.members });
+    expect(projectPublishingSource(store, { kind: 'space', entityId: added.entityId }).fingerprint).not.toBe(fingerprint);
+  });
+
+  it('is not projected once deleted', async () => {
+    const added = await core.command('marketAdd', { listingId: 'launch-space', version: 1 }) as MarketAdded;
+    await core.command('deleteSpace', { id: added.entityId });
+    expect(() => projectPublishingSource(store, { kind: 'space', entityId: added.entityId })).toThrow('Không gian này đã bị xóa.');
   });
 
   it('records where the space came from, lists it as installed, and stops listing it once the space is deleted', async () => {

@@ -140,7 +140,7 @@ it('projects ordered crew reference closure with shared skills and only approved
     store.put('knowledge', note);
   }
   const result = projectPublishingSource(store, { kind: 'crew', entityId: team.id });
-  if (!('workers' in result.template)) throw new Error('Expected crew projection');
+  if (!('team' in result.template)) throw new Error('Expected crew projection');
   expect(result.template.workers.map(worker => worker.name)).toEqual([member.name, lead.name]);
   expect(result.template.skills).toHaveLength(1);
   expect(result.template.workers.map(worker => worker.skillKey)).toEqual(['skill-1', 'skill-1']);

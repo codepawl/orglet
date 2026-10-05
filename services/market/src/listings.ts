@@ -4,6 +4,7 @@ import {
   MarketOwnerPage, type MarketListingV2 as PublicListing,
 } from '../../../apps/desktop/src/shared/market';
 import { canonicalMarketContent, type MarketSubmissionResult } from '../../../apps/desktop/src/shared/market-publishing';
+import type { MarketKind } from '../../../apps/desktop/src/shared/market';
 import type { MarketIdentity } from './auth';
 import { bodyChunks, joinBody, sha256 } from './content';
 import { OwnerSummaries } from '../../../apps/desktop/src/shared/market-desktop';
@@ -182,12 +183,18 @@ export async function listingBody(database: D1Database, listingId: string, versi
   return { bytes, hash: row.body_sha256 };
 }
 
-export async function approvedListings(database: D1Database, after: string, limit: number): Promise<PublicListing[]> {
+/**
+ * The approved listings of these kinds. An app from before spaces names no kinds and is given only the kinds it has
+ * always understood, so a space an account published never reaches a reader that would fail on it.
+ */
+export async function approvedListings(database: D1Database, after: string, limit: number, kinds: readonly MarketKind[]): Promise<PublicListing[]> {
+  // The kinds are checked against the enum by the caller; they are still bound, never written into the statement.
+  const placeholders = kinds.map(() => '?').join(',');
   const rows = await database.withSession('first-primary').prepare(`
     SELECT versions.* FROM listings JOIN listing_versions AS versions ON versions.listing_id = listings.listing_id
       AND versions.version = listings.published_version JOIN version_reviews AS reviews USING(listing_id, version)
-    WHERE reviews.state = 'approved' AND listings.moderation_hidden=0 AND listings.listing_id > ? ORDER BY listings.listing_id LIMIT ?
-  `).bind(after, limit).all<VersionRow>();
+    WHERE reviews.state = 'approved' AND listings.moderation_hidden=0 AND listings.kind IN (${placeholders}) AND listings.listing_id > ? ORDER BY listings.listing_id LIMIT ?
+  `).bind(...kinds, after, limit).all<VersionRow>();
   return rows.results.map(publicListing);
 }
 

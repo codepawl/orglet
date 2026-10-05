@@ -54,7 +54,7 @@ export async function catalogPageV2(search: URLSearchParams, database?: D1Databa
     }
     const candidates = [
       ...listings.filter(listing => listing.listingId > after),
-      ...await approvedListings(database, after, limit + 1),
+      ...await approvedListings(database, after, limit + 1, kinds),
     ].sort((left, right) => left.listingId < right.listingId ? -1 : left.listingId > right.listingId ? 1 : 0);
     const page = candidates.slice(0, limit);
     return JSON.stringify(MarketCatalogPageV2.parse({

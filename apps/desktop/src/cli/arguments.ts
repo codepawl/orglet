@@ -35,10 +35,10 @@ export type ParsedCommand =
   | ({ kind: 'control'; action: ChatControl; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | ({ kind: 'revise'; text: string; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | ({ kind: 'answer'; answer: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
-  | { kind: 'chats'; archived: boolean; json: boolean }
+  | { kind: 'chats'; archived: boolean; space?: string; json: boolean }
   | ({ kind: 'side'; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | { kind: 'bring'; chat: string; message?: string; json: boolean }
-  | { kind: 'channel'; names: string[]; message: string; name?: string; topic?: string; wait: boolean; timeoutSeconds: number; json: boolean }
+  | { kind: 'channel'; names: string[]; message: string; name?: string; topic?: string; space?: string; category?: string; wait: boolean; timeoutSeconds: number; json: boolean }
   | { kind: 'members'; chat: string; names: string[]; json: boolean }
   | ({ kind: 'chat-change'; change: ChatChange; title?: string; confirmName?: string; json: boolean } & ChatTarget)
   | { kind: 'archive-entity'; entity: 'worker' | 'team'; name: string; archived: boolean; json: boolean }
@@ -135,7 +135,7 @@ Exit codes: 0 ok, 1 failure, 2 usage error, 3 app not reachable.`;
 
 /** The help of `orglet channel` and of `orglet group`, its older name (COD-361). */
 function channelHelp(command: 'channel' | 'group'): string {
-  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
+  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\nVới --space, kênh nằm trong không gian đó; bỏ --with thì kênh nhận mọi Tí\ncủa không gian hoặc của mục.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --space <tên>        Không gian chứa kênh\n  --category <tên>     Mục của không gian đó chứa kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
 }
 
 export const COMMAND_HELP: Record<CommandName, string> = {
@@ -206,7 +206,7 @@ Example:
   answer: t("Cách dùng: orglet answer \"<câu trả lời>\" --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nTrả lời câu hỏi Tí đang chờ, rồi đợi lượt chạy tiếp như send. Gõ số của một\nlựa chọn (1, 2, 3) hoặc câu của bạn. read và send in câu hỏi cùng các lựa\nchọn. Câu hỏi xin quyền dùng công cụ MCP chỉ trả lời được trong app.\n\nTùy chọn:\n  --to <tên>           Tí hoặc kênh (bắt buộc)\n  --no-wait            Trả về ngay sau khi trả lời\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
   revise: t('Cách dùng: orglet revise "<chữ đã sửa>" --to <tên> --message <số> [--no-wait] [--timeout <giây>] [--json]\n\nSửa tin nhắn của bạn và chạy một lượt mới với tệp gốc còn được phép dùng.\nLịch sử cũ giữ nguyên. Chờ lượt đang chạy dừng trước khi sửa. Dùng --chat <mã> để chọn chat theo mã.'),
   ...controlHelp(),
-  chats: t("Cách dùng: orglet chats [--archived] [--json]\n\nLiệt kê chat, mới nhất trước: chat chính của Tí và kênh, chat phụ, kênh và lần\nchạy của lịch, mỗi chat có mã ngắn. Dùng mã với --chat trong các lệnh khác.\n\nTùy chọn:\n  --archived     Chỉ liệt kê chat đã lưu trữ\n  --json         In JSON cho máy đọc"),
+  chats: t("Cách dùng: orglet chats [--archived] [--space <tên>] [--json]\n\nLiệt kê chat, mới nhất trước: chat chính của Tí và kênh, chat phụ, kênh và lần\nchạy của lịch, mỗi chat có mã ngắn. Dùng mã với --chat trong các lệnh khác.\n\nTùy chọn:\n  --archived     Chỉ liệt kê chat đã lưu trữ\n  --space <tên>  Chỉ liệt kê kênh của không gian này\n  --json         In JSON cho máy đọc"),
   side: t("Cách dùng: orglet side \"<tin nhắn>\" --to <tên Tí> [--no-wait] [--timeout <giây>] [--json]\n\nGửi tin trong một chat phụ mới của Tí, như \"Gửi trong luồng mới\" trong app.\nChat phụ mang quyền, thư mục và MCP của chat chính, không bao giờ rộng hơn.\nChat chính giữ nguyên. Lệnh in mã của chat phụ để nhắn tiếp bằng --chat.\n\nTùy chọn:\n  --to <tên>           Tí có chat chính (hoặc --chat <mã> của chat đó)\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
   bring: t("Cách dùng: orglet bring --chat <mã chat phụ> [--message <số>] [--json]\n\nĐưa một câu trả lời của chat phụ vào chat chính dưới dạng trích dẫn. Không\nchạy lượt mới nào. Mặc định là câu trả lời mới nhất.\n\nTùy chọn:\n  --chat <mã>        Chat phụ (bắt buộc)\n  --message <số>     Câu trả lời theo số của read --turns, như 2.1\n  --json             In JSON cho máy đọc"),
   channel: channelHelp('channel'),
@@ -296,18 +296,20 @@ type Options = {
   provider?: string;
   channelName?: string;
   topic?: string;
+  space?: string;
+  category?: string;
   files: string[];
   targets: string[];
   members: string[];
   positionals: string[];
 };
 
-type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' | 'message' | 'replyTo' | 'note' | 'title' | 'provider' | 'channelName' | 'topic'
+type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' | 'message' | 'replyTo' | 'note' | 'title' | 'provider' | 'channelName' | 'topic' | 'space' | 'category'
   | 'brief' | 'every' | 'at' | 'day' | 'timezone' | 'budget' | 'dailyCap' | 'rename'
   | 'query' | 'text' | 'language' | 'theme';
 
 /** Options that take a value, written as `--to Researcher` or `--to=Researcher`. */
-const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider', '--name', '--topic',
+const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider', '--name', '--topic', '--space', '--category',
   '--brief', '--every', '--at', '--day', '--timezone', '--budget', '--daily-cap', '--rename', '--query', '--text', '--language', '--theme']);
 /** The options of the library, memory and preferences commands, the field each fills and who takes it (COD-354). */
 const LIBRARY_OPTIONS: readonly [string, SingleOption, CommandName][] = [['--query', 'query', 'library'], ['--text', 'text', 'memory'], ['--language', 'language', 'preferences'], ['--theme', 'theme', 'preferences']];
@@ -328,6 +330,8 @@ const SINGLE_OPTIONS: Record<string, SingleOption> = {
   '--provider': 'provider',
   '--name': 'channelName',
   '--topic': 'topic',
+  '--space': 'space',
+  '--category': 'category',
   ...Object.fromEntries(SCHEDULE_OPTIONS),
   ...Object.fromEntries(LIBRARY_OPTIONS.map(([option, key]) => [option, key])),
 };
@@ -350,6 +354,8 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
   { option: '--with', given: options => options.members.length > 0, commands: ['channel', 'group', 'members'] },
   { option: '--name', given: options => options.channelName !== undefined, commands: ['channel', 'group'] },
   { option: '--topic', given: options => options.topic !== undefined, commands: ['channel', 'group'] },
+  { option: '--space', given: options => options.space !== undefined, commands: ['channel', 'group', 'chats'] },
+  { option: '--category', given: options => options.category !== undefined, commands: ['channel', 'group'] },
   { option: '--title', given: options => options.title !== undefined, commands: ['rename'] },
   { option: '--provider', given: options => options.provider !== undefined, commands: ['template'] },
   { option: '--archived', given: options => options.archived, commands: ['chats'] },
@@ -528,7 +534,7 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'resume':
     case 'retry':
     case 'continue': return parseControl(command, options);
-    case 'chats': return { kind: 'chats', archived: options.archived, json };
+    case 'chats': return { kind: 'chats', archived: options.archived, ...(options.space?.trim() ? { space: options.space.trim() } : {}), json };
     case 'side': return parseSide(options);
     case 'bring': return parseBring(options);
     case 'channel':
@@ -666,8 +672,16 @@ function parseChannel(command: 'channel' | 'group', options: Options): ParsedCom
   if (!message) throw new UsageError(t("Gõ tin nhắn đầu tiên, ví dụ: orglet {0} \"Chào cả kênh\" --with Researcher --with Writer", command));
   const name = options.channelName?.trim();
   const topic = options.topic?.trim();
+  const space = options.space?.trim();
+  const category = options.category?.trim();
+  if (options.space !== undefined && !space) throw new UsageError(t("Gõ tên không gian sau --space."));
+  if (options.category !== undefined && !category) throw new UsageError(t("Gõ tên mục sau --category."));
+  if (category && !space) throw new UsageError(t("--category cần --space <tên không gian>."));
+  // In a space a channel with no --with takes every orglet of its place.
+  const names = space && !options.members.some(member => member.trim()) ? [] : memberNames(options);
   return {
-    kind: 'channel', names: memberNames(options), message, ...(name ? { name } : {}), ...(topic ? { topic } : {}),
+    kind: 'channel', names, message, ...(name ? { name } : {}), ...(topic ? { topic } : {}),
+    ...(space ? { space } : {}), ...(category ? { category } : {}),
     wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json,
   };
 }

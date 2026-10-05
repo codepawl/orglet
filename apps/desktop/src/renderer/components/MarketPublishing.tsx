@@ -12,21 +12,31 @@ import { confirmAction } from './confirm';
 import { providerName } from './workerModel';
 import type { MarketSubmission } from '../../shared/market-publishing';
 
-type Source = { kind: 'orglet' | 'crew'; entityId: string; name: string };
+type Source = { kind: 'orglet' | 'crew' | 'space'; entityId: string; name: string };
+
+/** The orglets a source shares: the orglet itself, a crew's members and lead, or the orglets of a space. */
+function sourceOrgletIds(workspace: Workspace, source: Source): string[] {
+  if (source.kind === 'space') return [...(workspace.spaces.find(item => item.id === source.entityId)?.orgletIds ?? [])];
+  const team = source.kind === 'crew' ? workspace.teams.find(item => item.id === source.entityId) : undefined;
+  return team ? [...new Set([...team.memberIds, team.synthesizerId])] : [source.entityId];
+}
 
 export function publishingRequiresSuggestion(workspace: Workspace, source: Source): boolean {
-  const team = source.kind === 'crew' ? workspace.teams.find(item => item.id === source.entityId) : undefined;
-  const ids = team ? [...team.memberIds, team.synthesizerId] : [source.entityId];
+  const ids = sourceOrgletIds(workspace, source);
   return workspace.workers.some(worker => ids.includes(worker.id) && worker.provider.startsWith('custom:'));
 }
 
 /** UI invalidation signal only; core independently verifies full persisted rows before dispatch. */
 export function publishingSourceRevision(workspace: Workspace, source: Source): string {
   const team = source.kind === 'crew' ? workspace.teams.find(item => item.id === source.entityId) : undefined;
-  const memberIds = team ? [...new Set([...team.memberIds, team.synthesizerId])] : [source.entityId];
+  const memberIds = sourceOrgletIds(workspace, source);
   const workers = workspace.workers.filter(worker => memberIds.includes(worker.id));
   const skillIds = new Set(workers.map(worker => worker.skillId));
+  const space = source.kind === 'space' ? workspace.spaces.find(item => item.id === source.entityId) : undefined;
+  const inSpace = (channel: { spaceId?: string } | undefined) => Boolean(space) && channel?.spaceId === space?.id;
   return JSON.stringify({
+    // A space's listing follows its channels too: one added, renamed or given other orglets makes the preview stale.
+    space: space ? [space, workspace.tasks.filter(task => inSpace(task.channel)).map(task => task.channel), workspace.emptyChannels.filter(inSpace)] : null,
     team: team ? [team.id, team.revision] : null,
     workers: workers.map(worker => [worker.id, worker.revision, worker.skillId]),
     skills: workspace.skills.filter(skill => skillIds.has(skill.id)).map(skill => [skill.id, skill.revision]),
@@ -248,7 +258,7 @@ export function MarketOwnListings() {
   }, []);
   return <section className="market-own" aria-label={t('Mục của tôi')}>
     <div className="market-own-content">
-    <p className="muted">{t('Để chia sẻ mẫu, mở menu của một Tí hoặc crew rồi chọn Xuất bản lên marketplace. Bạn luôn xem trước nội dung trước khi gửi.')}</p>
+    <p className="muted">{t('Để chia sẻ mẫu, mở menu của một Tí, một crew hoặc một không gian rồi chọn Xuất bản lên marketplace. Bạn luôn xem trước nội dung trước khi gửi.')}</p>
     <Button type="button" variant="outline" disabled={busy} onClick={() => void run({ action: 'listOwn' })}><RefreshCw size={16} />{t('Làm mới mục của tôi')}</Button>
     {!view && busy && <div className="marketplace-loading" aria-label={t('Đang tải mục của tôi')}><div /><div /></div>}
     {error && <p className="error" role="alert">{error}</p>}
