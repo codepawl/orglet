@@ -121,6 +121,7 @@ import { ActivityPage, activityTabLabel, activityCounts } from './components/Act
 import { MemberColumn } from './components/MemberColumn';
 import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
+import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
 import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
 import { ConnectWays, type ConnectWay } from './components/ConnectWays';
@@ -363,6 +364,7 @@ export function App() {
   const [spaceDraft, setSpaceDraft] = useState<SpaceDraft>();
   // Where a dragged channel would land in the open space: a category's id, or `root` for directly in the space.
   const [channelDropAt, setChannelDropAt] = useState<string>();
+  const [categoryDraft, setCategoryDraft] = useState<CategoryDraft>();
   const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
   const [friendsOpen, setFriendsOpen] = useState(false);
   // Which of Home's two pages is open: making an orglet, or the marketplace, which has its own row in the sidebar.
@@ -2393,7 +2395,7 @@ export function App() {
         {/* What a space holds is made from its + (user, 2026-10-05): a channel, or a category for channels to sit in. */}
         {sidebarSpace && <RowMenu label={t('Tạo trong không gian {0}', [sidebarSpace.name])} icon={Plus} className="org-button-icon" items={[
           { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({ spaceId: sidebarSpace.id }) },
-          { label: t('Tạo nhóm'), icon: FolderTree, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'categories', newCategory: true }) },
+          { label: t('Tạo nhóm'), icon: FolderTree, onSelect: () => setCategoryDraft({ space: sidebarSpace }) },
         ]} />}
         {sidebarSpace && <RowMenu label={t('Tùy chọn không gian {0}', [sidebarSpace.name])} icon={EllipsisVertical} className="org-button-icon" items={[
           { label: t('Thiết lập không gian'), icon: SlidersHorizontal, onSelect: () => setSpaceDraft({ space: sidebarSpace }) },
@@ -2652,6 +2654,7 @@ export function App() {
     {publishingSource && <MarketPublishingDialog key={`${publishingSource.kind}:${publishingSource.entityId}`} source={publishingSource} sourceRevision={publishingSourceRevision(workspace, publishingSource)} requiresSuggestion={publishingRequiresSuggestion(workspace, publishingSource)} onClose={() => setPublishingSource(undefined)} />}
     {spaceDraft && <SpaceDialog key={`space:${spaceDraft.space?.id ?? 'new'}`} open draft={spaceDraft} workspace={workspace} onClose={() => setSpaceDraft(undefined)}
       onCreated={spaceId => { setOpenSpace(spaceId); setArea('channels'); }} />}
+    {categoryDraft && <CategoryDialog key={`category:${categoryDraft.space.id}`} open draft={categoryDraft} workspace={workspace} onClose={() => setCategoryDraft(undefined)} />}
     {channelDraft && <ChannelDialog key={`channel:${channelDraft.id ?? 'new'}`} open draft={channelDraft} workspace={workspace} onClose={() => setChannelDraft(undefined)} onCreated={channelCreated} />}
     {privacyTaskId && workspace.tasks.find(task => task.id === privacyTaskId) && <LocalOnlyDialog key={`privacy:${privacyTaskId}`} task={workspace.tasks.find(task => task.id === privacyTaskId)!} workspace={workspace} onClose={() => setPrivacyTaskId(undefined)} />}
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />

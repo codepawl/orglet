@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openChannels, openHome, openSettings } from './smoke-language.mjs';
+import { useVietnamese, openHome, openSettings } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 // Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
@@ -41,8 +41,8 @@ try {
   await page.getByRole('button', { name: 'Schedule this message', exact: true }).waitFor();
   assert.ok(await page.locator('.suggestions button').count() > 1, 'the empty chat offers starters');
   await page.getByRole('button', { name: 'New orglet', exact: true }).first().waitFor();
-  await openChannels(page);
-  await page.getByRole('button', { name: 'Create channel', exact: true }).first().waitFor();
+  // The rail's + makes a space; a channel is made inside one.
+  await page.getByRole('button', { name: 'Create space', exact: true }).first().waitFor();
   assert.equal(await page.getByRole('button', { name: 'New task', exact: true }).count(), 0);
   assert.equal(await page.getByRole('navigation', { name: 'All tasks' }).count(), 0);
   await page.getByRole('button', { name: /^Schedules/ }).click();

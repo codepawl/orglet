@@ -75,6 +75,15 @@ try {
   // A channel in the space takes every orglet of the space, and only they answer.
   await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo trong không gian Launch', exact: true }).click();
   assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Tạo kênh', 'Tạo nhóm'], 'the space\'s + makes a channel or a category');
+  // Create category opens a dialog of its own, which adds the category to the space.
+  await page.getByRole('menuitem', { name: 'Tạo nhóm', exact: true }).click();
+  const categoryDialog = page.getByRole('dialog');
+  await categoryDialog.getByRole('heading', { name: 'Nhóm mới', exact: true }).waitFor();
+  await categoryDialog.getByRole('textbox', { name: 'Tên nhóm' }).fill('Review');
+  await categoryDialog.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
+  await categoryDialog.waitFor({ state: 'detached' });
+  assert.deepEqual((await workspace(page)).spaces.find(space => space.name === 'Launch').categories.map(category => category.name), ['Copy', 'Review']);
+  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo trong không gian Launch', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Tạo kênh', exact: true }).click();
   const channelDialog = page.getByRole('dialog');
   await channelDialog.getByRole('textbox', { name: 'Tên kênh' }).fill('general');
