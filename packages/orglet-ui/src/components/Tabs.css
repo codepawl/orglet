@@ -21,7 +21,7 @@
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--org-motion-quick, 110ms) var(--org-ease-out, ease), color var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+  transition: background-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), color var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
 }
 .org-tab:hover:not(:disabled):not([aria-selected=true]) {
   background: var(--org-sidebar, #f7f7f8);
@@ -32,13 +32,17 @@
   color: var(--org-text, #1f1f1f);
 }
 .org-tab:disabled {
-  cursor: default;
-  opacity: .55;
+  cursor: not-allowed;
+  opacity: .5;
 }
-.org-tab:focus-visible,
+/* The tab list scrolls sideways, which clips anything drawn outside it, so a tab's ring sits just inside it. */
+.org-tab:focus-visible {
+  outline: 2px solid var(--org-focus, #576b99);
+  outline-offset: -2px;
+}
 .org-tab-panel:focus-visible {
   outline: 2px solid var(--org-focus, #576b99);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 .org-tab-icon {
   display: inline-flex;

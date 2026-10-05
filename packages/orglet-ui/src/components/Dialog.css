@@ -22,7 +22,7 @@
   height: var(--org-panel-height, min(640px, calc(100dvh - 32px)));
   background: var(--org-bg, #fff);
   border-radius: 16px;
-  box-shadow: 0 16px 48px #00000033;
+  box-shadow: 0 0 0 1px var(--org-border, #e5e5e5), var(--org-shadow-lg, 0 4px 12px #00000012, 0 18px 48px #00000033);
   outline: none;
   animation: org-drawer-in var(--org-motion-base, 170ms) var(--org-ease-out, ease-out);
 }
@@ -98,7 +98,7 @@
   padding: 22px 22px 18px;
   background: var(--org-bg, #fff);
   border-radius: 16px;
-  box-shadow: 0 16px 48px #00000040;
+  box-shadow: 0 0 0 1px var(--org-border, #e5e5e5), var(--org-shadow-lg, 0 4px 12px #00000012, 0 18px 48px #00000033);
   outline: none;
 }
 .org-confirm-title {

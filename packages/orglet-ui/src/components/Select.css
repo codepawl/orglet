@@ -1,4 +1,4 @@
-/* The trigger reads like a field: one border, darker on hover and while its list is open. */
+/* The trigger reads like a field: one hairline and a barely-there shadow, darker on hover and while its list is open. */
 .org-select-trigger {
   --org-select-icon-slot: 20px;
   display: flex;
@@ -16,11 +16,22 @@
   font-weight: 400;
   line-height: 20px;
   text-align: left;
+  box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d);
+  transition: border-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
 }
 .org-select-trigger > .org-select-icon { min-width: var(--org-select-icon-slot); }
-.org-select-trigger:hover:not(:disabled) { border-color: var(--org-muted, #666); }
-.org-select-trigger[aria-expanded=true] { border-color: var(--org-muted, #666); }
-.org-select-trigger:disabled { opacity: .55; }
+.org-select-trigger:hover:not(:disabled) { border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5)); }
+.org-select-trigger[aria-expanded=true] { border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5)); }
+/* The same ring as a field: two pixels of focus colour and a soft halo, in box-shadow so it takes no room. */
+.org-select-trigger:focus-visible {
+  outline: 2px solid transparent;
+  border-color: var(--org-focus, #576b99);
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
+}
+.org-select-trigger:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
 .org-select-trigger.org-select-sm {
   --org-select-height: 32px;
   --org-select-icon-slot: 0px;
@@ -30,6 +41,10 @@
   border-radius: 8px;
 }
 .org-select-trigger[aria-invalid=true] { border-color: var(--org-error, #a82626); }
+.org-select-trigger[aria-invalid=true]:focus-visible {
+  border-color: var(--org-error, #a82626);
+  box-shadow: 0 0 0 1px var(--org-error, #a82626), 0 0 0 4px color-mix(in srgb, var(--org-error, #a82626) 22%, transparent);
+}
 /* The shake replays whenever `data-flash` changes, so choosing nothing twice stays visible. */
 .org-select-trigger[aria-invalid=true][data-flash] { animation: org-select-flash .55s ease-in-out 2; }
 @keyframes org-select-flash {
@@ -68,7 +83,7 @@
   background: var(--org-bg, #fff);
   border: 1px solid var(--org-border, #e5e5e5);
   border-radius: var(--org-radius-menu, 12px);
-  box-shadow: 0 12px 32px #00000026;
+  box-shadow: var(--org-shadow-md, 0 2px 6px #0000000f, 0 10px 28px #0000001f);
   pointer-events: auto;
   animation: org-select-in 120ms ease-out;
 }
@@ -97,7 +112,7 @@
   gap: 12px;
   min-height: var(--org-select-option-height, 36px);
   padding: 7px 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
   color: var(--org-text, #171717);
@@ -106,6 +121,7 @@
 .org-select-group + .org-select-option { margin-top: 2px; }
 .org-select-option + .org-select-group { margin-top: 10px; }
 .org-select-option.org-select-option-active { background: var(--org-surface, #f4f4f4); }
+.org-select-option:active:not([aria-disabled=true]) { background: var(--org-row-active, #e8e8ea); }
 .org-select-option[aria-disabled=true] { opacity: .45; }
 /* A dimmed choice still works, so its words keep a readable contrast: muted text, with only the icon faded. */
 .org-select-option.org-select-option-dimmed { color: var(--org-muted, #666); }

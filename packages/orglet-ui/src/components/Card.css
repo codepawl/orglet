@@ -6,7 +6,10 @@
   padding: 16px;
   border: 0;
   border-radius: var(--org-radius-menu, 12px);
-  background: var(--org-surface, #f1f1f1);
+  /* The page's own colour, told apart by a hairline and a barely-there shadow. The hairline is an inset shadow, so the
+     card has no border and keeps its size. */
+  background: var(--org-bg, #fff);
+  box-shadow: inset 0 0 0 1px var(--org-border, #e5e5e5), var(--org-shadow-xs, 0 1px 2px #0000000d);
   color: var(--org-text, #1f1f1f);
   font: inherit;
   text-align: left;
@@ -46,14 +49,17 @@
 }
 .org-card-interactive {
   cursor: pointer;
-  transition: background var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+  transition: background-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
 }
 .org-card-interactive:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--org-text, #1f1f1f) 7%, var(--org-surface, #f1f1f1));
+  background: var(--org-row-hover, #f1f1f2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5)), var(--org-shadow-xs, 0 1px 2px #0000000d);
 }
+.org-card-interactive:active:not(:disabled) { background: var(--org-row-active, #e8e8ea); }
 .org-card-interactive:disabled {
   cursor: default;
-  opacity: .55;
+  opacity: .5;
+  cursor: not-allowed;
 }
 .org-card-interactive:focus-visible {
   outline: 2px solid var(--org-focus, #576b99);

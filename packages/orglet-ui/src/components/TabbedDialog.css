@@ -7,7 +7,7 @@
   height: var(--org-panel-height, min(640px, calc(100dvh - 32px)));
   background: var(--org-bg, #fff);
   border-radius: 16px;
-  box-shadow: 0 16px 48px #00000033;
+  box-shadow: 0 0 0 1px var(--org-border, #e5e5e5), var(--org-shadow-lg, 0 4px 12px #00000012, 0 18px 48px #00000033);
   display: flex;
   flex-direction: column;
   outline: none;
@@ -94,6 +94,11 @@
 }
 .org-dialog-tabs button svg { color: var(--org-muted, #666); }
 .org-dialog-tabs button:hover { background: var(--org-sidebar, #f7f7f8); }
+/* A list that can scroll sideways would clip a ring drawn outside, so the ring sits just inside the button. */
+.org-dialog-tabs button:focus-visible {
+  outline: 2px solid var(--org-focus, #576b99);
+  outline-offset: -2px;
+}
 .org-dialog-tabs button[aria-selected=true] {
   background: var(--org-surface, #f4f4f4);
   font-weight: 500;
