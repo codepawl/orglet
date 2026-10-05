@@ -418,8 +418,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Which model answers this chat, beside its name in the top bar (user, 2026-09-19). Quiet, because it is context
    rather than a warning: the old Demo badge shouted, and only ever appeared for Demo. */
 .topbar-provider { display:inline-flex; align-items:center; align-self:center; gap:5px; flex-shrink:0; font-size:12px; font-weight:500; line-height:20px; color:var(--muted); white-space:nowrap; }
-/* Inline rather than a flex row, so the model's baseline is its text's, not its mark's; the mark sits on the text's middle. */
-.topbar-provider > .provider-mark { display:inline-flex; flex-shrink:0; }
+/* The mark sits on the text's middle and keeps its own centring: as a flex box with no alignment it pushed its
+   glyph into the top left corner of its square (user, 2026-10-05). */
+.topbar-provider > .provider-mark { display:inline-grid; place-items:center; flex-shrink:0; }
 /* Beside a byline: the role this worker played for the team, then the model that wrote the message. */
 .byline-role { font-size:11px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 8px; }
 .byline-provider { font-size:11px; font-weight:500; color:var(--muted); }

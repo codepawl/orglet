@@ -87,3 +87,11 @@ it('marks a focused message box with a darker line and a deeper shadow, never a 
   expect(css).toContain('.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -4px 16px #0000001c; }');
   expect(css).not.toContain('--island-ring');
 });
+
+// User, 2026-10-05: the provider's glyph sat in the top left corner of its square in the chat header.
+it('keeps a provider mark\'s glyph centred wherever the mark is placed', () => {
+  expect(css).toMatch(/\.provider-mark \{ display:inline-grid; place-items:center;/);
+  for (const rule of css.match(/[^\n{}]*\.provider-mark \{[^}]*\}/g) ?? []) {
+    if (/display:\s*(inline-)?flex/.test(rule)) expect(rule, rule).toMatch(/align-items:center[^}]*justify-content:center|justify-content:center[^}]*align-items:center/);
+  }
+});
