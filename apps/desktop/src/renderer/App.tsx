@@ -108,6 +108,7 @@ import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry, type AreaRailFolder } from './components/AreaRail';
 import type { RowMenuItem } from './components/RowMenu';
+import { SpaceMark } from './components/SpaceMark';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
 import { Boxes, CircleUserRound, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
@@ -2197,7 +2198,7 @@ export function App() {
     } },
     ...workspace.spaces.map(space => ({
       key: `space:${space.id}` as const,
-      icon: <Avatar name={space.name} seed={space.id} size="sm" />,
+      icon: <SpaceMark name={space.name} seed={space.id} color={space.color} />,
       label: space.name,
       active: area === 'channels' && openSpace?.id === space.id && !pagePanelOpen,
       onSelect: function goToSpace() {

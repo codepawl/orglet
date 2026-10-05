@@ -3045,6 +3045,13 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-tile:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
 .area-tile.active { background:var(--row-active); color:var(--text); }
 .area-tile:disabled { cursor:default; opacity:.6; }
+/* A space's tile is filled with its own gradient and its initials (user, 2026-10-05), so it reads as a place of the
+   person's own beside the rail's icons. The fill is the whole tile: hover brightens it and the open space wears a
+   ring, since a tint behind a fill would be a background inside a background. */
+.space-mark { display:grid; place-items:center; width:100%; height:100%; border-radius:inherit; background:linear-gradient(135deg, hsl(var(--space-hue-from) 66% 50%), hsl(var(--space-hue-to) 68% 38%)); color:#fff; font-size:15px; font-weight:600; line-height:1; user-select:none; }
+.area-tile:has(> .space-mark), .area-tile:has(> .space-mark):hover:not(:disabled), .area-tile.active:has(> .space-mark) { background:transparent; }
+.area-tile:has(> .space-mark):hover:not(:disabled) > .space-mark { filter:brightness(1.1); }
+.area-tile.active:has(> .space-mark) { box-shadow:0 0 0 2px var(--window), 0 0 0 4px var(--text); }
 /* A tile's menu opens on a right click; its trigger shows only on a keyboard focus, so the rail stays a column of tiles. */
 .area-tile-slot { position:relative; display:grid; place-items:center; }
 .area-tile-slot > .org-row-menu, .area-tile-slot > .row-menu { position:absolute; inset:auto -2px -2px auto; }
