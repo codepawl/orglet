@@ -319,13 +319,13 @@ async function foldSidebar(page) {
 /** The seeded space's tile on the rail, which lists its channels in the sidebar. */
 async function openSpace(page) {
   await openSidebar(page);
-  await page.locator('.area-tile[title="Studio"]').click();
+  await page.locator('.area-tile[data-name="Studio"]').click();
   await page.locator('.sidebar .channel-row').first().waitFor();
 }
 
 async function openArea(page, vietnamese) {
   await openSidebar(page);
-  await page.locator(`.area-tile[title="${label(vietnamese)}"]`).click();
+  await page.locator(`.area-tile[data-name="${label(vietnamese)}"]`).click();
 }
 
 const SCREENS = [

@@ -8,7 +8,7 @@ import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunningItem } from '../../apps/desktop/src/shared/running';
 import { categoryNames, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
 import { folderKey, spaceFolderNames } from '../../apps/desktop/src/renderer/areas';
-import { DITHER_CELLS, ditherCellOn, spaceHues } from '../../apps/desktop/src/renderer/components/SpaceMark';
+import { DITHER_CELLS, ditherCellOn, spaceDitherFlip, spaceHues } from '../../apps/desktop/src/renderer/components/SpaceMark';
 import { SAVED_LIMIT, SAVED_TEXT_LIMIT, savedExcerpt, withSaved, withoutSaved, type SavedMessage } from '../../apps/desktop/src/renderer/saved';
 import { activityCounts } from '../../apps/desktop/src/renderer/components/ActivityPage';
 
@@ -132,7 +132,10 @@ describe('a space\'s mark on the rail', () => {
   it('picks the same gradient for a space every time', () => {
     const seeds = Array.from({ length: 200 }, (_, index) => `space-${index}`);
     for (const seed of seeds) expect(spaceHues(seed)).toEqual(spaceHues(seed));
-    expect(new Set(seeds.map(seed => spaceHues(seed).join())).size).toBeGreaterThan(5);
+    // With no letter on the tile the fill tells spaces apart: many different pairs, and four corners to gather in.
+    expect(new Set(seeds.map(seed => spaceHues(seed).join())).size).toBeGreaterThan(100);
+    expect(new Set(seeds.map(seed => spaceDitherFlip(seed).join())).size).toBe(4);
+    for (const seed of seeds) expect(spaceDitherFlip(seed)).toEqual(spaceDitherFlip(seed));
   });
 
   it('dithers from the first colour at the top left to the second at the bottom right', () => {

@@ -3054,6 +3054,9 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-tile:has(> .space-mark), .area-tile:has(> .space-mark):hover:not(:disabled), .area-tile.active:has(> .space-mark) { background:transparent; }
 .area-tile:has(> .space-mark):hover:not(:disabled) > .space-mark { filter:brightness(1.1); }
 .area-tile.active:has(> .space-mark) { box-shadow:0 0 0 2px var(--window), 0 0 0 4px var(--text); }
+/* A tile's name, beside it while the pointer is on it. It is placed on the window because the rail scrolls and would
+   clip it, and it takes no pointer so it never stands between the pointer and the sidebar. */
+.area-tip { position:fixed; z-index:30; transform:translateY(-50%); max-width:260px; padding:6px 10px; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--bg); box-shadow:0 8px 24px #0000001f; color:var(--text); font-size:13px; font-weight:600; line-height:1.3; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
 /* A tile's menu opens on a right click; its trigger shows only on a keyboard focus, so the rail stays a column of tiles. */
 .area-tile-slot { position:relative; display:grid; place-items:center; }
 .area-tile-slot > .org-row-menu, .area-tile-slot > .row-menu { position:absolute; inset:auto -2px -2px auto; }

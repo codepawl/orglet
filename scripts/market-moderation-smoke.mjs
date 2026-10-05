@@ -137,7 +137,7 @@ async function close(page) {
 async function explore(page) {
   await page.locator('.app').waitFor();
   await expandSidebar(page);
-  await page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first().click();
+  await page.locator('.area-tile[data-name="Bạn bè và tin nhắn"], .area-tile[data-name="Friends and direct messages"]').first().click();
   await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
   await page.locator('.marketplace-listing').filter({ hasText: 'Review fixture' }).waitFor();
 }

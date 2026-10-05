@@ -3,14 +3,9 @@ import type { CSSProperties } from 'react';
 /**
  * A space's tile on the rail (user, 2026-10-05): a filled mark with no letter on it, so a space reads as a place of
  * the person's own and not as one of the rail's icons. The fill is a dithered gradient between two colours picked
- * from the space's id, the same ones every time. The tile's tooltip and accessible name say which space it is. A
+ * from the space's id, the same ones every time, gathering in one of four corners. The tile's tooltip and accessible name say which space it is. A
  * colour the space carries replaces the pair, and the dither then darkens it.
  */
-
-/** Hue pairs of the gradients, start and end, at the lightness in `styles.css`. */
-const HUE_PAIRS: readonly (readonly [number, number])[] = [
-  [262, 296], [224, 262], [200, 232], [172, 204], [146, 176], [12, 344], [338, 300], [24, 2], [288, 328], [208, 170],
-];
 
 /** A small stable number from a string, enough to pick one of a few pairs. */
 function seedNumber(seed: string): number {
@@ -19,8 +14,21 @@ function seedNumber(seed: string): number {
   return total;
 }
 
+/**
+ * The two hues of a space's fill: any hue of the wheel, and a second one a little further round. With no letter on
+ * the tile the fill alone tells spaces apart, so the whole wheel is used and not a short list of pairs.
+ */
 export function spaceHues(seed: string): readonly [number, number] {
-  return HUE_PAIRS[seedNumber(seed) % HUE_PAIRS.length];
+  const number = seedNumber(seed);
+  const from = number % 360;
+  const step = 28 + (Math.floor(number / 360) % 5) * 9;
+  return [from, (from + step) % 360];
+}
+
+/** Which corner the second colour gathers in, one of four, so two spaces of near hues still differ. */
+export function spaceDitherFlip(seed: string): readonly [number, number] {
+  const corner = Math.floor(seedNumber(seed) / 7) % 4;
+  return [corner % 2 === 0 ? 1 : -1, corner < 2 ? 1 : -1];
 }
 
 /** The tile is this many dither cells on a side: 3px cells on the rail's 42px tile. */
@@ -50,9 +58,10 @@ const DITHER_PATH = ditherPath();
 
 export function SpaceMark({ seed, color }: { seed: string; color?: string }) {
   const [from, to] = spaceHues(seed);
+  const [flipX, flipY] = spaceDitherFlip(seed);
   const colours: Record<string, string | number> = color ? { '--space-mark-from': color, '--space-mark-to': '#0000004d' } : { '--space-hue-from': from, '--space-hue-to': to };
   const style = colours as CSSProperties;
   return <span className="space-mark" style={style} aria-hidden="true">
-    <svg className="space-mark-dither" viewBox={`0 0 ${DITHER_CELLS} ${DITHER_CELLS}`} preserveAspectRatio="none" focusable="false"><path d={DITHER_PATH} /></svg>
+    <svg className="space-mark-dither" viewBox={`0 0 ${DITHER_CELLS} ${DITHER_CELLS}`} preserveAspectRatio="none" focusable="false" style={{ transform: `scale(${flipX}, ${flipY})` }}><path d={DITHER_PATH} /></svg>
   </span>;
 }
