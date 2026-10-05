@@ -1,6 +1,7 @@
 # @codepawlhq/orglet-ui
 
 The interface Orglet is built from: a small set of React components and the tokens they read.
+Docs with every component running live: https://ui.orglet.codepawl.com
 
 Components move here from the Orglet app one at a time, under a contract: a component arrives only when it meets
 the rules below, and the app then imports it from here like any other application would.
@@ -118,6 +119,20 @@ The build is tsdown. It keeps each component in its own file and copies its styl
 The root `pnpm test` runs these tests too, as the `orglet-ui` Vitest project. CI builds the kit and runs
 `check:package` on every pull request.
 
+### The docs site
+
+`site/` is a small Vite app that renders `docs/` and shows each story of `stories/` live in its own frame. It reads
+the kit's source directly, and it serves `llms.txt`, `llms-full.txt`, the pages as Markdown and the skill at the
+same paths they have in the package.
+
+```sh
+pnpm --filter @codepawlhq/orglet-ui site         # http://localhost:6007
+pnpm --filter @codepawlhq/orglet-ui build-site   # site-dist/ (not committed)
+pnpm --filter @codepawlhq/orglet-ui docs         # rewrites the README table, llms.txt and the skill from docs/components
+```
+
+A maintainer deploys it with `wrangler deploy --config packages/orglet-ui/site/wrangler.jsonc` after `build-site`.
+
 ### The gallery
 
 Every component has stories in `stories/`, one per meaningful state, in [Storybook](https://storybook.js.org) 10:
@@ -137,7 +152,7 @@ story that needs an exception says so in its `a11y` parameter, with the reason b
 Storybook and everything it pulls in are development dependencies of this package only: the app never imports
 `stories/` or `.storybook/`, and the published package still ships `dist` alone.
 
-A new component comes with a test in `test/`: it renders with its required text, works from the keyboard, applies
+A new component comes with a page in `docs/components/` (the format is the one `Button.md` has) and a test in `test/`: it renders with its required text, works from the keyboard, applies
 `className` last, and passes an axe check. It also gets stories in `stories/`. `test/styles.test.ts` checks every stylesheet for the `org-` prefix and for
 reduced motion.
 

@@ -4,7 +4,7 @@
   "description": "The interface Orglet is built from: a small set of components and the tokens they read",
   "license": "AGPL-3.0-only",
   "author": "CodePawl",
-  "homepage": "https://github.com/codepawl/orglet/tree/main/packages/orglet-ui#readme",
+  "homepage": "https://ui.orglet.codepawl.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/codepawl/orglet.git",
