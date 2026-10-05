@@ -1,5 +1,5 @@
 import { Check, CircleAlert, Copy, FileText, Info, Menu, Monitor, Moon, Search, Sun, UserRound } from 'lucide-react';
-import { useEffect, useId, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Button,
@@ -88,6 +88,30 @@ async function copyText(text: string, done: string): Promise<void> {
   } catch {
     showToast('Copying is blocked in this browser', 'error');
   }
+}
+
+/** How far the mark's eyes travel towards the pointer, as a share of the mark's own width. */
+const LOOK_REACH = 0.05;
+
+/** The Orglet mark. Its eyes blink in the stylesheet and lean a little towards the pointer from here. */
+function OrgletMark() {
+  const mark = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const lookAt = (event: PointerEvent) => {
+      const element = mark.current;
+      if (!element) return;
+      const box = element.getBoundingClientRect();
+      const offsetX = event.clientX - (box.left + box.width / 2);
+      const offsetY = event.clientY - (box.top + box.height / 2);
+      const distance = Math.hypot(offsetX, offsetY) || 1;
+      const reach = box.width * LOOK_REACH;
+      element.style.setProperty('--look-x', `${((offsetX / distance) * reach).toFixed(2)}px`);
+      element.style.setProperty('--look-y', `${((offsetY / distance) * reach).toFixed(2)}px`);
+    };
+    window.addEventListener('pointermove', lookAt);
+    return () => window.removeEventListener('pointermove', lookAt);
+  }, []);
+  return <span ref={mark} className="site-mark" aria-hidden="true" />;
 }
 
 function SiteLink({ href, navigate, className, current, children }: {
@@ -232,7 +256,7 @@ function HomeView({ navigate }: { navigate: (path: string) => void }) {
   return <article className="site-article site-home">
     <div className="site-hero">
       <div className="site-hero-text">
-        <h1>Orglet UI</h1>
+        <h1><OrgletMark /> Orglet UI</h1>
         <p className="site-lead">
           A small set of accessible React components and the tokens they read. It is the interface Orglet is built
           from: quiet, keyboard-first, themed with CSS variables.
@@ -335,7 +359,7 @@ function App() {
       <Button type="button" size="icon" className="site-menu-button" aria-label="Show the list of pages" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}>
         <Menu size={17} aria-hidden />
       </Button>
-      <SiteLink href="/" navigate={navigate} className="site-wordmark">Orglet UI</SiteLink>
+      <SiteLink href="/" navigate={navigate} className="site-wordmark"><OrgletMark /> Orglet UI</SiteLink>
       <span className="site-version">v{packageManifest.version}</span>
       <div className="site-topbar-end">
         <a className="site-quiet-link" href={PACKAGE_URL}>npm</a>

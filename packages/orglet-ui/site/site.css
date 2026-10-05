@@ -58,7 +58,64 @@ pre:focus-visible,
   backdrop-filter: blur(12px);
 }
 
+/* The Orglet mark, as the app draws it: a matte ball lit from the top left with two eyes that lean to the right. It
+   blinks once every few seconds and its eyes follow the pointer by a pixel or so (--look-x and --look-y, set by
+   OrgletMark). Each eye keeps its lean through both, which is why the lean is a variable the keyframes read. */
+.site-mark {
+  --mark-ink: var(--org-text);
+  --look-x: 0px;
+  --look-y: 0px;
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 46% 46% 46% 17%;
+  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--mark-ink) 72%, white), var(--mark-ink) 48%, color-mix(in srgb, var(--mark-ink) 78%, black));
+}
+
+.site-mark::before,
+.site-mark::after {
+  content: '';
+  position: absolute;
+  top: 21.4%;
+  width: 14.3%;
+  height: 28.6%;
+  border-radius: 999px;
+  background: var(--org-bg);
+  translate: var(--look-x) var(--look-y);
+  transform: translateY(var(--eye-lean)) rotate(14deg);
+  transition: translate 160ms ease-out;
+  animation: site-mark-blink 6s infinite;
+}
+
+.site-mark::before {
+  --eye-lean: -9%;
+  left: 35.7%;
+}
+
+.site-mark::after {
+  --eye-lean: 9%;
+  left: 57.1%;
+}
+
+@keyframes site-mark-blink {
+  0%, 94%, 100% { transform: translateY(var(--eye-lean)) rotate(14deg) scaleY(1); }
+  97% { transform: translateY(var(--eye-lean)) rotate(14deg) scaleY(0.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-mark::before,
+  .site-mark::after {
+    transition: none;
+    animation: none;
+  }
+}
+
 .site-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
   font-size: 1rem;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -355,7 +412,16 @@ h1 {
 }
 
 .site-hero h1 {
+  display: flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: 0.35em;
   font-size: 2.75rem;
+}
+
+.site-hero h1 .site-mark {
+  width: 1.1em;
+  height: 1.1em;
 }
 
 .site-hero-text {
@@ -450,6 +516,18 @@ h1 {
 .site-facts p {
   margin: 0;
   color: var(--org-muted);
+}
+
+/* Beside the sidebar the two-column hero runs out of room well before the phone layout starts. */
+@media (max-width: 1180px) {
+  .site-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  .site-sample {
+    max-width: 460px;
+  }
 }
 
 @media (max-width: 860px) {
