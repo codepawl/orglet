@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type 
 import { createPortal } from 'react-dom';
 import { Button } from './Button';
 import { cn } from '../cn';
+import { CloseIcon } from '../icons';
 import './RowMenu.css';
 
 /** Any icon component that takes a size, such as one from lucide-react. */
@@ -181,7 +182,7 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
       <asking.icon size={16} aria-hidden="true" /><span>{asking.confirm!.label}</span>
     </button>
     <button type="button" role="menuitem" onClick={() => setAsking(undefined)}>
-      <CancelGlyph /><span>{cancelLabel}</span>
+      <CloseIcon /><span>{cancelLabel}</span>
     </button>
   </>;
   const entries = items.map(item => <button key={item.label} type="button" role="menuitem"
@@ -206,9 +207,3 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
   </div>;
 }
 
-/** The cross on the way back from a question; drawn here so the kit needs no icon library. */
-function CancelGlyph() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-  </svg>;
-}

@@ -10,7 +10,7 @@ const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pagesFolder = join(packageRoot, 'docs', 'components');
 const checkOnly = process.argv.includes('--check');
 
-export const GROUP_ORDER = ['Actions', 'Forms', 'Navigation', 'Overlays', 'Feedback', 'Display', 'Utilities'];
+export const GROUP_ORDER = ['Foundations', 'Actions', 'Forms', 'Navigation', 'Overlays', 'Feedback', 'Display', 'Utilities'];
 const REQUIRED_HEADINGS = ['When to use', 'When not to', 'Example', 'Props', 'Accessibility'];
 
 function readText(path) {

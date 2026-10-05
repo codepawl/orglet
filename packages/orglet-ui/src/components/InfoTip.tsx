@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { CheckIcon, CopyIcon } from '../icons';
 import { Button } from './Button';
 import './InfoTip.css';
 
@@ -9,19 +10,6 @@ export type InfoTipRow = { label: string; value: ReactNode; mono?: boolean; onCo
 const CLOSE_DELAY_MS = 140;
 const PANEL_WIDTH = 320;
 const COPIED_FOR_MS = 1200;
-
-function CopyGlyph() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-  </svg>;
-}
-
-function CopiedGlyph() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M20 6 9 17l-5-5" />
-  </svg>;
-}
 
 /**
  * A small button that reveals technical detail (ids, paths, hashes) on hover and on keyboard focus, so the detail is a
@@ -137,7 +125,7 @@ export function InfoTip({ label, rows, icon, copyLabel }: {
             <span className="org-info-tip-value">{row.value}</span>
             {row.onCopy && <Button size="icon" className="org-info-tip-copy" aria-label={copyLabel(row.label)} title={copyLabel(row.label)}
               onClick={() => void copy(row, index)}>
-              {copiedIndex === index ? <CopiedGlyph /> : <CopyGlyph />}
+              {copiedIndex === index ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
             </Button>}
           </dd>
         </div>)}

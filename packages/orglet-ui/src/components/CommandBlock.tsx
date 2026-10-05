@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '../cn';
+import { CopyIcon } from '../icons';
 import './CommandBlock.css';
 
 /**
@@ -27,7 +28,7 @@ export function CommandBlock({ command, label, toolbar, copyLabel, copyIcon, onC
     aria-label={copyLabel}
     title={copyLabel}
     onClick={() => onCopy(command)}
-  >{copyIcon ?? <CopyGlyph />}</button>;
+  >{copyIcon ?? <CopyIcon size={14} />}</button>;
   return <div className={cn('org-command-block', className)}>
     {label && <span className="org-command-block-label">{label}</span>}
     <div className={cn('org-command-block-card', toolbar ? 'org-command-block-with-toolbar' : undefined)}>
@@ -52,10 +53,3 @@ function breakableCommand(command: string): ReactNode[] {
   });
 }
 
-/** Two overlapping sheets, drawn here so the kit needs no icon library. */
-function CopyGlyph() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="9" y="9" width="13" height="13" rx="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>;
-}

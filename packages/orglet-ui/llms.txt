@@ -7,6 +7,10 @@ Rules that hold for every component: text comes in as props, `className` is appl
 `--org-` tokens, keyboard and screen-reader behaviour is built in. The kit has no spinner (a wait is a
 `Skeleton`), no separator line and no alert with a coloured left border.
 
+## Foundations
+
+- [Icons](docs/components/Icons.md): The basic icons an application needs, drawn on one grid with one stroke, so no icon library is required.
+
 ## Actions
 
 - [Button](docs/components/Button.md): A button in four looks, or a square holding one icon.
