@@ -261,7 +261,7 @@ export function App() {
   const [privacyTaskId, setPrivacyTaskId] = useState<string>();
   const [panel, setPanel] = useState<Panel>(null); const [editingWorker, setEditingWorker] = useState<Worker>(); const [workerDialogTab, setWorkerDialogTab] = useState<'memory'>(); const [editingTask, setEditingTask] = useState<string>(); const [editingSkill, setEditingSkill] = useState<Skill>();
   const [editingKnowledge, setEditingKnowledge] = useState<Knowledge>(); const [libraryTab, setLibraryTab] = useState<'skills' | 'knowledge'>('skills');
-  const [publishingSource, setPublishingSource] = useState<{ kind: 'orglet' | 'crew'; entityId: string; name: string }>();
+  const [publishingSource, setPublishingSource] = useState<{ kind: 'orglet' | 'crew' | 'space'; entityId: string; name: string }>();
   // The Demo chat's "Kết nối model" opens the worker dialog on its Model field rather than at the top (COD-255), with
   // the first connection that can run already chosen (COD-293).
   const [workerDialogField, setWorkerDialogField] = useState<'provider'>();
@@ -2277,6 +2277,7 @@ export function App() {
           { label: t('Thiết lập không gian'), icon: SlidersHorizontal, onSelect: () => setSpaceDraft({ space: sidebarSpace }) },
           { label: t('Thành viên'), icon: Users, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'members' }) },
           { label: t('Nhóm'), icon: FolderTree, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'categories' }) },
+          { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'space', entityId: sidebarSpace.id, name: sidebarSpace.name }) },
           { label: t('Xóa không gian'), icon: Trash, danger: true, onSelect: () => deleteSpace(sidebarSpace), confirm: { question: t('Xóa không gian {0}? Các kênh của nó vẫn còn, nằm ngoài mọi không gian.', [sidebarSpace.name]), label: t('Xóa không gian') } },
         ]} />}
         {/* A space's head keeps room for its name: search stays on Ctrl+K there. */}

@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { ListingId, MARKET_REQUEST_LIMIT, MarketMutationReceipt, MarketReviewState, MarketListingV2 } from './market';
+import { ListingId, MARKET_REQUEST_LIMIT, MarketKind, MarketMutationReceipt, MarketReviewState, MarketListingV2 } from './market';
 import { BuiltInProviderId } from './contracts';
 import { MarketSubmission } from './market-publishing';
 
 const Digest = z.string().regex(/^[a-f0-9]{64}$/);
 export const PublicModelSuggestion = z.object({ provider: BuiltInProviderId, modelId: z.string().min(1).max(200).optional() }).strict();
-export const PublishingSource = z.object({ kind: z.enum(['orglet', 'crew']), entityId: z.string().uuid() }).strict();
+export const PublishingSource = z.object({ kind: MarketKind, entityId: z.string().uuid() }).strict();
 export const PublishingMetadata = z.object({
   name: z.string().trim().min(1).max(80), summary: z.string().trim().min(1).max(240),
   tags: z.array(z.string().min(1).max(32)).max(10), language: z.enum(['en', 'vi']),
@@ -16,7 +16,7 @@ export const OwnerAllowance = z.object({
   submissionsInHour: z.number().int().min(0).max(5), submissionLimit: z.literal(5),
 }).strict();
 export const OwnerSummary = z.object({
-  listingId: ListingId, kind: z.enum(['orglet', 'crew']),
+  listingId: ListingId, kind: MarketKind,
   latest: z.object({ listing: MarketListingV2, state: MarketReviewState, reason: z.string().max(2048).default('') }).strict(),
   published: MarketListingV2.nullable(), publicationEpoch: z.number().int().nonnegative(),
   hidden: z.boolean().default(false), hiddenReason: z.string().max(2048).default(''),

@@ -65,6 +65,19 @@ before(async () => {
 
 after(async () => { await runtime?.dispose(); });
 
+function spaceSubmission() {
+  return { ...submission, kind: 'space', name: 'Fixture space', template: {
+    format: 'orglet-space-template', version: 1,
+    space: {
+      name: 'Fixture space',
+      categories: [{ key: 'category-0', name: 'Work' }],
+      channels: [{ name: 'general', topic: '' }, { name: 'reading', topic: 'Read the text', categoryKey: 'category-0', memberKeys: ['worker-0'] }],
+    },
+    workers: [{ ...template.worker, key: 'worker-0', skillKey: 'skill-0' }],
+    skills: [{ ...template.skill, key: 'skill-0' }],
+  } };
+}
+
 async function repository(fields) {
   return runtime.dispatchFetch('https://fixture.test/repository-fixture', {
     method: 'POST', body: JSON.stringify({ owner: 'fixture-owner', target: null, key: 'fixture-key', text: JSON.stringify(submission), ...fields }),
@@ -82,7 +95,7 @@ async function decide(expected, decision = 'approve', fields = {}) {
 
 test('tracked migrations apply once, reapply without drift and survive runtime restart', async () => {
   const migrations = await database.prepare('SELECT name FROM d1_migrations ORDER BY name').all();
-  assert.deepEqual(migrations.results.map(row => row.name), ['0001_listings.sql', '0002_moderation.sql']);
+  assert.deepEqual(migrations.results.map(row => row.name), ['0001_listings.sql', '0002_moderation.sql', '0003_space_listings.sql']);
   await runtime.dispose();
   await startRuntime();
   assert.equal((await database.prepare('SELECT count(*) AS total FROM listings').first()).total, 0);
@@ -555,6 +568,37 @@ test('actual public v2 catalog uses bounded keyset pages over approved pointers 
     assert.equal(refused.status, 400);
     assert.equal(refused.headers.get('cache-control'), 'no-store');
   }
+});
+
+test('an account publishes a space, a reviewer approves it, and only a reader that names the kind is given it', async () => {
+  const submitted = await repository({ operation: 'submit', owner: 'space-owner', key: 'space-key', text: JSON.stringify(spaceSubmission()) });
+  assert.equal(submitted.status, 200);
+  const { listingId } = await submitted.json();
+  assert.equal((await database.prepare('SELECT kind FROM listings WHERE listing_id=?').bind(listingId).first()).kind, 'space');
+  const reserved = await repository({ operation: 'submit', owner: 'space-owner', target: 'launch-space', key: 'reserved-space-key', text: JSON.stringify(spaceSubmission()) });
+  assert.notEqual(reserved.status, 200);
+  const everyListing = async query => {
+    const listings = [];
+    let cursor = '';
+    do {
+      const page = await (await runtime.dispatchFetch(`https://fixture.test/v2/catalog?limit=100${query}${cursor}`)).json();
+      listings.push(...page.listings);
+      cursor = page.nextCursor ? `&cursor=${page.nextCursor}` : '';
+    } while (cursor);
+    return listings;
+  };
+  assert.ok(!(await everyListing('&kinds=orglet,crew,space')).some(listing => listing.listingId === listingId), 'a pending space is not listed');
+  const detail = await review(listingId);
+  assert.equal((await decide(detail.expected)).status, 200);
+  const named = await everyListing('&kinds=orglet,crew,space');
+  assert.equal(named.find(listing => listing.listingId === listingId)?.kind, 'space');
+  assert.ok(named.some(listing => listing.listingId === 'launch-space'));
+  const unnamed = await everyListing('');
+  assert.ok(unnamed.every(listing => listing.kind !== 'space'), 'a reader from before spaces is given no space');
+  const first = await (await runtime.dispatchFetch('https://fixture.test/v1/catalog')).json();
+  assert.ok(first.listings.every(listing => listing.kind !== 'space'));
+  const body = await repository({ operation: 'body', owner: 'space-owner', target: listingId, version: 1 });
+  assert.equal(JSON.parse(await body.text()).format, 'orglet-space-template');
 });
 
 test('reviewer queue, report and audit pages stay bounded and reveal no reporter subjects', async () => {

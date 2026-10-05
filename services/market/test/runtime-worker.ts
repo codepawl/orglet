@@ -35,7 +35,7 @@ export default {
         return Response.json(await submitListing(environment.MARKET_DB, identity, input.target, input.key, content, input.now));
       }
       if (input.operation === 'unpublish') return Response.json(await unpublishListing(environment.MARKET_DB, identity, input.target!, input.key));
-      if (input.operation === 'public') return Response.json(await approvedListings(environment.MARKET_DB, '', 100));
+      if (input.operation === 'public') return Response.json(await approvedListings(environment.MARKET_DB, '', 100, ['orglet', 'crew']));
       if (input.operation === 'owner') return Response.json(await ownerListings(environment.MARKET_DB, identity, input.after ?? '', input.limit ?? 100));
       if (input.operation === 'summary') return Response.json(await ownerSummaries(environment.MARKET_DB, identity, input.publishingEnabled));
       const body = await listingBody(environment.MARKET_DB, input.target!, input.version, input.operation === 'preview' ? input.owner : undefined);

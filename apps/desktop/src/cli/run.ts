@@ -90,10 +90,10 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'control': return { op: 'control', ...targetFields(command), action: command.action, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'revise': return { op: 'revise', ...targetFields(command), text: command.text, message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'answer': return { op: 'answer', ...targetFields(command), answer: command.answer, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
-    case 'chats': return { op: 'chats', archived: command.archived };
+    case 'chats': return { op: 'chats', archived: command.archived, ...(command.space ? { space: command.space } : {}) };
     case 'side': return { op: 'side-thread', ...targetFields(command), message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'bring': return { op: 'bring', chat: command.chat, ...(command.message ? { message: command.message } : {}) };
-    case 'channel': return { op: 'channel', names: command.names, message: command.message, ...(command.name ? { name: command.name } : {}), ...(command.topic ? { topic: command.topic } : {}), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'channel': return { op: 'channel', names: command.names, message: command.message, ...(command.name ? { name: command.name } : {}), ...(command.topic ? { topic: command.topic } : {}), ...(command.space ? { space: command.space } : {}), ...(command.category ? { category: command.category } : {}), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'members': return { op: 'members', chat: command.chat, names: command.names };
     case 'chat-change': return {
       op: 'chat-change',

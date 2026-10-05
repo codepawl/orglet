@@ -128,7 +128,25 @@ try {
   assert.equal(withListing.workers.length, orgletsBefore + 3);
   assert.equal(withListing.tasks.length, after.tasks.length, 'adding a space sends no message');
   await shot(page, 'market-space');
-  console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace.');
+
+  // Publishing the space: its menu opens the form, and the preview lists every channel with its category and who is
+  // in it. Nothing is sent: the smoke stops at the preview.
+  await page.getByRole('button', { name: 'Tùy chọn không gian Launch', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Xuất bản lên marketplace', exact: true }).click();
+  const publishing = page.locator('.market-publishing');
+  await publishing.getByLabel('Tên công khai').fill('Launch space of mine');
+  await publishing.getByLabel('Mô tả ngắn').fill('Three friends plan a launch.');
+  await shot(page, 'publish-space-form');
+  await publishing.getByRole('button', { name: /Xem trước nội dung/ }).click();
+  await publishing.locator('.market-space-channels li').nth(2).waitFor();
+  assert.deepEqual(await publishing.locator('.market-space-channel').allTextContents(), ['#general', '#sources', '#drafts']);
+  const previewed = await publishing.locator('.market-exact-request pre').textContent();
+  assert.equal(JSON.parse(previewed).kind, 'space');
+  for (const worker of withListing.workers) assert.ok(!previewed.includes(worker.id), 'the preview carries no local id');
+  await shot(page, 'publish-space-preview');
+  await page.keyboard.press('Escape');
+  await publishing.waitFor({ state: 'detached' });
+  console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it.');
 } finally {
   await app.close();
 }

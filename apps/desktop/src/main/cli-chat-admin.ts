@@ -1,5 +1,6 @@
 import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
+import type { Space } from '../shared/spaces';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
@@ -35,7 +36,8 @@ export class CliChatAdmin {
   /** Open chats newest first, or with `archived` the archived ones, each with the short id `--chat` takes. */
   async chats(request: Request<'chats'>): Promise<ChatsValue> {
     const workspace = await this.workspace();
-    const shown = workspace.tasks.filter(task => Boolean(task.archivedAt) === request.archived);
+    const space = request.space === undefined ? undefined : spaceNamed(workspace, request.space);
+    const shown = workspace.tasks.filter(task => Boolean(task.archivedAt) === request.archived && (!space || task.channel?.spaceId === space.id));
     const newest = [...shown].sort((first, second) => second.createdAt.localeCompare(first.createdAt)).slice(0, MAX_LISTED_CHATS);
     return { chats: newest.map(task => chatRow(workspace, task)) };
   }
@@ -81,11 +83,16 @@ export class CliChatAdmin {
    */
   async channel(request: Request<'channel'>, signal: AbortSignal): Promise<SendValue> {
     const workspace = await this.workspace();
-    const members = uniqueMembers(workspace, request.names);
+    const place = request.space === undefined ? undefined : placeNamed(workspace, request.space, request.category);
+    if (!place && !request.names.length) throw new CliFailure('failed', 'Kênh cần ít nhất một --with <tên Tí>.');
+    // In a space, a channel with no names takes every orglet of its category or space, and follows that list later.
+    const inherits = Boolean(place) && !request.names.length;
+    const members = inherits ? place!.orgletIds.map(orgletId => ({ kind: 'orglet' as const, id: orgletId })) : uniqueMembers(workspace, request.names);
     const workers = answeringWorkers(workspace, members);
     if (!workers.length) throw new CliFailure('failed', 'Kênh chưa có Tí nào để trả lời. Thêm một Tí.');
     const name = request.name ?? channelNameFrom(members.map(member => memberNameOf(workspace, member)));
-    const channelId = String(await this.dependencies.request('createChannel', { name, topic: request.topic ?? '', members }));
+    const placed = place ? { spaceId: place.spaceId, categoryId: place.categoryId ?? null, access: inherits ? 'inherit' as const : 'listed' as const } : {};
+    const channelId = String(await this.dependencies.request('createChannel', { name, topic: request.topic ?? '', members, ...placed }));
     const input: TaskInput = {
       workerId: workers[0].id,
       assignees: workers.map(worker => worker.id),
@@ -168,6 +175,32 @@ export class CliChatAdmin {
 }
 
 /** The orglets and crews these names find, each once, in the order named (COD-361). */
+/** The space with this name, or the only one whose name starts with it. */
+function spaceNamed(workspace: Workspace, query: string): Space {
+  const spaces = workspace.spaces ?? [];
+  const wanted = query.trim().toLocaleLowerCase();
+  const exact = spaces.filter(space => space.name.toLocaleLowerCase() === wanted);
+  const found = exact.length ? exact : spaces.filter(space => space.name.toLocaleLowerCase().startsWith(wanted));
+  if (found.length === 1) return found[0];
+  const names = (found.length ? found : spaces).map(space => space.name).join(', ');
+  if (found.length > 1) throw new CliFailure('ambiguous', `"${query}" khớp với nhiều không gian: ${names}. Gõ tên đầy đủ hơn.`);
+  if (!names) throw new CliFailure('not_found', 'Chưa có không gian nào.');
+  throw new CliFailure('not_found', `Không có không gian nào tên "${query}". Có: ${names}.`);
+}
+
+/** A space, or one of its categories, as the place of a new channel, with the orglets a channel there inherits. */
+function placeNamed(workspace: Workspace, spaceName: string, categoryName: string | undefined): { spaceId: string; categoryId?: string; orgletIds: readonly string[] } {
+  const space = spaceNamed(workspace, spaceName);
+  if (categoryName === undefined) return { spaceId: space.id, orgletIds: space.orgletIds };
+  const wanted = categoryName.trim().toLocaleLowerCase();
+  const category = space.categories.find(item => item.name.toLocaleLowerCase() === wanted);
+  if (!category) {
+    const names = space.categories.map(item => item.name).join(', ');
+    throw new CliFailure('not_found', names ? `Không gian "${space.name}" không có mục "${categoryName}". Có: ${names}.` : `Không gian "${space.name}" chưa có mục nào.`);
+  }
+  return { spaceId: space.id, categoryId: category.id, orgletIds: category.orgletIds ?? space.orgletIds };
+}
+
 function uniqueMembers(workspace: Workspace, names: readonly string[]): ChannelMember[] {
   const everyone = chatsOf({ workers: workspace.workers, teams: workspace.teams });
   const members: ChannelMember[] = [];

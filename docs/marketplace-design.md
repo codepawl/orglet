@@ -28,9 +28,13 @@ Adding a space listing writes its orglets and skills, then makes the space with 
 
 An update to a space listing compares and replaces its orglets and skills, as an orglet listing's does. It does not change the space's categories or channels, which are the person's once added.
 
-**Older apps.** An app from before spaces reads a catalog strictly and fails on a kind it does not know. So `/v1/catalog` lists only orglets and crews, and `/v2/catalog` lists a space only for a reader that names the kinds it understands (`kinds=orglet,crew,space`). This app asks with `kinds`, and asks again without it when a catalog server from before spaces refuses the query. The public content contract (`validateMarketSubmission`) accepts a space, which is how the server builds its curated catalog, but the owner route refuses a space from an account: a space is curated content for now.
+**Older apps.** An app from before spaces reads a catalog strictly and fails on a kind it does not know. So `/v1/catalog` lists only orglets and crews, and `/v2/catalog` lists a space only for a reader that names the kinds it understands (`kinds=orglet,crew,space`). This app asks with `kinds`, and asks again without it when a catalog server from before spaces refuses the query. A stored listing is filtered the same way: `approvedListings` takes the kinds the reader named.
 
-**Not built.** Publishing a space from the desktop, and its review. The curated listing **Launch space** ships with the app, and appears in an online catalog once the market service is deployed with this change.
+**Publishing a space.** A space's menu offers **Publish to marketplace**, and the form, preview, review and withdrawal are the ones an orglet or a crew uses. `projectPublishingSource` reads the space as it is now: its name, its categories, its orglets with their skills, and each channel's name, topic, category and, for a channel with its own list, the orglets it names. It reads no permission default, no colour, no schedule, no folder and no message. A channel that is archived or deleted is left out. The preview is refused when the space has no channel or two channels share a name, and it goes stale when the space, a channel or an orglet changes.
+
+On the server, migration `0003_space_listings.sql` widens the `kind` check of `listings` to `space` and reserves `launch-space`. SQLite cannot change a check in place, so the migration copies the rows, drops the table, makes it again under its own name with the same index and triggers, and puts the rows back, with foreign keys checked at the end. It does not rename a table, because a rename is refused while triggers on other tables read a table that is gone.
+
+**Not deployed.** The market service in production has neither the migration nor the `kinds` query until it is deployed with these changes. Until then an account cannot publish a space, and **Launch space** is only in the catalog that ships with the app.
 
 ## Pieces
 
@@ -119,7 +123,7 @@ The API and deployment setup are in [services/market](../services/market/README.
 
 ## Desktop publishing
 
-An orglet's menu and a crew channel's menu offer **Publish to marketplace**. A normal channel has no publishing action. The local form asks for a public name, summary, tags, language and changelog. A built-in connection/model can be suggested without changing the local orglets' connection choices. Preview selects only template instructions, skills, avatar data, crew settings and approved non-memory crew notes. Chats, local IDs, permissions, folders, private connections and account credentials stay on the computer.
+An orglet's menu, a crew channel's menu and a space's menu offer **Publish to marketplace**. A normal channel has no publishing action. The local form asks for a public name, summary, tags, language and changelog. A built-in connection/model can be suggested without changing the local orglets' connection choices. Preview selects only template instructions, skills, avatar data, crew settings and approved non-memory crew notes. Chats, local IDs, permissions, folders, private connections and account credentials stay on the computer.
 
 The form groups public metadata first, with optional version notes and model suggestions behind a disclosure. The preview leads with readable public names, summaries and instructions; labelled disclosures retain every decoded text skill file and the complete exact submission JSON. Nothing executes. Credential or package diagnostics identify a safe logical path and rule; edit the original content and preview again. Sending requires separate license and pending-review acknowledgements and an explicit **Send for review** click in the stable action footer. Every version starts pending. The recorded submission receipt says **Submitted for review**; the latest owner summary separately shows its current pending, approved or rejected state. No reviewer reason or moderator-hidden status is invented.
 

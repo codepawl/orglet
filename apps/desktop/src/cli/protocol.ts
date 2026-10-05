@@ -126,10 +126,11 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('control'), token: CliToken, ...ChatTarget, action: ChatControl, ...WaitFields }).strict(),
   z.object({ op: z.literal('answer'), token: CliToken, ...ChatTarget, answer: Answer, ...WaitFields }).strict(),
   z.object({ op: z.literal('revise'), token: CliToken, ...ChatTarget, message: UserMessageRef, text: Message, ...WaitFields }).strict(),
-  z.object({ op: z.literal('chats'), token: CliToken, archived: z.boolean() }).strict(),
+  z.object({ op: z.literal('chats'), token: CliToken, archived: z.boolean(), space: ChatName.optional() }).strict(),
   z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...WaitFields }).strict(),
   z.object({ op: z.literal('bring'), token: CliToken, chat: ChatId, message: MessageRef.optional() }).strict(),
-  z.object({ op: z.literal('channel'), token: CliToken, names: MemberNames, message: Message, name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), ...WaitFields }).strict(),
+  // With `space` the names may be empty: the channel then takes every orglet of its place.
+  z.object({ op: z.literal('channel'), token: CliToken, names: z.array(ChatName).max(50), message: Message, name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), space: ChatName.optional(), category: ChatName.optional(), ...WaitFields }).strict(),
   z.object({ op: z.literal('members'), token: CliToken, chat: ChatId, names: MemberNames }).strict(),
   z.object({
     op: z.literal('chat-change'),
