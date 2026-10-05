@@ -26,7 +26,9 @@ try {
   await page.setViewportSize({ width: 1200, height: 820 });
   await useVietnamese(page);
   await openDiscover(page);
-  assert.equal(await page.locator('.marketplace-listing').count(), 2);
+  // The catalog that ships with the app also lists a space; a catalog server from before spaces lists these two.
+  for (const name of ['Research friend', 'Research and review']) assert.equal(await page.locator('.marketplace-listing').filter({ hasText: name }).count(), 1, `${name} is listed once`);
+  assert.ok(await page.locator('.marketplace-listing').count() <= 3);
   assert.match(await page.locator('.marketplace-source').innerText(), /Danh mục/);
   await page.screenshot({ path: 'test-results/marketplace-light-wide.png' });
   await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByRole('button', { name: 'Thêm bạn', exact: true }).click();

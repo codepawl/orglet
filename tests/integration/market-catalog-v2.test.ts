@@ -114,3 +114,28 @@ it('serves curated reads without touching D1 even when account publishing is ena
   }
   expect(withSession).not.toHaveBeenCalled();
 });
+
+it('lists a space only for a reader that names the kinds it understands, and never in the first catalog', async () => {
+  const plain = MarketCatalogPageV2.parse(await (await marketWorker.fetch(new Request(`${origin}/v2/catalog`))).json());
+  expect(plain.listings.map(listing => listing.kind)).toEqual(['orglet', 'crew']);
+  const named = MarketCatalogPageV2.parse(await (await marketWorker.fetch(new Request(`${origin}/v2/catalog?kinds=orglet,crew,space`))).json());
+  expect(named.listings.map(listing => listing.listingId)).toEqual(['research-friend', 'research-review', 'launch-space']);
+  expect(named.listings[2]).toMatchObject({ kind: 'space', author: { displayName: 'CodePawl' } });
+  const onlySpaces = MarketCatalogPageV2.parse(await (await marketWorker.fetch(new Request(`${origin}/v2/catalog?kinds=space`))).json());
+  expect(onlySpaces.listings.map(listing => listing.listingId)).toEqual(['launch-space']);
+  // A cursor belongs to the list it was cut from: one from the named list is refused on the plain one.
+  const firstNamed = MarketCatalogPageV2.parse(await (await marketWorker.fetch(new Request(`${origin}/v2/catalog?limit=2&kinds=orglet,crew,space`))).json());
+  expect(firstNamed.nextCursor).not.toBeNull();
+  expect((await marketWorker.fetch(new Request(`${origin}/v2/catalog?limit=2&cursor=${firstNamed.nextCursor}`))).status).toBe(400);
+  const rest = MarketCatalogPageV2.parse(await (await marketWorker.fetch(new Request(`${origin}/v2/catalog?limit=2&kinds=orglet,crew,space&cursor=${firstNamed.nextCursor}`))).json());
+  expect(rest.listings.map(listing => listing.listingId)).toEqual(['launch-space']);
+  const first = MarketCatalog.parse(await (await marketWorker.fetch(new Request(`${origin}/v1/catalog`))).json());
+  expect(first.listings.map(listing => listing.kind)).toEqual(['orglet', 'crew']);
+  const body = await marketWorker.fetch(new Request(`${origin}/v2/listings/launch-space/versions/1`));
+  expect(await body.text()).toBe(MARKET_SEED_BODIES['launch-space:1']);
+});
+
+it.each(['kinds=', 'kinds=team', 'kinds=space,space', 'kinds=orglet,crew,space,orglet', 'kinds=space&kinds=crew'])('refuses invalid kinds %s', async query => {
+  const response = await marketWorker.fetch(new Request(`${origin}/v2/catalog?${query}`));
+  expect(response.status).toBe(400);
+});

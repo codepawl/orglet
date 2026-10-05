@@ -2155,7 +2155,11 @@ export function App() {
         onMarketAdded={async result => {
           await refresh();
           clearSelection();
-          if (result.kind === 'orglet') openWorker(result.entityId);
+          if (result.kind === 'space') {
+            setOpenSpace(result.entityId);
+            setFriendsOpen(false);
+            setArea('channels');
+          } else if (result.kind === 'orglet') openWorker(result.entityId);
           else openTeam(result.entityId);
         }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
       : null;

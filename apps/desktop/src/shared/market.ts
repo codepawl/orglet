@@ -9,10 +9,21 @@ export const MARKET_METADATA_LIMIT = 16 * 1024;
 export const MARKET_REQUEST_LIMIT = MARKET_BODY_LIMIT + MARKET_METADATA_LIMIT + 12;
 export const ListingId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
 export const MarketVersion = z.number().int().positive();
+/** What a listing adds: one orglet, a crew with its channel, or a space with its orglets, categories and channels. */
+export const MarketKind = z.enum(['orglet', 'crew', 'space']);
+export type MarketKind = z.infer<typeof MarketKind>;
+/**
+ * The kinds every Orglet has understood. An app from before spaces reads a catalog strictly, so a listing of any
+ * other kind is served only to a reader that names the kinds it understands (`kinds` on `/v2/catalog`), and never on
+ * `/v1/catalog`.
+ */
+export const LEGACY_MARKET_KINDS: readonly MarketKind[] = ['orglet', 'crew'];
+/** What this app asks the catalog for. */
+export const MARKET_KINDS_QUERY = MarketKind.options.join(',');
 export const MarketListing = z.object({
   listingId: ListingId,
   version: MarketVersion,
-  kind: z.enum(['orglet', 'crew']),
+  kind: MarketKind,
   name: z.string().min(1).max(80),
   summary: z.string().min(1).max(240),
   tags: z.array(z.string().min(1).max(32)).max(10),
@@ -66,7 +77,7 @@ export const MarketOwnerPage = z.object({
 }).strict();
 /** Origin links are local metadata and may travel in a workspace backup, never in a marketplace listing. */
 export const MarketOrigin = z.object({
-  entityId: z.string().uuid(), listingId: ListingId, version: MarketVersion, kind: z.enum(['orglet', 'crew']),
+  entityId: z.string().uuid(), listingId: ListingId, version: MarketVersion, kind: MarketKind,
   workerIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= MAX_CREW_TEMPLATE_WORKERS),
   skillIds: z.record(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/), z.string().uuid()).refine(values => Object.keys(values).length >= 1 && Object.keys(values).length <= MAX_CREW_TEMPLATE_WORKERS),
   baseline: z.string().regex(/^[a-f0-9]{64}$/),
@@ -87,10 +98,10 @@ export const MarketUpdateTarget = z.object({ entityId: z.string().uuid() }).stri
 export const MarketApplyUpdate = MarketUpdateTarget.extend({ token: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 export type MarketDisplayListing = MarketListing | MarketListingV2;
 export type MarketCatalogView = { listings: MarketDisplayListing[]; nextCursor?: string | null; pageCursor?: string; cachedPages?: { cursor: string; name: string }[]; source: 'online' | 'cache' | 'bundled'; fetchedAt: string | null; error?: string };
-export type MarketAdded = { entityId: string; kind: 'orglet' | 'crew'; workerIds: string[]; fallbackNames: string[] };
+export type MarketAdded = { entityId: string; kind: MarketKind; workerIds: string[]; fallbackNames: string[] };
 export type MarketChange = { name: string; before: string; after: string };
 export type MarketUpdate = {
   entityId: string; listing: MarketDisplayListing; installedVersion: number; customization: MarketCustomization;
   token: string; changes: MarketChange[];
 };
-export type MarketInstallation = { entityId: string; kind: 'orglet' | 'crew'; listingId: string; version: number; name: string; updateAvailable: boolean };
+export type MarketInstallation = { entityId: string; kind: MarketKind; listingId: string; version: number; name: string; updateAvailable: boolean };

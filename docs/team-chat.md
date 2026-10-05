@@ -114,7 +114,7 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 **Sync.** A space is its own sync record (`kind: 'space'` in `shared/sync-records.ts`), sent in the scope of every orglet it names, so a space with an orglet that stays on this computer is not sent. The newest save of a space wins as a whole. A synced channel whose space has not arrived, or was not sent, reads as a channel outside every space.
 
-**Not yet.** A space is not a marketplace listing.
+**From the marketplace.** A listing can be a space: adding it makes its orglets, the space with its categories, and its channels ([marketplace-design.md](marketplace-design.md#space-listings)). Publishing a space is not built.
 
 Back and forward work like a browser. The side buttons on a mouse, or Alt+Left and Alt+Right, step through what you opened: a chat, then another chat, then back to the first; Library, a skill, back to Library, forward to the skill again; Settings tab to tab; Notifications open, then back closes it. Closing a panel is a step too, so back reopens it. A chat, skill or knowledge item deleted since is skipped. Alt+arrows do nothing while you type in a text box; the mouse buttons always work. Leaving a schedule you are editing asks about unsaved changes, the same as the panel's own Back.
 

@@ -16,10 +16,21 @@ A listing is data in the template shapes Orglet already reads, checked with the 
 
 - **An orglet**: name, avatar, description, instructions, model suggestion (provider and ID, which the person can change), its skill as text, and an optional skill package.
 - **A crew**: the existing `orglet-team-template` v1 from `core/storage/templates.ts`, with its orglets, skills and approved crew notes.
+- **A space** (owner, 2026-10-05): `orglet-space-template` v1 in `shared/space-template.ts`. It carries the space's name, its orglets and skills as a crew listing does, its categories, and its channels: each channel's name, topic, category, and either every orglet of its place or the orglets it names. It carries no schedule, no permission and no folder.
 
 Plus listing fields: a slug, a short summary, tags, the language it was written in, a CC BY 4.0 license, the version, and the author.
 
 **A listing never carries**, and the server rejects one that tries: scripts that run (skill package files stay files, as with every import today), MCP servers, the auto-apply switch, permissions, folder grants, browser or desktop grants, connections, keys or tokens, memories, or chats. These are the same things a template already leaves out, for the same reason: they belong to one person's computer.
+
+## Space listings
+
+Adding a space listing writes its orglets and skills, then makes the space with its categories and channels in the same transaction (`addSpace` in `MarketRuntime`, `addMarketSpace` in `core/service.ts`). The space's id is what the origin names, with kind `space`. Adding it twice makes two spaces with their own orglets. Deleting the space removes it from the installed list; its orglets and channels stay.
+
+An update to a space listing compares and replaces its orglets and skills, as an orglet listing's does. It does not change the space's categories or channels, which are the person's once added.
+
+**Older apps.** An app from before spaces reads a catalog strictly and fails on a kind it does not know. So `/v1/catalog` lists only orglets and crews, and `/v2/catalog` lists a space only for a reader that names the kinds it understands (`kinds=orglet,crew,space`). This app asks with `kinds`, and asks again without it when a catalog server from before spaces refuses the query. The public content contract (`validateMarketSubmission`) accepts a space, which is how the server builds its curated catalog, but the owner route refuses a space from an account: a space is curated content for now.
+
+**Not built.** Publishing a space from the desktop, and its review. The curated listing **Launch space** ships with the app, and appears in an online catalog once the market service is deployed with this change.
 
 ## Pieces
 

@@ -45,7 +45,8 @@ export function deletionEntities(data: SyncData, records: readonly SyncRecord[] 
       ...scopes.filter(scope => scope.kind === 'task').flatMap(scope => taskEntities(scope.id))];
     case 'routine': return [{ kind: 'routine', id: data.value.id }, ...(data.value.task.teamId ? [{ kind: 'team', id: data.value.task.teamId }] : [])];
     case 'channel': return channelEntities(data.value);
-    case 'origin': return [{ kind: data.value.kind === 'orglet' ? 'worker' : 'team', id: data.value.entityId },
+    // A space's origin names the space, which is not an entity a deletion can name; its orglets and skills are.
+    case 'origin': return [...(data.value.kind === 'space' ? Object.values(data.value.workerIds).map(id => ({ kind: 'worker', id })) : [{ kind: data.value.kind === 'orglet' ? 'worker' : 'team', id: data.value.entityId }]),
       ...Object.values(data.value.skillIds).map(id => ({ kind: 'skill', id }))];
     case 'delete': return [{ kind: data.entity, id: data.id }];
     case 'withdraw': return [data.root];

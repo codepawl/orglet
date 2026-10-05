@@ -6,6 +6,7 @@ import { MARKET_BODY_LIMIT, MARKET_METADATA_LIMIT, MARKET_REQUEST_LIMIT } from '
 import { PackageInput, SKILL_FILE_LIMIT, SKILL_PACKAGE_LIMIT } from './skill-package';
 import { inspectPackageContent, packageBlockers, packageIdentityText } from './skill-package-content';
 import { validateTemplateReferences } from './templates';
+import { SpaceTemplate, validateSpaceTemplate } from './space-template';
 import { credentialLocations, MAX_CREDENTIAL_DIAGNOSTICS } from './secrets';
 
 const TemplateKey = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
@@ -32,6 +33,16 @@ export const PublicTeamTemplate = z.object({
   skills: z.array(PublicSkill.extend({ key: TemplateKey }).strict()).min(1).max(MAX_CREW_TEMPLATE_WORKERS),
   knowledge: z.array(KnowledgeInput.pick({ title: true, content: true, tags: true, pinned: true }).strict()).max(50).optional(),
 }).strict();
+/**
+ * A space as public content: its name, categories and channels as the space template has them, with the same
+ * public orglets and skills a crew listing carries. It has no permission, schedule or folder to carry.
+ */
+export const PublicSpaceTemplate = z.object({
+  format: z.literal('orglet-space-template'), version: z.literal(1),
+  space: SpaceTemplate.shape.space,
+  workers: z.array(PublicWorker.extend({ key: TemplateKey, skillKey: TemplateKey }).strict()).min(1).max(MAX_CREW_TEMPLATE_WORKERS),
+  skills: z.array(PublicSkill.extend({ key: TemplateKey }).strict()).min(1).max(MAX_CREW_TEMPLATE_WORKERS),
+}).strict();
 const SubmissionMetadata = {
   name: z.string().trim().min(1).max(80), summary: z.string().trim().min(1).max(240),
   tags: z.array(z.string().min(1).max(32)).max(10), language: z.enum(['en', 'vi']),
@@ -40,6 +51,7 @@ const SubmissionMetadata = {
 export const MarketSubmission = z.discriminatedUnion('kind', [
   z.object({ ...SubmissionMetadata, kind: z.literal('orglet'), template: PublicWorkerTemplate }).strict(),
   z.object({ ...SubmissionMetadata, kind: z.literal('crew'), template: PublicTeamTemplate }).strict(),
+  z.object({ ...SubmissionMetadata, kind: z.literal('space'), template: PublicSpaceTemplate }).strict(),
 ]);
 export type MarketSubmission = z.infer<typeof MarketSubmission>;
 export type MarketDiagnostic = { path: string; line: number; rule: string; message: string };
@@ -77,6 +89,7 @@ const DIAGNOSTIC_FIELDS = new Set([
   'instructions', 'provider', 'modelId', 'effort', 'avatar', 'description', 'emoji',
   'mascot', 'letter', 'color', 'key', 'skillKey', 'memberKeys', 'synthesizerKey',
   'content', 'package', 'directoryName', 'files', 'path', 'title', 'pinned',
+  'space', 'categories', 'channels', 'topic', 'categoryKey',
 ]);
 
 function scanAuthoredStrings(value: unknown, path: string, diagnostics: MarketDiagnostic[]): void {
@@ -141,8 +154,15 @@ export async function validateMarketSubmission(requestText: string, limits: Mark
       addDiagnostic(diagnostics, diagnostic('template', 'references'));
     }
   }
+  if (submission.kind === 'space') {
+    try {
+      validateSpaceTemplate(submission.template);
+    } catch {
+      addDiagnostic(diagnostics, diagnostic('template', 'references'));
+    }
+  }
   scanAuthoredStrings(submission, 'request', diagnostics);
-  const skills = submission.kind === 'crew' ? submission.template.skills : [submission.template.skill];
+  const skills = submission.kind === 'orglet' ? [submission.template.skill] : submission.template.skills;
   for (const [skillIndex, skill] of skills.entries()) {
     if (!skill.package) continue;
     const path = submission.kind === 'orglet' ? 'template.skill.package' : `template.skills[${skillIndex}].package`;

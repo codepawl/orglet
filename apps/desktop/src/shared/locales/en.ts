@@ -4109,6 +4109,8 @@ export const en: Dictionary = {
   "Không tìm thấy kênh này.": "This channel was not found.",
   "Kênh chưa có Tí nào để trả lời. Thêm một Tí.": "Nobody in this channel can answer yet. Add an orglet.",
   "Không tìm thấy không gian này.": "This space was not found.",
+  "Không gian này đã bị xóa.": "This space was deleted.",
+  "Không thêm được không gian ở đây.": "A space cannot be added here.",
   "Cách dùng: orglet spaces [--json]\n\nLiệt kê không gian: Tí trong đó, rồi từng kênh với nhóm của nó và những Tí ở trong kênh.": "Usage: orglet spaces [--json]\n\nLists spaces: the orglets in each, then each channel with its category and the orglets in it.",
   "Chưa có không gian nào.": "No spaces yet.",
   "mọi Tí của nơi nó nằm": "every orglet of its place",

@@ -48,7 +48,7 @@ Orglet is made for one person: freelancers, solo founders and anyone who uses Ch
 | **Let it remember** | An orglet keeps short notes about how you like things done. You can correct, pin or delete each one. [Memory](docs/memory.md) |
 | **Browse and use apps** | With your permission, an orglet reads web pages in its own browser, and on Windows it works in the desktop apps you allow. It asks before anything that sends, pays or deletes. [Browser](docs/browser.md), [desktop apps](docs/desktop.md) |
 | **Connect other services** | Add MCP servers, and choose which orglet can use each one. [MCP servers](docs/mcp.md) |
-| **Find ready-made orglets** | Add curated orglets and channels from the marketplace. Browsing and adding need no account. [Marketplace](docs/marketplace-design.md) |
+| **Find ready-made orglets** | Add curated orglets, channels and spaces from the marketplace. Browsing and adding need no account. [Marketplace](docs/marketplace-design.md) |
 | **Use the terminal** | The `orglet` command sends messages, reads answers and manages chats from a terminal or a script. [The orglet command](docs/cli.md) |
 | **Search everything** | **Ctrl+K** searches every message and answer in every chat, on this computer only. [Search](docs/chat-guide.md#search) |
 

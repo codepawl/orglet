@@ -1,4 +1,5 @@
 import { MARKET_SEED_BODIES, seedCatalog } from '../../../apps/desktop/src/shared/market-seed';
+import { LEGACY_MARKET_KINDS } from '../../../apps/desktop/src/shared/market';
 import { catalogPageV2 } from './catalog-v2';
 import { ownerRoute, privateReply, type MarketEnvironment } from './owner-routes';
 import { listingBody, publicListingSummary } from './listings';
@@ -59,7 +60,9 @@ export default {
         return privateReply(request, { code: 'storage_failed' }, 500);
       }
     }
-    const catalog = await seedCatalog();
+    // The first catalog is read strictly by every app from before spaces: it lists only the kinds they understand.
+    const seeded = await seedCatalog();
+    const catalog = { listings: seeded.listings.filter(listing => LEGACY_MARKET_KINDS.includes(listing.kind)) };
     if (path === '/v1/catalog') return reply(request, JSON.stringify(catalog), 'public, max-age=300');
     const match = /^\/v1\/listings\/([a-z0-9-]+)\/versions\/([1-9][0-9]*)$/.exec(path);
     const body = match ? MARKET_SEED_BODIES[`${match[1]}:${match[2]}`] : undefined;

@@ -1,12 +1,13 @@
 import type { D1Database } from '../worker-configuration';
-import { ListingId, MarketCatalogPageV2, type MarketListingV2 } from '../../../apps/desktop/src/shared/market';
+import { LEGACY_MARKET_KINDS, ListingId, MarketCatalogPageV2, MarketKind, type MarketListingV2 } from '../../../apps/desktop/src/shared/market';
 import { MARKET_SEED_BODIES, seedCatalog } from '../../../apps/desktop/src/shared/market-seed';
 import { validateMarketSubmission, canonicalMarketContent } from '../../../apps/desktop/src/shared/market-publishing';
 import { approvedListings } from './listings';
 
-export async function seedCatalogV2(): Promise<{ listings: MarketListingV2[]; snapshot: string }> {
+/** The curated listings of these kinds, and a digest of exactly that list for its page cursors. */
+export async function seedCatalogV2(kinds: readonly MarketKind[] = MarketKind.options): Promise<{ listings: MarketListingV2[]; snapshot: string }> {
   const seed = await seedCatalog();
-  const listings = await Promise.all(seed.listings.map(async listing => {
+  const listings = await Promise.all(seed.listings.filter(listing => kinds.includes(listing.kind)).map(async listing => {
     const { listingId, version, sha256, author: _author, ...metadata } = listing;
     const result = await validateMarketSubmission(JSON.stringify({
       ...metadata, template: JSON.parse(MARKET_SEED_BODIES[`${listingId}:${version}`]),
@@ -21,13 +22,22 @@ export async function seedCatalogV2(): Promise<{ listings: MarketListingV2[]; sn
 
 /** The immutable seed reserves its listing IDs; future account listings must never claim them. */
 export async function catalogPageV2(search: URLSearchParams, database?: D1Database): Promise<string | undefined> {
-  if ([...search.keys()].some(key => key !== 'limit' && key !== 'cursor')) return undefined;
-  if (search.getAll('limit').length > 1 || search.getAll('cursor').length > 1) return undefined;
+  if ([...search.keys()].some(key => key !== 'limit' && key !== 'cursor' && key !== 'kinds')) return undefined;
+  if (search.getAll('limit').length > 1 || search.getAll('cursor').length > 1 || search.getAll('kinds').length > 1) return undefined;
+  // A reader from before spaces names no kinds and gets the kinds it has always understood.
+  const requestedKinds = search.get('kinds');
+  let kinds = LEGACY_MARKET_KINDS;
+  if (requestedKinds !== null) {
+    const named = requestedKinds.split(',');
+    const parsed = named.map(kind => MarketKind.safeParse(kind));
+    if (named.length > MarketKind.options.length || new Set(named).size !== named.length || parsed.some(result => !result.success)) return undefined;
+    kinds = named as MarketKind[];
+  }
   const requestedLimit = search.get('limit') ?? '50';
   if (!/^[1-9][0-9]{0,2}$/.test(requestedLimit)) return undefined;
   const limit = Number(requestedLimit);
   if (limit > 100) return undefined;
-  const { listings, snapshot } = await seedCatalogV2();
+  const { listings, snapshot } = await seedCatalogV2(kinds);
   if (database) {
     let after = '';
     const cursor = search.get('cursor');

@@ -127,6 +127,9 @@ export async function ownerRoute(request: Request, environment: MarketEnvironmen
     }
     const content = await validateMarketSubmission(text);
     if (!content.ok) return privateReply(request, { code: 'invalid_submission', diagnostics: content.diagnostics }, 400);
+    // A space is curated content for now: an account cannot submit one, so the stored catalog holds only the kinds
+    // every app understands.
+    if (content.submission.kind === 'space') return privateReply(request, { code: 'invalid_submission', diagnostics: [{ path: 'request.kind', line: 1, rule: 'schema', message: 'Nội dung xuất bản không hợp lệ. Kiểm tra trường và quy tắc được chỉ ra.' }] }, 400);
     return privateReply(request, await submitListing(database, authentication.identity, version?.[1] ?? null, key!, content));
   } catch (error) {
     const status = error instanceof MarketOperationError ? error.status : 500;
