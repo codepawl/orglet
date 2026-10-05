@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { Bell, BookOpen, CalendarClock, Plus } from './icons';
-import { Hash, MessagesSquare } from 'lucide-react';
+import { MessagesSquare } from 'lucide-react';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
@@ -31,10 +31,10 @@ const STUCK_AFTER_SECONDS = 15;
 const WORKER_ROW_SHAPES = 3;
 const DEFAULT_SIDEBAR_WIDTH = 240;
 
-const areaIcons = [<MessagesSquare key="home" size={20} />, <Hash key="channels" size={20} />, <Bell key="activity" size={20} />, <BookOpen key="library" size={20} />, <CalendarClock key="schedules" size={20} />];
+const areaIcons = [<MessagesSquare key="home" size={20} />, <Bell key="activity" size={20} />, <BookOpen key="library" size={20} />, <CalendarClock key="schedules" size={20} />];
 
 type Wait = 'opening' | 'slow' | 'stuck';
-const areaLabels = () => [t('Bạn bè và tin nhắn'), t('Kênh'), t('Hoạt động'), t('Thư viện'), t('Lịch chạy')];
+const areaLabels = () => [t('Bạn bè và tin nhắn'), t('Hoạt động'), t('Thư viện'), t('Lịch chạy')];
 type Cue = { kind: Moment; count: number };
 
 const nextCue = (kind: Moment) => (previous: Cue | undefined): Cue => ({ kind, count: (previous?.count ?? 0) + 1 });

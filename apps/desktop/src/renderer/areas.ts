@@ -52,6 +52,41 @@ export function writeOpenSpace(spaceId: string) {
   }
 }
 
+const closedFoldersKey = 'orglet.closedSpaceFolders';
+
+/** The rail folders the person closed, by folded name. Which folders are open is UI chrome, like the open area. */
+export function readClosedFolders(): string[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem(closedFoldersKey) ?? '[]') as unknown;
+    return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeClosedFolders(names: readonly string[]) {
+  try {
+    localStorage.setItem(closedFoldersKey, JSON.stringify(names));
+  } catch {
+    /* storage unavailable: the folders stay as they are until the app closes */
+  }
+}
+
+/** One name for a folder however its spaces spell it: two spellings that differ only in case are one folder. */
+export function folderKey(name: string): string {
+  return foldForSearch(name.trim());
+}
+
+/** The folders the spaces name, each once as its first space spelled it, in the spaces' order. */
+export function spaceFolderNames(spaces: readonly { folder?: string }[]): string[] {
+  const names = new Map<string, string>();
+  for (const space of spaces) {
+    const name = space.folder?.trim();
+    if (name && !names.has(folderKey(name))) names.set(folderKey(name), name);
+  }
+  return [...names.values()];
+}
+
 /** The orglets that have a run going right now, which the sidebar and the member column mark. */
 export function workingOrgletIds(running: readonly RunningItem[]): Set<string> {
   return new Set(running.filter(item => item.state === 'running' || item.state === 'pausing').map(item => item.worker.id));

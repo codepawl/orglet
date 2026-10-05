@@ -13,6 +13,8 @@ import { CHANNEL_CATEGORY_LIMIT, MAX_CHANNEL_MEMBERS, type Channel, type Channel
  */
 
 export const SPACE_NAME_LIMIT = 80;
+/** A folder on the rail is named by the spaces in it, the way a loose channel names its category. */
+export const SPACE_FOLDER_LIMIT = 40;
 export const MAX_SPACES = 50;
 export const MAX_SPACE_CATEGORIES = 50;
 
@@ -51,6 +53,8 @@ export const Space = z.object({
     .refine(categories => new Set(categories.map(category => category.id)).size === categories.length, 'Mục bị trùng.'),
   /** What a new channel in the space starts with; none leaves a new channel the app's own defaults. */
   defaults: SpaceDefaults.optional(),
+  /** The folder the space's tile sits in on the rail; spaces that name the same folder share it. None stands alone. */
+  folder: z.string().trim().min(1).max(SPACE_FOLDER_LIMIT).optional(),
 }).strict();
 export type Space = z.infer<typeof Space>;
 
@@ -71,6 +75,8 @@ export const SpaceFields = z.object({
   categories: z.array(SpaceCategory.extend({ id: z.uuid().optional() }).strict()).max(MAX_SPACE_CATEGORIES).default([]),
   /** Left out keeps what the space has; `null` goes back to the app's own defaults. */
   defaults: SpaceDefaults.nullable().optional(),
+  /** Left out keeps the space's folder; `null` or an empty name takes it out of its folder. */
+  folder: z.string().trim().max(SPACE_FOLDER_LIMIT).nullable().optional(),
 }).strict();
 export type SpaceFields = z.infer<typeof SpaceFields>;
 

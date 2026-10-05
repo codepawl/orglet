@@ -7,6 +7,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunningItem } from '../../apps/desktop/src/shared/running';
 import { categoryNames, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
+import { folderKey, spaceFolderNames } from '../../apps/desktop/src/renderer/areas';
 import { SAVED_LIMIT, SAVED_TEXT_LIMIT, savedExcerpt, withSaved, withoutSaved, type SavedMessage } from '../../apps/desktop/src/renderer/saved';
 import { activityCounts } from '../../apps/desktop/src/renderer/components/ActivityPage';
 
@@ -115,5 +116,13 @@ describe('a channel category through the core', () => {
   it('refuses a category longer than the limit', async () => {
     const [scout] = store.all<Worker>('workers');
     await expect(core.command('createChannel', { name: 'x', topic: '', category: 'c'.repeat(41), members: [{ kind: 'orglet', id: scout.id }] })).rejects.toThrow();
+  });
+});
+
+describe('folders of spaces on the rail', () => {
+  it('lists each folder once, as its first space spelled it, in the spaces\' order', () => {
+    expect(spaceFolderNames([{ folder: 'Work' }, {}, { folder: ' clients' }, { folder: 'WORK' }, { folder: 'Clients' }])).toEqual(['Work', 'clients']);
+    expect(spaceFolderNames([{}, { folder: '   ' }])).toEqual([]);
+    expect(folderKey(' Work ')).toBe(folderKey('work'));
   });
 });

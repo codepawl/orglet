@@ -97,6 +97,7 @@ export class Spaces {
     });
     const color = fields.color?.trim();
     const defaults = fields.defaults === undefined ? current?.defaults : fields.defaults ?? undefined;
-    return Space.parse({ id: spaceId, name: fields.name, ...(color ? { color } : {}), orgletIds: fields.orgletIds, categories, ...(defaults ? { defaults } : {}) });
+    const folder = fields.folder === undefined ? current?.folder : fields.folder?.trim() || undefined;
+    return Space.parse({ id: spaceId, name: fields.name, ...(color ? { color } : {}), orgletIds: fields.orgletIds, categories, ...(defaults ? { defaults } : {}), ...(folder ? { folder } : {}) });
   }
 }

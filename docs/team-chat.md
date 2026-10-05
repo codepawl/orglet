@@ -104,6 +104,10 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 **The member column.** In a space, a channel with its own list shows a second, dimmed group: the orglets its place has that are not in the channel, with **Add to this channel**. **Remove from channel** gives the channel its own list first, or the space would put the orglet straight back.
 
+**Loose channels.** The rail has no tile for the channels outside every space (owner, 2026-10-05): Home lists them under the direct messages, and `areaOfTask` puts a chat in a space's area only when its channel's space exists.
+
+**Folders.** A space can name a `folder` (`Space.folder`, at most `SPACE_FOLDER_LIMIT` characters). Spaces that name the same folder, ignoring case, share one group on the rail, at the place of the first of them (`spaceFolderNames` and `folderKey` in `renderer/areas.ts`, `AreaRailFolder` in `AreaRail.tsx`). There is no folder record: a folder exists while a space names it, so it travels with the space in a backup and in sync. `updateSpace` keeps the folder when the field is left out, which is what the terminal and older callers send, and `null` or an empty name takes the space out. Which folders are closed is UI chrome (`orglet.closedSpaceFolders`). A tile's menu opens on a right click, and its small trigger takes keyboard focus.
+
 **From a category.** A category of channels outside every space has **Make a space from this category** in its menu.
 
 **Backups and the terminal.** A backup carries the spaces (`spaces` in its payload); restoring keeps a space this computer already has. `orglet spaces` lists each space with its orglets and channels.

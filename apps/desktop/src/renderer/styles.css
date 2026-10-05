@@ -3045,6 +3045,16 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-tile:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
 .area-tile.active { background:var(--row-active); color:var(--text); }
 .area-tile:disabled { cursor:default; opacity:.6; }
+/* A tile's menu opens on a right click; its trigger shows only on a keyboard focus, so the rail stays a column of tiles. */
+.area-tile-slot { position:relative; display:grid; place-items:center; }
+.area-tile-slot > .org-row-menu, .area-tile-slot > .row-menu { position:absolute; inset:auto -2px -2px auto; }
+.area-tile-menu { width:18px; height:18px; min-height:18px; padding:0; border:0; border-radius:6px; background:var(--surface); color:var(--text); opacity:0; pointer-events:none; }
+.area-tile-menu:focus-visible, .area-tile-menu[aria-expanded="true"] { opacity:1; pointer-events:auto; }
+/* A folder of spaces: an outline around its tiles, never a ground of its own, so a tile's hover tint is not a
+   background inside a background. */
+.area-folder { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.area-folder.open { padding:4px; margin:-4px; border-radius:18px; box-shadow:inset 0 0 0 1px var(--border); }
+.area-folder-tile { color:var(--muted); }
 .area-create { color:var(--muted); }
 .area-count { position:absolute; top:-3px; right:-3px; display:grid; place-items:center; min-width:16px; height:16px; padding:0 4px; border-radius:999px; font-size:10px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; box-shadow:0 0 0 2px var(--window); }
 .area-count.accent { background:var(--accent); color:var(--accent-ink); }
