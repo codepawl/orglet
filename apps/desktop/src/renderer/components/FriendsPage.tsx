@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ArchiveRestore, FileUp, UserRoundPlus } from 'lucide-react';
-import { Input } from '@codepawl/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 import { Avatar } from './Avatar';

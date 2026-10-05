@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { X } from 'lucide-react';
-import { TabbedFormDialog as KitTabbedFormDialog, type DialogTab } from '@codepawl/orglet-ui';
+import { TabbedFormDialog as KitTabbedFormDialog, type DialogTab } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 
 export type { DialogTab };

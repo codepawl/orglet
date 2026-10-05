@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Boxes, Database, FileText, Folder, FolderTree, Globe, Lock, Plus, ShieldCheck, SlidersHorizontal, Trash, UserRound, UsersRound } from 'lucide-react';
-import { Input } from '@codepawl/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { CHANNEL_CATEGORY_LIMIT, MAX_CHANNEL_MEMBERS } from '../../shared/channels';
 import { MAX_SPACE_CATEGORIES, SPACE_FOLDER_LIMIT, SPACE_NAME_LIMIT, type Space, type SpaceDefaultCapability } from '../../shared/spaces';

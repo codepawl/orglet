@@ -12,7 +12,7 @@ import { formatMoney, toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
-import { Input } from '@codepawl/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 import { LocalOnlyControl } from './LocalOnlyControl';
 
 type Tab = 'general' | 'limits';

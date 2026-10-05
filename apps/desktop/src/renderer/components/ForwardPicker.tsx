@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Checkbox, DialogOverlay, Input, Textarea, useReturnFocus } from '@codepawl/orglet-ui';
+import { Checkbox, DialogOverlay, Input, Textarea, useReturnFocus } from '@codepawlhq/orglet-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Forward, Search, X } from 'lucide-react';
 import { Button } from './ui';

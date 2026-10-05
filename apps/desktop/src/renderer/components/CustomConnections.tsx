@@ -7,7 +7,7 @@ import {
 } from '../../shared/custom-connections';
 import { connectionTestOutcome, pricingLabel } from '../customConnections';
 import { toAmount, toMicros } from './money';
-import { Input } from '@codepawl/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 import { AnchoredPopover } from './AnchoredPopover';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { ProviderMark } from './ProviderMark';

@@ -31,7 +31,7 @@ import { chatContextFor, usageRingFor, type ContextWorker } from '../../shared/c
 import { isHarness } from '../../shared/harness';
 import { modelLists } from '../caches';
 import { useCachedEach } from '../prefetch';
-import { Skeleton } from '@codepawl/orglet-ui';
+import { Skeleton } from '@codepawlhq/orglet-ui';
 
 const SINGLE_LINE = 40;
 

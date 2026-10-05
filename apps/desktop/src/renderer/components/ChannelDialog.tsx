@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Boxes, CalendarDays, Clock, Columns2, Combine, Download, FileUp, FolderTree, Globe, Hash, Layers, ListOrdered, Lock, MessageSquareQuote, MessagesSquare, ScrollText, SlidersHorizontal, UserRound, UsersRound, Wallet, Workflow } from 'lucide-react';
-import { Input, Textarea } from '@codepawl/orglet-ui';
+import { Input, Textarea } from '@codepawlhq/orglet-ui';
 import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type ChannelLeadSettings, type Team, type Worker, type Workspace } from '../../shared/contracts';
 import { CHANNEL_CATEGORY_LIMIT, CHANNEL_NAME_LIMIT, CHANNEL_TOPIC_LIMIT, MAX_CHANNEL_MEMBERS, type ChannelAccess, type ChannelMember, type ChannelMode } from '../../shared/channels';
 import { scopeOrgletIds } from '../../shared/spaces';

@@ -1,4 +1,4 @@
-# @codepawl/orglet-ui
+# @codepawlhq/orglet-ui
 
 The interface Orglet is built from: a small set of React components and the tokens they read.
 
@@ -12,7 +12,7 @@ imports it from here.
 Once it is published:
 
 ```sh
-pnpm add @codepawl/orglet-ui
+pnpm add @codepawlhq/orglet-ui
 ```
 
 It needs React 19 (`react` and `react-dom` are peer dependencies). It ships as ES modules with type declarations,
@@ -28,9 +28,9 @@ app needs a build of the kit first.
 Import the tokens once, in the application's entry file, then use the components:
 
 ```tsx
-import '@codepawl/orglet-ui/tokens.css';
+import '@codepawlhq/orglet-ui/tokens.css';
 import { useState } from 'react';
-import { SwitchField } from '@codepawl/orglet-ui';
+import { SwitchField } from '@codepawlhq/orglet-ui';
 
 export function ReportSetting() {
   const [weekly, setWeekly] = useState(true);
@@ -172,9 +172,9 @@ animates through them stops without any code of its own.
 ## Develop
 
 ```sh
-pnpm --filter @codepawl/orglet-ui build           # dist/: one module per component, its stylesheet beside it, types
-pnpm --filter @codepawl/orglet-ui test            # Vitest in jsdom, Testing Library, axe
-pnpm --filter @codepawl/orglet-ui check:package   # publint and Are the Types Wrong, on the built package
+pnpm --filter @codepawlhq/orglet-ui build           # dist/: one module per component, its stylesheet beside it, types
+pnpm --filter @codepawlhq/orglet-ui test            # Vitest in jsdom, Testing Library, axe
+pnpm --filter @codepawlhq/orglet-ui check:package   # publint and Are the Types Wrong, on the built package
 ```
 
 The build is tsdown. It keeps each component in its own file and copies its stylesheet next to it unchanged, so the
@@ -188,9 +188,9 @@ The root `pnpm test` runs these tests too, as the `orglet-ui` Vitest project. CI
 Every component has stories in `stories/`, one per meaningful state, in [Storybook](https://storybook.js.org) 10:
 
 ```sh
-pnpm --filter @codepawl/orglet-ui storybook         # the gallery at http://localhost:6006
-pnpm --filter @codepawl/orglet-ui build-storybook   # a static copy in storybook-static/ (not committed, not deployed)
-pnpm --filter @codepawl/orglet-ui check:stories     # every story of the static copy, light and dark, rendered and axe-checked
+pnpm --filter @codepawlhq/orglet-ui storybook         # the gallery at http://localhost:6006
+pnpm --filter @codepawlhq/orglet-ui build-storybook   # a static copy in storybook-static/ (not committed, not deployed)
+pnpm --filter @codepawlhq/orglet-ui check:stories     # every story of the static copy, light and dark, rendered and axe-checked
 ```
 
 The toolbar's Theme switch sets `data-theme` on the root element, exactly as an application does, and the

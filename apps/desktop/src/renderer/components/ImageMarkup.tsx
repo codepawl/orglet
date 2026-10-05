@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { ArrowUpRight, Circle, Crop, Highlighter, Pen, Redo2, Square, Type, Undo2 } from 'lucide-react';
-import { Button, Input, ToolbarToggleGroup, type ToolbarToggleItem } from '@codepawl/orglet-ui';
+import { Button, Input, ToolbarToggleGroup, type ToolbarToggleItem } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 import {
   cropFrom, exportFrame, extendStroke, isShape, isStroke, labelFont, paintMarkup, rectFrom, strokeWidth, textSize,

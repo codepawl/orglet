@@ -1,4 +1,4 @@
-import { Viewer } from '@codepawl/orglet-ui';
+import { Viewer } from '@codepawlhq/orglet-ui';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Download, ExternalLink, FolderOpen, MessageSquarePlus, Pencil, PenLine, ShieldOff, X } from 'lucide-react';
 import { useSync } from '../account';
@@ -15,7 +15,7 @@ import { languageOf } from './highlight';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { reportFeature } from '../analytics';
-import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawlhq/orglet-ui';
 import { sourcePreviews } from '../caches';
 import { useCached } from '../prefetch';
 import type { Icon } from './icons';

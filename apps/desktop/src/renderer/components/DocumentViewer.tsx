@@ -1,4 +1,4 @@
-import { Viewer } from '@codepawl/orglet-ui';
+import { Viewer } from '@codepawlhq/orglet-ui';
 import type { ReactNode } from 'react';
 import { FileText, X } from 'lucide-react';
 import { t } from '../i18n';

@@ -40,5 +40,5 @@ service-account*.json
 scripts/tacet/.*.mjs
 scripts/tacet/.*.cjs
 
-# The kit gallery's static build (pnpm --filter @codepawl/orglet-ui build-storybook).
+# The kit gallery's static build (pnpm --filter @codepawlhq/orglet-ui build-storybook).
 storybook-static/

@@ -1,4 +1,4 @@
-import { SwitchField } from '@codepawl/orglet-ui';
+import { SwitchField } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 
 export function LocalOnlyControl({ checked, onChange, inherited = false, permanent = false, worker = false }: {

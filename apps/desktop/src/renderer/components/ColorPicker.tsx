@@ -1,8 +1,8 @@
 // The picker moved into the kit (COD-274); this wrapper gives it the app's own words, so its callers did not change.
-import { ColorPicker as KitColorPicker, type ColorPickerLabels, type ColorPickerProps } from '@codepawl/orglet-ui';
+import { ColorPicker as KitColorPicker, type ColorPickerLabels, type ColorPickerProps } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 
-export { normalizeHex } from '@codepawl/orglet-ui';
+export { normalizeHex } from '@codepawlhq/orglet-ui';
 
 function colorPickerLabels(): ColorPickerLabels {
   return {

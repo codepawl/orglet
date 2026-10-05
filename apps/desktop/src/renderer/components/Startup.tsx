@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
-import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import { Bell, BookOpen, CalendarClock, Plus } from './icons';
 import { MessagesSquare } from 'lucide-react';
 import { t } from '../i18n';

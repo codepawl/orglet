@@ -3,4 +3,4 @@
  * belongs. This file stays so the app keeps importing `./Switch`, and so the move can be undone in one place if
  * the kit turns out to be the wrong home for it.
  */
-export { Switch, SwitchField } from '@codepawl/orglet-ui';
+export { Switch, SwitchField } from '@codepawlhq/orglet-ui';

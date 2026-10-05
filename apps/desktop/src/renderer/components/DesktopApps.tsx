@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Camera, Check, ChevronsUpDown, Image, Keyboard, List, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldAlert, TextCursorInput, ToggleRight, X, type LucideIcon } from 'lucide-react';
-import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { defaultDesktopChoice, type DesktopAction, type DesktopActionKind, type DesktopActKind, type DesktopApprovalView, type DesktopBorrowStep, type DesktopChoice, type DesktopWindowView } from '../../shared/desktop';
 import { Button, Drawer } from './ui';

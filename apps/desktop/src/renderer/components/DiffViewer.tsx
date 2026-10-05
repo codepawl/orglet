@@ -11,7 +11,7 @@ import type { InfoTipRow } from './InfoTip';
 import { languageOf, tokenizeLines, type Language } from './highlight';
 import { currentLocale, t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
-import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawlhq/orglet-ui';
 import { workspaceDiffs } from '../caches';
 import { useCached } from '../prefetch';
 

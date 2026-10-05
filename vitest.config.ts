@@ -17,7 +17,7 @@ const REAL_BROWSER_TESTS = [
 
 export default defineConfig({
   // The same source alias the renderer build uses, so a test can render an app component that imports the kit.
-  resolve: { alias: { '@codepawl/orglet-ui': fileURLToPath(new URL('packages/orglet-ui/src/index.ts', import.meta.url)) } },
+  resolve: { alias: { '@codepawlhq/orglet-ui': fileURLToPath(new URL('packages/orglet-ui/src/index.ts', import.meta.url)) } },
   test: {
     // Integration tests restart the core and run real SQLite work. They take 2 to 8 seconds on a GitHub Windows
     // runner, so the 5 second default fails healthy tests there. On CI the whole suite shares a 4-core runner with

@@ -11,7 +11,7 @@ import { Select } from './Select';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { SwitchField } from './Switch';
-import { Input, Textarea } from '@codepawl/orglet-ui';
+import { Input, Textarea } from '@codepawlhq/orglet-ui';
 
 export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
   if (scope.type === 'workspace') return t('Toàn workspace');

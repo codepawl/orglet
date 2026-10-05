@@ -3,7 +3,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
 } from 'react';
 import { AppWindow, ExternalLink, Hand, Info, Maximize2, MonitorSmartphone, Undo2, X } from 'lucide-react';
-import { Skeleton, Viewer } from '@codepawl/orglet-ui';
+import { Skeleton, Viewer } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import {
   BROWSER_WATCH_RENEW_MS, pageToView, viewToPage, type BrowserCursor, type BrowserInputEvent, type BrowserLiveEvent, type BrowserSuggestion, type BrowserWatchState,

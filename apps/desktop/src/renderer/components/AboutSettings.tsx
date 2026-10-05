@@ -13,7 +13,7 @@ import { Orglet3D } from './Orglet3D';
 import { clockLabel } from './TimeMark';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { CommandBlock, Skeleton, SkeletonText } from '@codepawl/orglet-ui';
+import { CommandBlock, Skeleton, SkeletonText } from '@codepawlhq/orglet-ui';
 import { aboutInfo, APP_KEY, changelogs, updateStates } from '../caches';
 import { useCached } from '../prefetch';
 import { restartIntoUpdate } from '../updateRestart';

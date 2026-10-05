@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { DialogOverlay } from '@codepawl/orglet-ui';
+import { DialogOverlay } from '@codepawlhq/orglet-ui';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CornerDownLeft, Search, X } from 'lucide-react';
 import type { Task, Team, Worker, Workspace } from '../../shared/contracts';
