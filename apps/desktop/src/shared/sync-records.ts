@@ -29,7 +29,7 @@ export const SyncChatField = z.discriminatedUnion('field', [
 export const SyncSetting = z.discriminatedUnion('key', [
   z.object({ key: z.literal('theme'), value: z.enum(['light', 'dark', 'system']).nullable() }).strict(),
   z.object({ key: z.literal('language'), value: z.enum(['vi', 'en', 'en-GB']).nullable() }).strict(),
-  z.object({ key: z.literal('sidebarOrder'), value: z.object({ workers: z.array(Id).max(10000).optional(), teams: z.array(Id).max(10000).optional() }).strict().nullable() }).strict(),
+  z.object({ key: z.literal('sidebarOrder'), value: z.object({ workers: z.array(Id).max(10000).optional(), teams: z.array(Id).max(10000).optional(), channels: z.array(Id).max(10000).optional(), categories: z.array(Id).max(10000).optional() }).strict().nullable() }).strict(),
 ]);
 export const SyncSource = z.object({ id: Id, name: z.string().max(2000), bytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   hash: z.string().regex(/^[a-f0-9]{64}$/), format: DataFormat.optional(), media: z.enum(['image', 'video', 'audio', 'pdf']).optional(), editedFrom: Id.optional() }).strict();

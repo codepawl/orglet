@@ -145,17 +145,17 @@ async function appearance(page, nextLanguage, theme) {
   const workspace = await call(page, 'workspace');
   await call(page, 'settings', { language, theme, connectionLimitMicros: workspace.connectionLimitMicros });
   await page.waitForFunction(({ theme, language }) => document.documentElement.dataset.theme === theme && document.documentElement.lang === language, { theme, language });
-  await page.locator(`.area-tile[data-name="${label('Bạn bè và tin nhắn')}"]`).waitFor();
+  await page.locator(`.area-tile[data-name="${label('Trò chuyện')}"]`).waitFor();
 }
 
-/** Home with the full sidebar, where an orglet's row has its menu and Add friend opens the marketplace. */
+/** Home with the full sidebar, where an orglet's row has its menu and the Marketplace row opens the marketplace. */
 async function friends(page) {
   // Resize restores the saved full sidebar asynchronously. Wait for that real state before inspecting its opener.
   await page.waitForFunction(() => matchMedia('(max-width: 780px)').matches
     ? document.querySelector('.app.sidebar-hidden') !== null
     : document.querySelector('.app:not(.sidebar-hidden)') !== null);
   await expandSidebar(page);
-  const home = page.locator('.area-tile[data-name="Bạn bè và tin nhắn"], .area-tile[data-name="Friends and direct messages"]').first();
+  const home = page.locator('.area-tile[data-name="Trò chuyện"], .area-tile[data-name="Chat"]').first();
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
 }
 
@@ -205,7 +205,7 @@ try {
   await page.setViewportSize({ width: 1200, height: 820 });
   await call(page, 'createChannel', { name: 'Public crew', topic: 'A crew for the publishing fixture.', members: [{ kind: 'orglet', id: worker.id }], mode: 'lead', lead: { synthesizerId: worker.id, instructions: 'Combine the reviewed research.', workflow: 'parallel', monthlyBudgetMicros: 1000000 } });
   await expandSidebar(page);
-  await page.locator('.area-tile[data-name="Bạn bè và tin nhắn"]').click();
+  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
   await page.getByRole('button', { name: 'Tùy chọn kênh #Public crew', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Xuất bản lên marketplace', exact: true }).click();
   await preparePreview(page);
@@ -260,7 +260,7 @@ try {
   const saved = await page.evaluate(id => window.orglet.marketPublishing({ action: 'inspect', operationId: id }), operation.id);
   assert.equal(saved.requestText, initialRequests[0].text);
   await friends(page);
-  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Marketplace', exact: true }).click();
   await page.getByRole('tab', { name: 'Mục của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Làm mới mục của tôi', exact: true }).click();
   await page.getByRole('button', { name: 'Xem nội dung đã gửi', exact: true }).click();
@@ -285,7 +285,7 @@ try {
   await page.waitForFunction(() => window.orglet !== undefined);
   // Both refresh routes fail in the trusted core transport, while real SQLite retains pages 1 and 4–12.
   await friends(page);
-  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Marketplace', exact: true }).click();
   const cachedPage = page.locator('.marketplace [role="combobox"]');
   await cachedPage.waitFor();
   await page.waitForFunction(() => document.querySelector('.marketplace [role="combobox"]')?.getAttribute('aria-disabled') !== 'true' && !document.querySelector('.marketplace [role="combobox"]')?.disabled);
@@ -311,12 +311,12 @@ try {
   page = await app.firstWindow();
   await page.waitForFunction(() => window.orglet !== undefined);
   await friends(page);
-  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Marketplace', exact: true }).click();
   await page.locator('.marketplace [role="combobox"]').waitFor();
   const heldDeadline = Date.now() + 30_000;
   while (!existsSync(catalogHeld) && Date.now() < heldDeadline) await new Promise(resolve => setTimeout(resolve, 50));
   assert.ok(existsSync(catalogHeld), 'the background refresh reached the real core transport');
-  assert.equal(await page.locator('.marketplace-listing').first().getByRole('button', { name: 'Thêm bạn', exact: true }).isEnabled(), true, 'cached actions remain available while refreshing');
+  assert.equal(await page.locator('.marketplace-listing').first().getByRole('button', { name: 'Thêm', exact: true }).isEnabled(), true, 'cached actions remain available while refreshing');
   await page.locator('.marketplace [role="combobox"]').click();
   await page.getByRole('option').filter({ hasText: 'Saved 12 item 0' }).click();
   await page.locator('.marketplace-listing').filter({ hasText: 'Saved 12 item 0' }).waitFor();

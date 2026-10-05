@@ -49,10 +49,10 @@
     "hexColour": 0
   },
   "components/AreaRail.tsx": {
-    "rawButton": 2,
+    "rawButton": 5,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 0,
+    "titleAttribute": 2,
     "hexColour": 0
   },
   "components/Avatar.tsx": {
@@ -193,7 +193,7 @@
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 0,
-    "hexColour": 6
+    "hexColour": 2
   },
   "components/McpSettings.tsx": {
     "rawButton": 0,
@@ -322,7 +322,7 @@
     "hexColour": 0
   },
   "components/Startup.tsx": {
-    "rawButton": 1,
+    "rawButton": 3,
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 0,
@@ -368,6 +368,6 @@
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 0,
-    "hexColour": 113
+    "hexColour": 114
   }
 }

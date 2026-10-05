@@ -136,7 +136,8 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
       <label><FieldLabel icon={MessageSquareQuote}>{t('Chủ đề')}</FieldLabel>
         <Input value={topic} onChange={event => setTopic(event.target.value)} maxLength={CHANNEL_TOPIC_LIMIT} placeholder={t('Kênh này để làm gì')} /></label>
       {workspace.spaces.length > 0 && <Select label={<FieldLabel icon={Boxes}>{t('Không gian')}</FieldLabel>} value={spaceId} onChange={changeSpace}
-        options={[{ value: '', label: t('Ngoài mọi không gian') }, ...workspace.spaces.map(item => ({ value: item.id, label: item.name }))]} />}
+        // A new channel is made in a space (user, 2026-10-05); only one that exists can be taken out of its space.
+        options={[...(editing || !draft.spaceId ? [{ value: '', label: t('Ngoài mọi không gian') }] : []), ...workspace.spaces.map(item => ({ value: item.id, label: item.name }))]} />}
       {space
         ? space.categories.length > 0 && <Select label={<FieldLabel icon={FolderTree}>{t('Nhóm')}</FieldLabel>} value={placeCategory?.id ?? ''} onChange={value => { setCategoryId(value); if (invalid === 'members') clearError(); }}
           options={[{ value: '', label: t('Không nhóm') }, ...space.categories.map(item => ({ value: item.id, label: item.name }))]} />

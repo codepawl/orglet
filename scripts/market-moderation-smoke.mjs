@@ -137,8 +137,8 @@ async function close(page) {
 async function explore(page) {
   await page.locator('.app').waitFor();
   await expandSidebar(page);
-  await page.locator('.area-tile[data-name="Bạn bè và tin nhắn"], .area-tile[data-name="Friends and direct messages"]').first().click();
-  await page.locator('.sidebar').getByRole('button', { name: label('Thêm bạn'), exact: true }).click();
+  await page.locator('.area-tile[data-name="Trò chuyện"], .area-tile[data-name="Chat"]').first().click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Marketplace', exact: true }).click();
   await page.locator('.marketplace-listing').filter({ hasText: 'Review fixture' }).waitFor();
 }
 async function openReview(page) {

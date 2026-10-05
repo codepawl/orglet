@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { ArchiveRestore, FileUp, UserRoundPlus } from 'lucide-react';
+import { ArchiveRestore, FileUp, Store, UserRoundPlus } from 'lucide-react';
 import { Input } from '@codepawlhq/orglet-ui';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
@@ -9,15 +9,20 @@ import { ChatHeader } from './ChatViews';
 import { Marketplace } from './Marketplace';
 import type { MarketAdded } from '../../shared/market';
 
-/** A ready-made group of orglets with its channel, offered under Add friend (COD-366). */
+/** A ready-made group of orglets with its channel, offered under Add orglet (COD-366). */
 export type FriendTemplate = { id: 'research-review' | 'eris-review'; name: string; description: string; orglets: number };
 
+/** Home's two pages, each with its own row in the sidebar: making an orglet, and the marketplace. */
+export type HomePageView = 'add' | 'market';
+
 /**
- * Home's Add friend page (COD-366). It holds only what the sidebar does not: making an orglet from a name, the
- * marketplace, and the other places to find one (an archived orglet to bring back, a ready-made group, a template
- * file). The orglets themselves are the sidebar's rows, so the page does not list them again (user, 2026-10-04).
+ * Home's pages (COD-366). Add orglet holds what the sidebar does not: making an orglet from a name, and the other
+ * ways to add one (an archived orglet to bring back, a ready-made group, a template file). The marketplace is a
+ * page of its own (user, 2026-10-05): it used to sit inside a page called Add friend, where nobody looked for it,
+ * and an orglet is not a friend one finds. The orglets themselves are the sidebar's rows, so no page lists them.
  */
-export function FriendsPage({ archived, onCreate, onRestore, templates, onTemplate, onImport, onMarketAdded, busy }: {
+export function FriendsPage({ view, archived, onCreate, onRestore, templates, onTemplate, onImport, onMarketAdded, busy }: {
+  view: HomePageView;
   archived: readonly Worker[];
   /** Opens the new-orglet dialog with this name already typed. */
   onCreate: (name: string) => void;
@@ -36,9 +41,17 @@ export function FriendsPage({ archived, onCreate, onRestore, templates, onTempla
     setName('');
     onCreate(typed);
   };
+  if (view === 'market') {
+    return <>
+      <ChatHeader contentKey="home:market"
+        lead={<span className="topbar-title"><Store size={16} aria-hidden="true" /><span className="topbar-name">Marketplace</span></span>}
+        views={null} actions={null} />
+      <div className="page-scroll"><div className="page-body friends-add"><Marketplace onAdded={onMarketAdded} /></div></div>
+    </>;
+  }
   return <>
     <ChatHeader contentKey="friends:add"
-      lead={<span className="topbar-title"><UserRoundPlus size={16} aria-hidden="true" /><span className="topbar-name">{t('Thêm bạn')}</span></span>}
+      lead={<span className="topbar-title"><UserRoundPlus size={16} aria-hidden="true" /><span className="topbar-name">{t('Thêm Tí')}</span></span>}
       views={null} actions={null} />
     <div className="page-scroll"><div className="page-body friends-add">
       <section className="page-section" aria-label={t('Tạo Tí')}>
@@ -48,9 +61,8 @@ export function FriendsPage({ archived, onCreate, onRestore, templates, onTempla
           <Button type="submit" disabled={!name.trim()}><UserRoundPlus size={16} />{t('Tạo Tí')}</Button>
         </form>
       </section>
-      <Marketplace onAdded={onMarketAdded} />
       <section className="page-section" aria-labelledby="friends-other-title">
-        <h2 id="friends-other-title">{t('Những nơi khác để tìm bạn')}</h2>
+        <h2 id="friends-other-title">{t('Cách khác để thêm Tí')}</h2>
         <p className="muted">{t('Không muốn tự tạo? Đưa về một Tí đã lưu trữ, chọn một nhóm làm sẵn hoặc nhập mẫu từ tệp.')}</p>
         <ul className="friends-sources">
           {templates.map(template => <li key={template.id} className="friend-source">

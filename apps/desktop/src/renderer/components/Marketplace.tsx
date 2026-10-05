@@ -65,10 +65,11 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     }
   };
   return <section className="page-section marketplace" aria-labelledby="marketplace-title">
-    <PanelHeading title={<span id="marketplace-title">{t('Marketplace')}</span>} description={tab === 'discover' ? t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.') : undefined}>
+    <PanelHeading title={<span id="marketplace-title">{t('Marketplace')}</span>}>
       {moderation.entry}
       {tab === 'discover' && <Button type="button" variant="outline" disabled={busy || refreshing} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{refreshing ? t('Đang làm mới') : t('Làm mới')}</Button>}
     </PanelHeading>
+    {tab === 'discover' && <p className="muted">{t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.')}</p>}
     <PageTabs tabs={[{ id: 'discover', label: t('Khám phá') }, { id: 'own', label: t('Mục của tôi') }]} current={tab} onSelect={setTab} label={t('Các phần của marketplace')} />
     {tab === 'discover' ? <div className="marketplace-discover">
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
@@ -98,7 +99,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
           addedNotice(result);
           await onAdded(result);
           setInstalled(await orglet.call('marketInstallations', {}));
-        })}><UserRoundPlus size={16} />{copies.length ? t('Thêm bản nữa') : t('Thêm bạn')}</Button>
+        })}><UserRoundPlus size={16} />{copies.length ? t('Thêm bản nữa') : t('Thêm')}</Button>
         {publicListing && <RowMenu label={t('Tùy chọn {0}', [listing.name])} disabled={busy} items={[
           { label: t('Report'), icon: Flag, onSelect: () => moderation.setReport(publicListing) },
           ...(moderation.capability?.canReview ? [{ label: t('Xem để duyệt'), icon: ShieldCheck, onSelect: () => moderation.setReview(publicListing) }] : []),

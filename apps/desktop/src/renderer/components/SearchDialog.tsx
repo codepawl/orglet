@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { DialogOverlay } from '@codepawlhq/orglet-ui';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { CornerDownLeft, Search, X } from 'lucide-react';
+import { CornerDownLeft, Hash, Search, X } from 'lucide-react';
 import type { Task, Team, Worker, Workspace } from '../../shared/contracts';
 import { markMatches, type ChatSearchHit, type ChatSearchResult, type SnippetPart } from '../../shared/chat-search';
 import { chatHeadline } from '../../shared/forward';
@@ -11,7 +11,6 @@ import { Avatar, RosterAvatars } from './Avatar';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { taskWorkers, teamRoster } from '../assignees';
-import { channelLabel } from '../../shared/channels';
 
 /** Vietnamese relative day labels like the reference palette; older items fall back to a short date. */
 export function relativeDay(iso: string, now = new Date()) {
@@ -59,10 +58,10 @@ function chatOwner(task: Task, workspace: SearchWorkspace, faces: readonly Worke
  * is, so a result always says which orglet or crew it belongs to; beside an owner's name sits the first message, so
  * several untitled chats of one orglet can be told apart. A side thread says so, as it does in the Send to picker.
  */
-function chatLabel(task: Task, workspace: SearchWorkspace, faces: readonly Worker[]): { name: string; detail?: string } {
+function chatLabel(task: Task, workspace: SearchWorkspace, faces: readonly Worker[]): { name: string; detail?: string; channel?: boolean } {
   const owner = chatOwner(task, workspace, faces);
   if (task.sideOf) return { name: task.title || chatHeadline(task), detail: owner ? t('chat phụ · {0}', [owner]) : t('chat phụ') };
-  if (task.channel) return { name: channelLabel(task.channel.name), detail: owner };
+  if (task.channel) return { name: task.channel.name, detail: owner, channel: true };
   if (task.title) return { name: task.title, detail: owner };
   if (owner) return { name: owner, detail: chatHeadline(task) };
   return { name: chatHeadline(task) };
@@ -209,6 +208,8 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
 function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose }: { row: SearchRow; index: number; active: boolean; terms: readonly string[]; workspace: SearchWorkspace; onPoint: () => void; onChoose: () => void }) {
   let faces: ReactNode;
   let name: string;
+  // A channel is told by the hash mark before its name (user, 2026-10-05), never by a `#` typed into the name.
+  let channel = false;
   let detail: string | undefined;
   let snippet: ReactNode = null;
   let at: string | undefined;
@@ -219,13 +220,15 @@ function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose 
   } else if (row.kind === 'crew') {
     const members = teamRoster(row.team, workspace.workers);
     faces = <Faces workers={members} several fallbackName={row.team.name} fallbackSeed={row.team.id} />;
-    name = channelLabel(row.team.name);
+    name = row.team.name;
+    channel = true;
     detail = members.map(worker => worker.name).join(', ');
   } else {
     const workers = chatFaces(row.task, workspace);
     const label = chatLabel(row.task, workspace, workers);
     faces = <Faces workers={workers} several={Boolean(row.task.teamId || row.task.assignees)} fallbackName={label.name} fallbackSeed={row.task.workerId} />;
     name = label.name;
+    channel = Boolean(label.channel);
     detail = label.detail;
     at = row.hit?.at ?? row.task.createdAt;
     const hit = row.hit;
@@ -238,7 +241,7 @@ function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose 
     {faces}
     <span className="search-result-text">
       <span className="search-result-head">
-        <span className="search-result-name"><Marked parts={markMatches(name, terms)} /></span>
+        <span className="search-result-name">{channel && <Hash size={14} className="search-result-hash" aria-label={t('Kênh')} />}<Marked parts={markMatches(name, terms)} /></span>
         {detail && <span className="search-result-detail">{detail}</span>}
       </span>
       {snippet}

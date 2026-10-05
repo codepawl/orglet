@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import { Bell, BookOpen, CalendarClock, Plus } from './icons';
-import { MessagesSquare } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MessagesSquare } from 'lucide-react';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
@@ -34,7 +34,7 @@ const DEFAULT_SIDEBAR_WIDTH = 240;
 const areaIcons = [<MessagesSquare key="home" size={20} />, <Bell key="activity" size={20} />, <BookOpen key="library" size={20} />, <CalendarClock key="schedules" size={20} />];
 
 type Wait = 'opening' | 'slow' | 'stuck';
-const areaLabels = () => [t('Bạn bè và tin nhắn'), t('Hoạt động'), t('Thư viện'), t('Lịch chạy')];
+const areaLabels = () => [t('Trò chuyện'), t('Hoạt động'), t('Thư viện'), t('Lịch chạy')];
 type Cue = { kind: Moment; count: number };
 
 const nextCue = (kind: Moment) => (previous: Cue | undefined): Cue => ({ kind, count: (previous?.count ?? 0) + 1 });
@@ -76,6 +76,10 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
     </aside>
     {/* The area rail and the person's face hold their places with disabled controls while the workspace opens (COD-366). */}
     <nav className="area-rail" aria-label={t('Khu vực')}>
+      <div className="area-trail">
+        <button type="button" className="area-trail-step" aria-label={t('Quay lại')} disabled><ArrowLeft size={16} /></button>
+        <button type="button" className="area-trail-step" aria-label={t('Tiến tới')} disabled><ArrowRight size={16} /></button>
+      </div>
       <ul className="area-rail-list">
         {areaIcons.map((icon, index) => <li key={index}><button type="button" className="area-tile" aria-label={areaLabels()[index]} disabled>{icon}</button></li>)}
       </ul>

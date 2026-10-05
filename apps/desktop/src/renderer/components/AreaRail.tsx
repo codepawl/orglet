@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type PointerEvent, type ReactNode } from 'react';
-import { Folder, FolderOpen } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Folder, FolderOpen } from 'lucide-react';
 import { Plus } from './icons';
 import { t } from '../i18n';
 import { RowMenu, type RowMenuItem } from './RowMenu';
@@ -7,11 +7,13 @@ import type { Area } from '../areas';
 
 /**
  * One button on the area rail: an icon in a rounded tile, named by its tooltip and accessible name, with a count of
- * what waits there. An `accent` count waits for the person, a `quiet` one is only news.
+ * what waits there, shown as a dot. An `accent` count waits for the person, a `quiet` one is only news.
  */
 export type AreaRailEntry = {
   key: string;
   icon: ReactNode;
+  /** The filled drawing shown while this is the open area; without one the outline stays. */
+  activeIcon?: ReactNode;
   label: string;
   ariaLabel?: string;
   active: boolean;
@@ -56,8 +58,9 @@ function Tile({ entry }: { entry: AreaRailEntry }) {
   return <div className="area-tile-slot">
     <button type="button" className={`area-tile${entry.active ? ' active' : ''}`} aria-label={entry.ariaLabel ?? entry.label} data-name={entry.label} aria-current={entry.active ? 'page' : undefined}
       onClick={() => { tip.hide(); entry.onSelect(); }} onPointerEnter={enter} onPointerLeave={leave} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(entry.label, event.currentTarget); }} onBlur={tip.hide}>
-      {entry.icon}
-      {entry.count ? <span className={`area-count ${entry.countTone ?? 'quiet'}`} aria-hidden="true">{entry.count > 99 ? '99+' : entry.count}</span> : null}
+      {entry.active && entry.activeIcon ? entry.activeIcon : entry.icon}
+      {/* A dot, not a number (user, 2026-10-05): the tile's accessible name carries the count where one matters. */}
+      {entry.count ? <span className={`area-dot ${entry.countTone ?? 'quiet'}`} aria-hidden="true" /> : null}
     </button>
     {entry.menuItems?.length ? <RowMenu label={t('Tùy chọn {0}', [entry.label])} className="area-tile-menu" align="start" contextMenuOf=".area-tile-slot" items={entry.menuItems} /> : null}
   </div>;
@@ -72,7 +75,7 @@ function FolderTiles({ folder }: { folder: AreaRailFolder }) {
       <button type="button" className={`area-tile area-folder-tile${!folder.open && holdsOpenPage ? ' active' : ''}`} aria-expanded={folder.open} aria-label={folder.label} data-name={folder.label} onClick={() => { tip.hide(); folder.onToggle(); }}
         onPointerEnter={event => tip.show(folder.label, event.currentTarget)} onPointerLeave={tip.hide} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(folder.label, event.currentTarget); }} onBlur={tip.hide}>
         {folder.open ? <FolderOpen size={20} /> : <Folder size={20} />}
-        {!folder.open && waiting ? <span className="area-count quiet" aria-hidden="true">{waiting > 99 ? '99+' : waiting}</span> : null}
+        {!folder.open && waiting ? <span className="area-dot quiet" aria-hidden="true" /> : null}
       </button>
       <RowMenu label={t('Tùy chọn thư mục {0}', [folder.label])} className="area-tile-menu" align="start" contextMenuOf=".area-tile-slot" items={folder.menuItems} />
     </div>
@@ -88,9 +91,15 @@ function FolderTiles({ folder }: { folder: AreaRailFolder }) {
  * A tile's name shows beside it while the pointer is on it (user, 2026-10-05), the way Discord names a server.
  * Spaces can sit in folders (user, 2026-10-05): a folder is an outlined group with its own tile, which opens and closes it.
  */
-export function AreaRail({ entries, createItems, onHover }: {
-  entries: readonly (AreaRailEntry | AreaRailFolder)[];
-  createItems: RowMenuItem[];
+export function AreaRail({ entries, spaces, onCreateSpace, onHover, trail }: {
+  /** The app's own places: Home, Activity, Library, Schedules. */
+  entries: readonly AreaRailEntry[];
+  /** The person's spaces and their folders, under a divider of their own (user, 2026-10-05), the way Discord parts its servers from Home. */
+  spaces: readonly (AreaRailEntry | AreaRailFolder)[];
+  /** The **+** under the spaces makes a space and nothing else (user, 2026-10-05): the rail lists spaces, so that is what it adds. */
+  onCreateSpace: () => void;
+  /** Back and forward along the places the person has been (user, 2026-10-05), at the top of the rail the way Discord has them. */
+  trail: { back: boolean; forward: boolean; onTravel: (step: -1 | 1) => void };
   /** The pointer came over the rail or left it, so a folded sidebar can show itself for a look. */
   onHover?: (inside: boolean) => void;
 }) {
@@ -103,10 +112,21 @@ export function AreaRail({ entries, createItems, onHover }: {
     hide: () => setTip(undefined),
   };
   return <TipContext.Provider value={control}><nav className="area-rail" aria-label={t('Khu vực')} onPointerEnter={onHover ? () => onHover(true) : undefined} onPointerLeave={onHover ? () => onHover(false) : undefined} onScroll={control.hide}>
+    <div className="area-trail">
+      <button type="button" className="area-trail-step" aria-label={t('Quay lại')} title={t('Quay lại')} disabled={!trail.back} onClick={() => trail.onTravel(-1)}><ArrowLeft size={16} /></button>
+      <button type="button" className="area-trail-step" aria-label={t('Tiến tới')} title={t('Tiến tới')} disabled={!trail.forward} onClick={() => trail.onTravel(1)}><ArrowRight size={16} /></button>
+    </div>
     <ul className="area-rail-list">
-      {entries.map(entry => <li key={entry.key}>{'kind' in entry ? <FolderTiles folder={entry} /> : <Tile entry={entry} />}</li>)}
+      {entries.map(entry => <li key={entry.key}><Tile entry={entry} /></li>)}
     </ul>
-    <RowMenu label={t('Tạo mới')} icon={Plus} className="area-tile area-create" align="start" items={createItems} />
+    {spaces.length > 0 && <span className="area-rail-divider" aria-hidden="true" />}
+    {spaces.length > 0 && <ul className="area-rail-list" aria-label={t('Không gian')}>
+      {spaces.map(entry => <li key={entry.key}>{'kind' in entry ? <FolderTiles folder={entry} /> : <Tile entry={entry} />}</li>)}
+    </ul>}
+    <button type="button" className="area-tile area-create" aria-label={t('Tạo không gian')} data-name={t('Tạo không gian')} onClick={() => { control.hide(); onCreateSpace(); }}
+      onPointerEnter={event => control.show(t('Tạo không gian'), event.currentTarget)} onPointerLeave={control.hide} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) control.show(t('Tạo không gian'), event.currentTarget); }} onBlur={control.hide}>
+      <Plus size={20} />
+    </button>
     {/* The tile's accessible name already says this, so the tip is for the eye only. */}
     {tip && <div className="area-tip" aria-hidden="true" style={{ top: tip.top, left: tip.left }}>{tip.label}</div>}
   </nav></TipContext.Provider>;
