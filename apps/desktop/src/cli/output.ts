@@ -1,4 +1,4 @@
-import type { CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, SearchValue, SpaceChangeValue, SpacesValue, UsageValue } from './protocol';
+import type { CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, ChannelCreatedValue, MarketAddValue, MarketInstalledValue, MarketListValue, SearchValue, SpaceChangeValue, SpacesValue, UsageValue } from './protocol';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
 
@@ -150,11 +150,37 @@ export function formatSpaces(value: SpacesValue): string {
   }).join('\n\n');
 }
 
+const MARKET_KIND_NAMES = { orglet: 'orglet', crew: 'channel', space: 'space' } as const;
+
+/** The catalog, what was added from it, or what one `add` made. */
+export function formatMarket(value: MarketListValue | MarketInstalledValue | MarketAddValue): string {
+  if ('installed' in value) {
+    if (value.installed.length === 0) return t('Chưa thêm gì từ marketplace.');
+    return padded(value.installed.map(item => [item.id, MARKET_KIND_NAMES[item.kind], item.name, `v${item.version}`, item.updateAvailable ? t('có bản cập nhật') : ''])).join('\n');
+  }
+  if ('listings' in value) {
+    const rows = padded(value.listings.map(listing => [listing.id, MARKET_KIND_NAMES[listing.kind], listing.name, listing.author, listing.summary]));
+    const notes = [
+      ...(value.source === 'online' ? [] : [value.source === 'cache' ? t('Đây là danh mục đã lưu; chưa tải được bản mới.') : t('Đây là danh mục đi kèm app; chưa tải được danh mục trực tuyến.')]),
+      ...(value.more ? [t('Còn mục khác; xem tất cả trong app.')] : []),
+    ];
+    return [...rows, ...notes].join('\n');
+  }
+  const made = t('Đã thêm {0} ({1}) với {2}.', value.name, MARKET_KIND_NAMES[value.kind], value.orglets.join(', '));
+  return value.withoutModel.length ? `${made}\n${t('Chưa có kết nối gợi ý cho: {0}. Chọn model cho các Tí này trong app.', value.withoutModel.join(', '))}` : made;
+}
+
+export function formatChannelCreated(value: ChannelCreatedValue): string {
+  return value.space ? t('Đã tạo kênh #{0} trong không gian {1}.', value.channel, value.space) : t('Đã tạo kênh #{0}.', value.channel);
+}
+
 export function formatSpaceChange(value: SpaceChangeValue): string {
   const orglets = (value.orglets ?? []).join(', ');
   if (value.verb === 'add') return t('Đã tạo không gian {0} với {1}.', value.space ?? '', orglets);
   if (value.verb === 'edit') return t('Đã lưu không gian {0}: {1}.', value.space ?? '', orglets);
+  if (value.verb === 'category' && value.existing) return t('Đã lưu mục {0} của không gian {1}.', value.category ?? '', value.space ?? '');
   if (value.verb === 'category') return t('Đã thêm mục {0} vào không gian {1}.', value.category ?? '', value.space ?? '');
+  if (value.verb === 'uncategory') return t('Đã xóa mục {0} khỏi không gian {1}. Các kênh của nó vẫn ở trong không gian.', value.category ?? '', value.space ?? '');
   if (value.verb === 'delete') return t('Đã xóa không gian {0}. Các kênh của nó vẫn còn.', value.space ?? '');
   if (value.verb === 'out') return t('Đã đưa kênh #{0} ra ngoài không gian.', value.channel ?? '');
   return value.category

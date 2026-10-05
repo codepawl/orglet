@@ -2,7 +2,7 @@ import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contrac
 import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
 import { placeNamed, spaceNamed } from './cli-spaces';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
-import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
+import type { ChannelCreatedValue, ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
 import { resolveMessage } from './cli-chat-history';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
@@ -81,7 +81,7 @@ export class CliChatAdmin {
    * (COD-361): the channel is created empty, then the message makes its chat. Every orglet answers in turn, a crew as
    * its orglets. Named by `name`, or by its members' names. The next message goes in with `--chat`.
    */
-  async channel(request: Request<'channel'>, signal: AbortSignal): Promise<SendValue> {
+  async channel(request: Request<'channel'>, signal: AbortSignal): Promise<SendValue | ChannelCreatedValue> {
     const workspace = await this.workspace();
     const place = request.space === undefined ? undefined : placeNamed(workspace, request.space, request.category);
     if (!place && !request.names.length) throw new CliFailure('failed', 'Kênh cần ít nhất một --with <tên Tí>.');
@@ -93,6 +93,11 @@ export class CliChatAdmin {
     const name = request.name ?? channelNameFrom(members.map(member => memberNameOf(workspace, member)));
     const placed = place ? { spaceId: place.spaceId, categoryId: place.categoryId ?? null, access: inherits ? 'inherit' as const : 'listed' as const } : {};
     const channelId = String(await this.dependencies.request('createChannel', { name, topic: request.topic ?? '', members, ...placed }));
+    // With no first message the channel waits, empty, as one made with New channel in the app does.
+    if (request.message === undefined) {
+      const spaceName = place ? (workspace.spaces ?? []).find(space => space.id === place.spaceId)?.name : undefined;
+      return { channel: name, ...(spaceName ? { space: spaceName } : {}) };
+    }
     const input: TaskInput = {
       workerId: workers[0].id,
       assignees: workers.map(worker => worker.id),

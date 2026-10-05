@@ -108,6 +108,14 @@ describe('orglet chat arguments', () => {
     expect(parseArguments(['space', 'category', 'Launch', '--category', 'Drafts'])).toMatchObject({ verb: 'category', space: 'Launch', category: 'Drafts' });
     expect(parseArguments(['space', 'move', 'Launch', '--chat', 'cccc', '--category', 'Drafts'])).toMatchObject({ verb: 'move', space: 'Launch', chat: 'cccc', category: 'Drafts' });
     expect(parseArguments(['space', 'out', '--chat', 'cccc'])).toEqual({ kind: 'space', verb: 'out', names: [], chat: 'cccc', json: false });
+    expect(parseArguments(['space', 'out', '--name', '#plans'])).toEqual({ kind: 'space', verb: 'out', names: [], channelName: 'plans', json: false });
+    expect(parseArguments(['space', 'category', 'Launch', '--category', 'Drafts', '--rename', 'Copy', '--with', 'Writer'])).toMatchObject({ verb: 'category', category: 'Drafts', rename: 'Copy', names: ['Writer'] });
+    expect(parseArguments(['space', 'uncategory', 'Launch', '--category', 'Drafts'])).toMatchObject({ verb: 'uncategory', space: 'Launch', category: 'Drafts' });
+    expect(parseArguments(['channel', '--name', 'ideas', '--space', 'Launch'])).toMatchObject({ kind: 'channel', names: [], name: 'ideas', space: 'Launch' });
+    expect(parseArguments(['channel', '--name', 'ideas', '--space', 'Launch'])).not.toHaveProperty('message');
+    for (const mistake of [['space', 'move', 'Launch', '--chat', 'cccc', '--name', 'plans'], ['space', 'uncategory', 'Launch'], ['space', 'out', '--name', 'plans', '--category', 'Drafts'], ['channel', '--with', 'Writer']]) {
+      expect(() => parseArguments(mistake), mistake.join(' ')).toThrow(UsageError);
+    }
     expect(parseArguments(['space', 'delete', 'Launch', '--confirm', 'Launch'])).toMatchObject({ verb: 'delete', space: 'Launch', confirmName: 'Launch' });
     for (const mistake of [['space'], ['space', 'add', 'Launch'], ['space', 'edit', 'Launch'], ['space', 'delete', 'Launch'], ['space', 'out', 'Launch', '--chat', 'cccc'], ['space', 'move', 'Launch'],
       ['space', 'add', 'Launch', '--with', 'Writer', '--rename', 'x'], ['space', 'category', 'Launch'], ['space', 'delete', 'Launch', '--confirm', 'Launch', '--with', 'Writer'], ['spaces', '--with', 'Writer']]) {
@@ -205,6 +213,11 @@ describe('orglet chats in the app', () => {
     const named = fakeCore(workspaceWithSpace);
     await named.operations.run({ op: 'channel', token, names: ['Researcher'], message: 'read', space: 'Launch', ...wait }, named.signal);
     expect(named.argsOf('createChannel')).toEqual({ name: 'Researcher', topic: '', members: [{ kind: 'orglet', id: researcherId }], spaceId, categoryId: null, access: 'listed' });
+    // With a name and no message the channel is only made: no chat starts.
+    const empty = fakeCore(workspaceWithSpace);
+    expect(await empty.operations.run({ op: 'channel', token, names: [], name: 'ideas', space: 'Launch', ...wait }, empty.signal)).toEqual({ channel: 'ideas', space: 'Launch' });
+    expect(empty.argsOf('createChannel')).toMatchObject({ name: 'ideas', spaceId, access: 'inherit' });
+    expect(empty.argsOf('createTask')).toBeUndefined();
     const refused = fakeCore(workspaceWithSpace);
     await expect(refused.operations.run({ op: 'channel', token, names: [], message: 'x', space: 'Nowhere', ...wait }, refused.signal)).rejects.toThrow('Không có không gian nào tên "Nowhere". Có: Launch.');
     await expect(refused.operations.run({ op: 'channel', token, names: [], message: 'x', space: 'Launch', category: 'Lost', ...wait }, refused.signal)).rejects.toThrow('không có mục "Lost". Có: Drafts.');
@@ -225,7 +238,20 @@ describe('orglet chats in the app', () => {
     const categories = fakeCore(workspaceWithSpace);
     await categories.operations.run({ op: 'space-change', token, verb: 'category', space: 'Launch', category: 'Sources', names: [] }, categories.signal);
     expect(categories.argsOf('updateSpace')).toMatchObject({ id: spaceId, name: 'Launch', orgletIds: [researcherId, writerId], categories: [{ id: categoryId, name: 'Drafts', orgletIds: [writerId] }, { name: 'Sources' }] });
-    await expect(categories.operations.run({ op: 'space-change', token, verb: 'category', space: 'Launch', category: 'drafts', names: [] }, categories.signal)).rejects.toThrow('đã có mục "drafts"');
+    await expect(categories.operations.run({ op: 'space-change', token, verb: 'category', space: 'Launch', category: 'drafts', names: [] }, categories.signal)).rejects.toThrow('đã có mục "Drafts". Thêm --rename hoặc --with');
+    // A category that exists is renamed and given its own orglets; one is removed by name.
+    const renaming = fakeCore(workspaceWithSpace);
+    expect(await renaming.operations.run({ op: 'space-change', token, verb: 'category', space: 'Launch', category: 'drafts', rename: 'Copy', names: ['Researcher'] }, renaming.signal)).toEqual({ verb: 'category', space: 'Launch', category: 'Copy', existing: true });
+    expect(renaming.argsOf('updateSpace')).toMatchObject({ categories: [{ id: categoryId, name: 'Copy', orgletIds: [researcherId] }] });
+    const removing = fakeCore(workspaceWithSpace);
+    expect(await removing.operations.run({ op: 'space-change', token, verb: 'uncategory', space: 'Launch', category: 'Drafts', names: [] }, removing.signal)).toEqual({ verb: 'uncategory', space: 'Launch', category: 'Drafts' });
+    expect(removing.argsOf('updateSpace')).toMatchObject({ id: spaceId, categories: [] });
+    await expect(removing.operations.run({ op: 'space-change', token, verb: 'uncategory', space: 'Launch', category: 'Lost', names: [] }, removing.signal)).rejects.toThrow('không có mục "Lost"');
+    // A channel is also named by its own name, which is the only way for one with no message yet.
+    const naming = fakeCore(workspaceWithSpace);
+    expect(await naming.operations.run({ op: 'space-change', token, verb: 'move', space: 'Launch', channelName: 'Launch', names: [] }, naming.signal)).toMatchObject({ verb: 'move', channel: 'launch' });
+    expect(naming.argsOf('updateChannel')).toMatchObject({ id: channelId, spaceId });
+    await expect(naming.operations.run({ op: 'space-change', token, verb: 'out', channelName: 'nothing', names: [] }, naming.signal)).rejects.toThrow('Không có kênh nào tên "nothing"');
     const moving = fakeCore(workspaceWithSpace);
     expect(await moving.operations.run({ op: 'space-change', token, verb: 'move', space: 'Launch', category: 'Drafts', chat: 'cccc', names: [] }, moving.signal)).toEqual({ verb: 'move', space: 'Launch', channel: 'launch', category: 'Drafts' });
     expect(moving.argsOf('updateChannel')).toEqual({ id: channelId, name: 'launch', topic: 'Ship it', members: [{ kind: 'orglet', id: researcherId }, { kind: 'orglet', id: writerId }], spaceId, categoryId });
@@ -324,6 +350,7 @@ function adminClient() {
     },
     // Schedules have their own tests in cli-schedules.test.ts.
     schedules: notUsed,
+    spaces: notUsed,
     enableSchedule: notUsed,
     runSchedule: notUsed,
     search: notUsed,

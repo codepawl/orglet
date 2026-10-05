@@ -7,6 +7,7 @@ import { maskEmail } from '../shared/pii';
 import type { RunningItem } from '../shared/running';
 import type { CliLibraryRow, CliRequest, CliRunningRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SearchValue, UsageValue } from '../cli/protocol';
 import { chatName, chatsOf, CliFailure, matchChat } from './cli-chats';
+import { spaceNamed } from './cli-spaces';
 import type { CliDependencies } from './cli-turns';
 
 /**
@@ -32,8 +33,11 @@ export class CliLibrary {
   async search(request: Request<'search'>): Promise<SearchValue> {
     const workspace = await this.workspace();
     const result = await this.dependencies.request('searchChats', { query: request.query }) as ChatSearchResult;
+    // In one space only its channels' messages count; an orglet or channel found by name belongs to no space.
+    const space = request.space === undefined ? undefined : spaceNamed(workspace, request.space);
+    const inSpace = (taskId: string) => !space || workspace.tasks.find(item => item.id === taskId)?.channel?.spaceId === space.id;
     const nameOf = (id: string) => workspace.workers.find(worker => worker.id === id)?.name ?? workspace.teams.find(team => team.id === id)?.name ?? id;
-    const chats = result.chats.map(hit => {
+    const chats = result.chats.filter(hit => inSpace(hit.taskId)).map(hit => {
       const task = workspace.tasks.find(item => item.id === hit.taskId);
       const sender = hit.sender?.kind === 'orglet' ? hit.sender.name : hit.sender ? 'you' : undefined;
       return {
@@ -44,13 +48,14 @@ export class CliLibrary {
         at: hit.at,
       };
     });
-    return { orglets: result.orgletIds.map(nameOf), crews: result.crewIds.map(nameOf), chats, indexing: result.indexing };
+    return { orglets: space ? [] : result.orgletIds.map(nameOf), crews: space ? [] : result.crewIds.map(nameOf), chats, indexing: result.indexing };
   }
 
   /** Every run working, waiting its turn or stopped at a checkpoint, across chats, as the Running view lists them. */
-  async running(): Promise<RunningValue> {
+  async running(request: Request<'running'>): Promise<RunningValue> {
     const workspace = await this.workspace();
-    const items = workspace.running ?? [];
+    const space = request.space === undefined ? undefined : spaceNamed(workspace, request.space);
+    const items = (workspace.running ?? []).filter(item => !space || workspace.tasks.find(task => task.id === item.taskId)?.channel?.spaceId === space.id);
     return { items: items.map(item => runningRow(workspace, item)) };
   }
 

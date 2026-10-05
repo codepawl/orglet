@@ -28,6 +28,7 @@ export type SlashCommand =
   | { kind: 'rename'; title: string }
   | { kind: 'archive' }
   | { kind: 'schedules' }
+  | { kind: 'spaces' }
   | { kind: 'schedule'; action: 'on' | 'off' | 'run'; name: string }
   | { kind: 'search'; query: string }
   | { kind: 'running' }
@@ -47,7 +48,7 @@ export type SlashCommand =
 /** In the order `/help` lists them. */
 export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
   '/history', '/revise', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
-  '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
+  '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule', '/spaces',
   '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme',
   '/new', '/edit', '/delete', '/help', '/exit'] as const;
 
@@ -86,6 +87,7 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/archive', t("Lưu trữ chat này")],
   ['/schedules', t("Liệt kê lịch")],
   ['/schedule on|off|run <name>', t("Bật, tắt hoặc chạy ngay một lịch")],
+  ['/spaces', t("Liệt kê không gian với Tí và kênh của chúng")],
   ['/search <words>', t("Tìm trong mọi chat")],
   ['/running', t("Mọi lượt đang chạy hoặc đang chờ")],
   ['/memory', t("Ghi nhớ của Tí hoặc kênh này")],
@@ -137,6 +139,7 @@ export function parseSlash(line: string): SlashCommand {
     case '/rename': return rest ? { kind: 'rename', title: rest } : { kind: 'usage', message: t("Gõ /rename rồi tên mới.") };
     case '/archive': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'archive' };
     case '/schedules': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'schedules' };
+    case '/spaces': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'spaces' };
     case '/schedule': return parseSchedule(rest);
     case '/search': return rest ? { kind: 'search', query: rest } : { kind: 'usage', message: t("Gõ /search rồi từ cần tìm.") };
     case '/running': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'running' };
