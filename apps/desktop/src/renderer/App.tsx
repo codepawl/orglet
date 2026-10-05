@@ -2306,7 +2306,8 @@ export function App() {
     },
   }));
   // The rail as it is drawn: a space with a folder sits inside that folder's group, at the place of its first space.
-  const railEntries: (AreaRailEntry | AreaRailFolder)[] = [];
+  const railEntries: AreaRailEntry[] = [];
+  const railSpaces: (AreaRailEntry | AreaRailFolder)[] = [];
   const railFolders = new Map<string, AreaRailFolder>();
   for (const tile of railTiles) {
     const space = workspace.spaces.find(item => `space:${item.id}` === tile.key);
@@ -2316,7 +2317,7 @@ export function App() {
     }
     const spaceTile = { ...tile, menuItems: spaceTileMenu(space) };
     if (!space.folder) {
-      railEntries.push(spaceTile);
+      railSpaces.push(spaceTile);
       continue;
     }
     const key = folderKey(space.folder);
@@ -2331,7 +2332,7 @@ export function App() {
         ],
       };
       railFolders.set(key, folder);
-      railEntries.push(folder);
+      railSpaces.push(folder);
     }
     folder.entries.push(spaceTile);
   }
@@ -2432,7 +2433,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} createItems={createItems} onHover={sidebar ? undefined : peekSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} createItems={createItems} onHover={sidebar ? undefined : peekSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },

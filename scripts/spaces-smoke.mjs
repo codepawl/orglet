@@ -56,6 +56,17 @@ try {
     return corners.filter(([x, y]) => !tile.contains(document.elementFromPoint(x, y))).length;
   });
   assert.equal(missedCorners, 0, 'every corner of a space tile selects it');
+  // The spaces sit under a divider, below the app's own places.
+  const railOrder = await page.locator('.area-rail').evaluate(rail => [...rail.children].map(child => child.className));
+  assert.deepEqual(railOrder.slice(0, 3), ['area-rail-list', 'area-rail-divider', 'area-rail-list'], 'places, a divider, then spaces');
+  assert.equal(await page.locator('.area-rail-divider + .area-rail-list .area-tile[data-name="Launch"]').count(), 1, 'the space is under the divider');
+  // The person's face is the button: its menu opens on it and it wears a ring meanwhile, with no tile behind it.
+  await page.locator('.user-panel-who').click();
+  await page.locator('.org-row-menu-panel').waitFor();
+  assert.equal(await page.locator('.user-panel-who').evaluate(button => getComputedStyle(button).backgroundColor), 'rgba(0, 0, 0, 0)', 'no tile behind the open face');
+  await shot(page, 'profile-menu');
+  await page.keyboard.press('Escape');
+  await page.locator('.org-row-menu-panel').waitFor({ state: 'detached' });
   const made = (await workspace(page)).spaces[0];
   assert.equal(made.name, 'Launch');
   assert.equal(made.orgletIds.length, 2);

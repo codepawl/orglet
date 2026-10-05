@@ -3043,6 +3043,8 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:var(--panel-inset) 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
 .area-rail::-webkit-scrollbar { width:0; height:0; }
 .area-rail-list { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0; padding:0; list-style:none; }
+/* The one divider of the rail (user, 2026-10-05): a short bar between the app's own places and the person's spaces. */
+.area-rail-divider { flex-shrink:0; width:24px; height:2px; margin:-2px 0; border-radius:1px; background:color-mix(in srgb, var(--text) 14%, transparent); }
 .area-tile { position:relative; display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border:0; border-radius:14px; background:transparent; color:var(--muted); cursor:pointer; }
 .area-tile:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
 .area-tile.active { background:var(--row-active); color:var(--text); }
@@ -3109,8 +3111,14 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 /* The person sits in the rail, under the areas: a face the size of a tile that opens their menu (user, 2026-10-04).
    A waiting update stacks above it. Like the rail, it has no ground of its own. */
 .user-panel { position:absolute; z-index:6; left:var(--shell-gap); bottom:var(--shell-gap); display:flex; flex-direction:column; align-items:center; gap:6px; width:var(--area-rail-width); }
-.user-panel-who { display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border-radius:14px; }
-.user-panel-who:hover:not(:disabled), .user-panel-who[aria-expanded="true"] { background:var(--row-hover); }
+/* The face is the button (user, 2026-10-05: a bordered tile around a bordered letter read as a box in a box). It is
+   the size of a space's fill, takes a soft fill of its own colour, lifts a little under the pointer, gives under
+   a press, and wears the open space's ring while its menu is open. */
+.user-panel-who, .user-panel-who:hover:not(:disabled), .user-panel-who[aria-expanded="true"] { display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border:0; border-radius:14px; background:transparent; }
+.user-panel-face > .avatar { width:32px; height:32px; border-radius:10px; font-size:13px; background:color-mix(in srgb, var(--avatar-color) 18%, var(--window)); box-shadow:none; transition:transform var(--motion-quick) var(--ease-out), background var(--motion-quick) var(--ease-out), box-shadow var(--motion-quick) var(--ease-out); }
+.user-panel-who:hover:not(:disabled) .avatar { background:color-mix(in srgb, var(--avatar-color) 30%, var(--window)); }
+.user-panel-who:active:not(:disabled) .avatar { transform:scale(.94); }
+.user-panel-who[aria-expanded="true"] .avatar { box-shadow:0 0 0 2px var(--window), 0 0 0 4px var(--text); }
 .user-panel-face { position:relative; display:grid; place-items:center; flex-shrink:0; }
 .user-panel-face .connection-dot { position:absolute; right:-2px; bottom:-2px; box-shadow:0 0 0 2px var(--window); }
 
