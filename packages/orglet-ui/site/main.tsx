@@ -43,6 +43,29 @@ function rememberTheme(theme: Theme): void {
   }
 }
 
+const BASE_FONT_SIZE = 15;
+
+/**
+ * How much larger than its smallest size the page's type is right now. The kit's own controls are sized in pixels,
+ * so the places that show them (the sample form, the story frames) are zoomed by this to keep up with the text.
+ */
+function useKitZoom(): number {
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    const measure = () => {
+      const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || BASE_FONT_SIZE;
+      // In steps of a twentieth, so dragging the window's edge does not reload every frame on every pixel.
+      const next = Math.max(1, Math.round((rootFontSize / BASE_FONT_SIZE) * 20) / 20);
+      setZoom(next);
+      document.documentElement.style.setProperty('--site-kit-zoom', String(next));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  return zoom;
+}
+
 function usePath(): [string, (path: string) => void] {
   const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
@@ -104,7 +127,7 @@ function Prose({ source, navigate }: { source: string; navigate: (path: string) 
 
 const FRAME_BORDER = 2;
 
-function StoryFrame({ story, theme, minimumHeight }: { story: StoryEntry; theme: Theme; minimumHeight: number }) {
+function StoryFrame({ story, theme, zoom, minimumHeight }: { story: StoryEntry; theme: Theme; zoom: number; minimumHeight: number }) {
   const frameId = useId();
   const [height, setHeight] = useState(minimumHeight);
   useEffect(() => {
@@ -112,12 +135,12 @@ function StoryFrame({ story, theme, minimumHeight }: { story: StoryEntry; theme:
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== 'orglet-ui-preview-height' || event.data.frame !== frameId) return;
       // The frame's own border is inside its height, so the story needs that much more or it scrolls by two pixels.
-      setHeight(Math.max(minimumHeight, Math.min((Number(event.data.height) || 0) + FRAME_BORDER, 720)));
+      setHeight(Math.max(minimumHeight, Math.min((Number(event.data.height) || 0) + FRAME_BORDER, Math.round(720 * zoom))));
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [frameId, minimumHeight]);
-  const query = new URLSearchParams({ file: story.file, story: story.exportName, theme, frame: frameId });
+  }, [frameId, minimumHeight, zoom]);
+  const query = new URLSearchParams({ file: story.file, story: story.exportName, theme, frame: frameId, zoom: String(zoom) });
   return <figure className="site-story">
     <figcaption>{story.title}</figcaption>
     <iframe src={`/preview.html?${query}`} title={`${story.title} preview`} loading="lazy" style={{ height }} />
@@ -133,9 +156,9 @@ function minimumFrameHeight(page: ComponentPage): number {
   return OPENS_A_PANEL.includes(page.name) ? 340 : 96;
 }
 
-function ComponentView({ page, theme, navigate }: { page: ComponentPage; theme: Theme; navigate: (path: string) => void }) {
+function ComponentView({ page, theme, zoom, navigate }: { page: ComponentPage; theme: Theme; zoom: number; navigate: (path: string) => void }) {
   const stories = storiesOf(page);
-  const minimumHeight = minimumFrameHeight(page);
+  const minimumHeight = Math.round(minimumFrameHeight(page) * zoom);
   const markdown = `# ${page.name}\n\n${page.summary}\n\n${page.body}\n`;
   return <article className="site-article">
     <header className="site-article-header">
@@ -151,7 +174,7 @@ function ComponentView({ page, theme, navigate }: { page: ComponentPage; theme: 
       </div>
     </header>
     {stories.length > 0 && <section aria-label="Previews" className="site-stories">
-      {stories.map(story => <StoryFrame key={`${page.name}-${story.exportName}`} story={story} theme={theme} minimumHeight={minimumHeight} />)}
+      {stories.map(story => <StoryFrame key={`${page.name}-${story.exportName}`} story={story} theme={theme} zoom={zoom} minimumHeight={minimumHeight} />)}
     </section>}
     <Prose source={page.body} navigate={navigate} />
   </article>;
@@ -296,6 +319,7 @@ function App() {
   const [path, navigate] = usePath();
   const [theme, setTheme] = useState<Theme>(storedTheme);
   const [menuOpen, setMenuOpen] = useState(false);
+  const kitZoom = useKitZoom();
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     rememberTheme(theme);
@@ -323,7 +347,7 @@ function App() {
       <Sidebar path={path} navigate={navigate} onNavigate={() => setMenuOpen(false)} />
       <main className="site-main">
         {path === '/' && <HomeView navigate={navigate} />}
-        {componentPage && <ComponentView key={componentPage.name} page={componentPage} theme={theme} navigate={navigate} />}
+        {componentPage && <ComponentView key={componentPage.name} page={componentPage} theme={theme} zoom={kitZoom} navigate={navigate} />}
         {guide && <GuideView guide={guide} navigate={navigate} />}
         {path !== '/' && !componentPage && !guide && <NotFound navigate={navigate} />}
       </main>

@@ -10,13 +10,15 @@
 }
 
 :root {
-  --site-topbar-height: 56px;
-  --site-sidebar-width: 248px;
-  --site-gutter: 24px;
+  --site-topbar-height: 3.5rem;
+  --site-sidebar-width: clamp(232px, 17vw, 328px);
+  --site-gutter: clamp(16px, 2.2vw, 48px);
   color-scheme: light dark;
 }
 
+/* Type follows the window: 15px on a small laptop, 20px on a very wide screen, and everything sized in rem with it. */
 html {
+  font-size: clamp(15px, 10.2px + 0.38vw, 20px);
   scroll-padding-top: calc(var(--site-topbar-height) + 16px);
 }
 
@@ -25,7 +27,7 @@ body {
   background: var(--org-bg);
   color: var(--org-text);
   font-family: var(--org-font);
-  font-size: 15px;
+  font-size: 1rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
@@ -57,7 +59,7 @@ pre:focus-visible,
 }
 
 .site-wordmark {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 650;
   letter-spacing: -0.01em;
   text-decoration: none;
@@ -68,7 +70,7 @@ pre:focus-visible,
   border-radius: 999px;
   background: var(--org-surface);
   color: var(--org-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .site-topbar-end {
@@ -83,7 +85,7 @@ pre:focus-visible,
   align-items: center;
   gap: 6px;
   color: var(--org-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   text-decoration: none;
 }
 
@@ -99,7 +101,7 @@ pre:focus-visible,
   display: grid;
   grid-template-columns: var(--site-sidebar-width) minmax(0, 1fr);
   align-items: start;
-  max-width: 1280px;
+  max-width: min(100%, 1840px);
   margin: 0 auto;
 }
 
@@ -138,7 +140,7 @@ pre:focus-visible,
   margin: 0 0 4px;
   padding: 0 10px;
   color: var(--org-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
@@ -154,7 +156,7 @@ pre:focus-visible,
   display: block;
   padding: 5px 10px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   text-decoration: none;
 }
 
@@ -171,16 +173,17 @@ pre:focus-visible,
   margin: 0;
   padding: 0 10px;
   color: var(--org-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .site-main {
   min-width: 0;
-  padding: 24px var(--site-gutter) 96px 32px;
+  padding: 24px var(--site-gutter) 96px clamp(24px, 3vw, 64px);
 }
 
 .site-article {
-  max-width: 820px;
+  max-width: clamp(820px, 64vw, 1320px);
+  margin: 0 auto;
 }
 
 .site-article-header {
@@ -197,7 +200,7 @@ pre:focus-visible,
 
 h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 2rem;
   font-weight: 680;
   line-height: 1.2;
   letter-spacing: -0.02em;
@@ -207,7 +210,7 @@ h1 {
   max-width: 62ch;
   margin: 8px 0 0;
   color: var(--org-muted);
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.55;
 }
 
@@ -224,7 +227,7 @@ h1 {
 .site-story figcaption {
   margin-bottom: 6px;
   color: var(--org-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .site-story iframe {
@@ -237,14 +240,14 @@ h1 {
 
 .site-prose h2 {
   margin: 40px 0 10px;
-  font-size: 21px;
+  font-size: 1.3125rem;
   font-weight: 650;
   letter-spacing: -0.01em;
 }
 
 .site-prose h3 {
   margin: 28px 0 8px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 650;
 }
 
@@ -284,7 +287,7 @@ h1 {
   background: var(--org-surface);
   overflow-x: auto;
   font-family: var(--org-font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
 }
 
@@ -309,7 +312,7 @@ h1 {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .site-prose th {
@@ -341,18 +344,18 @@ h1 {
 
 .site-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, clamp(360px, 26vw, 460px));
   align-items: center;
-  gap: 48px;
+  gap: clamp(32px, 4vw, 88px);
   padding: 32px 0 16px;
 }
 
 .site-home {
-  max-width: 980px;
+  max-width: clamp(980px, 74vw, 1480px);
 }
 
 .site-hero h1 {
-  font-size: 44px;
+  font-size: 2.75rem;
 }
 
 .site-hero-text {
@@ -377,7 +380,7 @@ h1 {
   padding: 0 16px;
   border-radius: 999px;
   background: var(--org-surface);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 550;
   text-decoration: none;
 }
@@ -392,13 +395,20 @@ h1 {
   color: var(--org-primary-text);
 }
 
+/* The kit sizes its controls in pixels, as an application expects. Where the site shows them off, they grow with the
+   page's type instead of staying small on a wide screen. */
+.site-sample,
+.site-hero .org-command-block {
+  zoom: var(--site-kit-zoom, 1);
+}
+
 .site-sample {
   display: grid;
   gap: 16px;
   padding: 22px;
   border-radius: 18px;
   background: color-mix(in srgb, var(--org-surface) 55%, var(--org-bg));
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .site-sample-field {
@@ -433,7 +443,7 @@ h1 {
 
 .site-facts h2 {
   margin: 0 0 6px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 650;
 }
 
@@ -481,7 +491,7 @@ h1 {
   }
 
   .site-hero h1 {
-    font-size: 34px;
+    font-size: 2.125rem;
   }
 
   .site-facts {
