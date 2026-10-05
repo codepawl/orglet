@@ -190,16 +190,20 @@ function FramedStory({ story, theme, zoom }: { story: StoryEntry; theme: Theme; 
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== 'oui-preview-height' || event.data.frame !== frameId) return;
       // The frame's own border is inside its height, so the story needs that much more or it scrolls by two pixels.
-      setHeight(Math.max(minimumHeight, Math.min((Number(event.data.height) || 0) + FRAME_BORDER, Math.round(720 * zoom))));
+      // The story reports its height in its own pixels; the frame is drawn `zoom` times larger than that.
+      const storyHeight = Math.min((Number(event.data.height) || 0) + FRAME_BORDER, 720);
+      setHeight(Math.max(minimumHeight, Math.round(storyHeight * zoom)));
       setLoaded(true);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [frameId, minimumHeight, zoom]);
-  const query = new URLSearchParams({ file: story.file, story: story.exportName, theme, frame: frameId, zoom: String(zoom) });
+  const query = new URLSearchParams({ file: story.file, story: story.exportName, theme, frame: frameId });
   return <div className="site-frame" style={{ height }}>
     {!loaded && <Skeleton shape="block" className="site-frame-wait" />}
-    <iframe src={`${PREVIEW_PATH}?${query}`} title={`${story.title} preview`} loading="lazy" onLoad={() => setLoaded(true)} />
+    {/* The frame itself is zoomed, not the page inside it: a story that places a menu or a popover measures its own
+        window, and a zoom inside that window would put the panel somewhere else. */}
+    <iframe src={`${PREVIEW_PATH}?${query}`} title={`${story.title} preview`} loading="lazy" style={{ zoom }} onLoad={() => setLoaded(true)} />
   </div>;
 }
 

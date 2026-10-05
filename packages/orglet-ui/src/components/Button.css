@@ -16,9 +16,11 @@
 .org-button:hover:not(:disabled) { background: var(--org-surface, #f4f4f5); }
 .org-button:active:not(:disabled) { background: var(--org-row-active, #e8e8ea); }
 /* One ring for every focusable thing in the kit: two pixels in the focus colour, two pixels off the control. */
+/* Focus is the same ring a field draws: a line of the focus colour with a soft halo, read as one, and no hard dark
+   outline. The transparent outline only shows in forced colours. */
 .org-button:focus-visible {
-  outline: 2px solid var(--org-focus, #576b99);
-  outline-offset: 2px;
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
 }
 /* A disabled control steps back by half and says so with the cursor. The hover and press rules skip it. */
 .org-button:disabled {

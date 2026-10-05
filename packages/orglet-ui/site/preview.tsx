@@ -17,8 +17,6 @@ const fileName = parameters.get('file') ?? '';
 const storyName = parameters.get('story') ?? '';
 const frameId = parameters.get('frame') ?? '';
 document.documentElement.dataset.theme = parameters.get('theme') ?? 'light';
-// The page that frames this story grows its type on a wide screen and asks the story to grow with it.
-document.body.style.zoom = String(Math.min(Math.max(Number(parameters.get('zoom')) || 1, 1), 2));
 
 function reportHeight(): void {
   const height = Math.ceil(document.documentElement.getBoundingClientRect().height);

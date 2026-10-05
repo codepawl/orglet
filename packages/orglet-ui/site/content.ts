@@ -64,7 +64,9 @@ export function pagesByGroup(pages: ComponentPage[]): { group: string; pages: Co
 }
 
 function readableName(exportName: string): string {
-  return exportName.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, first => first.toUpperCase()).replace(/ (\w)/g, (_, letter: string) => ` ${letter.toLowerCase()}`);
+  // Every capital after the first starts a word, a one-letter word included: `WithATitle` is "With a title".
+  const words = exportName.replace(/(?<!^)([A-Z])/g, ' $1').toLowerCase();
+  return words.replace(/^./, first => first.toUpperCase());
 }
 
 export function storiesOf(page: ComponentPage): StoryEntry[] {

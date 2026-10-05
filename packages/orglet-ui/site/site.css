@@ -668,11 +668,15 @@ pre:focus-visible,
    own colour, which is what a component sits on in an application. */
 .site-stories {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
+/* The single column is clamped: a long line of code would otherwise widen the card past the page and under the list
+   of sections beside it. */
 .site-story {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   padding: 8px;
   border-radius: var(--site-panel-radius);
@@ -709,10 +713,11 @@ pre:focus-visible,
   background: var(--org-bg);
 }
 
+/* The frame is zoomed with the page's type (see FramedStory), so it is laid out that much smaller to fill its box. */
 .site-frame iframe {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: calc(100% / var(--site-kit-zoom, 1));
+  height: calc(100% / var(--site-kit-zoom, 1));
   border: 0;
 }
 
@@ -768,6 +773,8 @@ pre:focus-visible,
   border-radius: 12px;
   background: var(--site-panel);
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--org-border) transparent;
   font-family: var(--org-font-mono);
   font-size: 0.8125rem;
   line-height: 1.65;

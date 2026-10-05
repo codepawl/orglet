@@ -52,7 +52,7 @@
   width: 18px;
   height: 18px;
   margin-top: 2px;
-  border: 1.5px solid color-mix(in srgb, var(--org-muted, #666) 70%, var(--org-border, #e5e5e5));
+  border: 1.5px solid color-mix(in srgb, var(--org-text, #1f1f1f) 14%, var(--org-border, #e5e5e5));
   border-radius: 50%;
   background: var(--org-bg, #fff);
   box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d);
@@ -68,7 +68,7 @@
   transform: scale(.4);
   transition: opacity var(--org-motion-quick, 110ms) var(--org-ease-out, ease), transform var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
 }
-.org-radio:hover:not(.org-radio-disabled) .org-radio-mark { border-color: var(--org-text, #111); }
+.org-radio:hover:not(.org-radio-disabled) .org-radio-input:not(:checked) + .org-radio-mark { border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 32%, var(--org-border, #e5e5e5)); }
 .org-radio-input:checked + .org-radio-mark {
   background: var(--org-accent, #4473d3);
   border-color: var(--org-accent, #4473d3);
@@ -78,9 +78,11 @@
   opacity: 1;
   transform: none;
 }
-.org-radio-input:focus-visible + .org-radio-mark {
-  outline: 2px solid var(--org-focus, #576b99);
-  outline-offset: 2px;
+.org-radio-input:focus-visible + .org-radio-mark,
+.org-radio:active:not(.org-radio-disabled) .org-radio-mark {
+  border-color: var(--org-focus, #576b99);
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
 }
 .org-radio-text {
   min-width: 0;
