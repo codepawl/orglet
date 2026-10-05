@@ -1,16 +1,34 @@
 {
   "name": "@codepawlhq/orglet-ui",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "The interface Orglet is built from: a small set of components and the tokens they read",
-  "private": true,
   "license": "AGPL-3.0-only",
   "author": "CodePawl",
+  "homepage": "https://github.com/codepawl/orglet/tree/main/packages/orglet-ui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codepawl/orglet.git",
+    "directory": "packages/orglet-ui"
+  },
+  "bugs": "https://github.com/codepawl/orglet/issues",
+  "keywords": [
+    "react",
+    "components",
+    "ui",
+    "design-system",
+    "accessibility",
+    "orglet"
+  ],
   "type": "module",
   "sideEffects": [
     "*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "docs",
+    "skills",
+    "llms.txt",
+    "llms-full.txt"
   ],
   "types": "./dist/index.d.ts",
   "exports": {
@@ -25,9 +43,13 @@
     "build": "tsdown",
     "check:package": "publint --strict && attw --pack --profile esm-only --exclude-entrypoints ./tokens.css",
     "test": "vitest run",
+    "docs": "node scripts/build-docs.mjs",
+    "check:docs": "node scripts/build-docs.mjs --check",
     "storybook": "storybook dev --port 6006 --no-open",
     "build-storybook": "storybook build --output-dir storybook-static",
-    "check:stories": "node scripts/check-stories.mjs"
+    "check:stories": "node scripts/check-stories.mjs",
+    "site": "vite --config site/vite.config.ts",
+    "build-site": "vite build --config site/vite.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "1.1.23",
@@ -61,5 +83,8 @@
     "vite": "8.3.1",
     "vitest": "5.0.2",
     "vitest-axe": "1.0.0-pre.5"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -1,0 +1,5 @@
+/* The frame a story sits in on a docs page. */
+body {
+  margin: 0;
+  padding: 24px;
+}

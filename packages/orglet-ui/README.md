@@ -2,14 +2,10 @@
 
 The interface Orglet is built from: a small set of React components and the tokens they read.
 
-It is not published yet. This package exists so components can be moved out of the app one at a time, under a
-contract, instead of being untangled in one go on the day someone wants to use them. The app still imports its own
-`apps/desktop/src/renderer/components`; a component moves here only when it meets the rules below, and the app then
-imports it from here.
+Components move here from the Orglet app one at a time, under a contract: a component arrives only when it meets
+the rules below, and the app then imports it from here like any other application would.
 
 ## Install
-
-Once it is published:
 
 ```sh
 pnpm add @codepawlhq/orglet-ui
@@ -43,109 +39,14 @@ loads the switch's styles.
 
 ## Components
 
-- `Button`: `variant` `ghost` (the default: quiet text, a soft background on hover), `outline` (a soft filled pill for a
-  secondary action), `primary` (the one filled action of a place) or `danger` (filled in `--org-error` with
-  `--org-error-ink` text, for a yes that cannot be undone); `size="icon"` for a square holding one icon,
-  named with `aria-label`, which answers hover with the icon's colour instead of a tile. `type` is left to the caller,
-  so inside a form it submits unless it says `type="button"`.
-- `Input` and `Textarea`: a text field. Name it with a `<label>` around it or `aria-label`. `invalid` marks it as
-  failing validation, and `flash` replays the shake: pass a counter the form increments on every failed submit.
-- `Switch` and `SwitchField`: an on/off setting. `Switch` is the bare control, named by `label` or `labelledBy`;
-  `SwitchField` is the whole row, its title on the left and the switch on the right, with `description` under the
-  title.
-- `Skeleton`, `SkeletonText` and `SkeletonGroup`: the only shape a wait may take. A bar where text will be, a block
-  where a picture will be, a circle where a face will be, sweeping under a second per pass and still under reduced
-  motion. The group is the one status region, and its `label` is what a screen reader hears. The kit has no spinner
-  and will not grow one.
-- `CommandBlock`: a command for someone to paste into a terminal. A label, the command on a quiet card that breaks
-  only after a path separator or a space, and a copy button. A small control that changes the command, such as a
-  terminal picker, goes in its `toolbar`, on the card's top bar. The application does the copying in `onCopy`.
-- `EditableText`: a name renamed where it is shown. A click, Enter or F2 turns it into a field; Enter or leaving the
-  field keeps the change, Escape puts the old value back. `onCommit` does the saving and may be async.
-- `Checkbox`: a tick for picking items out of a list or confirming something once, never for an on/off setting
-  (that is a `Switch`). A real, hidden `<input type="checkbox">` with a drawn box, so forms and keyboards work as
-  usual; every input prop passes through. `description` adds a second line, `required` draws the red asterisk
-  without the browser's own validation bubble.
-- `AnchoredPopover`: a panel attached to a trigger (`anchor` ref). It floats below it, flips above when there is no
-  room, stays inside the window, closes on Escape or a pointer outside and gives focus back to the anchor. Inside an
-  open dialog it portals into that dialog and sets `data-popup-open`, so Escape closes the popover, not the dialog.
-- `StatusMark`: a small status glyph for the left of a title. `variant` (`empty`, `dashed`, `paused`, `filled`, `busy`) and
-  `tone` (`muted`, `success`, `error`, `working`) pick a shape and a colour, and every state has its own shape, so
-  colour is never the only difference. `label` is what a screen reader hears; `decorative` keeps it out of a named
-  control. Which state a thing is in belongs to the application.
-- `ReactionBar`, `ReactionPicker` and `ReactionBadges`: reactions thrown at a message. The bar is a trigger (`label`,
-  `icon`) that opens a floating row of faces (`options` of `{ name, emoji, meaning }`, the `picked` one pressed;
-  picking it again takes it off). The badges sit on a bubble's corner (`align` `start`, `end` or `inline`), one
-  button each with a count above one. Where reactions are stored is the application's.
-- `ColorPicker` and `normalizeHex`: a saturation and brightness area (pointer and arrow keys), a hue slider and a hex
-  field that change the colour live, preset swatches, and saved colours with save and remove. Every string comes in
-  `labels`, including the ones built from a value (`areaValue`, `presetColor`, `removeColor`). It sets
-  `data-popup-open`, so Escape closes it rather than a dialog around it.
-- `PanelHeading`: a section's title (`level` 2 or 3) with its `description` under it on the left and the section's
-  actions (its children) on the right, vertically centred. Actions end flush with the section's right edge, so give
-  each a visible surface: `primary` only for the section's main add or create action, `outline` for a utility action
-  such as a rescan, never a bare `ghost` button with a label (its box is flush but its label is not, so it reads as
-  shifted left and colourless). An icon-only button lines up by its box and may stay `ghost`.
-- `FieldLabel`: a field's title with a small decorative leading `icon` (any icon component that takes `size`, such as
-  one from lucide-react); `required` draws the red asterisk without adding it to the field's name.
-- `InfoTip`: technical detail (ids, paths, hashes) behind a small button: opens on hover and keyboard focus, pins
-  open on click so a row's copy button can be reached, closes on Escape, focus leaving or a pointer outside. `rows` of
-  `{ label, value, mono?, onCopy? }`; `label` names the trigger, `icon` is what it shows, `copyLabel` names each copy
-  button. Portaled, so a scrolling dialog cannot clip it.
-- `RowMenu`: a row's actions behind an icon button (`icon`, named by `label`). Items (`{ label, icon, onSelect,
-  danger?, confirm?, shortcut? }`) close the menu when chosen; one with `confirm` asks inside the panel first, with
-  `cancelLabel` as the way back, and `asksOnOpen` opens a lone asking item straight on its question. Arrow keys move
-  between items, Escape and a pointer outside close it, and `contextMenuOf` opens it at the pointer on a right-click
-  in the matching ancestor.
-- `MoneyInput`: an amount with the currency `symbol` before it and its `code` after it, both hidden from the field's
-  name; the text stays as typed and converting it is the application's. `invalid` and `flash` work as on `Input`.
-- `Attachment`, `fileKind` and `formatFileSize`: a file as a same-width card (`name`, a `meta` line, the kind's
-  `icon`), rendered as a list item. With `onOpen` the whole card opens the file; with `onRemove` (named by
-  `removeLabel`, showing `removeIcon`) a remove button appears on hover or focus without moving anything; `inactive` draws a file that can no longer
-  be used (read access revoked) quieter, with `meta` saying why. `fileKind`
-  reads the kind from the extension; `formatFileSize` gives "1.5 KB" in a locale.
-- `Drawer`: a centred panel with a header (title or breadcrumb, `description`, the panel's `actions`, a close button
-  named by `closeLabel` showing `closeIcon`) and a body that scrolls on its own. Focus goes back to what opened it.
-- `confirmAction` and `Confirmer`: `await confirmAction({ title, description?, confirmLabel?, cancelLabel?, tone? })` asks
-  one yes-or-no question and resolves true only on confirm; `tone: 'danger'` draws the yes as a danger button. Render
-  one `<Confirmer confirmLabel cancelLabel />` for the default labels. Cancel takes focus, and the answer gives focus
-  back to what asked.
-- `useReturnFocus(onOpenAutoFocus?)`: for a Radix dialog opened from state rather than a `Dialog.Trigger`. Spread the
-  result on `Dialog.Content`: it remembers what had focus when the dialog opened and focuses it again when it closes,
-  unless something outside the dialog already took focus (a link in the dialog that closes it and focuses its target).
-  The kit's own dialogs use it.
-- `DialogOverlay`, `keepOpenForPopup` and `OPEN_POPUP_SELECTOR`: the frosted backdrop for any Radix dialog, and the
-  Escape rule that closes an open menu inside a dialog before the dialog.
-- `showToast` and `Toaster`: `showToast(text, tone?, action?)` shows a short message at the top centre, `success`,
-  `error` or `info`, with at most one `{ label, onSelect }` action. A repeated message replaces its older copy, three
-  at most are visible, and a plain success goes after 3 s, anything else after 6 s. Render one
-  `<Toaster icons={{ success, error, info }} renderText? />`; it portals to the page, so an open modal does not hide it.
-- `Select`: a single-choice dropdown (the select-only combobox pattern) named by `labelledBy` or `ariaLabel`, with a
-  `placeholder`. Options (`SelectOption`) take `icon`, `detail`, `note`, `group`, `disabled`, `dimmed`, `badge` and
-  `labelStyle`; `size="sm"`, `inlineDetail`, `menuMinWidth`, `invalid` with `flash`, and `field` (the trigger's
-  `data-field`). The list is portaled into the open dialog or the page, flips up when there is more room above, fits
-  the window and only scrolls when it must. Arrows, Page Up and Down, Home and End, typing to jump, Enter or Space to
-  choose, Escape to close without closing the dialog. Sizes come from `--org-select-height`, `--org-select-radius` and
-  `--org-select-option-height`.
-- `TabbedDialog`, `TabbedFormDialog` and `DialogTabs`: the settings layout, a title and close button on top, the tabs
-  on the left (a row on a narrow window) and the open section headed by its tab's `label`, with `description` and
-  `actions`, scrolling on its own. Every tab shares one frame: the panel keeps its scrollbar gutter whether or not
-  the tab scrolls, so content ends at the same x on every tab, and the heading is as tall as its text with the
-  actions overhanging it, so each tab's title starts at the same height. `TabbedDialog` applies changes at once; with `onSubmit` its body and `footer` form
-  one form. `TabbedFormDialog` pins Cancel and Save at the bottom with the `error` beside them, shows `busyLabel`
-  while saving, and lands on the field named by `focusField`. A tab's `buttonProps` reach its button, such as a
-  handler that prefetches on hover. Tabs follow the WAI-ARIA pattern: the arrows move and open, only the open tab is
-  in the Tab order. Closing gives focus back to what opened it.
-- `Viewer`: a large dialog for looking at one thing, in the style of macOS Quick Look: close on the left (`closeLabel`,
-  `closeIcon`), the `icon` and `title` centred with an optional `meta` line under them, `actions` on the right, and the
-  content on a grey backdrop that scrolls on its own. `className` widens or restyles one kind of viewer. `toolbar` adds
-  a second row of tools under the first, for an editing mode such as marking up a picture; it stays put while the
-  content scrolls. Closing gives focus back to what opened it.
-- `ToolbarToggleGroup`: one choice out of a few small icon buttons, such as the tool, colour or stroke width of a
-  drawing bar. A radio group named by `label`: one Tab stop, the arrow keys, Home and End move the choice and the focus
-  together, and the picked item sits on a pale tint. Each item has a `label`, an `icon` and an optional `shortcut`,
-  shown in its tooltip and announced as `aria-keyshortcuts`; handling that key elsewhere is the caller's job.
-- `cn`: joins class names and lets the caller's win.
+Each component has a page in [docs/components](docs/components): when to use it, when not to, an example, its props
+and its accessibility notes. This table is written from those pages by `pnpm --filter @codepawlhq/orglet-ui docs`.
+
+<!-- components:start -->
+<!-- components:end -->
+
+For agents, the same pages ship as [llms.txt](llms.txt), [llms-full.txt](llms-full.txt) and a skill,
+[skills/orglet-ui/SKILL.md](skills/orglet-ui/SKILL.md). See [docs/agents.md](docs/agents.md).
 
 ## Theming
 

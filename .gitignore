@@ -42,3 +42,5 @@ scripts/tacet/.*.cjs
 
 # The kit gallery's static build (pnpm --filter @codepawlhq/orglet-ui build-storybook).
 storybook-static/
+# The kit's docs site (pnpm --filter @codepawlhq/orglet-ui build-site).
+site-dist/
