@@ -114,12 +114,12 @@ import type { HomePageView } from './components/FriendsPage';
 import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
-import { Boxes, CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
+import { CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
-import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
+import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
 import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
@@ -452,6 +452,21 @@ export function App() {
   // one selected when they were created; otherwise a late refresh replaces the open task with nothing.
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const workspaceRef = useRef(workspace); workspaceRef.current = workspace;
+  // A channel outside every space has no row, since Home lists direct messages only: a crew from a template, a
+  // channel the terminal made, the channels a deleted space left. The core puts them into the space kept for them.
+  // Asked once per set of such channels and their states, so one that is running is asked for again when it stops.
+  const adoptAsked = useRef('');
+  useEffect(() => {
+    if (!workspace) return;
+    const outside = (channel: { spaceId?: string } | undefined) => Boolean(channel) && !workspace.spaces.some(space => space.id === channel!.spaceId);
+    const waiting = [
+      ...workspace.tasks.filter(task => !task.deletedAt && !task.archivedAt && outside(task.channel)).map(task => `${task.id}:${task.status}`),
+      ...workspace.emptyChannels.filter(outside).map(channel => channel.id),
+    ].join();
+    if (!waiting || adoptAsked.current === waiting) return;
+    adoptAsked.current = waiting;
+    void orglet.call('adoptLooseChannels', { name: t('Kênh') }).catch(() => undefined);
+  }, [workspace]);
   // Set when the first-run account question is answered, so the refresh that follows moves to the app as a transition.
   const leavingAccountChoice = useRef(false);
   // The open chat, once a refresh found the workspace no longer lists it, and where the view goes instead (COD-282).
@@ -2221,9 +2236,7 @@ export function App() {
   // A channel is in a space only while that space exists; one whose space is gone is listed with the loose channels.
   const channelOfEntry = (entry: (typeof channelEntries)[number]) => entry.kind === 'chat' ? entry.task.channel : entry.channel;
   const spaceOfEntry = (entry: (typeof channelEntries)[number]) => workspace.spaces.find(space => space.id === channelOfEntry(entry)?.spaceId);
-  const looseChannelEntries = channelEntries.filter(entry => !spaceOfEntry(entry));
   const openSpace = workspace.spaces.find(space => space.id === openSpaceId);
-  const channelGroupList = groupChannels(looseChannelEntries, entry => entry.kind === 'chat' ? entry.task.channel?.category : entry.channel.category);
   const activityCountsNow = activityCounts(workspace.running ?? [], savedMessages, pendingRoutines + knowledgeToReview);
   const workingIds = workingOrgletIds(workspace.running ?? []);
   const headerSpace = workspace.spaces.find(space => space.id === headerChannel?.spaceId);
@@ -2381,12 +2394,6 @@ export function App() {
     setArea('home');
     toast(t('Đã xóa không gian'), 'success', space.name);
   }, space.name);
-  const spaceFromCategory = (category: string) => action(async () => {
-    const spaceId = await orglet.call('spaceFromCategory', { category });
-    setOpenSpace(spaceId);
-    setArea('channels');
-    toast(t('Đã tạo không gian'), 'success', category);
-  }, category);
   // While the sidebar is folded, a tile opens it for good. The tile of the area already on screen only opens it, so
   // Home there does not also jump to Friends.
   const folderNames = spaceFolderNames(workspace.spaces);
@@ -2506,16 +2513,8 @@ export function App() {
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
-      {/* The channels outside every space, like group chats beside the DMs: the rail has a tile for each space and
-          none for these (user, 2026-10-05). Ones with a category keep their own section under it. They are only
-          listed here: a new channel is made in a space, so these sections have no way to add one. */}
-      {channelGroupList.some(group => group.name === undefined) && <SidebarSection id="loose-channels" title={t('Kênh')}>
-        {channelGroupList.filter(group => group.name === undefined).flatMap(group => group.entries).map(renderChannelEntry)}
-      </SidebarSection>}
-      {channelGroupList.filter(group => group.name !== undefined).map(group => <SidebarSection key={group.name!.toLowerCase()} id={`category-${group.name!.toLowerCase()}`} title={group.name!}
-        action={<RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />}>
-        {group.entries.map(renderChannelEntry)}
-      </SidebarSection>)}
+      {/* Home lists direct messages only (user, 2026-10-05): a channel lives in a space, under its tile on the rail.
+          One that arrives outside every space is put into the space kept for them (`adoptLooseChannels`). */}
       </>}
       {sidebarSpace && <>
         {sidebarSpaceEntries.length === 0 && sidebarSpace.categories.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}

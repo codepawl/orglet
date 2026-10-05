@@ -12,6 +12,8 @@ const TOO_MANY_SPACES = 'Đã có quá nhiều không gian.';
 const ORGLET_NOT_LISTED = 'Có Tí đã được lưu trữ hoặc xóa. Bỏ Tí đó khỏi không gian.';
 const CATEGORY_WIDER_THAN_SPACE = 'Một mục chỉ có thể có những Tí mà không gian của nó có.';
 const NO_CHANNEL_IN_CATEGORY = 'Không có kênh nào trong mục này.';
+/** The setting that names the space kept for channels that arrive outside every space. */
+const LOOSE_SPACE = 'looseChannelSpace';
 
 /** The spaces as saved, in the order they were made. A row an older or newer build wrote differently is left out. */
 export function storedSpaces(store: Store): Space[] {
@@ -81,6 +83,48 @@ export class Spaces {
       for (const channel of loose) this.channels.joinSpace(channel.id, spaceId);
     });
     return spaceId;
+  }
+
+  /**
+   * Puts the channels outside every space into the space kept for them (owner, 2026-10-05: Home lists direct
+   * messages only, so a channel has a row only in a space). A crew from a template, a channel the terminal made and
+   * the channels a deleted space left all arrive outside the spaces; the window calls this when it sees one. The
+   * space is made on first need with `name`, and is found again by the setting that remembers it; deleted, it is
+   * made again. It gains the orglets of the channels it takes, and each channel keeps its own list, so no orglet
+   * gains a channel. A channel that is running is left for the next call.
+   */
+  adoptLoose(name: string): string | undefined {
+    const loose = this.channels.loose().filter(channel => this.idle(channel.id));
+    if (!loose.length) return undefined;
+    const workspace = this.store.workspace();
+    const spaces = storedSpaces(this.store);
+    const home = spaces.find(space => space.id === this.store.setting<string>(LOOSE_SPACE, ''));
+    const wanted = new Set([...(home?.orgletIds ?? []), ...loose.flatMap(channel => channelOrgletIds(channel.members, workspace))]);
+    // In the order the person keeps their orglets.
+    const orgletIds = workspace.workers.map(worker => worker.id).filter(orgletId => wanted.has(orgletId)).slice(0, MAX_CHANNEL_MEMBERS);
+    if (!orgletIds.length) return undefined;
+    let spaceId = home?.id ?? '';
+    this.store.transaction(() => {
+      if (home) {
+        this.store.setSetting(SPACES, spaces.map(space => space.id === home.id ? { ...home, orgletIds } : space));
+        // A channel of the space that takes every orglet of it gains the new ones, unless it is running.
+        for (const channelId of this.channels.inSpace(home.id)) if (this.idle(channelId)) this.channels.followSpace(channelId);
+      } else {
+        spaceId = this.create({ name: name.trim(), orgletIds, categories: [] });
+        this.store.setSetting(LOOSE_SPACE, spaceId);
+      }
+      for (const channel of loose) this.channels.joinSpace(channel.id, spaceId);
+    });
+    return spaceId;
+  }
+
+  private idle(channelId: string): boolean {
+    try {
+      this.assertChannelIdle(channelId);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** The space as it is saved: its orglets listed in the workspace, its categories no wider than the space. */

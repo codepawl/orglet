@@ -37,11 +37,20 @@ export async function expandSidebar(page) {
 }
 
 /**
- * The area rail (COD-366) picks what the sidebar lists: Home has the orglets and the channels outside every space, and
- * each space has a tile of its own. A smoke that works with those channels or an orglet's row opens Home first.
+ * The area rail (COD-366) picks what the sidebar lists: Home has the orglets, and each space has a tile of its own.
+ * A channel made outside every space, as a template's crew is, is put into the space kept for such channels, named
+ * Kênh or Channels after the language the window had then. A smoke that works with those channels opens that
+ * space; with no such channel yet there is no tile, and Home is opened instead.
  */
 export async function openChannels(page) {
-  await openHome(page);
+  const tile = page.locator('.area-tile[data-name="Kênh"], .area-tile[data-name="Channels"]').first();
+  try {
+    await tile.waitFor({ timeout: 5000 });
+  } catch {
+    await openHome(page);
+    return;
+  }
+  if (!await tile.evaluate(element => element.classList.contains('active'))) await tile.click();
 }
 
 export async function openHome(page) {

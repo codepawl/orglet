@@ -242,6 +242,41 @@ describe('spaces in the core', () => {
     await expect(core.command('spaceFromCategory', { category: 'Nothing here' })).rejects.toThrow('Không có kênh nào');
   });
 
+  it('adopts the channels outside every space into one space kept for them, each keeping its own orglets', async () => {
+    expect(await core.command('adoptLooseChannels', { name: 'Channels' })).toBeNull();
+    const kept = await newSpace([scout.id]);
+    const inSpace = await core.command('createChannel', { name: 'general', topic: '', members: [orglet(scout.id)], spaceId: kept }) as string;
+    const first = await core.command('createChannel', { name: 'plan', topic: '', members: [orglet(scout.id)] }) as string;
+    const spaceId = await core.command('adoptLooseChannels', { name: 'Channels' }) as string;
+    expect(space(spaceId)).toMatchObject({ name: 'Channels', orgletIds: [scout.id], categories: [] });
+    expect(emptyChannel(first)).toMatchObject({ spaceId, access: 'listed' });
+    expect(emptyChannel(inSpace).spaceId).toBe(kept);
+    // A later arrival joins the same space, which gains its orglets; the first channel keeps its own list.
+    const second = await core.command('createChannel', { name: 'copy', topic: '', members: [orglet(writer.id), orglet(editor.id)] }) as string;
+    expect(await core.command('adoptLooseChannels', { name: 'Another name' })).toBe(spaceId);
+    expect(space(spaceId)).toMatchObject({ name: 'Channels', orgletIds: [scout.id, writer.id, editor.id] });
+    expect(memberIds(emptyChannel(first))).toEqual([scout.id]);
+    expect(memberIds(emptyChannel(second))).toEqual([writer.id, editor.id]);
+    expect(store.workspace().spaces).toHaveLength(2);
+    // Deleted, the space is made again for the channels it leaves.
+    await core.command('deleteSpace', { id: spaceId });
+    const again = await core.command('adoptLooseChannels', { name: 'Channels' }) as string;
+    expect(again).not.toBe(spaceId);
+    expect(emptyChannel(first).spaceId).toBe(again);
+  });
+
+  it('adopts a crew\'s channel with its lead and its members', async () => {
+    await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' });
+    const before = store.workspace();
+    const crew = before.teams.at(-1)!;
+    const spaceId = await core.command('adoptLooseChannels', { name: 'Channels' }) as string;
+    const after = store.workspace();
+    expect(after.teams.find(team => team.id === crew.id)).toMatchObject({ synthesizerId: crew.synthesizerId, memberIds: crew.memberIds });
+    const channels = [...after.tasks.map(task => task.channel), ...after.emptyChannels].filter(channel => channel?.spaceId === spaceId);
+    expect(channels.length).toBeGreaterThan(0);
+    expect(space(spaceId).orgletIds).toEqual(expect.arrayContaining([crew.synthesizerId, ...crew.memberIds]));
+  });
+
   it('starts a new channel with the permissions its space sets, unless the person chose some for that channel', async () => {
     const spaceId = await core.command('createSpace', { name: 'Launch', orgletIds: [scout.id, writer.id], categories: [], defaults: { capabilities: ['network.web'] } }) as string;
     expect(space(spaceId).defaults).toEqual({ capabilities: ['network.web'] });
