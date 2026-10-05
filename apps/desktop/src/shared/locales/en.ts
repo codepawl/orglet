@@ -4264,6 +4264,7 @@ export const en: Dictionary = {
   "Thiết lập không gian": "Space settings",
   "Thêm nhóm": "Add category",
   "Tạo nhóm": "Create category",
+  "Tiến tới": "Forward",
   "Nhóm mới": "New category",
   "Đặt tên cho nhóm.": "Give the category a name.",
   "Đã tạo nhóm": "Category created",

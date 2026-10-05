@@ -211,6 +211,8 @@ function freshFaceSize(count: number): 'xl' | 'lg' {
 }
 
 
+/** How many places back and forward remember. */
+const TRAIL_LIMIT = 50;
 type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'library' | 'skill' | 'knowledge' | 'activity' | 'thread' | null;
 export function App() {
   useLanguage();
@@ -1620,6 +1622,82 @@ export function App() {
   const isArriving = useArrivals(workspace ? workspace.workers.map(item => `worker-${item.id}`) : [], Boolean(workspace));
   // The shell is drawn before the workspace arrives (COD-218): the same frame, the same sidebar width, the lists
   // and the chat filled in as skeletons, so the window never opens on a blank page or a centred wait.
+  /*
+   * Back and forward (user, 2026-10-05), the two arrows at the top of the rail. A place is what the window shows:
+   * the area and its space, the chat or the empty channel in the main panel, the page over it, and the tab each of
+   * those is on. Every place the person reaches is added to the trail, and travelling along it puts those back.
+   * The trail lives for the session only: it is the window's chrome, never a row.
+   */
+  const place = {
+    area, spaceId: openSpaceId, chat: selected, emptyChannelId, friends: friendsOpen, homePage, activityTab, libraryTab,
+    page: panel === 'routines' ? 'routines' as const : panel === 'library' || panel === 'skill' || panel === 'knowledge' ? 'library' as const : null,
+  };
+  type Place = typeof place;
+  const placeKey = JSON.stringify(place);
+  const trail = useRef<{ places: Place[]; at: number; travelling: boolean }>({ places: [], at: -1, travelling: false });
+  const [trailEnds, setTrailEnds] = useState({ back: false, forward: false });
+  useEffect(() => {
+    if (!workspace) return;
+    const current = trail.current;
+    if (current.travelling) {
+      // What travelling actually reached, which is not the place it left if a chat on the trail is gone.
+      current.travelling = false;
+      current.places[current.at] = place;
+    } else if (current.at < 0 || JSON.stringify(current.places[current.at]) !== placeKey) {
+      current.places = [...current.places.slice(0, current.at + 1), place].slice(-TRAIL_LIMIT);
+      current.at = current.places.length - 1;
+    }
+    setTrailEnds({ back: current.at > 0, forward: current.at < current.places.length - 1 });
+  }, [placeKey, Boolean(workspace)]);
+  const travel = (step: -1 | 1) => {
+    const current = trail.current;
+    const target = current.places[current.at + step];
+    if (!target || !workspace) return;
+    // An unsaved schedule asks its one question first, as leaving its page any other way does.
+    if (pagePanelRef.current && routineDirty.current) {
+      void leaveRoutine(() => travel(step));
+      return;
+    }
+    current.at += step;
+    if (JSON.stringify(target) === placeKey) {
+      setTrailEnds({ back: current.at > 0, forward: current.at < current.places.length - 1 });
+      return;
+    }
+    current.travelling = true;
+    const chatThere = target.chat !== null && workspace.tasks.some(task => task.id === target.chat && !task.deletedAt);
+    if (chatThere) openInPane(target.chat!);
+    setPanel(target.page);
+    pagePanelRef.current = target.page !== null;
+    setLibraryTab(target.libraryTab);
+    setActivityTab(target.activityTab);
+    setHomePage(target.homePage);
+    setArea(target.area);
+    setOpenSpace(target.spaceId);
+    setFriendsOpen(target.friends);
+    setEmptyChannelId(target.emptyChannelId);
+  };
+  const travelRef = useRef(travel);
+  travelRef.current = travel;
+  useEffect(() => {
+    // Alt+Left and Alt+Right, and the mouse's own back and forward buttons, the way a browser has them.
+    const keydown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+      if (document.querySelector('[role=dialog]')) return;
+      event.preventDefault();
+      travelRef.current(event.key === 'ArrowLeft' ? -1 : 1);
+    };
+    const mouseup = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return;
+      event.preventDefault();
+      travelRef.current(event.button === 3 ? -1 : 1);
+    };
+    window.addEventListener('keydown', keydown);
+    window.addEventListener('mouseup', mouseup);
+    return () => {
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('mouseup', mouseup);
+    };
+  }, []);
   if (!workspace) return <Startup error={error} onRetry={window.orglet ? () => void refresh() : undefined} sidebar={sidebar} sidebarWidth={sidebarWidth} />;
   // A new install asks once, before the app, whether to sign in or stay local (COD-337); the answer is kept and the
   // workspace it comes back in drops this screen. Anyone who already has chats, or updated from an older build, never sees it.
@@ -2477,7 +2555,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} onHover={sidebar ? undefined : peekSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },

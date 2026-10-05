@@ -2565,6 +2565,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    the close button and the actions. Opening in the default app is always an icon; in a narrow window Ask, Edit and
    Save keep only their icons too (each button carries its name as its label). */
 .source-viewer.source-file { width:min(1040px, calc(100vw - 32px)); }
+/* A file's viewer is as tall as what it shows, up to the window (user, 2026-10-05: a three-row table sat in a dialog as
+   tall as the window, most of it empty). An edit keeps the full height it works in. */
+.source-viewer:not(.source-editing) { height:fit-content; min-height:200px; max-height:calc(100dvh - 40px); }
+.source-viewer:not(.source-editing) .org-viewer-scroll { min-height:0; padding-bottom:24px; }
 .source-viewer .source-open-external .source-action-label { display:none; }
 .source-viewer .source-open-external { width:34px; padding:0; justify-content:center; }
 @media (max-width: 900px) {
@@ -3072,6 +3076,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:var(--panel-inset) 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
 .area-rail::-webkit-scrollbar { width:0; height:0; }
 .area-rail-list { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0; padding:0; list-style:none; }
+/* Back and forward, side by side above the tiles: small and quiet, since they are used far less than the tiles. */
+.area-trail { display:flex; align-items:center; justify-content:center; gap:2px; flex-shrink:0; margin-bottom:-4px; }
+.area-trail-step { display:grid; place-items:center; width:24px; height:24px; min-height:24px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
+.area-trail-step:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
+.area-trail-step:disabled { cursor:default; opacity:.35; }
 /* The one divider of the rail (user, 2026-10-05): a short bar between the app's own places and the person's spaces. */
 .area-rail-divider { flex-shrink:0; width:24px; height:2px; margin:-2px 0; border-radius:1px; background:color-mix(in srgb, var(--text) 14%, transparent); }
 .area-tile { position:relative; display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border:0; border-radius:14px; background:transparent; color:var(--muted); cursor:pointer; }
