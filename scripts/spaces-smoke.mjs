@@ -162,6 +162,24 @@ try {
   await page.keyboard.press('ArrowRight');
   assert.equal(await columnWidth(), widthBefore);
   await shot(page, 'member-column');
+  // Dragging the edge follows the pointer exactly, wherever on the edge it was taken: 40 px left is 40 px wider.
+  const edgeBox = await columnEdge.boundingBox();
+  await page.mouse.move(edgeBox.x + 2, edgeBox.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(edgeBox.x + 2 - 20, edgeBox.y + 120);
+  await page.mouse.move(edgeBox.x + 2 - 40, edgeBox.y + 120);
+  await page.waitForFunction(expected => Math.round(document.querySelector('.members-pane').getBoundingClientRect().width) === expected, widthBefore + 40);
+  await page.mouse.up();
+  assert.equal(await columnWidth(), widthBefore + 40, 'the width the drag left is kept');
+  await columnEdge.dblclick();
+  // The column eases back, so wait for it to arrive.
+  await page.waitForFunction(expected => Math.round(document.querySelector('.members-pane').getBoundingClientRect().width) === expected, widthBefore);
+  assert.equal(await columnWidth(), widthBefore, 'a double click goes back to the default');
+  // The person's own row opens their account.
+  await page.locator('.member-row.member-you').click();
+  await page.getByRole('dialog').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'detached' });
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Ẩn danh sách thành viên', exact: true }).click();
   await page.locator('.members-pane').waitFor({ state: 'detached' });

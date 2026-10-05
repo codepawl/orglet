@@ -3224,8 +3224,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .member-row.member-outside { box-sizing:border-box; cursor:default; opacity:.6; }
 .member-row.member-outside:hover { background:transparent; }
 /* The person's own row opens nothing, so it does not answer the pointer. */
-.member-row.member-you { box-sizing:border-box; cursor:default; }
-.member-row.member-you:hover { background:transparent; }
+.member-row.member-you { box-sizing:border-box; }
 .member-text { display:flex; flex-direction:column; min-width:0; gap:1px; }
 .member-name { display:flex; align-items:center; gap:6px; font-weight:500; }
 .member-lead { padding:1px 6px; border-radius:999px; background:var(--row-active); color:var(--muted); font-size:11px; font-weight:500; }

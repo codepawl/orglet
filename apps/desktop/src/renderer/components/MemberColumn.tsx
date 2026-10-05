@@ -16,9 +16,11 @@ import { Button } from './ui';
  * right-click on it opens its menu. The person's row opens nothing. It takes the right panel's place while Details is closed, so the two never sit side by
  * side. It has no close button: the toggle in the channel's header shows and hides it (user, 2026-10-04).
  */
-export function MemberColumn({ you, members, others, working, leadId, onMessage, onEdit, removable, onRemove, onAdd }: {
+export function MemberColumn({ you, onYou, members, others, working, leadId, onMessage, onEdit, removable, onRemove, onAdd }: {
   /** The person's name, as their face in the rail has it. */
   you: string;
+  /** The person's own row was clicked. */
+  onYou: () => void;
   members: readonly Worker[];
   /** In a space, the orglets the channel's place has that are not in the channel: listed dimmed, with a way in. */
   others: readonly Worker[];
@@ -44,12 +46,13 @@ export function MemberColumn({ you, members, others, working, leadId, onMessage,
     </div>
     <ul className="members-list">
       <li>
-        <div className="member-row member-you">
+        {/* The person's own row opens their account, the way an orglet's row opens its profile (user, 2026-10-05). */}
+        <button type="button" className="member-row member-you" aria-label={t('Tài khoản và cài đặt')} onClick={onYou}>
           <Avatar name={you} seed={you} size="sm" />
           <span className="member-text">
             <span className="member-name">{you}{you !== youWord && <span className="member-lead">{youWord}</span>}</span>
           </span>
-        </div>
+        </button>
       </li>
       {members.map(worker => <li key={worker.id}>
         <MemberRow worker={worker} working={working.has(worker.id)} lead={worker.id === leadId} onMessage={() => onMessage(worker)} onEdit={() => onEdit(worker)}
