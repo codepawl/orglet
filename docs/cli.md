@@ -50,7 +50,9 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet preferences [--language …] [--theme …]` | Shows or changes the app's language and theme |
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category and who is in it |
-| `orglet space add\|edit\|category\|move\|out\|delete` | Creates, changes or deletes a space, and moves a channel into or out of one. See [Spaces](#spaces). |
+| `orglet space add\|edit\|category\|uncategory\|move\|out\|delete` | Creates, changes or deletes a space and its categories, and moves a channel into or out of one. See [Spaces](#spaces). |
+| `orglet market [installed \| add <id>]` | Lists the marketplace, what was added from it, or adds a listing. See [The marketplace](#the-marketplace). |
+| `orglet completion <powershell\|bash\|zsh>` | Prints the completion script for that shell. See [Shell completion](#shell-completion). |
 | `orglet schedule add\|edit\|on\|off\|delete "<name>"` | Creates, changes, switches or deletes a schedule. See [Schedules](#schedules). |
 
 It can create, edit and remove orglets and channels, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
@@ -384,7 +386,7 @@ orglet send "And the budget?" --chat c41d0e88
 orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 ```
 
-`channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. `--space <name>` puts the channel in that space, and `--category <name>` in one of its categories; a space is found by its name or the start of it. In a space `--with` can be left out: the channel then takes every orglet of its category or space and follows that list when it changes. With `--with` it keeps the orglets named. `orglet chats --space <name>` lists only the channels of that space. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
+`channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. `--space <name>` puts the channel in that space, and `--category <name>` in one of its categories; a space is found by its name or the start of it. With `--name` and no message the channel is only created, as **New channel** in the app does, and no chat starts. In a space `--with` can be left out: the channel then takes every orglet of its category or space and follows that list when it changes. With `--with` it keeps the orglets named. `orglet chats --space <name>` lists only the channels of that space. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
 
 ### Spaces
 
@@ -392,12 +394,37 @@ orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 orglet space add "Launch" --with Researcher --with Writer
 orglet space edit "Launch" --rename "Liftoff" --with Researcher
 orglet space category "Launch" --category Drafts
+orglet space category "Launch" --category Drafts --rename Copy --with Writer
+orglet space uncategory "Launch" --category Copy
 orglet space move "Launch" --chat cccc0000 --category Drafts
+orglet space move "Launch" --name ideas
 orglet space out --chat cccc0000
 orglet space delete "Launch" --confirm "Launch"
 ```
 
-The same as a space's settings in the app. `add` makes a space with these orglets. `edit` renames it with `--rename`, and with `--with` replaces the whole list of its orglets. `category` adds one category. `move` puts a channel in the space, or in one of its categories with `--category`; `out` takes the channel out of every space. `delete` needs the space's full name in `--confirm` and keeps its channels, which are then in no space. A space is found by its name or the start of it, except for `--confirm`. A space holds orglets, so `--with` does not take a channel's name. The command sets no permission and no folder, and it does not remove a category or set a category's own orglets: those are in the app.
+The same as a space's settings in the app. `add` makes a space with these orglets. `edit` renames it with `--rename`, and with `--with` replaces the whole list of its orglets. `category` adds one category; for a category that exists, `--rename` renames it and `--with` sets the orglets of its own. `uncategory` removes a category and keeps its channels in the space. `move` puts a channel in the space, or in one of its categories with `--category`; `out` takes the channel out of every space. Both name the channel with `--chat <id>` or with `--name <channel name>`, which is the only way for a channel that has no message yet. `delete` needs the space's full name in `--confirm` and keeps its channels, which are then in no space. A space is found by its name or the start of it, except for `--confirm`. A space holds orglets, so `--with` does not take a channel's name. The command sets no permission and no folder.
+
+`orglet search "words" --space <name>` keeps only the messages in that space's channels, and `orglet running --space <name>` only its runs. In the terminal chat, `/spaces` lists the spaces as `orglet spaces` does.
+
+### The marketplace
+
+```
+orglet market
+orglet market installed
+orglet market add launch-space
+```
+
+`orglet market` lists the catalog: each listing's id, whether it is an orglet, a channel or a space, its name, its author and its summary. It reads up to five pages and says when there are more. When the online catalog cannot be fetched it lists the saved copy, or the one that ships with the app, and says which. `--refresh` fetches it again. `installed` lists what was added from the marketplace, with the version of each and whether an update is waiting. `add <id>` adds the listing's current version, as **Add** on the Marketplace page does, with the same checks of its bytes: its orglets, and the channel or space it carries. It names the orglets it made, and the ones whose suggested connection this computer does not have. None of this needs an account. Publishing, reviewing and applying an update stay in the app, where you see the content before anything is sent or changed.
+
+### Shell completion
+
+```
+orglet completion powershell | Out-String | Invoke-Expression
+eval "$(orglet completion bash)"
+eval "$(orglet completion zsh)"
+```
+
+`orglet completion` prints a script that completes the command names as the first word and the option names after a `-`. Put the line for your shell in its startup file. The script is static text: completing asks the app nothing, and it holds no orglet, chat or space name. The command itself does not start the app.
 
 ### Rename, archive, restore and delete chats
 

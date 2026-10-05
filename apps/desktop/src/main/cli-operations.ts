@@ -21,6 +21,7 @@ export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from 
 export { answerText, isTurnRunning, latestAnsweredRevision, turnAnswers, turnErrors } from './cli-chat-history';
 export type { CliDependencies } from './cli-turns';
 import { CliSpaces } from './cli-spaces';
+import { CliMarket } from './cli-market';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -36,6 +37,7 @@ export class CliOperations {
   private readonly schedules: CliSchedules;
   private readonly library: CliLibrary;
   private readonly spaceChanges: CliSpaces;
+  private readonly market: CliMarket;
 
   constructor(private readonly dependencies: CliDependencies) {
     this.chatActions = new CliChatActions(dependencies);
@@ -43,6 +45,7 @@ export class CliOperations {
     this.schedules = new CliSchedules(dependencies);
     this.library = new CliLibrary(dependencies);
     this.spaceChanges = new CliSpaces(dependencies);
+    this.market = new CliMarket(dependencies);
   }
 
   async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
@@ -69,11 +72,12 @@ export class CliOperations {
       case 'schedules': return this.schedules.list();
       case 'spaces': return this.spaces();
       case 'space-change': return this.spaceChanges.change(request);
+      case 'market': return this.market.run(request);
       case 'schedule-enable': return this.schedules.enable(request);
       case 'schedule-delete': return this.schedules.remove(request);
       case 'schedule-save': return this.schedules.save(request);
       case 'search': return this.library.search(request);
-      case 'running': return this.library.running();
+      case 'running': return this.library.running(request);
       case 'library': return this.library.library(request);
       case 'memory-edit': return this.library.editMemory(request);
       case 'memory-delete': return this.library.deleteMemory(request);

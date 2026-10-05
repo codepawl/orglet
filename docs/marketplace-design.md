@@ -36,6 +36,8 @@ On the server, migration `0003_space_listings.sql` widens the `kind` check of `l
 
 **Deployed.** The `kinds` query and **Launch space** are in production since 2026-10-05. An account can publish a space once production takes submissions, which the rollout below opens.
 
+**From the terminal.** `orglet market` lists the catalog and what was added, and `orglet market add <id>` adds a listing through the same `marketAdd` command ([cli.md](cli.md#the-marketplace)). It does not publish, review or apply an update.
+
 ## Pieces
 
 | Piece | Where | Built with | Why |

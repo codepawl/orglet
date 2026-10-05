@@ -130,7 +130,7 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...WaitFields }).strict(),
   z.object({ op: z.literal('bring'), token: CliToken, chat: ChatId, message: MessageRef.optional() }).strict(),
   // With `space` the names may be empty: the channel then takes every orglet of its place.
-  z.object({ op: z.literal('channel'), token: CliToken, names: z.array(ChatName).max(50), message: Message, name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), space: ChatName.optional(), category: ChatName.optional(), ...WaitFields }).strict(),
+  z.object({ op: z.literal('channel'), token: CliToken, names: z.array(ChatName).max(50), message: Message.optional(), name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), space: ChatName.optional(), category: ChatName.optional(), ...WaitFields }).strict(),
   z.object({ op: z.literal('members'), token: CliToken, chat: ChatId, names: MemberNames }).strict(),
   z.object({
     op: z.literal('chat-change'),
@@ -144,10 +144,11 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('template'), token: CliToken, templateId: z.enum(TEMPLATE_IDS), provider: z.enum(['demo', 'openai']) }).strict(),
   z.object({ op: z.literal('schedules'), token: CliToken }).strict(),
   z.object({ op: z.literal('spaces'), token: CliToken }).strict(),
+  z.object({ op: z.literal('market'), token: CliToken, verb: z.enum(['list', 'installed', 'add']), listingId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/).optional(), refresh: z.boolean() }).strict(),
   z.object({
-    op: z.literal('space-change'), token: CliToken, verb: z.enum(['add', 'edit', 'category', 'move', 'out', 'delete']),
+    op: z.literal('space-change'), token: CliToken, verb: z.enum(['add', 'edit', 'category', 'uncategory', 'move', 'out', 'delete']),
     space: ChatName.optional(), names: z.array(ChatName).max(50), rename: ChatName.optional(), category: ChatName.optional(),
-    chat: ChatId.optional(), confirmName: ChatName.optional(),
+    chat: ChatId.optional(), channelName: ChannelName.optional(), confirmName: ChatName.optional(),
   }).strict(),
   z.object({ op: z.literal('schedule-enable'), token: CliToken, schedule: ScheduleName, enabled: z.boolean() }).strict(),
   z.object({ op: z.literal('schedule-delete'), token: CliToken, schedule: ScheduleName, confirmName: ScheduleName }).strict(),
@@ -173,8 +174,8 @@ export const CliRequest = z.discriminatedUnion('op', [
     trigger: z.enum(['schedule', 'called']).optional(),
     enabled: z.boolean().optional(),
   }).strict(),
-  z.object({ op: z.literal('search'), token: CliToken, query: z.string().trim().min(1).max(2000) }).strict(),
-  z.object({ op: z.literal('running'), token: CliToken }).strict(),
+  z.object({ op: z.literal('search'), token: CliToken, query: z.string().trim().min(1).max(2000), space: ChatName.optional() }).strict(),
+  z.object({ op: z.literal('running'), token: CliToken, space: ChatName.optional() }).strict(),
   z.object({ op: z.literal('library'), token: CliToken, kind: z.enum(['memory', 'note']), query: z.string().trim().min(1).max(200).optional(), owner: ChatName.optional() }).strict(),
   z.object({ op: z.literal('memory-edit'), token: CliToken, id: ChatId, text: z.string().trim().min(1).max(MEMORY_TEXT_LIMIT).optional(), pinned: z.boolean().optional() }).strict(),
   z.object({ op: z.literal('memory-delete'), token: CliToken, id: ChatId, confirmed: z.literal(true) }).strict(),
@@ -328,8 +329,18 @@ export type CliSpaceRow = {
   channels: { name: string; category?: string; access: 'inherit' | 'listed'; orglets: string[] }[];
 };
 export type SpacesValue = { spaces: CliSpaceRow[] };
+/** The marketplace as `orglet market` lists it; `source` says whether the catalog came from the service, a saved copy or the app itself. */
+export type MarketListValue = {
+  source: 'online' | 'cache' | 'bundled'; more: boolean; error?: string;
+  listings: { id: string; version: number; kind: 'orglet' | 'crew' | 'space'; name: string; summary: string; author: string; language: string }[];
+};
+export type MarketInstalledValue = { installed: { id: string; version: number; kind: 'orglet' | 'crew' | 'space'; name: string; updateAvailable: boolean }[] };
+/** What `orglet market add` made; `withoutModel` names the orglets whose suggested connection this computer lacks. */
+export type MarketAddValue = { id: string; version: number; kind: 'orglet' | 'crew' | 'space'; name: string; orglets: string[]; withoutModel: string[] };
 /** What `orglet space` changed: the space by its name now, and the channel or category the step was about. */
-export type SpaceChangeValue = { verb: 'add' | 'edit' | 'category' | 'move' | 'out' | 'delete'; space?: string; channel?: string; category?: string; orglets?: string[] };
+export type SpaceChangeValue = { verb: 'add' | 'edit' | 'category' | 'uncategory' | 'move' | 'out' | 'delete'; space?: string; channel?: string; category?: string; orglets?: string[]; existing?: boolean };
+/** A channel `orglet channel` made with no first message. */
+export type ChannelCreatedValue = { channel: string; space?: string };
 /** What `orglet search` found (COD-354): names that match, and one message per chat with the words around the match. */
 export type SearchValue = {
   orglets: string[];

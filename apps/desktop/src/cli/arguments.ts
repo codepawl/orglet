@@ -1,4 +1,5 @@
 import { t } from './text';
+import { COMPLETION_SHELLS, type CompletionShell } from './completion';
 import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, UserMessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody } from './protocol';
 import { ClockTime, EVERY_HOURS_CHOICES, MAX_DAILY_CAP_MICROS } from '../shared/schedule';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
@@ -11,7 +12,7 @@ import { Reaction } from '../shared/message-interactions';
 export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open' | 'run' | 'config' | 'create' | 'edit' | 'delete'
   | 'react' | 'forward' | 'answer' | 'revise' | ChatControl
   | 'chats' | 'side' | 'bring' | 'channel' | 'group' | 'members' | 'rename' | 'archive' | 'restore' | 'template'
-  | 'schedules' | 'schedule' | 'spaces' | 'space'
+  | 'schedules' | 'schedule' | 'spaces' | 'space' | 'market' | 'completion'
   | 'search' | 'running' | 'library' | 'memory' | 'usage' | 'models' | 'preferences';
 /** The fields `orglet schedule add` and `edit` may set (COD-354), as the protocol carries them. */
 export type ScheduleFields = Omit<Extract<CliRequestBody, { op: 'schedule-save' }>, 'op' | 'schedule'>;
@@ -38,19 +39,21 @@ export type ParsedCommand =
   | { kind: 'chats'; archived: boolean; space?: string; json: boolean }
   | ({ kind: 'side'; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | { kind: 'bring'; chat: string; message?: string; json: boolean }
-  | { kind: 'channel'; names: string[]; message: string; name?: string; topic?: string; space?: string; category?: string; wait: boolean; timeoutSeconds: number; json: boolean }
+  | { kind: 'channel'; names: string[]; message?: string; name?: string; topic?: string; space?: string; category?: string; wait: boolean; timeoutSeconds: number; json: boolean }
   | { kind: 'members'; chat: string; names: string[]; json: boolean }
   | ({ kind: 'chat-change'; change: ChatChange; title?: string; confirmName?: string; json: boolean } & ChatTarget)
   | { kind: 'archive-entity'; entity: 'worker' | 'team'; name: string; archived: boolean; json: boolean }
   | { kind: 'template'; templateId: TemplateId; provider: 'demo' | 'openai'; json: boolean }
   | { kind: 'schedules'; json: boolean }
   | { kind: 'spaces'; json: boolean }
-  | { kind: 'space'; verb: 'add' | 'edit' | 'category' | 'move' | 'out' | 'delete'; space?: string; names: string[]; rename?: string; category?: string; chat?: string; confirmName?: string; json: boolean }
+  | { kind: 'market'; verb: 'list' | 'installed' | 'add'; listingId?: string; refresh: boolean; json: boolean }
+  | { kind: 'space'; verb: 'add' | 'edit' | 'category' | 'uncategory' | 'move' | 'out' | 'delete'; space?: string; names: string[]; rename?: string; category?: string; chat?: string; channelName?: string; confirmName?: string; json: boolean }
+  | { kind: 'completion'; shell: CompletionShell }
   | { kind: 'schedule-enable'; schedule: string; enabled: boolean; json: boolean }
   | { kind: 'schedule-delete'; schedule: string; confirmName: string; json: boolean }
   | { kind: 'schedule-save'; schedule?: string; fields: ScheduleFields; json: boolean }
-  | { kind: 'search'; query: string; json: boolean }
-  | { kind: 'running'; json: boolean }
+  | { kind: 'search'; query: string; space?: string; json: boolean }
+  | { kind: 'running'; space?: string; json: boolean }
   | { kind: 'library'; library: 'memory' | 'note'; query?: string; owner?: string; json: boolean }
   | { kind: 'memory-edit'; id: string; text?: string; pinned?: boolean; json: boolean }
   | { kind: 'memory-delete'; id: string; json: boolean }
@@ -64,9 +67,9 @@ export type ParsedCommand =
 export class UsageError extends Error {}
 
 const CONTROL_COMMANDS: readonly ChatControl[] = ['stop', 'pause', 'resume', 'retry', 'continue'];
-const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run', 'config', 'create', 'edit', 'delete',
+export const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run', 'config', 'create', 'edit', 'delete',
   'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'channel', 'group', 'members', 'rename', 'archive', 'restore', 'template',
-  'schedules', 'schedule', 'spaces', 'space', 'search', 'running', 'library', 'memory', 'usage', 'models', 'preferences'];
+  'schedules', 'schedule', 'spaces', 'space', 'market', 'completion', 'search', 'running', 'library', 'memory', 'usage', 'models', 'preferences'];
 /** Commands that name an orglet or crew with --to; `schedule` names the one it runs for, `library` and `models` whose. */
 const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule', 'library', 'models'];
 /** Commands that name a chat with --chat, by the start of its id. */
@@ -112,6 +115,8 @@ Commands:
   schedule  Create, edit, switch on or off, or delete a schedule
   spaces    List spaces with their orglets and channels
   space     Create, change or delete a space, or move a channel into one
+  market    The marketplace: its listings, what you added, and adding one
+  completion  Print the completion script for PowerShell, bash or zsh
   search    Search every chat, message and name
   running   Every run working or waiting across chats
   library   Memories or notes, optionally of one orglet or channel
@@ -137,7 +142,7 @@ Exit codes: 0 ok, 1 failure, 2 usage error, 3 app not reachable.`;
 
 /** The help of `orglet channel` and of `orglet group`, its older name (COD-361). */
 function channelHelp(command: 'channel' | 'group'): string {
-  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\nVới --space, kênh nằm trong không gian đó; bỏ --with thì kênh nhận mọi Tí\ncủa không gian hoặc của mục.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --space <tên>        Không gian chứa kênh\n  --category <tên>     Mục của không gian đó chứa kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
+  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\nVới --space, kênh nằm trong không gian đó; bỏ --with thì kênh nhận mọi Tí\ncủa không gian hoặc của mục. Bỏ tin nhắn và đặt --name thì chỉ tạo kênh.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --space <tên>        Không gian chứa kênh\n  --category <tên>     Mục của không gian đó chứa kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
 }
 
 export const COMMAND_HELP: Record<CommandName, string> = {
@@ -218,7 +223,9 @@ Example:
   archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay kênh. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay kênh đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc kênh\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
   restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay kênh đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
   spaces: t("Cách dùng: orglet spaces [--json]\n\nLiệt kê không gian: Tí trong đó, rồi từng kênh với nhóm của nó và những Tí ở trong kênh."),
-  space: t("Cách dùng: orglet space add \"<tên>\" --with <Tí> [--with <Tí>]\n       orglet space edit \"<tên>\" [--rename <tên mới>] [--with <Tí> ...]\n       orglet space category \"<tên>\" --category <tên mục>\n       orglet space move \"<tên>\" --chat <mã> [--category <tên mục>]\n       orglet space out --chat <mã>\n       orglet space delete \"<tên>\" --confirm \"<tên đầy đủ>\"\n\nTạo và sửa không gian như trong app. edit với --with thay toàn bộ danh sách Tí\ncủa không gian. move đưa một kênh vào không gian hoặc một mục của nó, out đưa\nkênh ra ngoài mọi không gian. Xóa không gian thì các kênh của nó vẫn còn.\nLệnh này không đặt quyền hay thư mục.\n\nTùy chọn:\n  --with <Tí>          Một Tí của không gian; lặp lại cho nhiều Tí\n  --rename <tên>       Tên mới của không gian\n  --category <tên>     Mục cần thêm, hoặc mục nhận kênh\n  --chat <mã>          Mã của kênh, như orglet chats in ra\n  --confirm <tên>      Tên đầy đủ của không gian cần xóa\n  --json               In JSON cho máy đọc"),
+  space: t("Cách dùng: orglet space add \"<tên>\" --with <Tí> [--with <Tí>]\n       orglet space edit \"<tên>\" [--rename <tên mới>] [--with <Tí> ...]\n       orglet space category \"<tên>\" --category <tên mục> [--rename <tên mới>] [--with <Tí> ...]\n       orglet space uncategory \"<tên>\" --category <tên mục>\n       orglet space move \"<tên>\" (--chat <mã> | --name <tên kênh>) [--category <tên mục>]\n       orglet space out (--chat <mã> | --name <tên kênh>)\n       orglet space delete \"<tên>\" --confirm \"<tên đầy đủ>\"\n\nTạo và sửa không gian như trong app. edit với --with thay toàn bộ danh sách Tí\ncủa không gian. category thêm một mục, hoặc đổi tên mục đã có và đặt các Tí riêng\ncủa nó; uncategory xóa mục và giữ các kênh trong không gian. move đưa một kênh vào\nkhông gian hoặc một mục của nó, out đưa kênh ra ngoài mọi không gian. Kênh chưa có\ntin nhắn thì chỉ bằng --name. Xóa không gian thì các kênh của nó vẫn còn.\nLệnh này không đặt quyền hay thư mục.\n\nTùy chọn:\n  --with <Tí>          Một Tí của không gian; lặp lại cho nhiều Tí\n  --rename <tên>       Tên mới của không gian\n  --category <tên>     Mục cần thêm, hoặc mục nhận kênh\n  --chat <mã>          Mã của kênh, như orglet chats in ra\n  --name <tên kênh>    Tên của kênh, thay cho --chat\n  --confirm <tên>      Tên đầy đủ của không gian cần xóa\n  --json               In JSON cho máy đọc"),
+  completion: t("Cách dùng: orglet completion <powershell|bash|zsh>\n\nIn đoạn mã tự hoàn thành cho shell đó: tên lệnh trước, rồi tên tùy chọn. Đoạn mã\nkhông hỏi app và không chứa tên Tí, chat hay không gian nào.\n\n  PowerShell   orglet completion powershell | Out-String | Invoke-Expression\n  bash         eval \"$(orglet completion bash)\"\n  zsh          eval \"$(orglet completion zsh)\"\n\nĐặt dòng đó vào tệp khởi động của shell để dùng mỗi lần mở."),
+  market: t("Cách dùng: orglet market [--refresh] [--json]\n       orglet market installed [--json]\n       orglet market add <mã> [--json]\n\nLiệt kê marketplace: mã, loại, tên, tác giả và mô tả của từng mục. installed liệt kê\nnhững gì đã thêm từ marketplace và mục nào có bản cập nhật. add thêm bản hiện tại\ncủa một mục: các Tí của nó, cùng kênh hoặc không gian nó mang theo. Không cần tài khoản.\nXuất bản, duyệt và áp dụng bản cập nhật làm trong app, nơi bạn xem nội dung trước.\n\nTùy chọn:\n  --refresh      Tải lại danh mục thay vì dùng bản đã lưu\n  --json         In JSON cho máy đọc"),
   schedules: t("Cách dùng: orglet schedules [--json]\n\nLiệt kê lịch: bật hay tắt, Tí hoặc kênh chạy nó, khi nào chạy, lần tới, giới hạn mỗi\nlần và mỗi ngày. Số tiền trong --json là số nguyên phần triệu USD."),
   schedule: t("Cách dùng: orglet schedule add \"<tên>\" --to <tên> --brief \"<việc>\" --every <khi> --at <HH:MM> --budget <USD> [tùy chọn]\n       orglet schedule edit \"<tên>\" [tùy chọn]\n       orglet schedule on|off \"<tên>\"\n       orglet schedule delete \"<tên>\" --confirm \"<tên>\"\n\nTạo, sửa, bật, tắt hoặc xóa một lịch. Lịch tạo ở đây không có quyền công cụ,\ntrình duyệt hay thư mục; các provider của Tí hoặc kênh phải được cho phép sẵn\ntrong Cài đặt của app. Chọn những thứ đó trong app. Chạy ngay: orglet run.\n\nTùy chọn:\n  --to <tên>            Tí hoặc kênh chạy lịch\n  --brief <việc>        Brief gửi mỗi lần chạy\n  --every <khi>         daily, weekdays, weekly, hoặc số giờ như 2h\n  --at <HH:MM>          Giờ chạy; với số giờ là giờ đầu tiên trong ngày\n  --day <ngày>          Ngày trong tuần cho weekly: mon, tue, …, sun\n  --timezone <vùng>     Múi giờ, như Asia/Ho_Chi_Minh; mặc định là của máy\n  --budget <USD>        Giới hạn mỗi lần chạy\n  --daily-cap <USD>     Giới hạn mỗi ngày (không bắt buộc)\n  --called              Chỉ chạy khi gọi bằng orglet run\n  --off                 Tạo lịch ở trạng thái tắt (add)\n  --rename <tên>        Tên mới (edit)\n  --json                In JSON cho máy đọc"),
   search: t("Cách dùng: orglet search \"<từ cần tìm>\" [--json]\n\nTìm trong mọi tin nhắn, câu trả lời, tên chat, Tí và kênh, như ô tìm kiếm của app.\nKhông phân biệt hoa thường hay dấu. In mã chat để đọc bằng orglet read --chat.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
@@ -312,7 +319,7 @@ type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' |
   | 'query' | 'text' | 'language' | 'theme';
 
 /** Options that take a value, written as `--to Researcher` or `--to=Researcher`. */
-const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider', '--name', '--topic', '--space', '--category',
+export const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider', '--name', '--topic', '--space', '--category',
   '--brief', '--every', '--at', '--day', '--timezone', '--budget', '--daily-cap', '--rename', '--query', '--text', '--language', '--theme']);
 /** The options of the library, memory and preferences commands, the field each fills and who takes it (COD-354). */
 const LIBRARY_OPTIONS: readonly [string, SingleOption, CommandName][] = [['--query', 'query', 'library'], ['--text', 'text', 'memory'], ['--language', 'language', 'preferences'], ['--theme', 'theme', 'preferences']];
@@ -351,20 +358,20 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
   { option: '--pin', given: options => options.pin, commands: ['memory'] },
   { option: '--unpin', given: options => options.unpin, commands: ['memory'] },
   { option: '--yes', given: options => options.yes, commands: ['memory'] },
-  { option: '--refresh', given: options => options.refresh, commands: ['usage', 'models'] },
+  { option: '--refresh', given: options => options.refresh, commands: ['usage', 'models', 'market'] },
   ...LIBRARY_OPTIONS.map(([option, key, command]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: [command] })),
   ...SCHEDULE_OPTIONS.map(([option, key]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: (key === 'rename' ? ['schedule', 'space'] : ['schedule']) as readonly CommandName[] })),
   { option: '--with', given: options => options.members.length > 0, commands: ['channel', 'group', 'members', 'space'] },
-  { option: '--name', given: options => options.channelName !== undefined, commands: ['channel', 'group'] },
+  { option: '--name', given: options => options.channelName !== undefined, commands: ['channel', 'group', 'space'] },
   { option: '--topic', given: options => options.topic !== undefined, commands: ['channel', 'group'] },
-  { option: '--space', given: options => options.space !== undefined, commands: ['channel', 'group', 'chats'] },
+  { option: '--space', given: options => options.space !== undefined, commands: ['channel', 'group', 'chats', 'search', 'running'] },
   { option: '--category', given: options => options.category !== undefined, commands: ['channel', 'group', 'space'] },
   { option: '--title', given: options => options.title !== undefined, commands: ['rename'] },
   { option: '--provider', given: options => options.provider !== undefined, commands: ['template'] },
   { option: '--archived', given: options => options.archived, commands: ['chats'] },
 ];
 /** Commands that take one positional value after their name: a message, a schedule, an emoji, an answer or a template. */
-const VALUE_COMMANDS: readonly CommandName[] = ['send', 'run', 'react', 'answer', 'revise', 'side', 'channel', 'group', 'template', 'search', 'library', 'models'];
+const VALUE_COMMANDS: readonly CommandName[] = ['completion', 'send', 'run', 'react', 'answer', 'revise', 'side', 'channel', 'group', 'template', 'search', 'library', 'models'];
 /** Commands whose positionals may name an orglet or crew: `<orglet|channel> "<name>"`. */
 const ENTITY_COMMANDS: readonly CommandName[] = ['create', 'edit', 'delete', 'archive', 'restore'];
 
@@ -454,7 +461,7 @@ function namesEntity(command: CommandName, options: Options): boolean {
 /** Positionals after the command that nothing reads, which usually means a message with spaces lost its quotes. */
 function extraPositionals(command: CommandName, options: Options): string[] {
   if (namesEntity(command, options)) return options.positionals.slice(command === 'create' ? 2 : 3);
-  if (command === 'schedule' || command === 'memory' || command === 'space') return options.positionals.slice(3);
+  if (command === 'schedule' || command === 'memory' || command === 'space' || command === 'market') return options.positionals.slice(3);
   if (VALUE_COMMANDS.includes(command)) return options.positionals.slice(2);
   return options.positionals.slice(1);
 }
@@ -550,9 +557,15 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'schedules': return { kind: 'schedules', json };
     case 'spaces': return { kind: 'spaces', json };
     case 'space': return parseSpace(options);
+    case 'market': return parseMarket(options);
+    case 'completion': {
+      const shell = COMPLETION_SHELLS.find(item => item === options.positionals[1]);
+      if (!shell) throw new UsageError(t("Gõ powershell, bash hoặc zsh sau orglet completion."));
+      return { kind: 'completion', shell };
+    }
     case 'schedule': return parseSchedule(options);
     case 'search': return parseSearch(options);
-    case 'running': return { kind: 'running', json };
+    case 'running': return { kind: 'running', ...(options.space?.trim() ? { space: options.space.trim() } : {}), json };
     case 'library': return parseLibrary(options);
     case 'memory': return parseMemory(options);
     case 'usage': return { kind: 'usage', refresh: options.refresh, json };
@@ -673,8 +686,9 @@ function memberNames(options: Options): string[] {
 /** `orglet channel`, and `orglet group`, its older name: a new channel with its first message. */
 function parseChannel(command: 'channel' | 'group', options: Options): ParsedCommand {
   const message = options.positionals[1]?.trim();
-  if (!message) throw new UsageError(t("Gõ tin nhắn đầu tiên, ví dụ: orglet {0} \"Chào cả kênh\" --with Researcher --with Writer", command));
   const name = options.channelName?.trim();
+  // With a name and no message the channel is only created, as New channel in the app does.
+  if (!message && !name) throw new UsageError(t("Gõ tin nhắn đầu tiên, ví dụ: orglet {0} \"Chào cả kênh\" --with Researcher --with Writer", command));
   const topic = options.topic?.trim();
   const space = options.space?.trim();
   const category = options.category?.trim();
@@ -684,7 +698,7 @@ function parseChannel(command: 'channel' | 'group', options: Options): ParsedCom
   // In a space a channel with no --with takes every orglet of its place.
   const names = space && !options.members.some(member => member.trim()) ? [] : memberNames(options);
   return {
-    kind: 'channel', names, message, ...(name ? { name } : {}), ...(topic ? { topic } : {}),
+    kind: 'channel', names, ...(message ? { message } : {}), ...(name ? { name } : {}), ...(topic ? { topic } : {}),
     ...(space ? { space } : {}), ...(category ? { category } : {}),
     wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json,
   };
@@ -728,25 +742,39 @@ function parseTemplate(options: Options): ParsedCommand {
   return { kind: 'template', templateId, provider: options.provider, json: options.json };
 }
 
-const SPACE_VERBS = ['add', 'edit', 'category', 'move', 'out', 'delete'] as const;
+/** `orglet market`, `orglet market installed` and `orglet market add <id>`. */
+function parseMarket(options: Options): ParsedCommand {
+  const verb = options.positionals[1] ?? 'list';
+  if (verb !== 'list' && verb !== 'installed' && verb !== 'add') throw new UsageError(t("Gõ installed hoặc add <mã> sau orglet market, hoặc không gõ gì để xem danh mục."));
+  const listingId = options.positionals[2]?.trim();
+  if (verb !== 'add' && listingId) throw new UsageError(t("Chỉ orglet market add nhận một mã."));
+  if (verb !== 'list' && options.refresh) throw new UsageError(t("--refresh chỉ dùng khi xem danh mục."));
+  if (verb !== 'add') return { kind: 'market', verb, refresh: options.refresh, json: options.json };
+  if (!listingId || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(listingId)) throw new UsageError(t("Gõ mã của mục như orglet market in ra, ví dụ: orglet market add launch-space"));
+  return { kind: 'market', verb, listingId, refresh: false, json: options.json };
+}
 
-/** `orglet space`: a space's own changes, and a channel moved into or out of one. */
+const SPACE_VERBS = ['add', 'edit', 'category', 'uncategory', 'move', 'out', 'delete'] as const;
+
+/** `orglet space`: a space's own changes, its categories, and a channel moved into or out of one. */
 function parseSpace(options: Options): ParsedCommand {
   const verb = SPACE_VERBS.find(item => item === options.positionals[1]);
-  if (!verb) throw new UsageError(t("Gõ add, edit, category, move, out hoặc delete sau orglet space."));
+  if (!verb) throw new UsageError(t("Gõ add, edit, category, uncategory, move, out hoặc delete sau orglet space."));
   const space = options.positionals[2]?.trim();
-  if (verb === 'out' && space) throw new UsageError(t("orglet space out chỉ nhận --chat <mã>."));
+  if (verb === 'out' && space) throw new UsageError(t("orglet space out chỉ nhận --chat <mã> hoặc --name <tên kênh>."));
   if (verb !== 'out' && !space) throw new UsageError(t("Gõ tên không gian, ví dụ: orglet space {0} \"Launch\"", verb));
   const names = options.members.map(name => name.trim()).filter(Boolean);
   const rename = options.rename?.trim();
   const category = options.category?.trim();
+  const channelName = options.channelName?.trim().replace(/^#/, '');
   const takes = (allowed: readonly string[], option: string, given: boolean) => {
     if (given && !allowed.includes(verb)) throw new UsageError(t("orglet space {0} không nhận {1}.", verb, option));
   };
-  takes(['add', 'edit'], '--with', names.length > 0);
-  takes(['edit'], '--rename', options.rename !== undefined);
-  takes(['category', 'move'], '--category', options.category !== undefined);
+  takes(['add', 'edit', 'category'], '--with', names.length > 0);
+  takes(['edit', 'category'], '--rename', options.rename !== undefined);
+  takes(['category', 'uncategory', 'move'], '--category', options.category !== undefined);
   takes(['move', 'out'], '--chat', options.chat !== undefined);
+  takes(['move', 'out'], '--name', options.channelName !== undefined);
   takes(['delete'], '--confirm', options.confirm !== undefined);
   const base = { kind: 'space' as const, verb, names, json: options.json, ...(space ? { space } : {}) };
   if (verb === 'add') {
@@ -757,12 +785,16 @@ function parseSpace(options: Options): ParsedCommand {
     if (!names.length && !rename) throw new UsageError(t("orglet space edit cần --rename hoặc --with."));
     return { ...base, ...(rename ? { rename } : {}) };
   }
-  if (verb === 'category') {
+  if (verb === 'category' || verb === 'uncategory') {
     if (!category) throw new UsageError(t("Gõ tên mục sau --category."));
-    return { ...base, category };
+    return { ...base, category, ...(rename ? { rename } : {}) };
   }
-  if (verb === 'move') return { ...base, chat: requireChatId('space', options.chat), ...(category ? { category } : {}) };
-  if (verb === 'out') return { ...base, chat: requireChatId('space', options.chat) };
+  if (verb === 'move' || verb === 'out') {
+    // A channel with no message yet has no chat id, so it is named instead.
+    if ((options.chat === undefined) === (channelName === undefined)) throw new UsageError(t("Chỉ kênh cần chuyển bằng --chat <mã> hoặc --name <tên kênh>, một trong hai."));
+    const channel = channelName ? { channelName } : { chat: requireChatId('space', options.chat) };
+    return { ...base, ...channel, ...(verb === 'move' && category ? { category } : {}) };
+  }
   const confirmName = options.confirm?.trim();
   if (!confirmName) throw new UsageError(t("Xóa không gian cần --confirm \"<tên không gian>\"."));
   return { ...base, confirmName };
@@ -838,7 +870,7 @@ function parseWeekday(value: string): number {
 function parseSearch(options: Options): ParsedCommand {
   const query = options.positionals[1]?.trim();
   if (!query) throw new UsageError(t("Gõ từ cần tìm, ví dụ: orglet search \"hợp đồng\""));
-  return { kind: 'search', query, json: options.json };
+  return { kind: 'search', query, ...(options.space?.trim() ? { space: options.space.trim() } : {}), json: options.json };
 }
 
 /** `library [memory|notes]`: memories by default. */

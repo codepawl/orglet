@@ -14,7 +14,7 @@ import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
 import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
-import { formatChats, formatLibrary, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatUsage } from './output';
+import { formatChats, formatLibrary, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatSpaces, formatUsage } from './output';
 import { ERROR_COLOR, muted, MUTED_COLOR, NEUTRAL_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
 import type { ManagementResult } from './management';
@@ -48,7 +48,7 @@ const PICKER_MAX_ROWS = 8;
 const WELCOME_FACE_LIMIT = 12;
 const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
 /** These controls do not change the chat or submit a turn, so they need not wait behind one. */
-const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage', 'chats', 'schedules', 'search', 'running', 'memory', 'plan-usage', 'models']);
+const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents', 'history', 'react', 'forward', 'usage', 'chats', 'schedules', 'spaces', 'search', 'running', 'memory', 'plan-usage', 'models']);
 
 /** What requests name a chat by: its id for a chat opened with `/to #id`, else the orglet's or crew's name. */
 function targetOf(entry: ChatEntry): string {
@@ -604,6 +604,7 @@ class Session {
       case 'rename': return this.chatChange(actions => actions.rename(targetOf(this.chat!), command.title), value => t('Đã đổi tên chat thành {0}.', value.title ?? value.name));
       case 'archive': return this.chatChange(actions => actions.archive(targetOf(this.chat!)), value => t('Đã lưu trữ chat {0}.', value.name));
       case 'schedules': return this.listSchedules();
+      case 'spaces': return this.listing(actions => actions.spaces(), formatSpaces);
       case 'schedule': return this.scheduleAction(command.action, command.name);
       case 'search': return this.listing(actions => actions.search(command.query), formatSearch);
       case 'running': return this.listing(actions => actions.running(), formatRunning);
