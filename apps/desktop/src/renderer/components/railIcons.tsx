@@ -4,42 +4,54 @@ import type { ReactNode } from 'react';
  * The filled drawings of the area rail's icons (user, 2026-10-05): the open area's icon is solid and the others are
  * outlines. A stroked icon cannot simply be given a fill: an open stroke fills along the line that would close it,
  * which put a diagonal across the chat icon, and a line inside a shape vanishes into the fill. So each icon has its
- * own filled drawing on the same 24 grid and at the same outer size as its outline, in ink (`currentColor`), with
- * the lines that have to stay readable inside it drawn in the tile's ground (`--rail-cut`, set on the open tile).
+ * own filled drawing, and it is the SAME drawing as its outline: the same paths on the same grid at the same stroke
+ * width, filled, so the two read as one icon in two states and never as two icons. Lines that have to stay readable
+ * inside the fill are drawn in the tile's ground (`--rail-cut`, set on the open tile).
  */
 const cut = 'var(--rail-cut, transparent)';
 
-function Filled({ children }: { children: ReactNode }) {
+/** The grid and stroke of the app's own icons (`icons.tsx`): bell, book and calendar are drawn there. */
+function OrgletFilled({ children }: { children: ReactNode }) {
+  return <svg className="rail-icon-filled" width="20" height="20" viewBox="0 0 20 20" fill="currentColor" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{children}</svg>;
+}
+
+/** The grid and stroke of the Lucide icon Home uses. */
+function LucideFilled({ children }: { children: ReactNode }) {
   return <svg className="rail-icon-filled" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{children}</svg>;
 }
 
 const frontBubble = 'M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z';
 
-/** Two speech bubbles: the one behind is whole, and a halo in the ground keeps the one in front apart from it. */
-export const ChatFilled = <Filled>
+/**
+ * Lucide's two speech bubbles. The one behind is an open stroke in the outline; here it is the whole bubble, and a
+ * halo in the ground keeps the one in front apart from it.
+ */
+export const ChatFilled = <LucideFilled>
   <path d="M10 9h10a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2z" />
   <path d={frontBubble} fill={cut} stroke={cut} strokeWidth="5" />
   <path d={frontBubble} />
-</Filled>;
+</LucideFilled>;
 
-/** A bell: the body is solid and the clapper under it stays a stroke. */
-export const BellFilled = <Filled>
-  <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326z" />
-  <path d="M10.268 21a2 2 0 0 0 3.464 0" fill="none" />
-</Filled>;
+/** The app's bell: its body filled, and the flat lip under it still a stroke. */
+export const BellFilled = <OrgletFilled>
+  <path d="M6 8.5a4 4 0 0 1 8 0c0 3 .8 4.4 1.5 5.2.3.4 0 .8-.4.8H4.9c-.4 0-.7-.4-.4-.8C5.2 12.9 6 11.5 6 8.5Z" />
+  <path d="M8.4 17h3.2" fill="none" />
+</OrgletFilled>;
 
-/** An open book: both pages solid, with the spine cut between them. */
-export const BookFilled = <Filled>
-  <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
-  <path d="M12 7.5v12.5" fill="none" stroke={cut} strokeWidth="1.6" />
-</Filled>;
+/** The app's open book: both pages filled, with the spine cut between them. */
+export const BookFilled = <OrgletFilled>
+  <path d="M10 6C8.6 4.6 6.6 4 3.5 4v11.5c3.1 0 5.1.6 6.5 2 1.4-1.4 3.4-2 6.5-2V4c-3.1 0-5.1.6-6.5 2Z" />
+  <path d="M10 6.6v10" fill="none" stroke={cut} strokeWidth="1.3" />
+</OrgletFilled>;
 
-/** A calendar with a clock on its corner: the sheet is solid under its two pegs, and the clock sits over it. */
-export const CalendarClockFilled = <Filled>
-  <path d="M8 2v4M16 2v4" fill="none" />
-  <path d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
-  <path d="M4 10h16" fill="none" stroke={cut} strokeWidth="1.6" />
-  <circle cx="16.5" cy="16.5" r="5" fill={cut} stroke={cut} strokeWidth="5" />
-  <circle cx="16.5" cy="16.5" r="5" />
-  <path d="M16.5 14.2v2.6l1.7 1" fill="none" stroke={cut} strokeWidth="1.6" />
-</Filled>;
+/**
+ * The app's calendar with a clock on its corner. The outline's sheet is an open stroke that stops where the clock
+ * begins; here it is the whole sheet, and the clock sits over it inside a halo of the ground.
+ */
+export const CalendarClockFilled = <OrgletFilled>
+  <path d="M5.5 4h9A2.5 2.5 0 0 1 17 6.5v8a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 3 14.5v-8A2.5 2.5 0 0 1 5.5 4Z" />
+  <path d="M6.5 2.5v3M13.5 2.5v3" fill="none" />
+  <circle cx="13.5" cy="13.5" r="4.5" fill={cut} stroke={cut} strokeWidth="4.4" />
+  <circle cx="13.5" cy="13.5" r="4.5" />
+  <path d="M13.5 11.2v2.3l1.7 1" fill="none" stroke={cut} strokeWidth="1.3" />
+</OrgletFilled>;
