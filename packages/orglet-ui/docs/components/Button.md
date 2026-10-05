@@ -1,6 +1,6 @@
 ---
 name: Button
-exports: Button
+exports: Button, ButtonSize, ButtonVariant
 group: Actions
 summary: A button in four looks, or a square holding one icon.
 ---
