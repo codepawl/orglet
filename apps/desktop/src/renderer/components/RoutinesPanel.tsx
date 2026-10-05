@@ -1,9 +1,9 @@
 import { demoReplies } from '../demoReplies';
 import { useEffect, useRef, useState } from 'react';
 import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/contracts';
-import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
+import { Button, Drawer, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, BellRing, Briefcase, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, BellRing, Briefcase, ShieldCheck, CalendarRange, Sun, Users, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
 import { channelLabel } from '../../shared/channels';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
@@ -120,7 +120,11 @@ export type RoutineView = { editing: false } | { editing: true; routine?: Routin
 export function RoutinesPanel({ workspace, routines = workspace.routines, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; /** The schedules to list; a chat's Schedules view passes only its orglet's or crew's (COD-355). */ routines?: readonly Routine[]; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const action = async (fn: () => Promise<unknown>) => { setBusy(true); setError(''); try { await fn(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } };
-  if (view.editing) return <RoutineEditor key={view.routine?.id ?? 'new'} routine={view.routine} draft={view.routine ? undefined : draft} workspace={workspace} saved={() => { onDirty(false); onView({ editing: false }); }} back={onBack} onDirty={onDirty} />;
+  // A schedule is made and edited in a dialog over the list (user, 2026-10-05), not in the list's place: the page
+  // behind it stays where it was. Closing it asks about unsaved changes the way leaving the editor always did.
+  const editor = view.editing ? <Drawer open onClose={onBack} title={view.routine ? view.routine.name : t('Lịch mới')}>
+    <RoutineEditor key={view.routine?.id ?? 'new'} routine={view.routine} draft={view.routine ? undefined : draft} workspace={workspace} saved={() => { onDirty(false); onView({ editing: false }); }} back={onBack} onDirty={onDirty} />
+  </Drawer> : null;
   const assignee = (item: Routine) => item.task.teamId ? workspace.teams.find(team => team.id === item.task.teamId)?.name ?? t('Kênh đã xóa') : workspace.workers.find(worker => worker.id === item.task.workerId)?.name ?? t('Tí đã xóa');
   /** The face of whoever runs the schedule: the orglet's own, a crew's first members, or the plain icon once it is gone. */
   const assigneeFace = (item: Routine) => {
@@ -156,7 +160,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
     await orglet.call('deleteRoutine', { id: item.id });
     toast(t('Đã xóa lịch'), 'success', item.name);
   };
-  return <div className="form">
+  return <>{editor}<div className="form">
           {!routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
     <div className="routine-list">
       {routines.map(item => {
@@ -237,7 +241,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
     </div>
     {/* A run that could not start because its folder is gone says so on its card (COD-294); not twice. */}
     {error && !shownOnCard && <p role="alert" className="error">{error}</p>}
-  </div>;
+  </div></>;
 }
 /** Opens a schedule's newest run and says what became of it, in the colour of its mark (COD-294). */
 function LastRunButton({ outcome, disabled, onOpen }: { outcome: LastRunOutcome; disabled: boolean; onOpen: () => void }) {
@@ -519,6 +523,6 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         : t('Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.', [destination])}</p>}
       <p className="muted">{browserLevel === 'read' ? t('Đổi Tí, skill, kênh, model, hồ sơ hay danh sách trang thì cần lưu lịch lại.') : t('Đổi Tí, skill, kênh hay model thì cần lưu lịch lại.')}</p>
     </section>
-    <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
+    <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}>{t('Hủy')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;
 }

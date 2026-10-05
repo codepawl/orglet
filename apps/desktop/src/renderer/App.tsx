@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, Bookmark, BellRing, ChevronRight, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
+import { Bookmark, BellRing, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
-import { Button } from './components/ui';
+import { Button, Drawer } from './components/ui';
 import { PanelPage } from './components/PanelPage';
 import { SkillEditor } from './components/Editors';
 import { WorkerDialog, workerProviderOptions } from './components/WorkerDialog';
@@ -290,23 +290,6 @@ export function App() {
   const openLibraryKnowledge = (item?: Knowledge) => { setFromLibrary(true); setEditingKnowledge(item); setPanel('knowledge'); };
   const openLibrarySkill = (skill?: Skill) => { setFromLibrary(true); setEditingSkill(skill); setPanel('skill'); };
   const backToLibrary = () => setPanel('library');
-  /** The breadcrumb the schedules editor uses, pointing back at the Library. */
-  const libraryTitle = (current: string) => fromLibrary
-    ? <span className="breadcrumb">
-      <button type="button" className="breadcrumb-link" onClick={backToLibrary}>{t('Thư viện')}</button>
-      <ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" />
-      <span aria-current="page">{current}</span>
-    </span>
-    : current;
-  /**
-   * The way back out of an editor, drawn beside the close button rather than in front of the title (user,
-   * 2026-09-23): the two ways out of the panel sit together, and the title reads as a path, not a control.
-   */
-  const drawerBack = panel === 'routines' && routineView.editing
-    ? <Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button>
-    : (panel === 'skill' || panel === 'knowledge') && fromLibrary
-      ? <Button size="icon" aria-label={t('Quay lại Thư viện')} onClick={backToLibrary}><ArrowLeft size={18} /></Button>
-      : undefined;
   // Library and Schedules are pages in the main panel, not dialogs: the rail and the sidebar stay in reach beside
   // them, so going to a chat or an area has to leave the page.
   const pagePanelOpen = panel === 'library' || panel === 'skill' || panel === 'knowledge' || panel === 'routines';
@@ -2575,20 +2558,25 @@ export function App() {
       onDwell={dwellAbout}
       trailing={updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
     <main className="main-pane" id="main-content" tabIndex={-1}>
-      {pagePanelOpen ? <PanelPage pageKey={`${panel}:${libraryTab}:${routineView.editing}`} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
+      {pagePanelOpen ? <PanelPage pageKey={`${panel === 'routines' ? 'routines' : 'library'}:${libraryTab}`} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
         icon={panel === 'routines' ? <CalendarClock size={16} aria-hidden="true" /> : <BookOpen size={16} aria-hidden="true" />}
-        description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined}
-        actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack}
-        title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) : panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : t('Thư viện')}>
+        description={panel === 'routines' ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.'))}
+        actions={panel === 'routines' ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined}
+        title={panel === 'routines' ? t('Lịch chạy') : t('Thư viện')}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
-      {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}
-      {panel === 'library' && <div className="form">
+      {/* A skill and a note are edited in a dialog over the Library (user, 2026-10-05), so the list stays behind them. */}
+      {panel === 'skill' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingSkill?.package ? 'Review skill' : t('Chỉnh skill')}>
+        <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />
+      </Drawer>}
+      {panel !== 'routines' && <div className="form">
         <div className="tab-row"><div className="tabs" role="tablist" aria-label={t('Thư viện')} onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return; event.preventDefault(); const next = libraryTab === 'skills' ? 'knowledge' : 'skills'; setLibraryTab(next); document.getElementById(`library-tab-${next}`)?.focus(); }}>{(['skills', 'knowledge'] as const).map(tab => <Button key={tab} id={`library-tab-${tab}`} role="tab" aria-selected={libraryTab === tab} aria-controls="library-panel" tabIndex={libraryTab === tab ? 0 : -1} onClick={() => setLibraryTab(tab)}><span className="tab-label">{tab === 'skills' ? 'Skills' : 'Knowledge'}<span className="tab-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span></span></Button>)}</div>
           <div className="tab-row-actions">{libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}</div></div>
         <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
       </div>}
-      {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />}
+      {panel === 'knowledge' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingKnowledge ? 'Knowledge' : t('Knowledge mới')}>
+        <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />
+      </Drawer>}
       </PanelPage> : page ?? <>
       <ChatHeader contentKey={`${activeChatKey}:${chatViewList.map(view => `${view.name}${view.count ?? ''}`).join()}`}
         views={chatViewList.length > 1 ? <ChatViewTabs views={chatViewList} current={chatView} onSelect={showChatView} /> : null}
