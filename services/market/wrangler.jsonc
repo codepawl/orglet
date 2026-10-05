@@ -4,7 +4,16 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-02",
   "workers_dev": false,
-  "vars": { "MARKET_WRITES_ENABLED": "false", "MARKET_PUBLIC_PUBLISHING_ENABLED": "false", "MARKET_REVIEWER_SUBJECTS": "[]" },
+  // Production takes submissions and serves approved account listings. MARKET_REVIEWER_SUBJECTS is a Worker secret
+  // (wrangler secret put), so the reviewers' account subjects are not in this repository. Without it nobody can
+  // review and account listings are not served.
+  "vars": { "MARKET_WRITES_ENABLED": "true", "MARKET_PUBLIC_PUBLISHING_ENABLED": "true" },
+  "d1_databases": [{
+    "binding": "MARKET_DB",
+    "database_name": "orglet-market",
+    "database_id": "1b98fccd-9fba-4937-af33-6789a188f5e3",
+    "migrations_dir": "migrations"
+  }],
   "routes": [{ "pattern": "market.orglet.codepawl.com", "custom_domain": true }],
   "observability": {
     "enabled": true,
