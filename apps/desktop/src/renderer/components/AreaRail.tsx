@@ -7,7 +7,7 @@ import type { Area } from '../areas';
 
 /**
  * One button on the area rail: an icon in a rounded tile, named by its tooltip and accessible name, with a count of
- * what waits there. An `accent` count waits for the person, a `quiet` one is only news.
+ * what waits there, shown as a dot. An `accent` count waits for the person, a `quiet` one is only news.
  */
 export type AreaRailEntry = {
   key: string;
@@ -57,7 +57,8 @@ function Tile({ entry }: { entry: AreaRailEntry }) {
     <button type="button" className={`area-tile${entry.active ? ' active' : ''}`} aria-label={entry.ariaLabel ?? entry.label} data-name={entry.label} aria-current={entry.active ? 'page' : undefined}
       onClick={() => { tip.hide(); entry.onSelect(); }} onPointerEnter={enter} onPointerLeave={leave} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(entry.label, event.currentTarget); }} onBlur={tip.hide}>
       {entry.icon}
-      {entry.count ? <span className={`area-count ${entry.countTone ?? 'quiet'}`} aria-hidden="true">{entry.count > 99 ? '99+' : entry.count}</span> : null}
+      {/* A dot, not a number (user, 2026-10-05): the tile's accessible name carries the count where one matters. */}
+      {entry.count ? <span className={`area-dot ${entry.countTone ?? 'quiet'}`} aria-hidden="true" /> : null}
     </button>
     {entry.menuItems?.length ? <RowMenu label={t('Tùy chọn {0}', [entry.label])} className="area-tile-menu" align="start" contextMenuOf=".area-tile-slot" items={entry.menuItems} /> : null}
   </div>;
@@ -72,7 +73,7 @@ function FolderTiles({ folder }: { folder: AreaRailFolder }) {
       <button type="button" className={`area-tile area-folder-tile${!folder.open && holdsOpenPage ? ' active' : ''}`} aria-expanded={folder.open} aria-label={folder.label} data-name={folder.label} onClick={() => { tip.hide(); folder.onToggle(); }}
         onPointerEnter={event => tip.show(folder.label, event.currentTarget)} onPointerLeave={tip.hide} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(folder.label, event.currentTarget); }} onBlur={tip.hide}>
         {folder.open ? <FolderOpen size={20} /> : <Folder size={20} />}
-        {!folder.open && waiting ? <span className="area-count quiet" aria-hidden="true">{waiting > 99 ? '99+' : waiting}</span> : null}
+        {!folder.open && waiting ? <span className="area-dot quiet" aria-hidden="true" /> : null}
       </button>
       <RowMenu label={t('Tùy chọn thư mục {0}', [folder.label])} className="area-tile-menu" align="start" contextMenuOf=".area-tile-slot" items={folder.menuItems} />
     </div>

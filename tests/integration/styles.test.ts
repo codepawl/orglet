@@ -95,3 +95,10 @@ it('keeps a provider mark\'s glyph centred wherever the mark is placed', () => {
     if (/display:\s*(inline-)?flex/.test(rule)) expect(rule, rule).toMatch(/align-items:center[^}]*justify-content:center|justify-content:center[^}]*align-items:center/);
   }
 });
+
+// User, 2026-10-05: the open area's icon is filled, and what waits in an area is a dot.
+it('fills the open area\'s icon and marks what waits with a dot, not a number', () => {
+  expect(css).toContain('.area-tile.active > svg { fill:currentColor; stroke:color-mix(in srgb, var(--text) 12%, var(--window)); stroke-width:1.6; }');
+  expect(css).toContain('.area-dot.accent { background:var(--accent); }');
+  expect(css).not.toContain('.area-count');
+});
