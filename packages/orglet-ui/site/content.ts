@@ -16,6 +16,8 @@ const STORY_SOURCES: Record<string, { file: string; pattern: RegExp }> = {
 const componentSources = import.meta.glob('../docs/components/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const guideSources = import.meta.glob('../docs/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 const storyModules = import.meta.glob('../stories/*.stories.tsx', { eager: true }) as Record<string, Record<string, { name?: string }>>;
+// A module lists its exports alphabetically; the source keeps the order the stories were written in.
+const storySources = import.meta.glob('../stories/*.stories.tsx', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 function splitFrontmatter(source: string): { fields: Record<string, string>; body: string } {
   const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(source.replace(/\r\n/g, '\n'));
@@ -67,9 +69,11 @@ function readableName(exportName: string): string {
 
 export function storiesOf(page: ComponentPage): StoryEntry[] {
   const source = STORY_SOURCES[page.name] ?? { file: page.name, pattern: /./ };
-  const storyModule = storyModules[`../stories/${source.file}.stories.tsx`];
+  const path = `../stories/${source.file}.stories.tsx`;
+  const storyModule = storyModules[path];
   if (!storyModule) return [];
-  return Object.entries(storyModule)
-    .filter(([exportName]) => exportName !== 'default' && source.pattern.test(exportName))
-    .map(([exportName, story]) => ({ file: source.file, exportName, title: story?.name ?? readableName(exportName) }));
+  const writtenOrder = [...(storySources[path] ?? '').matchAll(/^export const (\w+)/gm)].map(match => match[1]);
+  return writtenOrder
+    .filter(exportName => exportName in storyModule && source.pattern.test(exportName))
+    .map(exportName => ({ file: source.file, exportName, title: storyModule[exportName]?.name ?? readableName(exportName) }));
 }

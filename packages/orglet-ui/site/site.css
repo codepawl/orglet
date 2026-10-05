@@ -112,6 +112,8 @@ pre:focus-visible,
   max-height: calc(100vh - var(--site-topbar-height));
   padding: 16px 12px 40px var(--site-gutter);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--org-border) transparent;
 }
 
 .site-filter {

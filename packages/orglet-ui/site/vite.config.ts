@@ -38,7 +38,12 @@ function agentFiles(): Plugin {
 export default defineConfig({
   root: siteFolder,
   plugins: [react(), agentFiles()],
-  resolve: { alias: { '@codepawlhq/orglet-ui': join(packageRoot, 'src', 'index.ts') } },
+  resolve: {
+    alias: [
+      { find: '@codepawlhq/orglet-ui/tokens.css', replacement: join(packageRoot, 'src', 'styles', 'tokens.css') },
+      { find: /^@codepawlhq\/orglet-ui$/, replacement: join(packageRoot, 'src', 'index.ts') },
+    ],
+  },
   server: { port: 6007, fs: { allow: [packageRoot] } },
   build: {
     outDir: outputFolder,

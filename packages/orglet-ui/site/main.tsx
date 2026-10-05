@@ -121,9 +121,18 @@ function StoryFrame({ story, theme, minimumHeight }: { story: StoryEntry; theme:
   </figure>;
 }
 
+// A frame is as tall as its story, but a story that opens a menu or a dialog needs room for it inside the frame.
+const OPENS_A_PANEL = ['Select', 'RowMenu', 'InfoTip', 'Tooltip', 'AnchoredPopover', 'ReactionBar', 'ColorPicker'];
+
+function minimumFrameHeight(page: ComponentPage): number {
+  if (page.group === 'Overlays' && !OPENS_A_PANEL.includes(page.name)) return 480;
+  if (page.name === 'Toaster') return 320;
+  return OPENS_A_PANEL.includes(page.name) ? 340 : 96;
+}
+
 function ComponentView({ page, theme, navigate }: { page: ComponentPage; theme: Theme; navigate: (path: string) => void }) {
   const stories = storiesOf(page);
-  const minimumHeight = page.group === 'Overlays' || page.name === 'Toaster' ? 460 : 220;
+  const minimumHeight = minimumFrameHeight(page);
   const markdown = `# ${page.name}\n\n${page.summary}\n\n${page.body}\n`;
   return <article className="site-article">
     <header className="site-article-header">
