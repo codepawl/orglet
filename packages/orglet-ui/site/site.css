@@ -1,7 +1,9 @@
 /*
- * The docs site's own layout, never shipped with the kit. `site-` keeps these apart from the kit's `org-` classes.
- * Everything reads the kit's tokens, so the site follows the theme switch like any application would. Groups are
- * separated by spacing and quiet fills, never by lines.
+ * OUI's site, in the visual language of codepawl.com and orglet.codepawl.com: system type, neutral greys, a header
+ * and footer that sit on the window, content in rounded cards, a soft aura and a dot grid behind the first screen.
+ * Nothing here ships with the kit. `site-` and `oui-` keep these apart from the kit's `org-` classes, everything
+ * reads the kit's tokens so the site follows the theme like any application, and groups are separated by spacing
+ * and quiet fills, never by lines.
  */
 *,
 *::before,
@@ -10,19 +12,73 @@
 }
 
 :root {
-  --site-topbar-height: 3.5rem;
-  --site-sidebar-width: clamp(232px, 17vw, 328px);
-  --site-gutter: clamp(16px, 2.2vw, 48px);
+  --site-page: min(1320px, calc(100% - 40px));
+  --site-home: min(1060px, calc(100% - 40px));
+  --site-header-height: 4.25rem;
+  --site-sidebar-width: clamp(200px, 15vw, 248px);
+  --site-panel: #f7f7f8;
+  --site-panel-radius: 16px;
+  --site-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
+  --site-aura-one: #6f8ff75c;
+  --site-aura-two: #a987f547;
+  --site-aura-three: #5fc4c43a;
+  --site-aura-four: #f4a27a2e;
+  --site-grid-dot: #17171724;
+  --site-code-comment: #6b7280;
+  --site-code-string: #0f6b4f;
+  --site-code-keyword: #7a3ea8;
+  --site-code-tag: #1d5fb8;
+  --site-code-number: #a2541a;
   color-scheme: light dark;
 }
 
-/* Type follows the window: 15px on a small laptop, 20px on a very wide screen, and everything sized in rem with it. */
+:root[data-theme=dark] {
+  --site-panel: #2a2a2a;
+  --site-shadow: 0 1px 2px #00000080;
+  --site-aura-one: #4d6fe847;
+  --site-aura-two: #8a5ee63a;
+  --site-aura-three: #2fa3a330;
+  --site-aura-four: #e0845a24;
+  --site-grid-dot: #ffffff1f;
+  --site-code-comment: #9ca3af;
+  --site-code-string: #7fd4b4;
+  --site-code-keyword: #c9a2f0;
+  --site-code-tag: #8fbcf5;
+  --site-code-number: #f0b27a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme=system] {
+    --site-panel: #2a2a2a;
+    --site-shadow: 0 1px 2px #00000080;
+    --site-aura-one: #4d6fe847;
+    --site-aura-two: #8a5ee63a;
+    --site-aura-three: #2fa3a330;
+    --site-aura-four: #e0845a24;
+    --site-grid-dot: #ffffff1f;
+    --site-code-comment: #9ca3af;
+    --site-code-string: #7fd4b4;
+    --site-code-keyword: #c9a2f0;
+    --site-code-tag: #8fbcf5;
+    --site-code-number: #f0b27a;
+  }
+}
+
+/* Type follows the window: 15px on a small laptop, 19px on a very wide screen, and everything sized in rem with it. */
 html {
-  font-size: clamp(15px, 10.2px + 0.38vw, 20px);
-  scroll-padding-top: calc(var(--site-topbar-height) + 16px);
+  font-size: clamp(15px, 11px + 0.32vw, 19px);
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--site-header-height) + 16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {
+  min-width: 320px;
   margin: 0;
   background: var(--org-bg);
   color: var(--org-text);
@@ -32,9 +88,34 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
 a {
   color: inherit;
   text-underline-offset: 3px;
+}
+
+svg {
+  flex-shrink: 0;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--org-focus) 24%, transparent);
 }
 
 a:focus-visible,
@@ -45,81 +126,117 @@ pre:focus-visible,
   border-radius: 6px;
 }
 
-.site-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: var(--site-topbar-height);
-  padding: 0 var(--site-gutter);
-  background: color-mix(in srgb, var(--org-bg) 88%, transparent);
-  backdrop-filter: blur(12px);
-}
-
-/* The Orglet mark, as the app draws it: a matte ball lit from the top left with two eyes that lean to the right. It
-   blinks once every few seconds and its eyes follow the pointer by a pixel or so (--look-x and --look-y, set by
-   OrgletMark). Each eye keeps its lean through both, which is why the lean is a variable the keyframes read. */
-.site-mark {
-  --mark-ink: var(--org-text);
+/* The mark: the orglet as a component on a canvas. An outlined bubble with a selection handle on its tight corner,
+   and two solid eyes that lean to the right, blink every few seconds and follow the pointer by a pixel or so
+   (--look-x and --look-y, set by OuiMark). Each eye keeps its lean through both, so the lean is a variable. */
+.oui-mark {
   --look-x: 0px;
   --look-y: 0px;
   position: relative;
   display: inline-block;
   flex-shrink: 0;
-  width: 1.5em;
-  height: 1.5em;
+  width: 1.625rem;
+  height: 1.625rem;
+  border: max(1.5px, 0.09em) solid currentColor;
   border-radius: 46% 46% 46% 17%;
-  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--mark-ink) 72%, white), var(--mark-ink) 48%, color-mix(in srgb, var(--mark-ink) 78%, black));
+  font-size: 1.625rem;
 }
 
-.site-mark::before,
-.site-mark::after {
+.oui-mark::before,
+.oui-mark::after {
   content: '';
   position: absolute;
-  top: 21.4%;
-  width: 14.3%;
-  height: 28.6%;
+  top: 22%;
+  width: 14%;
+  height: 30%;
   border-radius: 999px;
-  background: var(--org-bg);
+  background: currentColor;
   translate: var(--look-x) var(--look-y);
   transform: translateY(var(--eye-lean)) rotate(14deg);
   transition: translate 160ms ease-out;
-  animation: site-mark-blink 6s infinite;
+  animation: oui-mark-blink 6s infinite;
 }
 
-.site-mark::before {
+.oui-mark::before {
   --eye-lean: -9%;
-  left: 35.7%;
+  left: 31%;
 }
 
-.site-mark::after {
+.oui-mark::after {
   --eye-lean: 9%;
-  left: 57.1%;
+  left: 55%;
 }
 
-@keyframes site-mark-blink {
+.oui-mark-handle {
+  position: absolute;
+  left: -14%;
+  bottom: -14%;
+  width: 30%;
+  height: 30%;
+  border: max(1.5px, 0.09em) solid currentColor;
+  border-radius: 22%;
+  background: var(--org-bg);
+}
+
+@keyframes oui-mark-blink {
   0%, 94%, 100% { transform: translateY(var(--eye-lean)) rotate(14deg) scaleY(1); }
   97% { transform: translateY(var(--eye-lean)) rotate(14deg) scaleY(0.12); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .site-mark::before,
-  .site-mark::after {
+  .oui-mark::before,
+  .oui-mark::after {
     transition: none;
     animation: none;
   }
 }
 
-.site-wordmark {
+.oui-mark-hero {
+  width: 4.5rem;
+  height: 4.5rem;
+  font-size: 4.5rem;
+}
+
+/* Header and footer sit on the window background, outside the cards. */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--org-bg) 86%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.site-shell-home .site-header {
+  position: static;
+  background: none;
+  backdrop-filter: none;
+}
+
+.site-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px 24px;
+  width: var(--site-page);
+  min-height: var(--site-header-height);
+  margin-inline: auto;
+}
+
+.site-shell-home .site-header-inner {
+  width: var(--site-home);
+}
+
+.site-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5em;
-  font-size: 1rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  gap: 0.6rem;
+  margin-right: auto;
   text-decoration: none;
+}
+
+.site-brand-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.3px;
 }
 
 .site-version {
@@ -130,11 +247,25 @@ pre:focus-visible,
   font-size: 0.75rem;
 }
 
-.site-topbar-end {
+.site-nav {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-left: auto;
+  gap: 1.25rem;
+  font-size: 0.9375rem;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  color: var(--org-muted);
+  text-decoration: none;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+  color: var(--org-text);
 }
 
 .site-quiet-link {
@@ -154,22 +285,247 @@ pre:focus-visible,
   display: none;
 }
 
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+  width: var(--site-page);
+  margin-inline: auto;
+  padding-block: 28px 40px;
+  color: var(--org-muted);
+  font-size: 0.875rem;
+}
+
+.site-shell-home .site-footer {
+  width: var(--site-home);
+}
+
+/* The first screen: one centred column over a soft aura and a dot grid that fades out, as on the product pages. */
+.site-shell-home {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+}
+
+.site-shell-home::before,
+.site-shell-home::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: 46rem;
+  pointer-events: none;
+}
+
+.site-shell-home::before {
+  background:
+    radial-gradient(38rem 24rem at 12% 4%, var(--site-aura-three), transparent 70%),
+    radial-gradient(34rem 26rem at 78% 14%, var(--site-aura-one), transparent 70%),
+    radial-gradient(30rem 22rem at 92% 58%, var(--site-aura-two), transparent 70%),
+    radial-gradient(34rem 20rem at 32% 82%, var(--site-aura-four), transparent 70%);
+}
+
+.site-shell-home::after {
+  background-image: radial-gradient(var(--site-grid-dot) 1px, transparent 1.5px);
+  background-size: 20px 20px;
+  mask-image: radial-gradient(60rem 30rem at 50% 62%, #000 20%, transparent 78%);
+}
+
+.site-page {
+  width: var(--site-home);
+  margin-inline: auto;
+  padding-block: 20px 72px;
+}
+
+.site-home {
+  display: grid;
+  gap: 4rem;
+}
+
+.site-hero {
+  display: grid;
+  justify-items: center;
+  gap: 1.25rem;
+  padding-top: 2rem;
+  text-align: center;
+}
+
+.site-hero h1 {
+  max-width: 16ch;
+  font-size: clamp(2rem, 5.2vw, 3.4rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.site-lead {
+  max-width: 62ch;
+  color: var(--org-muted);
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+
+.site-hero .site-lead {
+  max-width: 40rem;
+  font-size: clamp(1.0625rem, 1.9vw, 1.25rem);
+}
+
+.site-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 12px;
+}
+
+.site-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.6rem;
+  padding: 0.5rem 1.15rem;
+  border: 1px solid var(--org-border);
+  border-radius: var(--org-radius);
+  background: var(--org-bg);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 120ms ease-out, opacity 120ms ease-out;
+}
+
+.site-action:hover {
+  background: var(--org-surface);
+}
+
+.site-action-primary {
+  border-color: var(--org-primary);
+  background: var(--org-primary);
+  color: var(--org-primary-text);
+}
+
+.site-action-primary:hover {
+  background: var(--org-primary);
+  opacity: 0.85;
+}
+
+.site-install {
+  width: min(100%, 24rem);
+  text-align: left;
+}
+
+/* The kit sizes its controls in pixels, as an application expects. Where the site shows them off, they grow with the
+   page's type instead of staying small on a wide screen. */
+.site-install,
+.site-showcase,
+.site-canvas {
+  zoom: var(--site-kit-zoom, 1);
+}
+
+/* The showcase is one card, like the screenshot on a product page, holding the kit at work. */
+.site-showcase {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--site-panel-radius);
+  background: var(--site-panel);
+  box-shadow: var(--site-shadow);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.site-showcase-column {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.site-tile {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--org-bg);
+}
+
+.site-tile-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.site-tile-card {
+  background: var(--org-bg);
+}
+
+.site-field {
+  display: grid;
+  gap: 6px;
+}
+
+.site-field .org-input {
+  width: 100%;
+}
+
+.site-tile-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.site-states {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-states li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-states .org-badge {
+  margin-left: auto;
+}
+
+.site-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+}
+
+.site-facts h2 {
+  margin-bottom: 6px;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.site-facts p {
+  color: var(--org-muted);
+}
+
+/* The docs: the list of pages on the left, the page, and its sections on the right. */
 .site-body {
   display: grid;
   grid-template-columns: var(--site-sidebar-width) minmax(0, 1fr);
   align-items: start;
-  max-width: min(100%, 1840px);
-  margin: 0 auto;
+  gap: clamp(24px, 3vw, 56px);
+  width: var(--site-page);
+  margin-inline: auto;
 }
 
 .site-sidebar {
   position: sticky;
-  top: var(--site-topbar-height);
+  top: var(--site-header-height);
   display: grid;
-  gap: 22px;
+  gap: 1.25rem;
   align-content: start;
-  max-height: calc(100vh - var(--site-topbar-height));
-  padding: 16px 12px 40px var(--site-gutter);
+  max-height: calc(100vh - var(--site-header-height));
+  padding: 8px 8px 40px 0;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--org-border) transparent;
@@ -193,15 +549,17 @@ pre:focus-visible,
   padding-left: 32px;
 }
 
-.site-sidebar h2 {
-  margin: 0 0 4px;
+.site-sidebar h2,
+.site-sections h2 {
+  margin-bottom: 4px;
   padding: 0 10px;
   color: var(--org-muted);
   font-size: 0.8125rem;
   font-weight: 500;
 }
 
-.site-sidebar ul {
+.site-sidebar ul,
+.site-sections ul {
   display: grid;
   gap: 1px;
   margin: 0;
@@ -211,7 +569,7 @@ pre:focus-visible,
 
 .site-sidebar a {
   display: block;
-  padding: 5px 10px;
+  padding: 0.3rem 10px;
   border-radius: 8px;
   font-size: 0.875rem;
   text-decoration: none;
@@ -227,7 +585,6 @@ pre:focus-visible,
 }
 
 .site-empty {
-  margin: 0;
   padding: 0 10px;
   color: var(--org-muted);
   font-size: 0.875rem;
@@ -235,18 +592,49 @@ pre:focus-visible,
 
 .site-main {
   min-width: 0;
-  padding: 24px var(--site-gutter) 96px clamp(24px, 3vw, 64px);
+  padding: 16px 0 72px;
+}
+
+.site-doc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 11rem;
+  align-items: start;
+  gap: clamp(24px, 3vw, 56px);
 }
 
 .site-article {
-  max-width: clamp(820px, 64vw, 1320px);
-  margin: 0 auto;
+  min-width: 0;
+  max-width: 52rem;
+}
+
+.site-sections {
+  position: sticky;
+  top: calc(var(--site-header-height) + 16px);
+}
+
+.site-sections a {
+  display: block;
+  padding: 0.2rem 10px;
+  color: var(--org-muted);
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+
+.site-sections a:hover {
+  color: var(--org-text);
 }
 
 .site-article-header {
   display: grid;
-  gap: 14px;
-  margin-bottom: 28px;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.site-article h1 {
+  font-size: 2.125rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 .site-article-actions {
@@ -255,69 +643,99 @@ pre:focus-visible,
   gap: 16px;
 }
 
-h1 {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 680;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-}
-
-.site-lead {
-  max-width: 62ch;
-  margin: 8px 0 0;
-  color: var(--org-muted);
-  font-size: 1.0625rem;
-  line-height: 1.55;
-}
-
-.site-stories {
-  display: grid;
-  gap: 20px;
-  margin-bottom: 40px;
-}
-
-.site-story {
-  margin: 0;
-}
-
-.site-story figcaption {
-  margin-bottom: 6px;
-  color: var(--org-muted);
-  font-size: 0.8125rem;
-}
-
-.site-story iframe {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--org-border);
-  border-radius: 14px;
-  background: var(--org-bg);
-}
-
+.site-section-title,
 .site-prose h2 {
-  margin: 40px 0 10px;
-  font-size: 1.3125rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  margin: 2.5rem 0 0.75rem;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
 }
 
 .site-prose h3 {
-  margin: 28px 0 8px;
-  font-size: 1rem;
-  font-weight: 650;
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+/* A story is a card: its name and the Preview and Code tabs on the card's top row, the story below on the page's
+   own colour, which is what a component sits on in an application. */
+.site-stories {
+  display: grid;
+  gap: 16px;
+}
+
+.site-story {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--site-panel-radius);
+  background: var(--site-panel);
+}
+
+.site-story-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-left: 10px;
+}
+
+.site-story-header h3 {
+  color: var(--org-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.site-canvas {
+  display: flow-root;
+  padding: 28px 24px;
+  border-radius: 10px;
+  background: var(--org-bg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.site-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--org-bg);
+}
+
+.site-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.site-frame-wait {
+  position: absolute;
+  inset: 24px;
+  width: auto;
+  height: auto;
+}
+
+.site-story-panel .site-code {
+  margin: 0;
+}
+
+.site-story-panel .site-code pre {
+  max-height: 26rem;
+  border-radius: 10px;
+  background: var(--org-bg);
 }
 
 .site-prose p,
 .site-prose ul,
 .site-prose ol {
   max-width: 72ch;
-  margin: 0 0 12px;
+  margin: 0 0 0.75rem;
 }
 
 .site-prose ul,
 .site-prose ol {
-  padding-left: 20px;
+  padding-left: 1.25rem;
 }
 
 .site-prose li + li {
@@ -329,23 +747,23 @@ h1 {
   border-radius: 6px;
   background: var(--org-surface);
   font-family: var(--org-font-mono);
-  font-size: 0.88em;
+  font-size: 0.86em;
 }
 
 .site-code {
   position: relative;
-  margin: 0 0 16px;
+  margin: 0 0 1rem;
 }
 
 .site-code pre {
   margin: 0;
   padding: 16px 52px 16px 18px;
-  border-radius: 14px;
-  background: var(--org-surface);
-  overflow-x: auto;
+  border-radius: 12px;
+  background: var(--site-panel);
+  overflow: auto;
   font-family: var(--org-font-mono);
   font-size: 0.8125rem;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .site-code pre code {
@@ -360,8 +778,15 @@ h1 {
   right: 8px;
 }
 
+.site-code-comment { color: var(--site-code-comment); }
+.site-code-string { color: var(--site-code-string); }
+.site-code-keyword { color: var(--site-code-keyword); }
+.site-code-tag { color: var(--site-code-tag); }
+.site-code-number { color: var(--site-code-number); }
+.site-code-token { color: var(--site-code-tag); }
+
 .site-table-scroll {
-  margin: 0 0 16px;
+  margin: 0 0 1rem;
   overflow-x: auto;
 }
 
@@ -387,7 +812,7 @@ h1 {
 
 /* Rows are told apart by a quiet fill on every other one, since the site draws no lines between them. */
 .site-prose tbody tr:nth-child(odd) td {
-  background: color-mix(in srgb, var(--org-surface) 60%, var(--org-bg));
+  background: var(--site-panel);
 }
 
 .site-prose tbody td:first-child {
@@ -399,144 +824,23 @@ h1 {
   border-radius: 0 10px 10px 0;
 }
 
-.site-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, clamp(360px, 26vw, 460px));
-  align-items: center;
-  gap: clamp(32px, 4vw, 88px);
-  padding: 32px 0 16px;
-}
-
-.site-home {
-  max-width: clamp(980px, 74vw, 1480px);
-}
-
-.site-hero h1 {
-  display: flex;
-  white-space: nowrap;
-  align-items: center;
-  gap: 0.35em;
-  font-size: 2.75rem;
-}
-
-.site-hero h1 .site-mark {
-  width: 1.1em;
-  height: 1.1em;
-}
-
-.site-hero-text {
-  display: grid;
-  gap: 20px;
-}
-
-.site-hero-text .site-lead {
-  margin: 0;
-}
-
-.site-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.site-action {
-  display: inline-flex;
-  align-items: center;
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: var(--org-surface);
-  font-size: 0.875rem;
-  font-weight: 550;
-  text-decoration: none;
-}
-
-.site-action:hover {
-  background: var(--org-row-active);
-}
-
-.site-action-primary,
-.site-action-primary:hover {
-  background: var(--org-primary);
-  color: var(--org-primary-text);
-}
-
-/* The kit sizes its controls in pixels, as an application expects. Where the site shows them off, they grow with the
-   page's type instead of staying small on a wide screen. */
-.site-sample,
-.site-hero .org-command-block {
-  zoom: var(--site-kit-zoom, 1);
-}
-
-.site-sample {
-  display: grid;
-  gap: 16px;
-  padding: 22px;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--org-surface) 55%, var(--org-bg));
-  font-size: 0.875rem;
-}
-
-.site-sample-field {
-  display: grid;
-  gap: 6px;
-}
-
-.site-sample-field .org-input {
-  width: 100%;
-}
-
-.site-sample-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.site-sample-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: auto;
-  color: var(--org-success);
-}
-
-.site-facts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 32px;
-  margin-top: 56px;
-}
-
-.site-facts h2 {
-  margin: 0 0 6px;
-  font-size: 1rem;
-  font-weight: 650;
-}
-
-.site-facts p {
-  margin: 0;
-  color: var(--org-muted);
-}
-
-/* Beside the sidebar the two-column hero runs out of room well before the phone layout starts. */
 @media (max-width: 1180px) {
-  .site-hero {
+  .site-doc {
     grid-template-columns: minmax(0, 1fr);
-    gap: 28px;
   }
 
-  .site-sample {
-    max-width: 460px;
+  .site-sections {
+    display: none;
   }
 }
 
 @media (max-width: 860px) {
-  :root {
-    --site-gutter: 16px;
-  }
-
   .site-menu-button {
     display: inline-flex;
+  }
+
+  .site-nav-extra {
+    display: none;
   }
 
   .site-body {
@@ -547,7 +851,7 @@ h1 {
     display: none;
     position: static;
     max-height: none;
-    padding: 8px var(--site-gutter) 24px;
+    padding: 8px 0 24px;
   }
 
   .site-menu-open .site-sidebar {
@@ -558,34 +862,23 @@ h1 {
     display: none;
   }
 
-  .site-main {
-    padding: 16px var(--site-gutter) 72px;
-  }
-
-  .site-hero {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 28px;
-    padding-top: 12px;
-  }
-
-  .site-hero h1 {
-    font-size: 2.125rem;
-  }
-
+  .site-showcase,
   .site-facts {
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
-    margin-top: 36px;
   }
 
-  .site-topbar-end {
-    gap: 12px;
+  .site-home {
+    gap: 2.5rem;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 560px) {
   .site-version,
-  .site-topbar-end .site-quiet-link {
+  .site-nav a:not(:first-child):not(:nth-child(2)) {
     display: none;
+  }
+
+  .site-nav {
+    gap: 0.9rem;
   }
 }

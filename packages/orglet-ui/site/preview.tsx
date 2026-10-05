@@ -1,13 +1,14 @@
-import { composeStories } from '@storybook/react-vite';
-import { useEffect, type ComponentType } from 'react';
+import { useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../src/styles/tokens.css';
 import '../.storybook/preview.css';
 import '../stories/gallery.css';
 import './preview.css';
+import { StoryView, playStory, type StoryModule } from './stories';
 
-// One story, alone in a frame. A frame keeps a story's dialogs, portals, focus traps and Escape handling to itself,
-// so a page can show several of them at once.
+// One story, alone in a frame, for the stories that open a dialog, a menu or a toast: a frame keeps their portals,
+// focus traps and Escape handling to itself, so a page can show several at once. Everything else is drawn straight
+// into the page (see StoryPreview in main.tsx).
 const storyModules = import.meta.glob('../stories/*.stories.tsx');
 const parameters = new URLSearchParams(window.location.search);
 const fileName = parameters.get('file') ?? '';
@@ -19,18 +20,20 @@ document.body.style.zoom = String(Math.min(Math.max(Number(parameters.get('zoom'
 
 function reportHeight(): void {
   const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
-  window.parent.postMessage({ type: 'orglet-ui-preview-height', frame: frameId, height }, window.location.origin);
+  window.parent.postMessage({ type: 'oui-preview-height', frame: frameId, height }, window.location.origin);
 }
 
-function Frame({ Story }: { Story: ComponentType }) {
+function Frame({ storyModule }: { storyModule: StoryModule }) {
+  const canvas = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Once by hand: a tab that is not on screen runs no resize observers, and its frames would keep their first size.
     reportHeight();
     const observer = new ResizeObserver(reportHeight);
     observer.observe(document.documentElement);
+    if (canvas.current) void playStory(storyModule, storyName, canvas.current);
     return () => observer.disconnect();
-  }, []);
-  return <Story />;
+  }, [storyModule]);
+  return <div ref={canvas}><StoryView storyModule={storyModule} exportName={storyName} /></div>;
 }
 
 async function showStory(): Promise<void> {
@@ -40,9 +43,8 @@ async function showStory(): Promise<void> {
     root.render(<p className="gallery-note">No such story file.</p>);
     return;
   }
-  const stories = composeStories(await loadModule() as Parameters<typeof composeStories>[0]) as Record<string, ComponentType>;
-  const Story = stories[storyName];
-  root.render(Story ? <Frame Story={Story} /> : <p className="gallery-note">No such story.</p>);
+  const storyModule = await loadModule() as StoryModule;
+  root.render(storyName in storyModule ? <Frame storyModule={storyModule} /> : <p className="gallery-note">No such story.</p>);
 }
 
 void showStory();

@@ -1,7 +1,7 @@
 # @codepawlhq/orglet-ui
 
 The interface Orglet is built from: a small set of React components and the tokens they read.
-Docs with every component running live: https://ui.orglet.codepawl.com
+Docs with every component running live: https://oui.codepawl.com
 
 Components move here from the Orglet app one at a time, under a contract: a component arrives only when it meets
 the rules below, and the app then imports it from here like any other application would.

@@ -42,6 +42,8 @@ export default defineConfig({
     alias: [
       { find: '@codepawlhq/orglet-ui/tokens.css', replacement: join(packageRoot, 'src', 'styles', 'tokens.css') },
       { find: /^@codepawlhq\/orglet-ui$/, replacement: join(packageRoot, 'src', 'index.ts') },
+      // The stories' `play` helpers come from Storybook's test module, which is far larger than the whole site.
+      { find: 'storybook/test', replacement: join(siteFolder, 'storybook-test.ts') },
     ],
   },
   server: { port: 6007, fs: { allow: [packageRoot] } },

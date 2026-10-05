@@ -77,3 +77,29 @@ export function storiesOf(page: ComponentPage): StoryEntry[] {
     .filter(exportName => exportName in storyModule && source.pattern.test(exportName))
     .map(exportName => ({ file: source.file, exportName, title: storyModule[exportName]?.name ?? readableName(exportName) }));
 }
+
+/** The story file as a module, for drawing a story straight into the page. */
+export function storyModuleOf(file: string): Record<string, unknown> | undefined {
+  return storyModules[`../stories/${file}.stories.tsx`];
+}
+
+/** The story file's own text, for showing a story's code beside it. */
+export function storyFileSource(file: string): string {
+  return storySources[`../stories/${file}.stories.tsx`] ?? '';
+}
+
+// Pages whose stories open a dialog, a menu or a toast. Those are shown in a frame of their own; the rest are
+// drawn straight into the page, which costs nothing to load.
+const FRAMED_PAGES = [
+  'AnchoredPopover', 'Confirm', 'DialogOverlay', 'Drawer', 'InfoTip', 'ReactionBar', 'RowMenu', 'Select',
+  'TabbedDialog', 'Toaster', 'Tooltip', 'Viewer',
+];
+
+export function isFramed(page: ComponentPage): boolean {
+  return FRAMED_PAGES.includes(page.name);
+}
+
+/** The headings of a page's body, for the list of sections beside it. */
+export function sectionsOf(body: string): string[] {
+  return [...body.matchAll(/^## (.+)$/gm)].map(match => match[1]);
+}
