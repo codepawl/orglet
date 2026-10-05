@@ -73,7 +73,9 @@ try {
   assert.deepEqual([...made.defaults.capabilities].sort(), ['dataset.check', 'network.web', 'source.read']);
 
   // A channel in the space takes every orglet of the space, and only they answer.
-  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo kênh', exact: true }).click();
+  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo trong không gian Launch', exact: true }).click();
+  assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Tạo kênh', 'Tạo nhóm'], 'the space\'s + makes a channel or a category');
+  await page.getByRole('menuitem', { name: 'Tạo kênh', exact: true }).click();
   const channelDialog = page.getByRole('dialog');
   await channelDialog.getByRole('textbox', { name: 'Tên kênh' }).fill('general');
   await channelDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
@@ -223,6 +225,31 @@ try {
   await page.locator('.sidebar-title').hover();
   await page.locator('.area-tip').waitFor({ state: 'detached' });
   await shot(page, 'space-marks');
+  // Dragging a category's heading onto another one moves it there, and a channel dropped on a channel's row in
+  // another category takes that category and the place before that row.
+  await page.locator('.area-tile[data-name="Launch"]').click();
+  await page.locator('.sidebar .section-toggle').first().waitFor();
+  const sectionNames = () => page.locator('.sidebar .section-toggle').evaluateAll(toggles => toggles.map(toggle => toggle.textContent.trim()).join());
+  assert.equal(await sectionNames(), 'Research,Writing');
+  await page.locator('.sidebar .section-toggle', { hasText: 'Research' }).dragTo(page.locator('.sidebar .section-toggle', { hasText: 'Writing' }));
+  await page.waitForFunction(() => [...document.querySelectorAll('.sidebar .section-toggle')].map(toggle => toggle.textContent.trim()).join() === 'Writing,Research');
+  const channelIn = async name => {
+    const state = await workspace(page);
+    const launch = state.spaces.find(space => space.name === 'Launch');
+    const channel = [...state.tasks.map(task => task.channel), ...state.emptyChannels].find(item => item?.name === name && item.spaceId === launch.id);
+    return { id: channel.id, category: launch.categories.find(category => category.id === channel.categoryId)?.name, order: state.channelOrder };
+  };
+  assert.equal((await channelIn('sources')).category, 'Research');
+  await page.locator('.sidebar .channel-row', { hasText: 'sources' }).dragTo(page.locator('.sidebar .channel-row', { hasText: 'drafts' }));
+  await page.waitForFunction(async () => {
+    const state = await window.orglet.call('workspace', {});
+    return state.channelOrder.length > 0;
+  });
+  const movedSources = await channelIn('sources');
+  const drafts = await channelIn('drafts');
+  assert.equal(movedSources.category, 'Writing', 'the channel took the category of the row it was dropped on');
+  assert.ok(movedSources.order.indexOf(movedSources.id) < movedSources.order.indexOf(drafts.id), 'and the place before that row');
+  await shot(page, 'space-dragged');
   console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it, put it in a folder and take it out.');
 } finally {
   await app.close();

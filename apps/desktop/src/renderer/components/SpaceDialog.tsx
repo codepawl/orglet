@@ -30,7 +30,7 @@ const APP_DEFAULTS: readonly SpaceDefaultCapability[] = ['source.read', 'dataset
 type CategoryDraft = { key: string; id?: string; name: string; listed: boolean; orgletIds: string[] };
 
 /** The space being edited, or nothing for a new one. `initialTab` opens its orglets or its categories straight away. */
-export type SpaceDraft = { space?: Space; initialTab?: Tab };
+export type SpaceDraft = { space?: Space; initialTab?: Tab; /** Opens with one more category, empty, ready for its name. */ newCategory?: boolean };
 
 let nextCategoryKey = 0;
 function categoryKey(): string {
@@ -49,7 +49,10 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
   const [name, setName] = useState(editing?.name ?? '');
   const [folder, setFolder] = useState(editing?.folder ?? '');
   const [orgletIds, setOrgletIds] = useState<string[]>(() => editing ? editing.orgletIds.filter(id => workspace.workers.some(worker => worker.id === id)) : []);
-  const [categories, setCategories] = useState<CategoryDraft[]>(() => (editing?.categories ?? []).map(category => ({ key: category.id, id: category.id, name: category.name, listed: Boolean(category.orgletIds), orgletIds: category.orgletIds ?? [] })));
+  const [categories, setCategories] = useState<CategoryDraft[]>(() => [
+    ...(editing?.categories ?? []).map(category => ({ key: category.id, id: category.id, name: category.name, listed: Boolean(category.orgletIds), orgletIds: category.orgletIds ?? [] })),
+    ...(draft.newCategory ? [{ key: categoryKey(), name: '', listed: false, orgletIds: [] }] : []),
+  ]);
   // What a new channel in the space starts with. Sent only once the space has a setting or the person touched one,
   // so opening and saving a space never changes what its next channel gets.
   const [defaults, setDefaults] = useState<readonly SpaceDefaultCapability[]>(editing?.defaults?.capabilities ?? APP_DEFAULTS);

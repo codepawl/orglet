@@ -3108,6 +3108,9 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
    height while it is empty so that there is something to drop on. */
 .channel-drop { border-radius:10px; }
 .channel-drop.over { background:var(--row-hover); }
+/* Where a dragged channel will land: a bar above the row it is over. A drop mark, shown only during a drag. */
+.channel-slot { border-radius:10px; }
+.channel-slot.over { box-shadow:inset 0 2px 0 var(--accent); }
 .channel-uncategorized.channel-drop:empty { min-height:12px; }
 .sidebar-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 12px; text-align:center; }
 

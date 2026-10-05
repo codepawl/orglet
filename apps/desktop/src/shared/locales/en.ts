@@ -4263,6 +4263,8 @@ export const en: Dictionary = {
   "Nhóm gom các kênh trong không gian. Một nhóm có thể chỉ có một số Tí của không gian.": "A category holds channels in the space. It can have only some of the space’s orglets.",
   "Thiết lập không gian": "Space settings",
   "Thêm nhóm": "Add category",
+  "Tạo nhóm": "Create category",
+  "Tạo trong không gian {0}": "Create in the space {0}",
   "Thêm vào kênh này": "Add to this channel",
   "Trong không gian — {0}": "In the space — {0}",
   "Tên không gian": "Space name",

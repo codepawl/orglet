@@ -112,7 +112,11 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 **Backups and the terminal.** A backup carries the spaces (`spaces` in its payload); restoring keeps a space this computer already has. `orglet spaces` lists each space with its orglets and channels.
 
-**Moving by dragging.** A channel row in a space is draggable (`dragId` on `ChannelRow`). A category of that space, or the list directly in the space, takes the drop and saves the channel with its new `categoryId`, so its orglets are resolved again for the new place.
+**Moving by dragging.** A channel row in a space is draggable (`dragId` on `ChannelRow`). A category of that space, or the list directly in the space, takes the drop and saves the channel with its new `categoryId`, so its orglets are resolved again for the new place; the channel goes last there. A drop on another channel's row (`channelSlot` in `App.tsx`) gives the channel that row's category and the place before it, or after it when the row is below it in the same category. A category is dragged by its heading and dropped on another category (`placeCategory`).
+
+**Order.** The order is the setting `sidebarOrder`, written by `reorder` with `kind: 'channels'` or `kind: 'categories'`: one list of ids each for every space. It is not part of the space's record, so placing a row never resolves the space's channels again and is not refused while one runs. `Store.workspace()` returns each space's categories in that order and the channel list as `Workspace.channelOrder`; an id never placed stays after the placed ones, and the sidebar lists unplaced channels newest first.
+
+**Making.** The **+** in a space's head opens a menu (owner, 2026-10-05): **Create channel**, and **Create category**, which opens the space's settings on Categories with one more empty category.
 
 **What a new channel starts with.** A space can set `defaults.capabilities`: whether a new channel in it reads attached files, checks data and reads the web (`SPACE_DEFAULT_CAPABILITIES`). The space dialog's **Permissions** tab edits them, and sends them only once the space has a setting or the person touched one. A channel with no choice of its own takes them on its first message (`spaceChatCapabilities` in `createTask`), and its empty chat shows them. The browser, desktop apps and the working folder stay each chat's own choice.
 

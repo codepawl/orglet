@@ -43,7 +43,7 @@ import { suggestStarters } from '../shared/starters';
 import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
-import { CHANNEL_DRAG_TYPE, ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
+import { CHANNEL_DRAG_TYPE, CATEGORY_DRAG_TYPE, ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
 import { chatsUnder, type ChatOwner } from '../shared/schedule-runs';
 import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
@@ -2227,28 +2227,74 @@ export function App() {
   const sidebarFor = !sidebar && peekList ? peekList : shownList;
   // The space the sidebar lists, which a folded sidebar's look can make another one than the space on screen.
   const sidebarSpace = workspace.spaces.find(space => `space:${space.id}` === sidebarFor);
-  const sidebarSpaceEntries = sidebarSpace ? channelEntries.filter(entry => spaceOfEntry(entry)?.id === sidebarSpace.id) : [];
+  // In the order the person keeps them (`reorder`): a channel never placed stays after the placed ones, newest first.
+  const channelOrder = workspace.channelOrder ?? [];
+  const idOfEntry = (entry: (typeof channelEntries)[number]) => channelOfEntry(entry)?.id ?? '';
+  const placeOfEntry = (entry: (typeof channelEntries)[number], index: number) => channelOrder.includes(idOfEntry(entry)) ? channelOrder.indexOf(idOfEntry(entry)) : channelOrder.length + index;
+  const sidebarSpaceEntries = sidebarSpace
+    ? channelEntries.filter(entry => spaceOfEntry(entry)?.id === sidebarSpace.id).map((entry, index) => ({ entry, place: placeOfEntry(entry, index) })).sort((first, second) => first.place - second.place).map(item => item.entry)
+    : [];
   const categoryOfEntry = (entry: (typeof channelEntries)[number]) => sidebarSpace?.categories.find(category => category.id === channelOfEntry(entry)?.categoryId);
-  /** Moves a channel of the listed space to another of its categories, or directly into the space. */
-  const moveChannelTo = (channelId: string, categoryId: string | null) => {
+  /**
+   * Puts a channel of the listed space somewhere else in it (user, 2026-10-05): on another channel's row it takes
+   * that row's category and place, and on a category, or on the space's own list, it goes last there. Dropped on a
+   * row below it in its own category it lands after that row, and otherwise before it.
+   */
+  const placeChannel = (channelId: string, target: { rowId?: string; categoryId: string | null }) => {
     const channel = sidebarSpaceEntries.map(channelOfEntry).find(item => item?.id === channelId);
-    if (!channel || (channel.categoryId ?? null) === categoryId) return;
-    action(() => orglet.call('updateChannel', { id: channel.id, name: channel.name, topic: channel.topic ?? '', members: channel.members, categoryId }), channelLabel(channel.name));
+    if (!channel || channelId === target.rowId) return;
+    const ids = sidebarSpaceEntries.map(idOfEntry);
+    const moved = (channel.categoryId ?? null) !== target.categoryId;
+    const next = ids.filter(id => id !== channelId);
+    const after = !moved && target.rowId !== undefined && ids.indexOf(channelId) < ids.indexOf(target.rowId);
+    next.splice(target.rowId === undefined ? next.length : next.indexOf(target.rowId) + (after ? 1 : 0), 0, channelId);
+    if (!moved && next.join() === ids.join()) return;
+    const inSpace = new Set(ids);
+    action(async () => {
+      if (moved) await orglet.call('updateChannel', { id: channel.id, name: channel.name, topic: channel.topic ?? '', members: channel.members, categoryId: target.categoryId });
+      await orglet.call('reorder', { kind: 'channels', ids: [...channelOrder.filter(id => !inSpace.has(id)), ...next] });
+    }, channelLabel(channel.name));
   };
-  const channelDrop = (key: string, categoryId: string | null) => ({
-    onDragOver: (event: DragEvent<HTMLElement>) => {
-      if (!event.dataTransfer.types.includes(CHANNEL_DRAG_TYPE)) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-      setChannelDropAt(key);
-    },
-    onDragLeave: () => setChannelDropAt(current => current === key ? undefined : current),
-    onDrop: (event: DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      setChannelDropAt(undefined);
-      moveChannelTo(event.dataTransfer.getData(CHANNEL_DRAG_TYPE), categoryId);
-    },
-  });
+  /** Puts a category of the listed space at another one's place: after it when it was above, before it when below. */
+  const placeCategory = (categoryId: string, targetId: string) => {
+    if (!sidebarSpace || categoryId === targetId) return;
+    const ids = sidebarSpace.categories.map(category => category.id);
+    if (!ids.includes(categoryId)) return;
+    const next = ids.filter(id => id !== categoryId);
+    next.splice(next.indexOf(targetId) + (ids.indexOf(categoryId) < ids.indexOf(targetId) ? 1 : 0), 0, categoryId);
+    const everySpace = workspace.spaces.flatMap(space => space.id === sidebarSpace.id ? next : space.categories.map(category => category.id));
+    action(() => orglet.call('reorder', { kind: 'categories', ids: everySpace }), sidebarSpace.categories.find(category => category.id === categoryId)?.name);
+  };
+  const dropTarget = (key: string, dropped: (kind: 'channel' | 'category', id: string) => void, takesCategory = false) => {
+    const kindOf = (event: DragEvent<HTMLElement>) => event.dataTransfer.types.includes(CHANNEL_DRAG_TYPE) ? 'channel' as const : takesCategory && event.dataTransfer.types.includes(CATEGORY_DRAG_TYPE) ? 'category' as const : undefined;
+    return {
+      onDragOver: (event: DragEvent<HTMLElement>) => {
+        if (!kindOf(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        setChannelDropAt(key);
+      },
+      onDragLeave: () => setChannelDropAt(current => current === key ? undefined : current),
+      onDrop: (event: DragEvent<HTMLElement>) => {
+        const kind = kindOf(event);
+        if (!kind) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setChannelDropAt(undefined);
+        dropped(kind, event.dataTransfer.getData(kind === 'channel' ? CHANNEL_DRAG_TYPE : CATEGORY_DRAG_TYPE));
+      },
+    };
+  };
+  /** A channel's row in a space, as a place another channel can be dropped. */
+  const channelSlot = (entry: (typeof channelEntries)[number], categoryId: string | null) => <div key={idOfEntry(entry)} className={`channel-slot${channelDropAt === `row:${idOfEntry(entry)}` ? ' over' : ''}`}
+    {...dropTarget(`row:${idOfEntry(entry)}`, (_kind, id) => placeChannel(id, { rowId: idOfEntry(entry), categoryId }))}>{renderChannelEntry(entry)}</div>;
+  /** A category's heading starts a drag of the category; a drag that started on one of its channels is the channel's. */
+  const startCategoryDrag = (categoryId: string) => (event: DragEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('.channel-row')) return;
+    event.dataTransfer.setData(CATEGORY_DRAG_TYPE, categoryId);
+    event.dataTransfer.effectAllowed = 'move';
+  };
   const deleteSpace = (space: { id: string; name: string }) => action(async () => {
     await orglet.call('deleteSpace', { id: space.id });
     setOpenSpace('');
@@ -2344,11 +2390,14 @@ export function App() {
       onPointerEnter={sidebar ? undefined : () => peekSidebar(true)} onPointerLeave={sidebar ? undefined : () => peekSidebar(false)}>
       <div className="sidebar-head">
         <strong className="sidebar-title">{sidebarSpace ? sidebarSpace.name : sidebarFor === 'home' ? t('Trò chuyện') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
-        {sidebarSpace && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><Plus size={18} /></Button>}
+        {/* What a space holds is made from its + (user, 2026-10-05): a channel, or a category for channels to sit in. */}
+        {sidebarSpace && <RowMenu label={t('Tạo trong không gian {0}', [sidebarSpace.name])} icon={Plus} className="org-button-icon" items={[
+          { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({ spaceId: sidebarSpace.id }) },
+          { label: t('Tạo nhóm'), icon: FolderTree, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'categories', newCategory: true }) },
+        ]} />}
         {sidebarSpace && <RowMenu label={t('Tùy chọn không gian {0}', [sidebarSpace.name])} icon={EllipsisVertical} className="org-button-icon" items={[
           { label: t('Thiết lập không gian'), icon: SlidersHorizontal, onSelect: () => setSpaceDraft({ space: sidebarSpace }) },
           { label: t('Thành viên'), icon: Users, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'members' }) },
-          { label: t('Nhóm'), icon: FolderTree, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'categories' }) },
           { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'space', entityId: sidebarSpace.id, name: sidebarSpace.name }) },
           { label: t('Xóa không gian'), icon: Trash, danger: true, onSelect: () => deleteSpace(sidebarSpace), confirm: { question: t('Xóa không gian {0}? Các kênh của nó vẫn còn, nằm ngoài mọi không gian.', [sidebarSpace.name]), label: t('Xóa không gian') } },
         ]} />}
@@ -2391,10 +2440,10 @@ export function App() {
       {sidebarSpace && <>
         {sidebarSpaceEntries.length === 0 && sidebarSpace.categories.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
         {/* The channels directly in the space. With categories it is also where a dragged channel leaves its category. */}
-        {(sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) || sidebarSpace.categories.length > 0) && <div className={`channel-uncategorized channel-drop${channelDropAt === 'root' ? ' over' : ''}`} {...channelDrop('root', null)}>{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(renderChannelEntry)}</div>}
-        {sidebarSpace.categories.map(category => <div key={category.id} className={`channel-drop${channelDropAt === category.id ? ' over' : ''}`} {...channelDrop(category.id, category.id)}><SidebarSection id={`space-category-${category.id}`} title={category.name}
+        {(sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) || sidebarSpace.categories.length > 0) && <div className={`channel-uncategorized channel-drop${channelDropAt === 'root' ? ' over' : ''}`} {...dropTarget('root', (_kind, id) => placeChannel(id, { categoryId: null }))}>{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(entry => channelSlot(entry, null))}</div>}
+        {sidebarSpace.categories.map(category => <div key={category.id} className={`channel-drop${channelDropAt === category.id ? ' over' : ''}`} draggable onDragStart={startCategoryDrag(category.id)} {...dropTarget(category.id, (kind, id) => kind === 'channel' ? placeChannel(id, { categoryId: category.id }) : placeCategory(id, category.id), true)}><SidebarSection id={`space-category-${category.id}`} title={category.name}
           action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [category.name])} title={t('Tạo kênh trong {0}', [category.name])} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id, categoryId: category.id })}><Plus size={16} /></Button>}>
-          {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(renderChannelEntry)}
+          {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(entry => channelSlot(entry, category.id))}
         </SidebarSection></div>)}
       </>}
       {/* A page's own list: the sidebar always belongs to what the main panel shows, never to the area left behind. */}

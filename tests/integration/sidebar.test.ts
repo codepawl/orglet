@@ -27,6 +27,23 @@ it('keeps the chosen sidebar order and lists items created later after the place
   await expect(core.command('reorder', { kind: 'skills', ids })).rejects.toThrow();
 });
 
+it('keeps the order of a space\'s categories and of its channels', async () => {
+  await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' });
+  const orgletIds = (await workspace()).workers.slice(0, 2).map(worker => worker.id);
+  const spaceId = await core.command('createSpace', { name: 'Launch', orgletIds, categories: [{ name: 'Plan' }, { name: 'Copy' }, { name: 'Ship' }] }) as string;
+  const categories = (await workspace()).spaces.find(space => space.id === spaceId)!.categories;
+  expect(categories.map(category => category.name)).toEqual(['Plan', 'Copy', 'Ship']);
+  await core.command('reorder', { kind: 'categories', ids: [categories[2].id, categories[0].id] });
+  // A category never placed stays after the placed ones.
+  expect((await workspace()).spaces.find(space => space.id === spaceId)!.categories.map(category => category.name)).toEqual(['Ship', 'Plan', 'Copy']);
+  const member = { kind: 'orglet' as const, id: orgletIds[0] };
+  const first = await core.command('createChannel', { name: 'one', topic: '', members: [member], spaceId }) as string;
+  const second = await core.command('createChannel', { name: 'two', topic: '', members: [member], spaceId }) as string;
+  expect((await workspace()).channelOrder).toEqual([]);
+  await core.command('reorder', { kind: 'channels', ids: [second, first] });
+  expect((await workspace()).channelOrder).toEqual([second, first]);
+});
+
 it('stores task names separately from the task, so a run updating the task keeps the name', async () => {
   const { workers } = await workspace();
   const id = await core.command('createTask', { workerId: workers[0].id, brief: 'Long original brief', sourceIds: [], consent: false, budgetMicros: 1000 }) as string;
