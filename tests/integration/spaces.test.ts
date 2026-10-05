@@ -137,6 +137,23 @@ describe('spaces in the core', () => {
     await expect(core.command('createChannel', { name: 'lost', topic: '', members: [orglet(scout.id)], spaceId: copy.id })).rejects.toThrow('Không tìm thấy không gian');
   });
 
+  it('keeps the folder a space names until an edit changes it or takes it out', async () => {
+    const spaceId = await core.command('createSpace', { name: 'Launch', orgletIds: [scout.id], categories: [], folder: '  Clients ' }) as string;
+    const folderOf = () => store.workspace().spaces.find(space => space.id === spaceId)!.folder;
+    expect(folderOf()).toBe('Clients');
+    // An edit that says nothing about the folder, as the terminal's and an older dialog's do, leaves it.
+    await core.command('updateSpace', { id: spaceId, name: 'Liftoff', orgletIds: [scout.id], categories: [] });
+    expect(folderOf()).toBe('Clients');
+    await core.command('updateSpace', { id: spaceId, name: 'Liftoff', orgletIds: [scout.id], categories: [], folder: 'Work' });
+    expect(folderOf()).toBe('Work');
+    await core.command('updateSpace', { id: spaceId, name: 'Liftoff', orgletIds: [scout.id], categories: [], folder: '' });
+    expect(folderOf()).toBeUndefined();
+    await core.command('updateSpace', { id: spaceId, name: 'Liftoff', orgletIds: [scout.id], categories: [], folder: 'Work' });
+    await core.command('updateSpace', { id: spaceId, name: 'Liftoff', orgletIds: [scout.id], categories: [], folder: null });
+    expect(folderOf()).toBeUndefined();
+    await expect(core.command('updateSpace', { id: spaceId, name: 'Liftoff', orgletIds: [scout.id], categories: [], folder: 'x'.repeat(41) })).rejects.toThrow();
+  });
+
   it('takes an orglet out of every channel of a space when the space loses it, on rows and on empty channels', async () => {
     const spaceId = await newSpace([scout.id, writer.id, editor.id]);
     const written = await core.command('createChannel', { name: 'general', topic: '', members: [orglet(scout.id)], spaceId }) as string;

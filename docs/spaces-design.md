@@ -89,5 +89,5 @@ Each phase is its own pull request. Each one leaves the app working.
 2. **One orglet in many spaces.** This page says yes, because an orglet is a friend first.
 3. **Reading history.** This page says an orglet reads only the channels it is in. The alternative is that it reads every channel of its space, which costs more per message.
 4. **Memory by space.** Whether an orglet's notes can be kept inside one space.
-5. **The Channels area.** Loose channels can keep their own rail tile for good. The alternative is that every channel must sit in a space.
+5. **The Channels area.** Decided 2026-10-05: the rail has no tile for loose channels. They are listed in Home under the direct messages, and spaces can be gathered in folders on the rail.
 6. **People as members.** [Collaboration](account-sync-design.md) will add people to channels. A space is the natural unit to invite a person to. The `orgletIds` list then becomes members with a kind, as channel members already are.

@@ -106,14 +106,17 @@ import { OpenChatRow, type OpenChatItem } from './components/OpenChats';
 import { ChatHeader, ChatViewPanel, ChatViewTabs } from './components/ChatViews';
 import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
-import { AreaRail, type AreaRailEntry } from './components/AreaRail';
+import { AreaRail, type AreaRailEntry, type AreaRailFolder } from './components/AreaRail';
+import type { RowMenuItem } from './components/RowMenu';
+import { SpaceMark } from './components/SpaceMark';
+import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
-import { Boxes, CircleUserRound, FolderTree, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
+import { Boxes, CircleUserRound, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
-import { readArea, writeArea, readOpenSpace, writeOpenSpace, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
+import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
@@ -351,6 +354,9 @@ export function App() {
   // The space whose channels the Channels area lists (docs/spaces-design.md); none lists the channels outside every space.
   const [openSpaceId, setOpenSpaceState] = useState(readOpenSpace);
   const setOpenSpace = (spaceId: string) => { setOpenSpaceState(spaceId); writeOpenSpace(spaceId); };
+  // The rail folders that are closed, by folded name. UI chrome: a folder itself is the name its spaces carry.
+  const [closedFolders, setClosedFoldersState] = useState(readClosedFolders);
+  const setClosedFolders = (names: string[]) => { setClosedFoldersState(names); writeClosedFolders(names); };
   const [spaceDraft, setSpaceDraft] = useState<SpaceDraft>();
   // Where a dragged channel would land in the open space: a category's id, or `root` for directly in the space.
   const [channelDropAt, setChannelDropAt] = useState<string>();
@@ -365,8 +371,10 @@ export function App() {
   const noticesOpen = area === 'activity' && activityTab === 'done';
   const runningOpen = area === 'activity' && activityTab === 'running';
   const showActivity = (tab: ActivityTab) => { setActivityTab(tab); setArea('activity'); };
-  /** The area a chat belongs to: channels (a crew's chat too) in Channels, an orglet's chats in Home. */
-  const areaOfTask = (task: Task | undefined): Area => task && (task.teamId || isChannelChat(task)) ? 'channels' : 'home';
+  /** Whether a channel is in a space that still exists; one in no space is listed in Home, beside the DMs. */
+  const inSpace = (channel: { spaceId?: string } | undefined) => Boolean(channel?.spaceId && workspaceRef.current?.spaces.some(space => space.id === channel.spaceId));
+  /** The area a chat belongs to: a space's channel in that space, every other chat in Home. */
+  const areaOfTask = (task: Task | undefined): Area => inSpace(task?.channel) ? 'channels' : 'home';
   const leaveActivity = () => setAreaState(current => {
     if (current !== 'activity') return current;
     const open = selectedRef.current ? workspaceRef.current?.tasks.find(task => task.id === selectedRef.current) : undefined;
@@ -736,7 +744,9 @@ export function App() {
     if (leavingPage(() => openTeam(id))) return;
     setTeamId(id);
     setFriendsOpen(false);
-    setArea('channels');
+    const crewChannel = workspace?.tasks.find(task => task.teamId === id && task.channel)?.channel ?? workspace?.emptyChannels.find(channel => channel.crewId === id);
+    if (inSpace(crewChannel)) setOpenSpace(crewChannel!.spaceId!);
+    setArea(inSpace(crewChannel) ? 'channels' : 'home');
     const live = workspace ? liveTeamTask(workspace.tasks, id) : undefined;
     if (live) { setBrief(''); openTask(live.id); return; }
     leaveThread();
@@ -763,10 +773,12 @@ export function App() {
     setTeamId('');
     leaveThread();
     setFriendsOpen(false);
-    setArea('channels');
-    // A channel just made may not be in this render's workspace yet; it was made in the space on screen, which stays.
+    // A channel just made may not be in this render's workspace yet; it was made in the place on screen, which stays.
     const waiting = workspaceRef.current?.emptyChannels.find(channel => channel.id === channelId);
-    if (waiting) setOpenSpace(waiting.spaceId ?? '');
+    if (waiting) {
+      setOpenSpace(waiting.spaceId ?? '');
+      setArea(inSpace(waiting) ? 'channels' : 'home');
+    }
     setEmptyChannelId(channelId);
     if (matchMedia('(max-width: 780px)').matches) setSidebar(false);
     setTimeout(() => composer.current?.focus(), 0);
@@ -2161,13 +2173,13 @@ export function App() {
             setArea('channels');
           } else if (result.kind === 'orglet') openWorker(result.entityId);
           else openTeam(result.entityId);
-        }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
+        }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('home'); })} />
       : null;
   const goToActivity = () => {
     if (!leavingPage(goToActivity)) setArea('activity');
   };
   const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
-    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: area === 'home' && !pagePanelOpen, onSelect: function goHome() {
+    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
       clearSelection();
       // Home is always a chat (user, 2026-10-04): the DM that was open, else the last orglet written to, else the
@@ -2186,7 +2198,7 @@ export function App() {
     } },
     ...workspace.spaces.map(space => ({
       key: `space:${space.id}` as const,
-      icon: <Avatar name={space.name} seed={space.id} size="sm" />,
+      icon: <SpaceMark name={space.name} seed={space.id} color={space.color} />,
       label: space.name,
       active: area === 'channels' && openSpace?.id === space.id && !pagePanelOpen,
       onSelect: function goToSpace() {
@@ -2195,18 +2207,14 @@ export function App() {
         setArea('channels');
       },
     })),
-    { key: 'channels', icon: <Hash size={20} />, label: t('Kênh'), active: area === 'channels' && !openSpace && !pagePanelOpen, onSelect: function goToChannels() {
-      if (leavingPage(goToChannels)) return;
-      setOpenSpace('');
-      setArea('channels');
-    } },
     { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },
     { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
     { key: 'schedules', icon: <CalendarClock size={20} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
   ];
   // What the sidebar lists: the open page's own rows, else the area's. A folded sidebar taking a look lists the tile
   // under the pointer instead.
-  const shownList: SidebarList = !pagePanelOpen ? (area === 'channels' && openSpace ? `space:${openSpace.id}` : area) : panel === 'routines' ? 'schedules' : 'library';
+  // A space that is gone leaves its area with nothing to list, so Home is listed.
+  const shownList: SidebarList = !pagePanelOpen ? (area === 'channels' ? (openSpace ? `space:${openSpace.id}` : 'home') : area) : panel === 'routines' ? 'schedules' : 'library';
   const sidebarFor = !sidebar && peekList ? peekList : shownList;
   // The space the sidebar lists, which a folded sidebar's look can make another one than the space on screen.
   const sidebarSpace = workspace.spaces.find(space => `space:${space.id}` === sidebarFor);
@@ -2235,16 +2243,47 @@ export function App() {
   const deleteSpace = (space: { id: string; name: string }) => action(async () => {
     await orglet.call('deleteSpace', { id: space.id });
     setOpenSpace('');
+    setArea('home');
     toast(t('Đã xóa không gian'), 'success', space.name);
   }, space.name);
   const spaceFromCategory = (category: string) => action(async () => {
     const spaceId = await orglet.call('spaceFromCategory', { category });
     setOpenSpace(spaceId);
+    setArea('channels');
     toast(t('Đã tạo không gian'), 'success', category);
   }, category);
   // While the sidebar is folded, a tile opens it for good. The tile of the area already on screen only opens it, so
   // Home there does not also jump to Friends.
-  const railEntries = areaEntries.map(entry => ({
+  const folderNames = spaceFolderNames(workspace.spaces);
+  /** Puts a space in a folder, or with no name takes it out. Everything else about the space stays. */
+  const moveSpaceToFolder = (space: Space, folder: string | null) => action(async () => {
+    await orglet.call('updateSpace', { id: space.id, name: space.name, ...(space.color ? { color: space.color } : {}), orgletIds: space.orgletIds, categories: space.categories, folder });
+    if (folder) setClosedFolders(closedFolders.filter(name => name !== folderKey(folder)));
+  }, space.name);
+  const newFolderName = () => {
+    for (let number = 1; ; number += 1) {
+      const name = t('Thư mục {0}', [number]);
+      if (!folderNames.some(existing => folderKey(existing) === folderKey(name))) return name;
+    }
+  };
+  /** What a right click on a space's tile offers: its settings, and where its tile sits on the rail. */
+  const spaceTileMenu = (space: Space): RowMenuItem[] => [
+    { label: t('Thiết lập không gian'), icon: SlidersHorizontal, onSelect: () => setSpaceDraft({ space }) },
+    ...folderNames.filter(name => !space.folder || folderKey(name) !== folderKey(space.folder)).map(name => ({ label: t('Chuyển vào thư mục {0}', [name]), icon: FolderInput, onSelect: () => moveSpaceToFolder(space, name) })),
+    { label: t('Chuyển vào thư mục mới'), icon: FolderPlus, onSelect: () => moveSpaceToFolder(space, newFolderName()) },
+    ...(space.folder ? [{ label: t('Đưa ra khỏi thư mục'), icon: FolderMinus, onSelect: () => moveSpaceToFolder(space, null) }] : []),
+  ];
+  const toggleFolder = (name: string) => {
+    const key = folderKey(name);
+    setClosedFolders(closedFolders.includes(key) ? closedFolders.filter(item => item !== key) : [...closedFolders, key]);
+  };
+  /** Takes every space out of a folder, which ends the folder: it exists only as the name they share. */
+  const dissolveFolder = (name: string) => action(async () => {
+    for (const space of workspace.spaces.filter(item => item.folder && folderKey(item.folder) === folderKey(name))) {
+      await orglet.call('updateSpace', { id: space.id, name: space.name, ...(space.color ? { color: space.color } : {}), orgletIds: space.orgletIds, categories: space.categories, folder: null });
+    }
+  }, name);
+  const railTiles = areaEntries.map(entry => ({
     ...entry,
     onSelect: () => {
       if (!sidebar) {
@@ -2257,6 +2296,36 @@ export function App() {
       if (resting) setPeekList(entry.key);
     },
   }));
+  // The rail as it is drawn: a space with a folder sits inside that folder's group, at the place of its first space.
+  const railEntries: (AreaRailEntry | AreaRailFolder)[] = [];
+  const railFolders = new Map<string, AreaRailFolder>();
+  for (const tile of railTiles) {
+    const space = workspace.spaces.find(item => `space:${item.id}` === tile.key);
+    if (!space) {
+      railEntries.push(tile);
+      continue;
+    }
+    const spaceTile = { ...tile, menuItems: spaceTileMenu(space) };
+    if (!space.folder) {
+      railEntries.push(spaceTile);
+      continue;
+    }
+    const key = folderKey(space.folder);
+    let folder = railFolders.get(key);
+    if (!folder) {
+      const name = space.folder;
+      folder = {
+        kind: 'folder', key: `folder:${key}`, label: name, open: !closedFolders.includes(key), onToggle: () => toggleFolder(name), entries: [],
+        menuItems: [
+          { label: t('Đóng mọi thư mục'), icon: Folders, onSelect: () => setClosedFolders(folderNames.map(folderKey)) },
+          { label: t('Bỏ thư mục'), icon: FolderMinus, onSelect: () => dissolveFolder(name) },
+        ],
+      };
+      railFolders.set(key, folder);
+      railEntries.push(folder);
+    }
+    folder.entries.push(spaceTile);
+  }
   const createItems = [
     { label: t('Thêm bạn (tạo Tí)'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
     { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft(openSpace && area === 'channels' ? { spaceId: openSpace.id } : {}) },
@@ -2270,8 +2339,7 @@ export function App() {
     <aside className={`sidebar${sidebar ? '' : sidebarPeek ? ' peek' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={(!sidebar && !sidebarPeek) || undefined}
       onPointerEnter={sidebar ? undefined : () => peekSidebar(true)} onPointerLeave={sidebar ? undefined : () => peekSidebar(false)}>
       <div className="sidebar-head">
-        <strong className="sidebar-title">{sidebarSpace ? sidebarSpace.name : sidebarFor === 'home' ? t('Trò chuyện') : sidebarFor === 'channels' ? t('Kênh') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
-        {sidebarFor === 'channels' && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={18} /></Button>}
+        <strong className="sidebar-title">{sidebarSpace ? sidebarSpace.name : sidebarFor === 'home' ? t('Trò chuyện') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
         {sidebarSpace && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><Plus size={18} /></Button>}
         {sidebarSpace && <RowMenu label={t('Tùy chọn không gian {0}', [sidebarSpace.name])} icon={EllipsisVertical} className="org-button-icon" items={[
           { label: t('Thiết lập không gian'), icon: SlidersHorizontal, onSelect: () => setSpaceDraft({ space: sidebarSpace }) },
@@ -2281,7 +2349,7 @@ export function App() {
           { label: t('Xóa không gian'), icon: Trash, danger: true, onSelect: () => deleteSpace(sidebarSpace), confirm: { question: t('Xóa không gian {0}? Các kênh của nó vẫn còn, nằm ngoài mọi không gian.', [sidebarSpace.name]), label: t('Xóa không gian') } },
         ]} />}
         {/* A space's head keeps room for its name: search stays on Ctrl+K there. */}
-        {(sidebarFor === 'channels' || sidebarFor === 'activity') && <Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button>}
+        {sidebarFor === 'activity' && <Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button>}
         <Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={closeSidebar}><PanelLeft size={18} /></Button>
       </div>
       {sidebarFor === 'home' && <button type="button" className="sidebar-search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={16} aria-hidden="true" /><span>{t('Tìm hoặc bắt đầu trò chuyện')}</span></button>}
@@ -2302,6 +2370,19 @@ export function App() {
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
+      {/* The channels outside every space, like group chats beside the DMs: the rail has a tile for each space and
+          none for these (user, 2026-10-05). Ones with a category keep their own section under it. */}
+      <SidebarSection id="loose-channels" title={t('Kênh')} action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={16} /></Button>}>
+        {channelGroupList.length === 0 && <p className="empty-history">{t('Chưa có kênh nào.')}</p>}
+        {channelGroupList.filter(group => group.name === undefined).flatMap(group => group.entries).map(renderChannelEntry)}
+      </SidebarSection>
+      {channelGroupList.filter(group => group.name !== undefined).map(group => <SidebarSection key={group.name!.toLowerCase()} id={`category-${group.name!.toLowerCase()}`} title={group.name!}
+        action={<>
+          <RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />
+          <Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [group.name!])} title={t('Tạo kênh trong {0}', [group.name!])} onClick={() => setChannelDraft({ category: group.name })}><Plus size={16} /></Button>
+        </>}>
+        {group.entries.map(renderChannelEntry)}
+      </SidebarSection>)}
       </>}
       {sidebarSpace && <>
         {sidebarSpaceEntries.length === 0 && sidebarSpace.categories.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
@@ -2311,18 +2392,6 @@ export function App() {
           action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [category.name])} title={t('Tạo kênh trong {0}', [category.name])} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id, categoryId: category.id })}><Plus size={16} /></Button>}>
           {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(renderChannelEntry)}
         </SidebarSection></div>)}
-      </>}
-      {sidebarFor === 'channels' && <>
-        {channelGroupList.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({})}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
-        {channelGroupList.map(group => group.name === undefined
-          ? <div key="uncategorized" className="channel-uncategorized">{group.entries.map(renderChannelEntry)}</div>
-          : <SidebarSection key={group.name.toLowerCase()} id={`category-${group.name.toLowerCase()}`} title={group.name}
-            action={<>
-              <RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />
-              <Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [group.name])} title={t('Tạo kênh trong {0}', [group.name])} onClick={() => setChannelDraft({ category: group.name })}><Plus size={16} /></Button>
-            </>}>
-            {group.entries.map(renderChannelEntry)}
-          </SidebarSection>)}
       </>}
       {/* A page's own list: the sidebar always belongs to what the main panel shows, never to the area left behind. */}
       {sidebarFor === 'library' && <nav className="sidebar-nav" aria-label={t('Thư viện')}>

@@ -97,9 +97,9 @@ try {
   await page.locator('.area-tile.active').hover();
   await page.locator('.sidebar.peek').waitFor();
   const openAreaTitle = await sidebarTitle();
-  await page.locator('.area-tile[aria-label="Kênh"]').hover();
+  await page.locator('.area-tile[title="Hoạt động"]').hover();
   await page.waitForTimeout(100);
-  assert.equal(await sidebarTitle(), 'Kênh', 'the look follows the pointer to another tile');
+  assert.equal(await sidebarTitle(), 'Hoạt động', 'the look follows the pointer to another tile');
   await page.locator('.area-tile[aria-label="Lịch chạy"]').hover();
   await page.waitForTimeout(100);
   assert.equal(await sidebarTitle(), 'Lịch chạy', 'the look lists a page tile too');

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Boxes, Database, FileText, FolderTree, Globe, Lock, Plus, ShieldCheck, SlidersHorizontal, Trash, UserRound, UsersRound } from 'lucide-react';
+import { Boxes, Database, FileText, Folder, FolderTree, Globe, Lock, Plus, ShieldCheck, SlidersHorizontal, Trash, UserRound, UsersRound } from 'lucide-react';
 import { Input } from '@codepawl/orglet-ui';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { CHANNEL_CATEGORY_LIMIT, MAX_CHANNEL_MEMBERS } from '../../shared/channels';
-import { MAX_SPACE_CATEGORIES, SPACE_NAME_LIMIT, type Space, type SpaceDefaultCapability } from '../../shared/spaces';
+import { MAX_SPACE_CATEGORIES, SPACE_FOLDER_LIMIT, SPACE_NAME_LIMIT, type Space, type SpaceDefaultCapability } from '../../shared/spaces';
 import { SwitchField } from './Switch';
 import { Button, FieldLabel } from './ui';
 import { Avatar } from './Avatar';
@@ -47,6 +47,7 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
   const editing = draft.space;
   const [tab, setTab] = useState<Tab>(draft.initialTab ?? 'general');
   const [name, setName] = useState(editing?.name ?? '');
+  const [folder, setFolder] = useState(editing?.folder ?? '');
   const [orgletIds, setOrgletIds] = useState<string[]>(() => editing ? editing.orgletIds.filter(id => workspace.workers.some(worker => worker.id === id)) : []);
   const [categories, setCategories] = useState<CategoryDraft[]>(() => (editing?.categories ?? []).map(category => ({ key: category.id, id: category.id, name: category.name, listed: Boolean(category.orgletIds), orgletIds: category.orgletIds ?? [] })));
   // What a new channel in the space starts with. Sent only once the space has a setting or the person touched one,
@@ -80,6 +81,8 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
     const fields = {
       name: trimmed,
       orgletIds,
+      // An empty name takes the space out of its folder.
+      folder: folder.trim() || null,
       ...(defaultsSet ? { defaults: { capabilities: [...defaults] } } : {}),
       categories: categories.map(category => ({
         ...(category.id ? { id: category.id } : {}),
@@ -114,6 +117,10 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
       <label><FieldLabel icon={Boxes} required>{t('Tên không gian')}</FieldLabel>
         <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={SPACE_NAME_LIMIT} placeholder={t('ví dụ: Ra mắt sản phẩm')} invalid={invalid === 'name'} flash={flash} /></label>
       <p className="muted">{t('Một không gian gom các kênh của một việc lớn, với những Tí làm việc đó. Kênh trong không gian chỉ có những Tí của không gian.')}</p>
+      <label><FieldLabel icon={Folder}>{t('Thư mục')}</FieldLabel>
+        <Input value={folder} onChange={event => setFolder(event.target.value)} maxLength={SPACE_FOLDER_LIMIT} placeholder={t('ví dụ: Khách hàng')} list="space-folder-names" />
+        <span className="muted">{t('Các không gian cùng tên thư mục nằm chung một nhóm trên thanh bên trái. Để trống thì không gian đứng riêng.')}</span></label>
+      <datalist id="space-folder-names">{[...new Set(workspace.spaces.flatMap(space => space.folder ?? []))].map(item => <option key={item} value={item} />)}</datalist>
     </>}
     {tab === 'members' && <>
       <fieldset><legend><FieldLabel icon={UserRound} required>{t('Tí trong không gian')}</FieldLabel></legend><div className="fieldset-options">

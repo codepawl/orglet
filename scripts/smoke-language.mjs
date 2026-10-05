@@ -37,11 +37,11 @@ export async function expandSidebar(page) {
 }
 
 /**
- * The area rail (COD-366) picks what the sidebar lists: Home has the orglets, Channels the channels. A smoke that works
- * with channels opens that area first, and one that goes back to an orglet's row opens Home.
+ * The area rail (COD-366) picks what the sidebar lists: Home has the orglets and the channels outside every space, and
+ * each space has a tile of its own. A smoke that works with those channels or an orglet's row opens Home first.
  */
 export async function openChannels(page) {
-  await page.locator('.area-tile[title="Kênh"], .area-tile[title="Channels"]').first().click();
+  await openHome(page);
 }
 
 export async function openHome(page) {

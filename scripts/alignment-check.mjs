@@ -340,14 +340,14 @@ const SCREENS = [
   } },
   { name: 'chat-options-menu', open: async page => { await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'composer-add-menu', open: async page => { await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
-  { name: 'crew-chat', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); } },
+  { name: 'crew-chat', open: async (page, context) => { await openArea(page, 'Bạn bè và tin nhắn'); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); } },
   // A member's profile card and its right-click menu. The member column is only there in a wide window.
-  { name: 'member-card', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); if (await page.locator('.members-pane').count()) { await page.locator('.member-item .member-row').first().click(); await page.locator('.member-card').waitFor(); } } },
-  { name: 'member-menu', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); if (await page.locator('.members-pane').count()) { await page.locator('.member-item .member-row').first().click({ button: 'right' }); await page.getByRole('menu').waitFor(); } } },
+  { name: 'member-card', open: async (page, context) => { await openArea(page, 'Bạn bè và tin nhắn'); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); if (await page.locator('.members-pane').count()) { await page.locator('.member-item .member-row').first().click(); await page.locator('.member-card').waitFor(); } } },
+  { name: 'member-menu', open: async (page, context) => { await openArea(page, 'Bạn bè và tin nhắn'); await page.getByRole('button', { name: `#${context.crew.name}`, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); if (await page.locator('.members-pane').count()) { await page.locator('.member-item .member-row').first().click({ button: 'right' }); await page.getByRole('menu').waitFor(); } } },
   // A crew turn at work: the island on the prompt bar, with the member on the held model still working (COD-167).
   { name: 'crew-chat-island', needs: 'islandCrew', open: async (page, context) => {
     context.islandTaskId = await callCore(page, 'createTask', { workerId: context.researcher.id, teamId: context.islandCrew.id, brief: 'Check the last three run logs and say what failed.', sourceIds: [], consent: true, providerScopes: ['ollama'], budgetMicros: 100_000 });
-    await openArea(page, 'Kênh');
+    await openArea(page, 'Bạn bè và tin nhắn');
     await page.getByRole('button', { name: `#${context.islandCrew.name}`, exact: true }).first().click();
     await page.locator('.live-island:not(.leaving)').waitFor();
   }, close: async (page, context) => {
@@ -365,16 +365,16 @@ const SCREENS = [
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
   // Channels (COD-361): one written in, its settings, a new one, and one still empty.
-  { name: 'channel-chat', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click(); await page.locator('.topbar-topic').waitFor(); } },
+  { name: 'channel-chat', open: async (page, context) => { await openArea(page, 'Bạn bè và tin nhắn'); await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click(); await page.locator('.topbar-topic').waitFor(); } },
   { name: 'channel-members', open: async (page, context) => {
-    await openArea(page, 'Kênh');
+    await openArea(page, 'Bạn bè và tin nhắn');
     await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click();
     await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
     await page.getByRole('menuitem', { name: label('Thành viên'), exact: true }).click();
     await page.getByRole('dialog').waitFor();
   } },
-  { name: 'channel-new', open: async page => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: label('Tạo kênh'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },
-  { name: 'channel-empty', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: context.channels.ideas, exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
+  { name: 'channel-new', open: async page => { await openArea(page, 'Bạn bè và tin nhắn'); await page.getByRole('button', { name: label('Tạo kênh'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },
+  { name: 'channel-empty', open: async (page, context) => { await openArea(page, 'Bạn bè và tin nhắn'); await page.getByRole('button', { name: context.channels.ideas, exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
   // A space: its sidebar with a category and a locked channel, its editor, and a channel being made in it.
   { name: 'space-sidebar', open: async page => { await openSpace(page); } },
   { name: 'space-dialog-members', open: async page => { await openSpace(page); await page.getByRole('button', { name: label('Tùy chọn không gian {0}', ['Studio']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Thành viên'), exact: true }).click(); await page.getByRole('dialog').waitFor(); } },

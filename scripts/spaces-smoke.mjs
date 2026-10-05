@@ -45,6 +45,9 @@ try {
   await spaceDialog.waitFor({ state: 'detached' });
   await page.locator('.area-tile.active[title="Launch"]').waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch', 'the sidebar lists the new space');
+  // The space's tile is a filled mark with its initials, not one more icon.
+  assert.equal(await page.locator('.area-tile[title="Launch"] > .space-mark').textContent(), 'LA');
+  assert.match(await page.locator('.area-tile[title="Launch"] > .space-mark').evaluate(element => getComputedStyle(element).backgroundImage), /linear-gradient/);
   const made = (await workspace(page)).spaces[0];
   assert.equal(made.name, 'Launch');
   assert.equal(made.orgletIds.length, 2);
@@ -94,11 +97,12 @@ try {
   await page.locator('.sidebar .channel-row').first().dragTo(page.locator('.channel-drop').filter({ hasText: 'Copy' }));
   await page.waitForFunction(async categoryId => (await window.orglet.call('workspace', {})).tasks.some(task => task.channel?.name === 'general' && task.channel.categoryId === categoryId), made.categories[0].id);
 
-  // The template's channel is outside every space, under the # tile; the space's tile lists only its own.
+  // The template's channel is outside every space, so Home lists it beside the DMs; the space's tile lists only its own.
   assert.equal(await page.locator('.sidebar .channel-row').count(), 1, 'the space lists its one channel');
-  await page.locator('.area-tile[title="Kênh"]').click();
+  assert.equal(await page.locator('.area-tile[title="Kênh"]').count(), 0, 'the rail has no tile for channels');
+  await page.locator('.area-tile[title="Bạn bè và tin nhắn"]').click();
   await page.locator('.sidebar .channel-row').first().waitFor();
-  assert.equal(await page.locator('.sidebar-title').textContent(), 'Kênh');
+  assert.equal(await page.locator('.sidebar-title').textContent(), 'Trò chuyện');
   assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed with the loose ones');
   void third;
 
@@ -146,7 +150,35 @@ try {
   await shot(page, 'publish-space-preview');
   await page.keyboard.press('Escape');
   await publishing.waitFor({ state: 'detached' });
-  console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it.');
+
+  // A folder on the rail: a right click on the space's tile puts it in a new one, the folder's tile closes and opens
+  // it, and removing the folder leaves the space on the rail.
+  await page.locator('.area-tile[title="Launch"]').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Chuyển vào thư mục mới', exact: true }).click();
+  const folder = page.locator('.area-folder');
+  await folder.locator('.area-tile[title="Launch"]').waitFor();
+  assert.equal((await workspace(page)).spaces.find(space => space.name === 'Launch').folder, 'Thư mục 1');
+  assert.equal(await folder.locator('.area-folder-tile').getAttribute('aria-expanded'), 'true');
+  await shot(page, 'folder-open');
+  await folder.locator('.area-folder-tile').click();
+  await page.locator('.area-tile[title="Launch"]').waitFor({ state: 'detached' });
+  assert.ok(await folder.locator('.area-folder-tile.active').count(), 'a closed folder marks that it holds the open space');
+  await shot(page, 'folder-closed');
+  await folder.locator('.area-folder-tile').click();
+  await page.locator('.area-tile[title="Launch"]').waitFor();
+  await folder.locator('.area-folder-tile').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Bỏ thư mục', exact: true }).click();
+  await folder.waitFor({ state: 'detached' });
+  await page.locator('.area-tile[title="Launch"]').waitFor();
+  assert.equal((await workspace(page)).spaces.find(space => space.name === 'Launch').folder, undefined);
+
+  // Several spaces side by side: each tile has its own fill, so they are told apart at a glance.
+  const firstOrgletId = (await workspace(page)).workers[0].id;
+  for (const name of ['Ra mắt', 'Khách hàng', 'Nghiên cứu']) await page.evaluate(fields => window.orglet.call('createSpace', fields), { name, orgletIds: [firstOrgletId], categories: [] });
+  await page.locator('.area-tile > .space-mark').nth(3).waitFor();
+  assert.deepEqual(await page.locator('.area-tile > .space-mark').allTextContents(), ['LA', 'RM', 'KH', 'NC']);
+  await shot(page, 'space-marks');
+  console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it, put it in a folder and take it out.');
 } finally {
   await app.close();
 }
