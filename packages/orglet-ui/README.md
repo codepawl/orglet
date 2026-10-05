@@ -145,6 +145,27 @@ loads the switch's styles.
   drawing bar. A radio group named by `label`: one Tab stop, the arrow keys, Home and End move the choice and the focus
   together, and the picked item sits on a pale tint. Each item has a `label`, an `icon` and an optional `shortcut`,
   shown in its tooltip and announced as `aria-keyshortcuts`; handling that key elsewhere is the caller's job.
+- `Tooltip`: a short text label for a control, shown on hover after a short delay and at once on keyboard focus,
+  hidden by Escape, the pointer leaving, a press and focus leaving. It wraps exactly one element, which keeps its own
+  accessible name and gains `aria-describedby` while the label shows. `side` (`top` or `bottom`) flips when there is
+  no room, `shortcut` adds a key combination. Portaled into the open dialog or the page; Escape closes the label and
+  leaves a dialog open. It holds no interactive content: that is an `InfoTip`.
+- `Badge`: a small pill for a count or a short state word. `tone` (`neutral`, `accent`, `success`, `warning`,
+  `error`) draws a pale tint with readable text in both themes; `count` reads `99+` past `max`. Colour is never the
+  whole message: pair a state with a word or a `StatusMark`.
+- `Card`: a quiet rounded surface with an optional `title`, `description` and `actions` (right side, centred with the
+  title block) above its children. No shadow, no line between header and body. With `interactive` the whole card is
+  one button with a hover wash and a focus ring, named by its title; it cannot also take `actions`.
+- `Tabs` and `TabPanel`: tabs outside a dialog, following the WAI-ARIA pattern with automatic activation. `tabs` of
+  `{ id, label, icon?, disabled? }`, `value`, `onChange`; the arrows, Home and End move and open, only the open tab
+  is in the Tab order. Quiet text buttons, the open one on a subtle fill, never a track or an underline. `id` on the
+  tabs and `tabsId` on each panel make `aria-controls` and `aria-labelledby` match.
+- `RadioGroup`: one choice out of a few labelled `options`, each with an optional `description` and `disabled`. Real,
+  hidden `<input type="radio">` elements with a drawn mark, a `<fieldset>` named by its `label`, `name`, `value` and
+  `onChange(value)`; `required` draws the red asterisk without adding it to the name.
+- `Progress`: a determinate bar for work whose size is known. `value` out of `max` (default 100), a required `label`
+  as its accessible name and an optional visible `valueText`. It has no indeterminate mode: a wait of unknown length
+  is a `Skeleton`.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
@@ -234,9 +255,8 @@ token like `--sidebar`, it is not general yet, and forcing it here only moves th
 
 ## What is still missing
 
-The kit is deliberately thin today. Before it can be published it needs at least the controls an application cannot
-do without: `Label`, `Card`, `Badge`, and a real `Tooltip`. After those: `Tabs` outside a dialog,
-`RadioGroup`, `Progress`, `Table`.
+The kit is still thin. The one control an application cannot do without that it lacks is a `Table`. (A form label is
+`FieldLabel`, so there is no separate `Label`.)
 
 Two things it will not grow: a `Separator` and the alert with a coloured left border. Orglet separates with spacing,
 grouping and a quiet background instead, and that rule travels with the kit.

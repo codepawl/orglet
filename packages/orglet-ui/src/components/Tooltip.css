@@ -1,0 +1,27 @@
+/* The label never takes the pointer: moving onto it would otherwise end the hover that showed it. */
+.org-tooltip {
+  z-index: 40;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--org-primary, #171717);
+  color: var(--org-primary-text, #fff);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+  animation: org-tooltip-in var(--org-motion-quick, 110ms) var(--org-ease-out, ease-out);
+}
+.org-tooltip-shortcut {
+  margin-left: 8px;
+  font: inherit;
+  font-size: 11px;
+  opacity: .75;
+}
+@keyframes org-tooltip-in {
+  from { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-tooltip { animation: none; }
+}
