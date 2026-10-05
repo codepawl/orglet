@@ -8,7 +8,7 @@ import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunningItem } from '../../apps/desktop/src/shared/running';
 import { categoryNames, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
 import { folderKey, spaceFolderNames } from '../../apps/desktop/src/renderer/areas';
-import { spaceHues, spaceInitials } from '../../apps/desktop/src/renderer/components/SpaceMark';
+import { DITHER_CELLS, ditherCellOn, spaceHues, spaceInitials } from '../../apps/desktop/src/renderer/components/SpaceMark';
 import { SAVED_LIMIT, SAVED_TEXT_LIMIT, savedExcerpt, withSaved, withoutSaved, type SavedMessage } from '../../apps/desktop/src/renderer/saved';
 import { activityCounts } from '../../apps/desktop/src/renderer/components/ActivityPage';
 
@@ -141,5 +141,17 @@ describe('a space\'s mark on the rail', () => {
     for (const seed of seeds) expect(spaceHues(seed)).toEqual(spaceHues(seed));
     expect(new Set(seeds.map(seed => spaceHues(seed).join())).size).toBeGreaterThan(5);
     for (const seed of seeds) for (const hue of spaceHues(seed)) expect(hue >= 35 && hue <= 80).toBe(false);
+  });
+
+  it('dithers from the first colour at the top left to the second at the bottom right', () => {
+    const on = (rows: readonly number[]) => rows.reduce((total, row) => total + Array.from({ length: DITHER_CELLS }, (_, column) => ditherCellOn(column, row)).filter(Boolean).length, 0);
+    expect(ditherCellOn(0, 0)).toBe(false);
+    expect(ditherCellOn(DITHER_CELLS - 1, DITHER_CELLS - 1)).toBe(true);
+    // The second colour thickens row by row, and about half the tile ends up in each colour.
+    expect(on([0, 1, 2, 3])).toBeLessThan(on([5, 6, 7, 8]));
+    expect(on([5, 6, 7, 8])).toBeLessThan(on([10, 11, 12, 13]));
+    const all = on(Array.from({ length: DITHER_CELLS }, (_, row) => row));
+    expect(all).toBeGreaterThan(DITHER_CELLS * DITHER_CELLS * 0.4);
+    expect(all).toBeLessThan(DITHER_CELLS * DITHER_CELLS * 0.6);
   });
 });
