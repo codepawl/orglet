@@ -3237,8 +3237,12 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 /* Curated friends and explicit template updates. */
 .marketplace-source { margin: 0; font-size: 12px; }
 .marketplace-discover { display: grid; gap: 12px; min-width: 0; }
-.marketplace-listing { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
+.marketplace-listing { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
 .marketplace-listing .friend-source-text { gap: 6px; }
+/* The listing's picture: one column wide for every kind, level with the listing's name. */
+.market-listing-face { display: grid; place-items: center; flex-shrink: 0; align-self: flex-start; width: 40px; min-height: 40px; }
+.market-listing-crew { display: flex; justify-content: center; }
+.market-listing-crew > .avatar + .avatar { margin-left: -6px; }
 .marketplace-listing .friend-name, .market-own .friend-name { margin: 0; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: 14px; }
 .market-listing-summary { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .market-listing-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; }
@@ -3303,7 +3307,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-review-reports h3 { margin: 0; font-size: 14px; }
 .market-review-report { border-block-start: 1px solid var(--border); padding-block-start: 12px; min-width: 0; }
 .market-review-report > p { margin-block: 0 6px; }
-@media (max-width: 560px) { .marketplace-listing { grid-template-columns: minmax(0, 1fr); gap: 10px; } .market-listing-actions { justify-content: flex-start; } .market-own-listing { flex-wrap: wrap; } }
+@media (max-width: 560px) { .marketplace-listing { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; } .market-listing-actions { grid-column: 2; justify-content: flex-start; } .market-own-listing { flex-wrap: wrap; } }
 @media (max-width: 560px) { .market-publishing-target { grid-template-columns: minmax(0, 1fr); } }
 
 /* One inherited setting does not need the editor's full-height panel. */
