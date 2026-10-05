@@ -2048,13 +2048,13 @@ import { SmilePlus } from 'lucide-react';
 type Reaction = 'like' | 'laugh' | 'think';
 
 const options: ReactionOption<Reaction>[] = [
-  { name: 'like', emoji: '����', meaning: 'Like' },
-  { name: 'laugh', emoji: '����', meaning: 'Laugh' },
-  { name: 'think', emoji: '����', meaning: 'Think' },
+  { name: 'like', emoji: '👍', meaning: 'Like' },
+  { name: 'laugh', emoji: '😂', meaning: 'Laugh' },
+  { name: 'think', emoji: '🤔', meaning: 'Think' },
 ];
 
 const badges: ReactionBadge<Reaction>[] = [
-  { name: 'like', emoji: '����', count: 2, mine: true, label: 'Like, from you and Mai' },
+  { name: 'like', emoji: '👍', count: 2, mine: true, label: 'Like, from you and Maya' },
 ];
 
 <ReactionBar options={options} picked={mine} onPick={toggleReaction} label="React" icon={<SmilePlus size={16} aria-hidden />} />

@@ -21,7 +21,7 @@ function Amount({ initial, symbol, code, invalid, title }: { initial: string; sy
 
 export const Dollars: Story = { render: () => <Amount title="Budget per day" initial="5.00" symbol="$" code="USD" /> };
 
-export const Dong: Story = { render: () => <Amount title="Ngân sách mỗi ngày" initial="120000" symbol="₫" code="VND" /> };
+export const Dong: Story = { render: () => <Amount title="Budget per day" initial="120000" symbol="₫" code="VND" /> };
 
 export const Invalid: Story = { render: () => <Amount title="Budget per day" initial="five" symbol="$" code="USD" invalid /> };
 

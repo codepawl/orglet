@@ -107,11 +107,11 @@ async function copyText(text: string, done: string): Promise<void> {
 }
 
 /** How far the mark's eyes travel towards the pointer, as a share of the mark's own width. */
-const LOOK_REACH = 0.045;
+const LOOK_REACH = 0.028;
 
 /**
- * OUI's mark: the orglet drawn as a component on a canvas. The bubble is an outline with a selection handle on its
- * tight corner, and only the eyes are solid. They blink in the stylesheet and lean towards the pointer from here.
+ * OUI's mark: a grid of four pieces, one of which is the orglet. Its eyes blink in the stylesheet and lean towards
+ * the pointer from here.
  */
 function OuiMark({ className }: { className?: string }) {
   const mark = useRef<HTMLSpanElement>(null);
@@ -131,7 +131,10 @@ function OuiMark({ className }: { className?: string }) {
     return () => window.removeEventListener('pointermove', lookAt);
   }, []);
   return <span ref={mark} className={className ? `oui-mark ${className}` : 'oui-mark'} aria-hidden="true">
-    <span className="oui-mark-handle" />
+    <span className="oui-mark-face" />
+    <span className="oui-mark-piece" />
+    <span className="oui-mark-piece" />
+    <span className="oui-mark-piece oui-mark-piece-round" />
   </span>;
 }
 
@@ -286,9 +289,9 @@ function GuideView({ guide, navigate }: { guide: Guide; navigate: (path: string)
 }
 
 const REVIEWERS = [
-  { value: 'mai', label: 'Mai', detail: 'Design' },
-  { value: 'quan', label: 'Quân', detail: 'Engineering' },
-  { value: 'linh', label: 'Linh', detail: 'Writing' },
+  { value: 'maya', label: 'Maya', detail: 'Design' },
+  { value: 'quinn', label: 'Quinn', detail: 'Engineering' },
+  { value: 'lena', label: 'Lena', detail: 'Writing' },
 ];
 
 const CADENCES = [
@@ -299,7 +302,7 @@ const CADENCES = [
 /** A small working form, so the first screen shows the kit doing its job instead of describing it. */
 function ReportForm() {
   const [name, setName] = useState('Weekly report');
-  const [reviewer, setReviewer] = useState('mai');
+  const [reviewer, setReviewer] = useState('maya');
   const [notify, setNotify] = useState(true);
   const [attach, setAttach] = useState(false);
   const nameId = useId();

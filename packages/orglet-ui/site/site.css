@@ -126,56 +126,64 @@ pre:focus-visible,
   border-radius: 6px;
 }
 
-/* The mark: the orglet as a component on a canvas. An outlined bubble with a selection handle on its tight corner,
-   and two solid eyes that lean to the right, blink every few seconds and follow the pointer by a pixel or so
-   (--look-x and --look-y, set by OuiMark). Each eye keeps its lean through both, so the lean is a variable. */
+/* The mark: a grid of four pieces, and one of them is the orglet. A kit is a set of parts, and this one has a face.
+   The three plain pieces sit back at a lower weight, so at the size of a header the face is what reads. Its eyes
+   lean to the right, blink every few seconds and follow the pointer by a pixel or so (--look-x and --look-y, set
+   by OuiMark). Each eye keeps its lean through both, so the lean is a variable the keyframes read. */
 .oui-mark {
   --look-x: 0px;
   --look-y: 0px;
-  position: relative;
-  display: inline-block;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 9%;
   flex-shrink: 0;
   width: 1.625rem;
   height: 1.625rem;
-  border: max(1.5px, 0.09em) solid currentColor;
-  border-radius: 46% 46% 46% 17%;
-  font-size: 1.625rem;
 }
 
-.oui-mark::before,
-.oui-mark::after {
+.oui-mark-face,
+.oui-mark-piece {
+  background: currentColor;
+}
+
+.oui-mark-face {
+  position: relative;
+  border-radius: 46% 46% 46% 17%;
+}
+
+.oui-mark-piece {
+  border-radius: 30%;
+  opacity: 0.38;
+}
+
+.oui-mark-piece-round {
+  border-radius: 50%;
+}
+
+.oui-mark-face::before,
+.oui-mark-face::after {
   content: '';
   position: absolute;
   top: 22%;
-  width: 14%;
-  height: 30%;
+  width: 15%;
+  height: 31%;
   border-radius: 999px;
-  background: currentColor;
+  background: var(--org-bg);
   translate: var(--look-x) var(--look-y);
   transform: translateY(var(--eye-lean)) rotate(14deg);
   transition: translate 160ms ease-out;
   animation: oui-mark-blink 6s infinite;
 }
 
-.oui-mark::before {
+.oui-mark-face::before {
   --eye-lean: -9%;
-  left: 31%;
+  left: 33%;
 }
 
-.oui-mark::after {
+.oui-mark-face::after {
   --eye-lean: 9%;
-  left: 55%;
-}
-
-.oui-mark-handle {
-  position: absolute;
-  left: -14%;
-  bottom: -14%;
-  width: 30%;
-  height: 30%;
-  border: max(1.5px, 0.09em) solid currentColor;
-  border-radius: 22%;
-  background: var(--org-bg);
+  left: 56%;
 }
 
 @keyframes oui-mark-blink {
@@ -184,8 +192,8 @@ pre:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .oui-mark::before,
-  .oui-mark::after {
+  .oui-mark-face::before,
+  .oui-mark-face::after {
     transition: none;
     animation: none;
   }
@@ -194,7 +202,6 @@ pre:focus-visible,
 .oui-mark-hero {
   width: 4.5rem;
   height: 4.5rem;
-  font-size: 4.5rem;
 }
 
 /* Header and footer sit on the window background, outside the cards. */
