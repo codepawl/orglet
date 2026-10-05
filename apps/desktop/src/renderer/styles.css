@@ -47,7 +47,7 @@
   color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
-  --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg));
+  --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 78%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
@@ -445,11 +445,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer.expanded.has-context { grid-template-areas:"context context" "input send"; }
 .composer.expanded.has-context.has-attachments { grid-template-areas:"context context" "attach attach" "input send"; }
 .composer-context { grid-area:context; min-width:0; }
-/* Focus inside the bar darkens its outline. Typing in it rings the whole pill in the focus colour, two pixels like
-   every other focus ring (COD-284): the border turns and an inset line adds the second pixel, so nothing around the
-   bar moves and the idle bar stays as quiet as before. A button inside the bar keeps its own ring instead. */
-.composer:focus-within { border-color:var(--bar-line-focus); }
-.composer:has(> textarea:focus-visible) { border-color:var(--focus); box-shadow:inset 0 0 0 1px var(--focus), 0 1px 2px #0000000d, 0 6px 20px #00000014; }
+/* Focus inside the bar darkens its outline and deepens its shadow a little, and that is all (user, 2026-10-05): the
+   bar used to ring itself in the focus colour while typing (COD-284), which read as a different control. The line
+   keeps its one pixel, so nothing around the bar moves. A button inside the bar keeps its own ring. */
+.composer:focus-within { border-color:var(--bar-line-focus); box-shadow:0 1px 3px #00000014, 0 8px 24px #0000001f; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
@@ -2394,14 +2393,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   transform-origin:50% calc(100% - var(--island-reach));
   animation:island-rise 200ms var(--ease-out);
 }
-/* One outline for tab and bar: the same colour the bar's own focus rule sets. */
-.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); }
-/* Typing rings the bar in two pixels, its border and an inset line (COD-284); the tab and its corners carry the same
-   second line on the inside of the shape, so the ring runs round the tab too instead of stepping at the corners. */
-.thread-composer:has(.composer > textarea:focus-visible) .live-island {
-  --island-line:var(--focus); --island-ring:0 0 0 1px var(--focus),;
-  box-shadow:inset 1px 1px 0 0 var(--focus), inset -1px 0 0 0 var(--focus), var(--island-shadow);
-}
+/* One outline for tab and bar: the same darker line the bar's own focus rule sets, and the same deeper shadow, with
+   no change of colour (user, 2026-10-05). */
+.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -4px 16px #0000001c; }
 /* The corner's box starts a fillet above the bar's top edge and ends under the bar's top border, so its bottom border
    is the bar's. The clip lets the fill reach the tab's bottom and two pixels into the tab, over the soft edge of the
    tab's typing ring, and keeps the ring's shadow off the box's top and outer edges, where it left a faint line; the
@@ -2410,7 +2404,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   content:""; position:absolute; box-sizing:content-box;
   top:calc(100% - var(--island-reach) - var(--island-fillet)); width:var(--island-fillet); height:var(--island-fillet);
   border:0 solid var(--island-line); border-bottom-width:1px;
-  box-shadow:var(--island-ring,) 0 0 0 var(--island-fillet) var(--bg);
+  box-shadow:0 0 0 var(--island-fillet) var(--bg);
 }
 .live-island::before { right:100%; border-right-width:1px; border-bottom-right-radius:var(--island-fillet); clip-path:inset(1px -2px calc(-1 * var(--island-reach)) 1px); }
 .live-island::after { left:100%; border-left-width:1px; border-bottom-left-radius:var(--island-fillet); clip-path:inset(1px 1px calc(-1 * var(--island-reach)) -2px); }

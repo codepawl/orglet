@@ -79,3 +79,11 @@ it('puts a chat\'s own right column in place at once, and keeps the fold for the
   expect(css).toContain('.details-pane.with-chat, .members-pane.with-chat { animation:none; }');
   expect(css).toMatch(/\.members-pane \{[^}]*animation:pane-in/);
 });
+
+// User, 2026-10-05: the message box turned the focus colour while typing, which read as a different control.
+it('marks a focused message box with a darker line and a deeper shadow, never a change of colour', () => {
+  expect(css).toContain('.composer:focus-within { border-color:var(--bar-line-focus); box-shadow:0 1px 3px #00000014, 0 8px 24px #0000001f; }');
+  expect(css).not.toMatch(/\.composer:has\(> textarea:focus-visible\)/);
+  expect(css).toContain('.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -4px 16px #0000001c; }');
+  expect(css).not.toContain('--island-ring');
+});
