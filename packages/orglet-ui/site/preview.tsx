@@ -9,7 +9,9 @@ import { StoryView, playStory, type StoryModule } from './stories';
 // One story, alone in a frame, for the stories that open a dialog, a menu or a toast: a frame keeps their portals,
 // focus traps and Escape handling to itself, so a page can show several at once. Everything else is drawn straight
 // into the page (see StoryPreview in main.tsx).
-const storyModules = import.meta.glob('../stories/*.stories.tsx');
+// Loaded with the page, not one request per story: the site's own page already holds the same modules, so a frame
+// finds them in the browser's cache, and the build stays a handful of files instead of a hundred small ones.
+const storyModules = import.meta.glob('../stories/*.stories.tsx', { eager: true }) as Record<string, StoryModule>;
 const parameters = new URLSearchParams(window.location.search);
 const fileName = parameters.get('file') ?? '';
 const storyName = parameters.get('story') ?? '';
@@ -36,15 +38,14 @@ function Frame({ storyModule }: { storyModule: StoryModule }) {
   return <div ref={canvas}><StoryView storyModule={storyModule} exportName={storyName} /></div>;
 }
 
-async function showStory(): Promise<void> {
-  const loadModule = storyModules[`../stories/${fileName}.stories.tsx`];
+function showStory(): void {
+  const storyModule = storyModules[`../stories/${fileName}.stories.tsx`];
   const root = createRoot(document.getElementById('root')!);
-  if (!loadModule) {
+  if (!storyModule) {
     root.render(<p className="gallery-note">No such story file.</p>);
     return;
   }
-  const storyModule = await loadModule() as StoryModule;
   root.render(storyName in storyModule ? <Frame storyModule={storyModule} /> : <p className="gallery-note">No such story.</p>);
 }
 
-void showStory();
+showStory();
