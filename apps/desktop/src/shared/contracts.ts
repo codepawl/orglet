@@ -464,7 +464,7 @@ export const commands = {
   updateSpace: SpaceFields.extend({ id: Id }).strict(),
   deleteSpace: z.object({ id: Id }).strict(),
   spaceFromCategory: z.object({ category: z.string().trim().min(1).max(40) }).strict(),
-  // Every idle channel outside the spaces goes into the space kept for them, made with this name on first need.
+  // Every channel outside the spaces goes into the space kept for them, made with this name on first need.
   adoptLooseChannels: z.object({ name: z.string().trim().min(1).max(40) }).strict(),
   updateTask: z.object({ localOnly: z.boolean().optional(), id: Id, title: z.string().trim().max(120), assignee: z.discriminatedUnion('kind', [z.object({ kind: z.literal('workers'), workerIds: z.array(Id).min(1).max(50) }).strict(), z.object({ kind: z.literal('team'), teamId: Id }).strict(), z.object({ kind: z.literal('all') }).strict()]), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   // The order the person keeps rows in. `channels` and `categories` are the order inside spaces: one list each for

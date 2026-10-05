@@ -454,18 +454,22 @@ export function App() {
   const workspaceRef = useRef(workspace); workspaceRef.current = workspace;
   // A channel outside every space has no row, since Home lists direct messages only: a crew from a template, a
   // channel the terminal made, the channels a deleted space left. The core puts them into the space kept for them.
-  // Asked once per set of such channels and their states, so one that is running is asked for again when it stops.
-  const adoptAsked = useRef('');
+  // One call at a time. A set of channels the core could not take is not asked for again, so a refusal cannot loop;
+  // a set it did take is forgotten, since a save still on its way can put one of them outside again.
+  const adoptRefused = useRef('');
+  const adopting = useRef(false);
   useEffect(() => {
     if (!workspace) return;
     const outside = (channel: { spaceId?: string } | undefined) => Boolean(channel) && !workspace.spaces.some(space => space.id === channel!.spaceId);
     const waiting = [
-      ...workspace.tasks.filter(task => !task.deletedAt && !task.archivedAt && outside(task.channel)).map(task => `${task.id}:${task.status}`),
+      ...workspace.tasks.filter(task => !task.deletedAt && outside(task.channel)).map(task => task.id),
       ...workspace.emptyChannels.filter(outside).map(channel => channel.id),
     ].join();
-    if (!waiting || adoptAsked.current === waiting) return;
-    adoptAsked.current = waiting;
-    void orglet.call('adoptLooseChannels', { name: t('Kênh') }).catch(() => undefined);
+    if (!waiting || adopting.current || adoptRefused.current === waiting) return;
+    adopting.current = true;
+    void orglet.call('adoptLooseChannels', { name: t('Kênh') })
+      .then(spaceId => { adoptRefused.current = spaceId ? '' : waiting; }, () => { adoptRefused.current = waiting; })
+      .finally(() => { adopting.current = false; });
   }, [workspace]);
   // Set when the first-run account question is answered, so the refresh that follows moves to the app as a transition.
   const leavingAccountChoice = useRef(false);

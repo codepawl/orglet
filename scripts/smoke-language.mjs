@@ -62,7 +62,8 @@ export async function openHome(page) {
 /** Open a specific under-the-hood task by its brief via search (sidebar no longer lists task rows). */
 export async function openThreadByBrief(page, brief) {
   await expandSidebar(page);
-  // Home has its search box ("Find or start a chat"); the other areas have the magnifier in the sidebar's head (COD-366).
+  // Home has its search box ("Find or start a chat"); a space's head keeps room for its name and has none.
+  await openHome(page);
   await page.getByRole('button', { name: /Tìm cuộc trò chuyện|Tìm hoặc bắt đầu trò chuyện/ }).first().click();
   await page.getByRole('combobox', { name: 'Tìm cuộc trò chuyện' }).fill(brief);
   await page.getByRole('option').filter({ hasText: brief }).first().click();

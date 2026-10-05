@@ -91,10 +91,11 @@ export class Spaces {
    * the channels a deleted space left all arrive outside the spaces; the window calls this when it sees one. The
    * space is made on first need with `name`, and is found again by the setting that remembers it; deleted, it is
    * made again. It gains the orglets of the channels it takes, and each channel keeps its own list, so no orglet
-   * gains a channel. A channel that is running is left for the next call.
+   * gains a channel. A channel that is running is taken too: joining changes where it is listed and not who is in
+   * it, and a run keeps the snapshot it started with.
    */
   adoptLoose(name: string): string | undefined {
-    const loose = this.channels.loose().filter(channel => this.idle(channel.id));
+    const loose = this.channels.loose();
     if (!loose.length) return undefined;
     const workspace = this.store.workspace();
     const spaces = storedSpaces(this.store);
