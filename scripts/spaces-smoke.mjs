@@ -57,7 +57,7 @@ try {
   assert.equal(missedCorners, 0, 'every corner of a space tile selects it');
   // The spaces sit under a divider, below the app's own places.
   const railOrder = await page.locator('.area-rail').evaluate(rail => [...rail.children].map(child => child.className));
-  assert.deepEqual(railOrder.slice(0, 3), ['area-rail-list', 'area-rail-divider', 'area-rail-list'], 'places, a divider, then spaces');
+  assert.deepEqual(railOrder.slice(0, 4), ['area-trail', 'area-rail-list', 'area-rail-divider', 'area-rail-list'], 'back and forward, places, a divider, then spaces');
   assert.equal(await page.locator('.area-rail-divider + .area-rail-list .area-tile[data-name="Launch"]').count(), 1, 'the space is under the divider');
   // The person's face is the button: its menu opens on it and it wears a ring meanwhile, with no tile behind it.
   await page.locator('.user-panel-who').click();
@@ -259,6 +259,18 @@ try {
   assert.equal(movedSources.category, 'Writing', 'the channel took the category of the row it was dropped on');
   assert.ok(movedSources.order.indexOf(movedSources.id) < movedSources.order.indexOf(drafts.id), 'and the place before that row');
   await shot(page, 'space-dragged');
+  // Back and forward, at the top of the rail, travel along the places the window has shown.
+  const back = page.getByRole('button', { name: 'Quay lại', exact: true });
+  const forward = page.getByRole('button', { name: 'Tiến tới', exact: true });
+  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
+  await page.locator('.area-tile.active[data-name="Trò chuyện"]').waitFor();
+  assert.equal(await forward.isDisabled(), true, 'nothing lies ahead of the newest place');
+  await back.click();
+  await page.locator('.area-tile.active[data-name="Launch"]').waitFor();
+  assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch');
+  await forward.click();
+  await page.locator('.area-tile.active[data-name="Trò chuyện"]').waitFor();
+  await shot(page, 'trail');
   console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it, put it in a folder and take it out.');
 } finally {
   await app.close();
