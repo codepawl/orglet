@@ -12,6 +12,8 @@ import type { Area } from '../areas';
 export type AreaRailEntry = {
   key: string;
   icon: ReactNode;
+  /** The filled drawing shown while this is the open area; without one the outline stays. */
+  activeIcon?: ReactNode;
   label: string;
   ariaLabel?: string;
   active: boolean;
@@ -56,7 +58,7 @@ function Tile({ entry }: { entry: AreaRailEntry }) {
   return <div className="area-tile-slot">
     <button type="button" className={`area-tile${entry.active ? ' active' : ''}`} aria-label={entry.ariaLabel ?? entry.label} data-name={entry.label} aria-current={entry.active ? 'page' : undefined}
       onClick={() => { tip.hide(); entry.onSelect(); }} onPointerEnter={enter} onPointerLeave={leave} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(entry.label, event.currentTarget); }} onBlur={tip.hide}>
-      {entry.icon}
+      {entry.active && entry.activeIcon ? entry.activeIcon : entry.icon}
       {/* A dot, not a number (user, 2026-10-05): the tile's accessible name carries the count where one matters. */}
       {entry.count ? <span className={`area-dot ${entry.countTone ?? 'quiet'}`} aria-hidden="true" /> : null}
     </button>

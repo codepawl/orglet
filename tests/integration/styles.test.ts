@@ -98,7 +98,9 @@ it('keeps a provider mark\'s glyph centred wherever the mark is placed', () => {
 
 // User, 2026-10-05: the open area's icon is filled, and what waits in an area is a dot.
 it('fills the open area\'s icon and marks what waits with a dot, not a number', () => {
-  expect(css).toContain('.area-tile.active > svg { fill:currentColor; }');
+  // Only a folder's closed outline is filled by a rule; the other icons have filled drawings of their own.
+  expect(css).toContain('.area-folder-tile.active > svg { fill:currentColor; }');
+  expect(css).not.toContain('.area-tile.active > svg { fill:currentColor; }');
   expect(css).toContain('.area-dot.accent { background:var(--accent); }');
   expect(css).not.toContain('.area-count');
 });

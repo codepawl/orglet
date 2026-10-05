@@ -3046,10 +3046,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-tile { position:relative; display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border:0; border-radius:14px; background:transparent; color:var(--muted); cursor:pointer; }
 .area-tile:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
 .area-tile.active { background:var(--row-active); color:var(--text); }
-/* The open area's icon is filled, and the others stay outlines (user, 2026-10-05). The fill reaches the outline's
-   outer edge: the stroke keeps the ink, so the filled icon is as big as the outlined one. Strokes in the tile's
-   ground were tried first, to keep inner lines as cuts, and made every icon look thin. */
-.area-tile.active > svg { fill:currentColor; }
+/* The open area's icon is filled, and the others stay outlines (user, 2026-10-05). Each icon has a filled drawing
+   of its own (`railIcons.tsx`), as big as its outline; `--rail-cut` is the tile's ground, for the lines that stay
+   readable inside the fill. A folder's outline is one closed shape, so it is simply filled. */
+.area-tile.active { --rail-cut:color-mix(in srgb, var(--text) 12%, var(--window)); }
+.area-folder-tile.active > svg { fill:currentColor; }
 .area-tile:disabled { cursor:default; opacity:.6; }
 /* A space's tile is filled with its own gradient and carries no letter (user, 2026-10-05), so it reads as a place
    of the person's own beside the rail's icons. The gradient is shaded the way the mascots and the Orglet mark are:

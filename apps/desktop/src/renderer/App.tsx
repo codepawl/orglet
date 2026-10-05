@@ -109,6 +109,7 @@ import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry, type AreaRailFolder } from './components/AreaRail';
 import type { RowMenuItem } from './components/RowMenu';
 import { SpaceMark } from './components/SpaceMark';
+import { BellFilled, BookFilled, CalendarClockFilled, ChatFilled } from './components/railIcons';
 import type { HomePageView } from './components/FriendsPage';
 import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
@@ -2187,7 +2188,7 @@ export function App() {
     if (!leavingPage(goToActivity)) setArea('activity');
   };
   const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
-    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Trò chuyện'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
+    { key: 'home', icon: <MessagesSquare size={20} />, activeIcon: ChatFilled, label: t('Trò chuyện'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
       clearSelection();
       // Home is always a chat (user, 2026-10-04): the DM that was open, else the last orglet written to, else the
@@ -2215,9 +2216,9 @@ export function App() {
         setArea('channels');
       },
     })),
-    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },
-    { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
-    { key: 'schedules', icon: <CalendarClock size={20} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
+    { key: 'activity', icon: <Bell size={20} />, activeIcon: BellFilled, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },
+    { key: 'library', icon: <BookOpen size={20} />, activeIcon: BookFilled, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
+    { key: 'schedules', icon: <CalendarClock size={20} />, activeIcon: CalendarClockFilled, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
   ];
   // What the sidebar lists: the open page's own rows, else the area's. A folded sidebar taking a look lists the tile
   // under the pointer instead.
