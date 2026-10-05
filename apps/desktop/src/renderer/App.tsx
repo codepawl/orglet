@@ -89,7 +89,7 @@ import { permissionsForLevel, permissionState, type WorkspaceLevel } from '../sh
 import { ComposerPermissionHint, type PermissionHintControls } from './permissionHints';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 import { noSelection, pruneSelection, selectRange, toggleSelection, type SelectionPickMode, type SidebarSelection, type SidebarSelectionSection } from './sidebarSelection';
-import { channelFromRecipient, channelMembersFromSelection, channelNameOf, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from './channelChat';
+import { channelFromRecipient, channelNameOf, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from './channelChat';
 import { CHANNEL_NAME_LIMIT, channelLabel, isChannelChat } from '../shared/channels';
 import { ChannelDialog, type ChannelDraft } from './components/ChannelDialog';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
@@ -109,10 +109,11 @@ import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry, type AreaRailFolder } from './components/AreaRail';
 import type { RowMenuItem } from './components/RowMenu';
 import { SpaceMark } from './components/SpaceMark';
+import type { HomePageView } from './components/FriendsPage';
 import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
-import { Boxes, CircleUserRound, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
+import { Boxes, CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
@@ -363,6 +364,8 @@ export function App() {
   const [channelDropAt, setChannelDropAt] = useState<string>();
   const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
   const [friendsOpen, setFriendsOpen] = useState(false);
+  // Which of Home's two pages is open: making an orglet, or the marketplace, which has its own row in the sidebar.
+  const [homePage, setHomePage] = useState<HomePageView>('add');
   const [activityTab, setActivityTab] = useState<ActivityTab>('needs');
   const [membersOpen, setMembersOpen] = useState(() => { try { return localStorage.getItem('orglet.members') !== 'hidden'; } catch { return true; } });
   const toggleMembers = () => setMembersOpen(current => { try { localStorage.setItem('orglet.members', current ? 'hidden' : 'shown'); } catch { /* chrome only */ } return !current; });
@@ -783,13 +786,6 @@ export function App() {
     setEmptyChannelId(channelId);
     if (matchMedia('(max-width: 780px)').matches) setSidebar(false);
     setTimeout(() => composer.current?.focus(), 0);
-  };
-  /** Several orglets picked in the sidebar start a new channel with them in it. */
-  const newChannelFromSelection = () => {
-    const members = channelMembersFromSelection(selection);
-    if (!members) return;
-    clearSelection();
-    setChannelDraft({ members });
   };
   /** A channel just created opens empty, once the workspace lists it. */
   const channelCreated = (channelId: string) => {
@@ -1974,11 +1970,8 @@ export function App() {
   };
   const selectionCount = selection.ids.length;
   const deleteSelectionQuestion = t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
-  // Two or more orglets picked together start a channel (COD-215, COD-361); one orglet is its own DM.
-  const canStartChannel = channelMembersFromSelection(selection) !== undefined;
   const selectionBar = selection.section && <div className="selection-bar" role="toolbar" aria-label={t('Mục đã chọn')}>
     <span className="selection-count">{t('{0} đã chọn', [selectionCount])}</span>
-    {canStartChannel && <Button size="icon" className="row-action" aria-label={t('Tạo kênh với các mục đã chọn')} title={t('Tạo kênh với các mục đã chọn')} onClick={newChannelFromSelection}><Hash size={16} /></Button>}
     <Button size="icon" className="row-action" aria-label={t('Lưu trữ')} title={t('Lưu trữ')} onClick={() => void applyToSelection('archive')}><Archive size={16} /></Button>
     <RowMenu className="row-action danger" label={t('Xóa')} icon={Trash} asksOnOpen items={[{ label: t('Xóa'), icon: Trash, danger: true, onSelect: () => void applyToSelection('delete'), confirm: { question: deleteSelectionQuestion, label: t('Xóa') } }]} />
     <Button size="icon" className="row-action" aria-label={t('Bỏ chọn')} title={t('Bỏ chọn')} onClick={clearSelection}><SidebarX size={16} /></Button>
@@ -2177,7 +2170,7 @@ export function App() {
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
       onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     : area === 'home' && friendsOpen
-      ? <FriendsPage archived={workspace.archivedWorkers} busy={friendsBusy}
+      ? <FriendsPage view={homePage} archived={workspace.archivedWorkers} busy={friendsBusy}
         onCreate={name => { setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }} onRestore={member => archiveEntity('worker', member.id, false)}
         onMarketAdded={async result => {
           await refresh();
@@ -2194,7 +2187,7 @@ export function App() {
     if (!leavingPage(goToActivity)) setArea('activity');
   };
   const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
-    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
+    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Trò chuyện'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
       clearSelection();
       // Home is always a chat (user, 2026-10-04): the DM that was open, else the last orglet written to, else the
@@ -2342,8 +2335,9 @@ export function App() {
     folder.entries.push(spaceTile);
   }
   const createItems = [
-    { label: t('Thêm bạn (tạo Tí)'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
-    { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft(openSpace && area === 'channels' ? { spaceId: openSpace.id } : {}) },
+    { label: t('Thêm Tí'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
+    // A channel is made in a space (user, 2026-10-05), so the item is there only while one is open.
+    ...(openSpace && area === 'channels' ? [{ label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({ spaceId: openSpace.id }) }] : []),
     { label: t('Tạo không gian'), icon: Boxes, onSelect: () => setSpaceDraft({}) },
     { label: t('Tạo lịch chạy'), icon: LucideCalendarClock, onSelect: () => openRoutines({ editing: true }) },
   ];
@@ -2370,10 +2364,13 @@ export function App() {
       {sidebarFor === 'home' && <button type="button" className="sidebar-search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={16} aria-hidden="true" /><span>{t('Tìm hoặc bắt đầu trò chuyện')}</span></button>}
       <div className="sidebar-scroll">
       {sidebarFor === 'home' && <>
-      <nav className="sidebar-nav" aria-label={t('Thêm bạn')}>
-        <button type="button" className={`sidebar-nav-item${friendsOpen ? ' active' : ''}`} aria-current={friendsOpen ? 'page' : undefined} onClick={() => { clearSelection(); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
-          <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm bạn')}</span>
-        </button>
+      <nav className="sidebar-nav" aria-label={t('Thêm Tí')}>
+        {(['add', 'market'] as const).map(view => {
+          const open = friendsOpen && homePage === view;
+          return <button key={view} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => { clearSelection(); setHomePage(view); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
+            {view === 'add' ? <UserRoundPlus size={18} aria-hidden="true" /> : <Store size={18} aria-hidden="true" />}<span className="sidebar-nav-name">{view === 'add' ? t('Thêm Tí') : 'Marketplace'}</span>
+          </button>;
+        })}
       </nav>
       {/* The chats kept at hand that have no row anywhere else in the sidebar (COD-355), so no chat is listed twice. */}
       {openChatItems.length > 0 && <SidebarSection id="open" title={t('Đang mở')}>
@@ -2386,16 +2383,13 @@ export function App() {
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
       {/* The channels outside every space, like group chats beside the DMs: the rail has a tile for each space and
-          none for these (user, 2026-10-05). Ones with a category keep their own section under it. */}
-      <SidebarSection id="loose-channels" title={t('Kênh')} action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={16} /></Button>}>
-        {channelGroupList.length === 0 && <p className="empty-history">{t('Chưa có kênh nào.')}</p>}
+          none for these (user, 2026-10-05). Ones with a category keep their own section under it. They are only
+          listed here: a new channel is made in a space, so these sections have no way to add one. */}
+      {channelGroupList.some(group => group.name === undefined) && <SidebarSection id="loose-channels" title={t('Kênh')}>
         {channelGroupList.filter(group => group.name === undefined).flatMap(group => group.entries).map(renderChannelEntry)}
-      </SidebarSection>
+      </SidebarSection>}
       {channelGroupList.filter(group => group.name !== undefined).map(group => <SidebarSection key={group.name!.toLowerCase()} id={`category-${group.name!.toLowerCase()}`} title={group.name!}
-        action={<>
-          <RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />
-          <Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [group.name!])} title={t('Tạo kênh trong {0}', [group.name!])} onClick={() => setChannelDraft({ category: group.name })}><Plus size={16} /></Button>
-        </>}>
+        action={<RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />}>
         {group.entries.map(renderChannelEntry)}
       </SidebarSection>)}
       </>}

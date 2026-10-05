@@ -34,7 +34,7 @@ const DEFAULT_SIDEBAR_WIDTH = 240;
 const areaIcons = [<MessagesSquare key="home" size={20} />, <Bell key="activity" size={20} />, <BookOpen key="library" size={20} />, <CalendarClock key="schedules" size={20} />];
 
 type Wait = 'opening' | 'slow' | 'stuck';
-const areaLabels = () => [t('Bạn bè và tin nhắn'), t('Hoạt động'), t('Thư viện'), t('Lịch chạy')];
+const areaLabels = () => [t('Trò chuyện'), t('Hoạt động'), t('Thư viện'), t('Lịch chạy')];
 type Cue = { kind: Moment; count: number };
 
 const nextCue = (kind: Moment) => (previous: Cue | undefined): Cue => ({ kind, count: (previous?.count ?? 0) + 1 });

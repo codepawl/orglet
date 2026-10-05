@@ -45,12 +45,12 @@ A channel is a named conversation, like **#launch** or **#research**, with a top
 
 ### Make one
 
-1. Click **+** next to **Channels**.
+1. Open a space from the rail and click **+** in its sidebar. A channel is made in a space.
 2. On **General**, give it a name and, if you like, a topic.
 3. On **Members**, tick the orglets that belong in it.
 4. On **How it works**, pick how the channel answers a message (see below), then choose **Create channel**.
 
-You can also pick two or more orglets in the sidebar (the pencil next to the section, or Ctrl-click) and choose the **#** button in the bar that appears. The dialog opens with them ticked.
+
 
 The channel opens empty, with its orglets' faces above the message box, and waits in **Channels** until you write in it. Its header shows **#name** and the topic; **Members** in the chat's menu (⋮) changes who is in it. **Channel settings** in the header's **⋯** or the row's menu changes the name, topic, members and how it works; a change applies from the next message. Rename it in place from the row's menu or by clicking its name in the header. Archive and delete are in the same menus. A channel with no messages yet has nothing to archive, so it can only be deleted.
 

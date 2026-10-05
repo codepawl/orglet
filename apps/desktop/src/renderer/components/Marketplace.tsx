@@ -98,7 +98,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
           addedNotice(result);
           await onAdded(result);
           setInstalled(await orglet.call('marketInstallations', {}));
-        })}><UserRoundPlus size={16} />{copies.length ? t('Thêm bản nữa') : t('Thêm bạn')}</Button>
+        })}><UserRoundPlus size={16} />{copies.length ? t('Thêm bản nữa') : t('Thêm')}</Button>
         {publicListing && <RowMenu label={t('Tùy chọn {0}', [listing.name])} disabled={busy} items={[
           { label: t('Report'), icon: Flag, onSelect: () => moderation.setReport(publicListing) },
           ...(moderation.capability?.canReview ? [{ label: t('Xem để duyệt'), icon: ShieldCheck, onSelect: () => moderation.setReview(publicListing) }] : []),

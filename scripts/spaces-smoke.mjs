@@ -100,7 +100,7 @@ try {
   // The template's channel is outside every space, so Home lists it beside the DMs; the space's tile lists only its own.
   assert.equal(await page.locator('.sidebar .channel-row').count(), 1, 'the space lists its one channel');
   assert.equal(await page.locator('.area-tile[data-name="Kênh"]').count(), 0, 'the rail has no tile for channels');
-  await page.locator('.area-tile[data-name="Bạn bè và tin nhắn"]').click();
+  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
   await page.locator('.sidebar .channel-row').first().waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Trò chuyện');
   assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed with the loose ones');
