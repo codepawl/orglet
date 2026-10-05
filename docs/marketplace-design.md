@@ -1,6 +1,6 @@
 # Marketplace: technical design
 
-**Status: curated reads deployed; desktop publishing and moderation implemented; production writes await rollout** (COD-373). Decided with An on 2026-10-01: the marketplace moves out of [product.md](product.md)'s Not now, because the CodePawl account exists ([account.md](account.md)) and the marketplace should run on the same account and the same backend as sync ([account-sync-design.md](account-sync-design.md)).
+**Status: curated reads deployed; desktop publishing and moderation implemented; production is configured to take submissions since 2026-10-05** (COD-373). Decided with An on 2026-10-01: the marketplace moves out of [product.md](product.md)'s Not now, because the CodePawl account exists ([account.md](account.md)) and the marketplace should run on the same account and the same backend as sync ([account-sync-design.md](account-sync-design.md)).
 
 ## What we are building
 
@@ -34,7 +34,7 @@ An update to a space listing compares and replaces its orglets and skills, as an
 
 On the server, migration `0003_space_listings.sql` widens the `kind` check of `listings` to `space` and reserves `launch-space`. SQLite cannot change a check in place, so the migration copies the rows, drops the table, makes it again under its own name with the same index and triggers, and puts the rows back, with foreign keys checked at the end. It does not rename a table, because a rename is refused while triggers on other tables read a table that is gone.
 
-**Not deployed.** The market service in production has neither the migration nor the `kinds` query until it is deployed with these changes. Until then an account cannot publish a space, and **Launch space** is only in the catalog that ships with the app.
+**Deployed.** The `kinds` query and **Launch space** are in production since 2026-10-05. An account can publish a space once production takes submissions, which the rollout below opens.
 
 ## Pieces
 
@@ -139,7 +139,7 @@ Discover offers Previous and Next page controls. SQLite retains the first page a
 
 A source using a private connection opens the model-suggestion disclosure and requires an explicit built-in connection suggestion before preview. The local connection is unchanged. When the service disables publishing, owner summaries and saved-request inspection remain available, while withdrawal and retry are disabled with an explanation. Service unavailability does not suggest signing in again.
 
-Production remains the read-only service without a publishing database. The desktop preview works locally, but sends stay unavailable until the moderation rollout enables the bound service. Local trusted transport fixtures are distinct from a positive authenticated Worker HTTP/signature proof, which remains unverified.
+Production binds the publishing database and takes submissions since the rollout of 2026-10-05 ([services/market](../services/market/README.md)). Before that it was the read-only service, and a send was unavailable. Local trusted transport fixtures are distinct from a positive authenticated Worker HTTP/signature proof, which remains unverified.
 
 ## Human review and reports
 
@@ -155,7 +155,7 @@ The reviewer queue includes pending versions and any historical version with ope
 
 Uncertain reports and decisions retain their exact request/key in a private core-owned SQLite journal, limited to ten unresolved actions across the device, including actions from other accounts. A full journal blocks new actions without evicting evidence or revealing another account's inputs; sign in to the original account to resolve them. Closing a drawer or restarting does not send anything. **Unresolved reviews and reports** lets the original signed-in account inspect and explicitly retry the saved action. A later refusal does not overwrite an earlier unknown outcome; a verified success receipt clears it. This journal is excluded from backups, templates and sync. Service pauses leave reviewer inspection available and disable mutations with an availability explanation.
 
-Account-public reads additionally require the explicit public flag, valid nonempty reviewer configuration and the working moderation migration contract. The default remains closed, with both write/public flags false and no production database binding. The deployment approval covers the exact Worker revision, D1 creation/binding and migrations, trusted reviewer subjects, and enabling the flags. The existing read-only deployment is not that approval.
+Account-public reads additionally require the explicit public flag, valid nonempty reviewer configuration and the working moderation migration contract. Production has both flags true and the database bound since 2026-10-05, and the reviewer subjects are a Worker secret; the `local_test` environment stays closed. The deployment approval covers the exact Worker revision, D1 creation/binding and migrations, trusted reviewer subjects, and enabling the flags. The existing read-only deployment is not that approval.
 
 ## Public content contract
 
@@ -173,7 +173,7 @@ The template-body SHA proves import byte integrity. A separate canonical complet
 
 ## Owner submission service
 
-GH-476 adds the D1 repository and authenticated v2 handlers. Production writes require both a `MARKET_DB` binding and `MARKET_WRITES_ENABLED=true`. The default deployment has neither an enabled flag nor a database binding. Publishing remains closed until the moderation and reporting flow is available. No desktop publishing UI ships in this change.
+GH-476 adds the D1 repository and authenticated v2 handlers. Production writes require both a `MARKET_DB` binding and `MARKET_WRITES_ENABLED=true`. The deployment had neither until the moderation and reporting flow was available; both are set since 2026-10-05. No desktop publishing UI ships in this change.
 
 `POST /v2/listings` creates an account-owned listing identity. `POST /v2/listings/:listingId/versions` adds an immutable version to an existing identity of the same kind. Both accept the strict public submission and an `Idempotency-Key` header. The server assigns ownership, IDs and version numbers. Every successful version starts pending; a caller cannot supply approval or publication state. One account can hold ten listing identities across all states, or a lower signed entitlement. Unpublishing does not reclaim a slot. Existing identities can receive new versions even if the current signed cap is lower than their count, subject to ownership and the hourly limit.
 
