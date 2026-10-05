@@ -8,7 +8,7 @@ import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunningItem } from '../../apps/desktop/src/shared/running';
 import { categoryNames, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
 import { folderKey, spaceFolderNames } from '../../apps/desktop/src/renderer/areas';
-import { spaceHues, spaceInitials } from '../../apps/desktop/src/renderer/components/SpaceMark';
+import { spaceHues } from '../../apps/desktop/src/renderer/components/SpaceMark';
 import { SAVED_LIMIT, SAVED_TEXT_LIMIT, savedExcerpt, withSaved, withoutSaved, type SavedMessage } from '../../apps/desktop/src/renderer/saved';
 import { activityCounts } from '../../apps/desktop/src/renderer/components/ActivityPage';
 
@@ -129,17 +129,10 @@ describe('folders of spaces on the rail', () => {
 });
 
 describe('a space\'s mark on the rail', () => {
-  it('takes two initials from the name', () => {
-    expect(spaceInitials('Launch')).toBe('LA');
-    expect(spaceInitials('  ra mắt sản phẩm ')).toBe('RM');
-    expect(spaceInitials('Q')).toBe('Q');
-    expect(spaceInitials('   ')).toBe('?');
-  });
-
-  it('picks the same gradient for a space every time, and never a yellow one', () => {
+  it('picks the same gradient for a space every time', () => {
     const seeds = Array.from({ length: 200 }, (_, index) => `space-${index}`);
     for (const seed of seeds) expect(spaceHues(seed)).toEqual(spaceHues(seed));
-    expect(new Set(seeds.map(seed => spaceHues(seed).join())).size).toBeGreaterThan(5);
-    for (const seed of seeds) for (const hue of spaceHues(seed)) expect(hue >= 35 && hue <= 80).toBe(false);
+    // With no letter on the tile the fill tells spaces apart, so there are many different pairs.
+    expect(new Set(seeds.map(seed => spaceHues(seed).join())).size).toBeGreaterThan(100);
   });
 });

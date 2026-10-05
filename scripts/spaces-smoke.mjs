@@ -43,11 +43,11 @@ try {
   await shot(page, 'space-dialog');
   await spaceDialog.getByRole('button', { name: 'Tạo không gian', exact: true }).click();
   await spaceDialog.waitFor({ state: 'detached' });
-  await page.locator('.area-tile.active[title="Launch"]').waitFor();
+  await page.locator('.area-tile.active[data-name="Launch"]').waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch', 'the sidebar lists the new space');
-  // The space's tile is a filled mark with its initials, not one more icon.
-  assert.equal(await page.locator('.area-tile[title="Launch"] > .space-mark').textContent(), 'LA');
-  assert.match(await page.locator('.area-tile[title="Launch"] > .space-mark').evaluate(element => getComputedStyle(element).backgroundImage), /linear-gradient/);
+  // The space's tile is a filled mark with no letter on it, not one more icon; its name is the tile's tooltip.
+  assert.equal(await page.locator('.area-tile[data-name="Launch"] > .space-mark').textContent(), '');
+  assert.match(await page.locator('.area-tile[data-name="Launch"] > .space-mark').evaluate(element => getComputedStyle(element).backgroundImage), /linear-gradient/);
   const made = (await workspace(page)).spaces[0];
   assert.equal(made.name, 'Launch');
   assert.equal(made.orgletIds.length, 2);
@@ -99,20 +99,20 @@ try {
 
   // The template's channel is outside every space, so Home lists it beside the DMs; the space's tile lists only its own.
   assert.equal(await page.locator('.sidebar .channel-row').count(), 1, 'the space lists its one channel');
-  assert.equal(await page.locator('.area-tile[title="Kênh"]').count(), 0, 'the rail has no tile for channels');
-  await page.locator('.area-tile[title="Bạn bè và tin nhắn"]').click();
+  assert.equal(await page.locator('.area-tile[data-name="Kênh"]').count(), 0, 'the rail has no tile for channels');
+  await page.locator('.area-tile[data-name="Bạn bè và tin nhắn"]').click();
   await page.locator('.sidebar .channel-row').first().waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Trò chuyện');
   assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed with the loose ones');
   void third;
 
   // Deleting the space keeps its channel, outside every space.
-  await page.locator('.area-tile[title="Launch"]').click();
+  await page.locator('.area-tile[data-name="Launch"]').click();
   await page.getByRole('button', { name: 'Tùy chọn không gian Launch', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Xóa không gian', exact: true }).click();
   await shot(page, 'delete-space');
   await page.getByRole('menuitem', { name: 'Xóa không gian', exact: true }).click();
-  await page.locator('.area-tile[title="Launch"]').waitFor({ state: 'detached' });
+  await page.locator('.area-tile[data-name="Launch"]').waitFor({ state: 'detached' });
   const after = await workspace(page);
   assert.equal(after.spaces.length, 0);
   const kept = after.tasks.find(task => task.channel?.name === 'general');
@@ -123,7 +123,7 @@ try {
   const orgletsBefore = after.workers.length;
   const added = await page.evaluate(() => window.orglet.call('marketAdd', { listingId: 'launch-space', version: 1 }));
   assert.equal(added.kind, 'space');
-  await page.locator('.area-tile[title="Launch"]').click();
+  await page.locator('.area-tile[data-name="Launch"]').click();
   await page.locator('.sidebar .channel-row').nth(2).waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch');
   assert.deepEqual((await page.locator('.sidebar .section-toggle').allTextContents()).map(text => text.trim()), ['Research', 'Writing']);
@@ -153,30 +153,40 @@ try {
 
   // A folder on the rail: a right click on the space's tile puts it in a new one, the folder's tile closes and opens
   // it, and removing the folder leaves the space on the rail.
-  await page.locator('.area-tile[title="Launch"]').click({ button: 'right' });
+  await page.locator('.area-tile[data-name="Launch"]').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Chuyển vào thư mục mới', exact: true }).click();
   const folder = page.locator('.area-folder');
-  await folder.locator('.area-tile[title="Launch"]').waitFor();
+  await folder.locator('.area-tile[data-name="Launch"]').waitFor();
   assert.equal((await workspace(page)).spaces.find(space => space.name === 'Launch').folder, 'Thư mục 1');
   assert.equal(await folder.locator('.area-folder-tile').getAttribute('aria-expanded'), 'true');
   await shot(page, 'folder-open');
   await folder.locator('.area-folder-tile').click();
-  await page.locator('.area-tile[title="Launch"]').waitFor({ state: 'detached' });
+  await page.locator('.area-tile[data-name="Launch"]').waitFor({ state: 'detached' });
   assert.ok(await folder.locator('.area-folder-tile.active').count(), 'a closed folder marks that it holds the open space');
   await shot(page, 'folder-closed');
   await folder.locator('.area-folder-tile').click();
-  await page.locator('.area-tile[title="Launch"]').waitFor();
+  await page.locator('.area-tile[data-name="Launch"]').waitFor();
   await folder.locator('.area-folder-tile').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Bỏ thư mục', exact: true }).click();
   await folder.waitFor({ state: 'detached' });
-  await page.locator('.area-tile[title="Launch"]').waitFor();
+  await page.locator('.area-tile[data-name="Launch"]').waitFor();
   assert.equal((await workspace(page)).spaces.find(space => space.name === 'Launch').folder, undefined);
 
   // Several spaces side by side: each tile has its own fill, so they are told apart at a glance.
   const firstOrgletId = (await workspace(page)).workers[0].id;
   for (const name of ['Ra mắt', 'Khách hàng', 'Nghiên cứu']) await page.evaluate(fields => window.orglet.call('createSpace', fields), { name, orgletIds: [firstOrgletId], categories: [] });
   await page.locator('.area-tile > .space-mark').nth(3).waitFor();
-  assert.deepEqual(await page.locator('.area-tile > .space-mark').allTextContents(), ['LA', 'RM', 'KH', 'NC']);
+  assert.deepEqual(await page.locator('.area-tile:has(> .space-mark)').evaluateAll(tiles => tiles.map(tile => tile.dataset.name)), ['Launch', 'Ra mắt', 'Khách hàng', 'Nghiên cứu']);
+  // The pointer on a tile shows its name beside it, and it goes when the pointer leaves.
+  await page.locator('.area-tile[data-name="Khách hàng"]').hover();
+  assert.equal(await page.locator('.area-tip').textContent(), 'Khách hàng');
+  const tileBox = await page.locator('.area-tile[data-name="Khách hàng"]').boundingBox();
+  const tipBox = await page.locator('.area-tip').boundingBox();
+  assert.ok(tipBox.x > tileBox.x + tileBox.width, 'the name sits to the right of the tile');
+  assert.ok(Math.abs(tipBox.y + tipBox.height / 2 - (tileBox.y + tileBox.height / 2)) <= 1, 'the name is centred on the tile');
+  await shot(page, 'tile-tip');
+  await page.locator('.sidebar-title').hover();
+  await page.locator('.area-tip').waitFor({ state: 'detached' });
   await shot(page, 'space-marks');
   console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it, put it in a folder and take it out.');
 } finally {

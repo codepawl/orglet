@@ -145,7 +145,7 @@ async function appearance(page, nextLanguage, theme) {
   const workspace = await call(page, 'workspace');
   await call(page, 'settings', { language, theme, connectionLimitMicros: workspace.connectionLimitMicros });
   await page.waitForFunction(({ theme, language }) => document.documentElement.dataset.theme === theme && document.documentElement.lang === language, { theme, language });
-  await page.locator(`.area-tile[title="${label('Bạn bè và tin nhắn')}"]`).waitFor();
+  await page.locator(`.area-tile[data-name="${label('Bạn bè và tin nhắn')}"]`).waitFor();
 }
 
 /** Home with the full sidebar, where an orglet's row has its menu and Add friend opens the marketplace. */
@@ -155,7 +155,7 @@ async function friends(page) {
     ? document.querySelector('.app.sidebar-hidden') !== null
     : document.querySelector('.app:not(.sidebar-hidden)') !== null);
   await expandSidebar(page);
-  const home = page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first();
+  const home = page.locator('.area-tile[data-name="Bạn bè và tin nhắn"], .area-tile[data-name="Friends and direct messages"]').first();
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
 }
 
@@ -205,7 +205,7 @@ try {
   await page.setViewportSize({ width: 1200, height: 820 });
   await call(page, 'createChannel', { name: 'Public crew', topic: 'A crew for the publishing fixture.', members: [{ kind: 'orglet', id: worker.id }], mode: 'lead', lead: { synthesizerId: worker.id, instructions: 'Combine the reviewed research.', workflow: 'parallel', monthlyBudgetMicros: 1000000 } });
   await expandSidebar(page);
-  await page.locator('.area-tile[title="Bạn bè và tin nhắn"]').click();
+  await page.locator('.area-tile[data-name="Bạn bè và tin nhắn"]').click();
   await page.getByRole('button', { name: 'Tùy chọn kênh #Public crew', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Xuất bản lên marketplace', exact: true }).click();
   await preparePreview(page);

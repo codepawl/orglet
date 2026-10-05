@@ -2198,7 +2198,7 @@ export function App() {
     } },
     ...workspace.spaces.map(space => ({
       key: `space:${space.id}` as const,
-      icon: <SpaceMark name={space.name} seed={space.id} color={space.color} />,
+      icon: <SpaceMark seed={space.id} color={space.color} />,
       label: space.name,
       active: area === 'channels' && openSpace?.id === space.id && !pagePanelOpen,
       onSelect: function goToSpace() {

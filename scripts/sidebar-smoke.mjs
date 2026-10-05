@@ -103,7 +103,7 @@ try {
   await page.getByRole('button', { name: 'Tùy chọn Archive smoke', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
   await waitFor(async () => (await workspace(page)).archivedWorkers.some(worker => worker.id === archiveOrglet.id), 'orglet archive');
-  await page.locator('.area-tile[title="Hoạt động"]').click();
+  await page.locator('.area-tile[data-name="Hoạt động"]').click();
   await page.getByRole('tab', { name: 'Xong', exact: true }).click();
   await page.getByRole('button', { name: 'Mở mục lưu trữ', exact: true }).click();
   await page.getByRole('tab', { name: 'Lưu trữ', exact: true }).waitFor();

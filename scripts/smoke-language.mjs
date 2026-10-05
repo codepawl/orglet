@@ -45,7 +45,7 @@ export async function openChannels(page) {
 }
 
 export async function openHome(page) {
-  const home = page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first();
+  const home = page.locator('.area-tile[data-name="Bạn bè và tin nhắn"], .area-tile[data-name="Friends and direct messages"]').first();
   // On Home already there is nothing to do; a click would only go back to the DM that is open.
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
 }
