@@ -72,18 +72,73 @@ export const mascotShapes: Record<MascotId, { body: BodyShapeId; face: FaceId }>
   care: { body: 'wide', face: 'happy' },
 };
 
-/** The body as one closed SVG path on the 64 grid. */
+/*
+ * How round a body is (owner, 2026-10-05: the bodies read as boxes; make them blobs, with the top, the bottom and
+ * the sides curved). A body is a rounded box drawn part of the way towards the ellipse that fits the same box:
+ * at 0 it is the box, at 1 the ellipse. The ellipse touches the box at the middle of each side, so on the way the
+ * straight sides bow and the corners round, while the body still fills its box and still stands on its bottom
+ * line. The small corner stays the squarest one, which is what keeps a body the logo's kin.
+ */
+export const BODY_ROUNDNESS = 0.3;
+
+/** How many points draw one side between two corners, so it can bow. */
+const SIDE_STEPS = 7;
+
+/**
+ * A body's outline on the 64 grid, clockwise from the top left corner: the points of its four corner arcs and,
+ * when the body is rounded, of each side between them. `inset` shrinks the whole outline by that distance, which
+ * the 3D solid uses for the rings of its rolled edge. Both drawings take their body from here.
+ */
+export function bodyOutlinePoints(shape: BodyShape, inset = 0, roundness = BODY_ROUNDNESS): [number, number][] {
+  const left = shape.left + inset;
+  const top = shape.top + inset;
+  const right = shape.left + shape.width - inset;
+  const bottom = shape.top + shape.height - inset;
+  const halfWidth = (right - left) / 2;
+  const halfHeight = (bottom - top) / 2;
+  const centreX = left + halfWidth;
+  const centreY = top + halfHeight;
+  // A corner smaller than the inset keeps a sliver of a radius, and none is bigger than the box allows.
+  const [topLeft, topRight, bottomRight, bottomLeft] = shape.corners.map(radius => Math.min(Math.max(radius - inset, 0.6), halfWidth, halfHeight));
+  const arcs: [number, number, number, number][] = [
+    [left + topLeft, top + topLeft, topLeft, Math.PI],
+    [right - topRight, top + topRight, topRight, Math.PI * 1.5],
+    [right - bottomRight, bottom - bottomRight, bottomRight, 0],
+    [left + bottomLeft, bottom - bottomLeft, bottomLeft, Math.PI / 2],
+  ];
+  const corners = arcs.map(([arcX, arcY, radius, startAngle]) => {
+    const steps = radius > 9 ? 10 : 6;
+    return Array.from({ length: steps + 1 }, (_, index): [number, number] => {
+      const angle = startAngle + (Math.PI / 2) * (index / steps);
+      return [arcX + radius * Math.cos(angle), arcY + radius * Math.sin(angle)];
+    });
+  });
+  if (roundness <= 0) return corners.flat();
+  const points: [number, number][] = [];
+  corners.forEach((corner, index) => {
+    points.push(...corner);
+    // The straight side from this corner's end to the next corner's start, as points that can bow.
+    const from = corner[corner.length - 1];
+    const to = corners[(index + 1) % corners.length][0];
+    for (let step = 1; step < SIDE_STEPS; step++) points.push([from[0] + (to[0] - from[0]) * step / SIDE_STEPS, from[1] + (to[1] - from[1]) * step / SIDE_STEPS]);
+  });
+  return points.map(([x, y]) => {
+    const across = (x - centreX) / halfWidth;
+    const down = (y - centreY) / halfHeight;
+    const distance = Math.hypot(across, down);
+    if (distance === 0) return [x, y];
+    // The point of the fitted ellipse on the same ray from the centre.
+    const ellipseX = centreX + (x - centreX) / distance;
+    const ellipseY = centreY + (y - centreY) / distance;
+    return [x + (ellipseX - x) * roundness, y + (ellipseY - y) * roundness];
+  });
+}
+
+const rounded = (value: number) => Math.round(value * 100) / 100;
+
+/** The body as one closed SVG path on the 64 grid: the outline's points joined, which at these sizes is the curve. */
 export function bodyPath(shape: BodyShape): string {
-  const { left, top, width, height } = shape;
-  const [topLeft, topRight, bottomRight, bottomLeft] = shape.corners;
-  const right = left + width;
-  const bottom = top + height;
-  return [
-    `M${left + topLeft} ${top}`, `H${right - topRight}`, `A${topRight} ${topRight} 0 0 1 ${right} ${top + topRight}`,
-    `V${bottom - bottomRight}`, `A${bottomRight} ${bottomRight} 0 0 1 ${right - bottomRight} ${bottom}`,
-    `H${left + bottomLeft}`, `A${bottomLeft} ${bottomLeft} 0 0 1 ${left} ${bottom - bottomLeft}`,
-    `V${top + topLeft}`, `A${topLeft} ${topLeft} 0 0 1 ${left + topLeft} ${top}`, 'Z',
-  ].join('');
+  return `M${bodyOutlinePoints(shape).map(([x, y]) => `${rounded(x)} ${rounded(y)}`).join('L')}Z`;
 }
 
 /**

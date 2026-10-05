@@ -20,7 +20,7 @@ export type FaceMotion = {
 };
 
 /**
- * One orglet as an extruded slab on a canvas (COD-156), turning to look at the pointer; see orgletSolid.ts for the
+ * One orglet as a round solid on a canvas (COD-156), turning to look at the pointer; see orgletSolid.ts for the
  * drawing and orgletStage.ts for the loop. `size` is the size of the 64-unit drawing in CSS pixels, the same box
  * the flat `Mascot` fills; the canvas is bigger and centred on it, so a hop or a note never touches layout. The
  * colours are read from the stylesheet: `color` is the body, `--mascot-ink` the rims. Decorative, like `Mascot`.

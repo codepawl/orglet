@@ -1,9 +1,9 @@
 import type { MascotId } from './mascots';
-import { BODY_BOX, bodyShapes, eyeShift, mascotShapes, type BodyShape, type BodyShapeId, type FaceId } from './orgletShapes';
+import { BODY_BOX, bodyOutlinePoints, bodyShapes, eyeShift, mascotShapes, type BodyShape, type BodyShapeId, type FaceId } from './orgletShapes';
 
 /*
  * An orglet in 3D (COD-156, from the owner's standalone "ORGLETS" page, 2026-09-21: "this orglet form is so good,
- * apply it in the Orglet app too"). A large face is not the flat drawing in mascots.tsx but an extruded slab: the
+ * apply it in the Orglet app too"). A large face is not the flat drawing in mascots.tsx but a round solid: the
  * logo bubble outline is rotated as a solid with a front face, a back face and the side between them, the eyes and
  * each accessory are polygons living at their own depth, and the whole head turns in real 3D to look at the
  * pointer on springs, the eyes leading the head. Everything is projected from geometry every frame and drawn on a
@@ -19,11 +19,12 @@ export type Rgb = readonly [number, number, number];
 
 /** Half the logo body's side, and how far below the centre every body's bottom edge is: they all stand on one line. */
 export const BODY_HALF = 22;
-export const DEPTH = 15;
+/*
+ * How thick the solid is (owner, 2026-10-05: as a thin slab it read as a coin with a flat edge once it turned; it
+ * should be one even round volume). At a little over half the body's width it is a pillow from every side.
+ */
+export const DEPTH = 24;
 export const FRONT = DEPTH / 2;
-// Anything worn on the head sits just behind the face plane: enough parallax to feel like a hat on a head, close
-// enough that drawing it after the body is the right order at every angle.
-export const HAT_Z = FRONT - 4;
 export const FOCAL = 150;
 const EYE_WIDTH = 4.4;
 const EYE_HEIGHT = 9.5;
@@ -144,51 +145,39 @@ function capsulePoints(centreX: number, centreY: number, width: number, height: 
 }
 
 /**
- * A body's outline, clockwise from the top edge: a rounded box with a radius of its own at each corner, which for
+ * A body's outline around its centre, clockwise from the top edge (`bodyOutlinePoints` in `orgletShapes.ts`, which
+ * the flat drawing uses too): a rounded box with bulged sides and a radius of its own at each corner, which for
  * the logo's body is three big corners and the small bottom-left one that makes it a speech bubble (`orgletShapes.ts`
  * holds every body). `inset` shrinks it by that distance everywhere, which for a rounded outline is exactly the same
  * outline with every radius reduced by the inset and every arc centre where it was; that is what makes the bevel
  * below a true parallel curve and not a scaled copy, so the body's own proportions survive it.
  */
 export function buildBodyOutline(inset = 0, shape: BodyShape = bodyShapes.base): Point2[] {
-  const points: Point2[] = [];
-  const left = shape.left - BODY_BOX.centreX + inset;
-  const top = shape.top - BODY_BOX.centreY + inset;
-  const right = shape.left + shape.width - BODY_BOX.centreX - inset;
-  const bottom = shape.top + shape.height - BODY_BOX.centreY - inset;
-  // A corner smaller than the inset keeps a sliver of a radius, so the outline never folds back on itself.
-  const [topLeft, topRight, bottomRight, bottomLeft] = shape.corners.map(radius => Math.max(radius - inset, 0.6));
-  const stepsFor = (radius: number) => radius > 9 ? 10 : 6;
-  const arcs: [number, number, number, number, number][] = [
-    [left + topLeft, top + topLeft, topLeft, Math.PI, Math.PI * 1.5],
-    [right - topRight, top + topRight, topRight, Math.PI * 1.5, TAU],
-    [right - bottomRight, bottom - bottomRight, bottomRight, 0, Math.PI / 2],
-    [left + bottomLeft, bottom - bottomLeft, bottomLeft, Math.PI / 2, Math.PI],
-  ];
-  for (const [centreX, centreY, radius, startAngle, endAngle] of arcs) {
-    const steps = stepsFor(radius);
-    for (let index = 0; index <= steps; index++) {
-      const angle = startAngle + (endAngle - startAngle) * (index / steps);
-      points.push([centreX + radius * Math.cos(angle), centreY + radius * Math.sin(angle)]);
-    }
-  }
-  return points;
+  return bodyOutlinePoints(shape, inset).map(([x, y]): Point2 => [x - BODY_BOX.centreX, y - BODY_BOX.centreY]);
 }
 
 /*
- * The rolled edge (user, 2026-09-22: the edges were still too sharp). The slab is not a cut-out with a crease where
- * the face meets the side: its edge is a quarter round of radius BEVEL, so the widest cross-section is the rim at
- * ±RIM_Z and the face plate at ±FRONT is inset by the whole radius. The steps between them are drawn as shoulders,
- * each one a ring of the quarter round with a tone that much further from the side and towards the face, which is
- * what a rolled edge is made of at the sizes these faces are drawn.
+ * The dome. The solid has no side: its widest cross-section is the rim in the middle, at depth 0, and from there
+ * to the front and to the back the cross-sections shrink about the body's centre along a quarter ellipse, down
+ * to the face plate at ±FRONT. The plate keeps a share of the body's size, so the eyes sit on something nearly
+ * flat. The steps between are drawn as shoulders, each a ring lit like the face.
  */
-export const BEVEL = 3.4;
-export const RIM_Z = FRONT - BEVEL;
-/** Along the quarter round, 0 at the rim and a right angle at the face plate. Two steps read as a roll; one reads as a chamfer. */
-const SHOULDER_ANGLES = [Math.PI / 6, Math.PI / 3];
-const bevelInset = (angle: number) => BEVEL * (1 - Math.cos(angle));
-const bevelDepth = (angle: number) => RIM_Z + BEVEL * Math.sin(angle);
-/** One body as the slab is built from it: the rim, the shoulders of the rolled edge and the face plate. */
+/** How much of its size a cross-section has lost by the face plate. */
+export const FACE_SHRINK = 0.6;
+const SHOULDER_COUNT = 6;
+/** Along the quarter ellipse, 0 at the rim and a right angle at the face plate. */
+const SHOULDER_ANGLES = Array.from({ length: SHOULDER_COUNT }, (_, index) => (Math.PI / 2) * (index + 1) / (SHOULDER_COUNT + 1));
+const domeDepth = (angle: number) => FRONT * Math.sin(angle);
+/** How far the rim, the widest cross-section, already is from the shaded colour to the face's. */
+const RIM_TONE = 0.55;
+/** The cross-section at one angle of the dome: the rim's outline shrunk about the body's centre. */
+function crossSection(angle: number, shape: BodyShape): Point2[] {
+  const scale = 1 - FACE_SHRINK * (1 - Math.cos(angle));
+  const centreX = shape.left + shape.width / 2 - BODY_BOX.centreX;
+  const centreY = shape.top + shape.height / 2 - BODY_BOX.centreY;
+  return buildBodyOutline(0, shape).map(([x, y]): Point2 => [centreX + (x - centreX) * scale, centreY + (y - centreY) * scale]);
+}
+/** One body as the solid is built from it: the rim, the shoulders of the dome and the face plate. */
 export type BodyGeometry = {
   rim: Point2[];
   shoulders: { outline: Point2[]; z: number; towardsFace: number }[];
@@ -199,13 +188,13 @@ export type BodyGeometry = {
 function buildGeometry(shape: BodyShape): BodyGeometry {
   return {
     rim: buildBodyOutline(0, shape),
-    shoulders: SHOULDER_ANGLES.map((angle, index) => ({
-      outline: buildBodyOutline(bevelInset(angle), shape),
-      z: bevelDepth(angle),
-      /** How far this ring has travelled from the side's colour to the face's. */
-      towardsFace: (index + 1) / (SHOULDER_ANGLES.length + 1),
+    shoulders: SHOULDER_ANGLES.map(angle => ({
+      outline: crossSection(angle, shape),
+      z: domeDepth(angle),
+      /** How far this ring has travelled from the rim's tone to the face's. */
+      towardsFace: RIM_TONE + (1 - RIM_TONE) * Math.sin(angle),
     })),
-    face: buildBodyOutline(BEVEL, shape),
+    face: crossSection(Math.PI / 2, shape),
     widthRatio: shape.width / BODY_BOX.size,
   };
 }
@@ -962,6 +951,18 @@ function eyeSpec(model: OrgletModel): { left: EyeSpec; right: EyeSpec } {
   return spec;
 }
 
+/**
+ * How far forward the body's front surface is at a point of the face: the depth of the dome's cross-section that
+ * reaches that far from the centre (the body taken as the ellipse of its box).
+ */
+function surfaceDepth(x: number, y: number, shape: BodyShape): number {
+  const across = (x - (shape.left + shape.width / 2 - BODY_BOX.centreX)) / (shape.width / 2);
+  const down = (y - (shape.top + shape.height / 2 - BODY_BOX.centreY)) / (shape.height / 2);
+  const reach = Math.min(Math.hypot(across, down), 1);
+  const cosine = clamp(1 - (1 - reach) / FACE_SHRINK, 0, 1);
+  return domeDepth(Math.acos(cosine));
+}
+
 function drawEyes(context: Context, model: OrgletModel, rotation: Rotation, tones: Tones, now: number) {
   const eyeColour = rgbString(tones.eye);
   const spec = eyeSpec(model);
@@ -970,12 +971,14 @@ function drawEyes(context: Context, model: OrgletModel, rotation: Rotation, tone
   const happyBlend = smoothstep(0.3, 0.7, model.happy.value);
   const gazeX = model.eyeX.value;
   const gazeY = model.eyeY.value;
-  const eyeZ = FRONT + 0.6;
+  const shape = bodyShapes[model.look.body];
+  // Just proud of the body's surface at that point, so on a dome the eyes turn with it and never leave it.
+  const onFace = (x: number, y: number) => projectPoint(rotation, x, y, surfaceDepth(x, y, shape) + 0.6);
   for (const eye of [spec.left, spec.right]) {
     const centreX = eye.x + gazeX;
     const centreY = eye.y + gazeY;
     if (eye.shut) {
-      const projected = capsulePoints(centreX, centreY, 7, 3).map(([x, y]) => projectPoint(rotation, x, y, eyeZ));
+      const projected = capsulePoints(centreX, centreY, 7, 3).map(([x, y]) => onFace(x, y));
       context.fillStyle = eyeColour;
       tracePolygon(context, projected, true);
       context.fill();
@@ -983,7 +986,7 @@ function drawEyes(context: Context, model: OrgletModel, rotation: Rotation, tone
     }
     const height = Math.max(1.6, eye.height * open * (1 - happyBlend));
     if (happyBlend < 1) {
-      const projected = capsulePoints(centreX, centreY, EYE_WIDTH, height).map(([x, y]) => projectPoint(rotation, x, y, eyeZ));
+      const projected = capsulePoints(centreX, centreY, EYE_WIDTH, height).map(([x, y]) => onFace(x, y));
       context.globalAlpha = tones.alpha * (1 - happyBlend);
       context.fillStyle = eyeColour;
       tracePolygon(context, projected, true);
@@ -1000,7 +1003,7 @@ function drawEyes(context: Context, model: OrgletModel, rotation: Rotation, tone
         const controlY = centreY - 3.2;
         const x = (1 - t) * (1 - t) * startX + 2 * (1 - t) * t * centreX + t * t * endX;
         const y = (1 - t) * (1 - t) * baseY + 2 * (1 - t) * t * controlY + t * t * baseY;
-        arch.push(projectPoint(rotation, x, y, eyeZ));
+        arch.push(onFace(x, y));
       }
       context.globalAlpha = tones.alpha * happyBlend;
       context.strokeStyle = eyeColour;
@@ -1015,7 +1018,7 @@ function drawEyes(context: Context, model: OrgletModel, rotation: Rotation, tone
     context.fillStyle = '#ff8fa3';
     context.globalAlpha = tones.alpha * 0.6 * clamp(blushAmount, 0, 1);
     for (const cheekX of [-10, 13]) {
-      const cheek = ellipseArcPoints(cheekX + 32 + gazeX * 0.3, 35.5 + model.look.eyeDy, 3.2, 1.9, 0, TAU, 14).map(([x, y]) => projectPoint(rotation, x, y, eyeZ));
+      const cheek = ellipseArcPoints(cheekX + 32 + gazeX * 0.3, 35.5 + model.look.eyeDy, 3.2, 1.9, 0, TAU, 14).map(([x, y]) => onFace(x, y));
       tracePolygon(context, cheek, true);
       context.fill();
     }
@@ -1077,6 +1080,30 @@ function faceGradient(context: Context, front: readonly (readonly number[])[], t
   return gradient;
 }
 
+/**
+ * One ring of the dome, lit like the face: from a shaded tone at the rim to the face's own gradient at the plate,
+ * so the rings read as one round surface under one light and not as flat bands.
+ */
+function ringGradient(context: Context, ring: readonly (readonly number[])[], tones: Tones, sideColour: Rgb, towardsFace: number, rotation: Rotation) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of ring) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  const away = clamp(0.35 * rotation.sinYaw + 0.25 * rotation.sinPitch, -0.35, 0.35);
+  const shade = (colour: Rgb) => mixRgb(sideColour, away > 0 ? mixRgb(colour, BLACK, away * 0.5) : mixRgb(colour, WHITE, -away * 0.35), towardsFace);
+  const gradient = context.createLinearGradient(minX, minY, maxX, maxY);
+  gradient.addColorStop(0, rgbString(shade(tones.lit)));
+  gradient.addColorStop(0.5, rgbString(shade(tones.base)));
+  gradient.addColorStop(1, rgbString(shade(tones.shaded)));
+  return gradient;
+}
+
 // The contact shadow, like the `mascot-ground` ellipse of the flat drawing: it spreads and fades as the face lifts.
 function drawShadow(context: Context, model: OrgletModel, tones: Tones, unit: number) {
   const height = clamp(-model.lift.value, 0, 40);
@@ -1131,18 +1158,17 @@ export function drawOrglet(context: Context, model: OrgletModel, tones: Tones, l
   context.lineCap = 'round';
   context.lineJoin = 'round';
 
-  // The rolled edge: the widest cross-section is the rim at ±RIM_Z, the plates at ±FRONT are inset by the bevel,
-  // and a shoulder sits at the 45° point between them.
+  // The dome: the widest cross-section is the rim in the middle, and the plates at ±FRONT are the smallest.
   const geometry = bodyGeometries[model.look.body];
   const shoulders = geometry.shoulders;
-  const rimFront = geometry.rim.map(([x, y]) => projectPoint(rotation, x, y, RIM_Z));
-  const rimBack = geometry.rim.map(([x, y]) => projectPoint(rotation, x, y, -RIM_Z));
+  const rim = geometry.rim.map(([x, y]) => projectPoint(rotation, x, y, 0));
   const front = geometry.face.map(([x, y]) => projectPoint(rotation, x, y, FRONT));
   const back = geometry.face.map(([x, y]) => projectPoint(rotation, x, y, -FRONT));
   const frontCentre = projectPoint(rotation, 0, 0, FRONT);
   const backCentre = projectPoint(rotation, 0, 0, -FRONT);
-  // The slab's silhouette is the convex hull of every cross-section: every body is a rounded box, which is convex.
-  const hull = convexHull(rimFront.concat(rimBack, front, back));
+  // The silhouette is the convex hull of every cross-section: every body is convex.
+  const sections = shoulders.flatMap(shoulder => [shoulder.z, -shoulder.z].flatMap(z => shoulder.outline.map(([x, y]) => projectPoint(rotation, x, y, z))));
+  const hull = convexHull(rim.concat(sections, front, back));
 
   const projectedShapes = model.look.shapes.map((record, index) => {
     const result = projectShape(record, rotation, model);
@@ -1167,9 +1193,14 @@ export function drawOrglet(context: Context, model: OrgletModel, tones: Tones, l
   context.stroke();
 
   if (facing) {
+    // The rim is already the body, a little darker towards its edge; what shows beyond it is the back half.
+    context.fillStyle = ringGradient(context, rim, tones, sideColour, RIM_TONE, rotation);
+    tracePolygon(context, rim, true);
+    context.fill();
     for (const shoulder of shoulders) {
-      context.fillStyle = rgbString(mixRgb(sideColour, tones.base, shoulder.towardsFace));
-      tracePolygon(context, shoulder.outline.map(([x, y]) => projectPoint(rotation, x, y, shoulder.z)), true);
+      const ring = shoulder.outline.map(([x, y]) => projectPoint(rotation, x, y, shoulder.z));
+      context.fillStyle = ringGradient(context, ring, tones, sideColour, shoulder.towardsFace, rotation);
+      tracePolygon(context, ring, true);
       context.fill();
     }
     const face = faceGradient(context, front, tones, rotation);

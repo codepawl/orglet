@@ -5,7 +5,7 @@ import { mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
 import { bodyShapeIds, mascotShapes } from '../../apps/desktop/src/renderer/components/orgletShapes';
 import { avatarRenderer, mascotGlyph, solidSizes } from '../../apps/desktop/src/renderer/components/Avatar';
 import {
-  BEVEL, BODY_HALF, FRONT, addAct, bodyGeometries, bodyOutline, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, looks, oklchLightness, projectPoint, updateOrglet,
+  BODY_HALF, FACE_SHRINK, FRONT, addAct, bodyGeometries, bodyOutline, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, looks, oklchLightness, projectPoint, updateOrglet,
   type Attention, type Palette,
 } from '../../apps/desktop/src/renderer/components/orgletSolid';
 import { parseCssColour } from '../../apps/desktop/src/renderer/components/orgletStage';
@@ -35,7 +35,8 @@ it('projects a face that looks straight ahead onto the grid unchanged, and turns
   expect(ahead.facing).toBe(true);
   const [x, y] = projectPoint(ahead, 10, -6, FRONT);
   expect(x).toBeGreaterThan(10);
-  expect(x).toBeLessThan(10.6);
+  // A touch of perspective only: the plate is 12 units forward of the centre.
+  expect(x).toBeLessThan(11);
   expect(y).toBeLessThan(-6);
   // Positive yaw looks right: the front face's centre moves right and the head is lit from its right.
   const right = buildRotation(0.6, 0, 0);
@@ -48,7 +49,7 @@ it('projects a face that looks straight ahead onto the grid unchanged, and turns
   expect(buildRotation(0, 0, Math.PI * 2).facing).toBe(true);
 });
 
-it('takes the slab silhouette as the convex hull of the front and back outlines', () => {
+it('takes the silhouette as the convex hull of the cross-sections', () => {
   const square = [[0, 0], [4, 0], [4, 4], [0, 4], [2, 2], [1, 3]];
   const hull = convexHull(square);
   expect(hull).toHaveLength(4);
@@ -74,14 +75,19 @@ it('builds every body as a closed convex outline that stands on the same line', 
   for (const id of bodyShapeIds) {
     const geometry = bodyGeometries[id];
     const lowest = Math.max(...geometry.rim.map(point => point[1]));
-    expect(lowest, id).toBeCloseTo(BODY_HALF, 5);
-    // A rounded box is convex: its hull keeps every point of the outline that is not on a straight edge's line.
-    expect(convexHull(geometry.rim).length, id).toBeGreaterThan(geometry.rim.length * 0.8);
-    // The face plate is the same outline inset by the bevel, never folded back on itself.
+    // The bowed bottom touches the line at one point, which the outline samples to within a few hundredths.
+    expect(lowest, id).toBeCloseTo(BODY_HALF, 1);
+    // A body is convex, and its sides bow, so its hull keeps every point of the outline.
+    expect(convexHull(geometry.rim).length, id).toBeGreaterThan(geometry.rim.length * 0.9);
+    // The face plate is the same outline shrunk about the body's centre: the dome's smallest cross-section.
     const faceWidth = Math.max(...geometry.face.map(point => point[0])) - Math.min(...geometry.face.map(point => point[0]));
     const rimWidth = Math.max(...geometry.rim.map(point => point[0])) - Math.min(...geometry.rim.map(point => point[0]));
-    expect(rimWidth - faceWidth, id).toBeCloseTo(2 * BEVEL, 5);
-    expect(geometry.shoulders).toHaveLength(2);
+    expect(faceWidth / rimWidth, id).toBeCloseTo(1 - FACE_SHRINK, 5);
+    // The dome has no side: every ring is smaller and further forward than the one before, from the rim to the plate.
+    const widths = geometry.shoulders.map(shoulder => Math.max(...shoulder.outline.map(point => point[0])) - Math.min(...shoulder.outline.map(point => point[0])));
+    expect([rimWidth, ...widths, faceWidth], id).toEqual([rimWidth, ...widths, faceWidth].slice().sort((first, second) => second - first));
+    const depths = geometry.shoulders.map(shoulder => shoulder.z);
+    expect([0, ...depths, FRONT], id).toEqual([0, ...depths, FRONT].slice().sort((first, second) => first - second));
   }
   // The logo's own body is what `bodyOutline` still names.
   expect(bodyOutline).toBe(bodyGeometries.base.rim);
