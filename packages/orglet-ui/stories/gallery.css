@@ -188,3 +188,8 @@
     grid-column: 2;
   }
 }
+
+/* Room above and below a story whose floating label needs somewhere to appear. */
+.gallery-padded {
+  padding: 48px 24px;
+}

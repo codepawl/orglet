@@ -135,9 +135,8 @@ token like `--sidebar`, it is not general yet, and forcing it here only moves th
 
 ## What is still missing
 
-The kit is deliberately thin today. Before it can be published it needs at least the controls an application cannot
-do without: `Label`, `Card`, `Badge`, and a real `Tooltip`. After those: `Tabs` outside a dialog,
-`RadioGroup`, `Progress`, `Table`.
+The kit is still thin. The one control an application cannot do without that it lacks is a `Table`. (A form label is
+`FieldLabel`, so there is no separate `Label`.)
 
 Two things it will not grow: a `Separator` and the alert with a coloured left border. Orglet separates with spacing,
 grouping and a quiet background instead, and that rule travels with the kit.

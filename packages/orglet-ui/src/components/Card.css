@@ -1,0 +1,61 @@
+.org-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 0;
+  border-radius: var(--org-radius-menu, 12px);
+  background: var(--org-surface, #f1f1f1);
+  color: var(--org-text, #1f1f1f);
+  font: inherit;
+  text-align: left;
+}
+.org-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.org-card-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.org-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.org-card-description {
+  color: var(--org-muted, #666);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.org-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.org-card-body {
+  display: block;
+  min-width: 0;
+  font-size: 14px;
+}
+.org-card-interactive {
+  cursor: pointer;
+  transition: background var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-card-interactive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--org-text, #1f1f1f) 7%, var(--org-surface, #f1f1f1));
+}
+.org-card-interactive:disabled {
+  cursor: default;
+  opacity: .55;
+}
+.org-card-interactive:focus-visible {
+  outline: 2px solid var(--org-focus, #576b99);
+  outline-offset: 2px;
+}
