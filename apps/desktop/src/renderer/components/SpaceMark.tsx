@@ -1,13 +1,13 @@
 import type { CSSProperties } from 'react';
 
 /**
- * A space's tile on the rail (user, 2026-10-05): a filled mark with the space's initials, so a space reads as a place
- * of the person's own and not as one of the rail's icons. The fill is a dithered gradient between two colours picked
- * from the space's id, the same ones every time, with no yellow pair because the initials are white. A colour the
- * space carries replaces the pair, and the dither then darkens it.
+ * A space's tile on the rail (user, 2026-10-05): a filled mark with no letter on it, so a space reads as a place of
+ * the person's own and not as one of the rail's icons. The fill is a dithered gradient between two colours picked
+ * from the space's id, the same ones every time. The tile's tooltip and accessible name say which space it is. A
+ * colour the space carries replaces the pair, and the dither then darkens it.
  */
 
-/** Hue pairs of the gradients, start and end. Each keeps white initials readable at the lightness in `styles.css`. */
+/** Hue pairs of the gradients, start and end, at the lightness in `styles.css`. */
 const HUE_PAIRS: readonly (readonly [number, number])[] = [
   [262, 296], [224, 262], [200, 232], [172, 204], [146, 176], [12, 344], [338, 300], [24, 2], [288, 328], [208, 170],
 ];
@@ -21,14 +21,6 @@ function seedNumber(seed: string): number {
 
 export function spaceHues(seed: string): readonly [number, number] {
   return HUE_PAIRS[seedNumber(seed) % HUE_PAIRS.length];
-}
-
-/** Up to two initials: the first letters of the first two words, or the first two letters of a single word. */
-export function spaceInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  const letters = words.length === 1 ? [...words[0]].slice(0, 2) : [[...words[0]][0], [...words[1]][0]];
-  return letters.join('').toLocaleUpperCase();
 }
 
 /** The tile is this many dither cells on a side: 3px cells on the rail's 42px tile. */
@@ -56,12 +48,11 @@ function ditherPath(): string {
 /** One path for every mark: the pattern is the same, only the two colours differ. */
 const DITHER_PATH = ditherPath();
 
-export function SpaceMark({ name, seed, color }: { name: string; seed: string; color?: string }) {
+export function SpaceMark({ seed, color }: { seed: string; color?: string }) {
   const [from, to] = spaceHues(seed);
   const colours: Record<string, string | number> = color ? { '--space-mark-from': color, '--space-mark-to': '#0000004d' } : { '--space-hue-from': from, '--space-hue-to': to };
   const style = colours as CSSProperties;
   return <span className="space-mark" style={style} aria-hidden="true">
     <svg className="space-mark-dither" viewBox={`0 0 ${DITHER_CELLS} ${DITHER_CELLS}`} preserveAspectRatio="none" focusable="false"><path d={DITHER_PATH} /></svg>
-    <span className="space-mark-initials">{spaceInitials(name)}</span>
   </span>;
 }

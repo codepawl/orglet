@@ -45,8 +45,8 @@ try {
   await spaceDialog.waitFor({ state: 'detached' });
   await page.locator('.area-tile.active[title="Launch"]').waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch', 'the sidebar lists the new space');
-  // The space's tile is a filled mark with its initials, not one more icon.
-  assert.equal(await page.locator('.area-tile[title="Launch"] .space-mark-initials').textContent(), 'LA');
+  // The space's tile is a filled mark with no letter on it, not one more icon; its name is the tile's tooltip.
+  assert.equal(await page.locator('.area-tile[title="Launch"] > .space-mark').textContent(), '');
   assert.ok((await page.locator('.area-tile[title="Launch"] .space-mark-dither path').getAttribute('d')).length > 500, 'the fill is a dither of cells');
   const made = (await workspace(page)).spaces[0];
   assert.equal(made.name, 'Launch');
@@ -176,7 +176,7 @@ try {
   const firstOrgletId = (await workspace(page)).workers[0].id;
   for (const name of ['Ra mắt', 'Khách hàng', 'Nghiên cứu']) await page.evaluate(fields => window.orglet.call('createSpace', fields), { name, orgletIds: [firstOrgletId], categories: [] });
   await page.locator('.area-tile > .space-mark').nth(3).waitFor();
-  assert.deepEqual(await page.locator('.area-tile .space-mark-initials').allTextContents(), ['LA', 'RM', 'KH', 'NC']);
+  assert.deepEqual(await page.locator('.area-tile:has(> .space-mark)').evaluateAll(tiles => tiles.map(tile => tile.title)), ['Launch', 'Ra mắt', 'Khách hàng', 'Nghiên cứu']);
   await shot(page, 'space-marks');
   console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it, put it in a folder and take it out.');
 } finally {
