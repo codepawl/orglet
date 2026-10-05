@@ -79,7 +79,14 @@ async function main() {
     await page.waitForTimeout(600);
     // The crew's plan makes the turn taller than the window, and the thread follows its end: start the shot at the
     // question instead, so the message is not cut under the header.
-    const showFromTop = () => page.locator('.thread-scroll').evaluate(element => { element.scrollTop = 0; });
+    // The faces at the top of the chat turn after the pointer. Left where the last click was, it turns them hard
+    // to one side; resting just under them, they look out of the picture at the reader.
+    const showFromTop = async () => {
+      await page.locator('.thread-scroll').evaluate(element => { element.scrollTop = 0; });
+      const faces = await page.locator('.thread-scroll .orglet-3d').first().boundingBox();
+      if (faces) await page.mouse.move(faces.x + faces.width * 1.5, faces.y + faces.height + 40);
+      await page.waitForTimeout(900);
+    };
     await showFromTop();
     await page.screenshot({ path: join(outputFolder, 'chat-light.png') });
 

@@ -5,7 +5,7 @@ import type { CrewPlanDiagram, CrewStep, CrewStepState } from '../../shared/crew
 import { Avatar } from './Avatar';
 import { StatusMark, type StatusMarkState } from './StatusMark';
 import { overflowAttributes, useStripOverflow } from '../stripOverflow';
-import { t } from '../i18n';
+import { t, tMessage } from '../i18n';
 
 const stepMarks: Record<CrewStepState, StatusMarkState> = {
   waiting: { variant: 'dashed', tone: 'muted' },
@@ -28,8 +28,9 @@ export function CrewPlanFlow({ diagram, live, statusLabel }: { diagram: CrewPlan
   const stepLabel = (step: CrewStep) => step.waitingFor.length > 0
     ? `${statusLabel[step.status]} · ${t('Chờ {0}', [step.waitingFor.join(', ')])}`
     : statusLabel[step.status];
-  const leadSummary = diagram.lead.summary || t('Chia việc cho {0} Tí', [diagram.memberCount]);
-  const combineSummary = diagram.combine.summary || t('Gộp kết quả thành câu trả lời');
+  // The lead's own note is a sentence the core wrote, in the source language: it is translated like any core message.
+  const leadSummary = (diagram.lead.summary && tMessage(diagram.lead.summary)) || t('Chia việc cho {0} Tí', [diagram.memberCount]);
+  const combineSummary = (diagram.combine.summary && tMessage(diagram.combine.summary)) || t('Gộp kết quả thành câu trả lời');
   const items: ReactNode[] = [<FlowStep key="lead" step={diagram.lead} summary={leadSummary} label={stepLabel(diagram.lead)} />];
   const rows = [...diagram.rows.map(row => ({ key: row[0].id, steps: row })), { key: 'combine', steps: [diagram.combine] }];
   for (const [index, row] of rows.entries()) {

@@ -17,7 +17,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.png">
-  <img src="docs/images/chat-light.png" alt="Orglet chat: one answer back, channels and orglets in the sidebar, open chats as tabs across the top" width="900">
+  <img src="docs/images/chat-light.png" alt="Orglet chat in a channel: the rail with a space on the left, the channel in the sidebar, the lead's plan in the thread and the members on the right" width="900">
 </picture>
 
 </div>
