@@ -444,6 +444,9 @@ export function App() {
   // a set it did take is forgotten, since a save still on its way can put one of them outside again.
   const adoptRefused = useRef('');
   const adopting = useRef(false);
+  // Counts the calls that came back, so the check runs once more after each: a channel put outside while a call
+  // was on its way changes the workspace before the call ends, and nothing else would look again.
+  const [adoptReturns, setAdoptReturns] = useState(0);
   useEffect(() => {
     if (!workspace) return;
     const outside = (channel: { spaceId?: string } | undefined) => Boolean(channel) && !workspace.spaces.some(space => space.id === channel!.spaceId);
@@ -455,8 +458,8 @@ export function App() {
     adopting.current = true;
     void orglet.call('adoptLooseChannels', { name: t('Kênh') })
       .then(spaceId => { adoptRefused.current = spaceId ? '' : waiting; }, () => { adoptRefused.current = waiting; })
-      .finally(() => { adopting.current = false; });
-  }, [workspace]);
+      .finally(() => { adopting.current = false; setAdoptReturns(count => count + 1); });
+  }, [workspace, adoptReturns]);
   // Set when the first-run account question is answered, so the refresh that follows moves to the app as a transition.
   const leavingAccountChoice = useRef(false);
   // The open chat, once a refresh found the workspace no longer lists it, and where the view goes instead (COD-282).
