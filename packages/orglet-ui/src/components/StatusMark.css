@@ -23,10 +23,9 @@
 .org-status-mark-asking { background: color-mix(in srgb, currentColor 14%, transparent); }
 /* A pause waits for the person, so it sits on a tint like the other states that carry news; idle stays plain. */
 .org-status-mark-paused { background: color-mix(in srgb, currentColor 13%, transparent); }
-.org-status-mark-busy {
-  background: color-mix(in srgb, currentColor 13%, transparent);
-  color: var(--org-working, #4473d3);
-}
+/* Working is the turning ring alone, with no tint behind it: the motion already says it is live, and a disc under a
+   moving ring reads as a second shape. */
+.org-status-mark-busy { color: var(--org-working, #4473d3); }
 .org-status-mark-busy svg { animation: org-status-mark-spin .75s linear infinite; }
 @keyframes org-status-mark-spin {
   to { transform: rotate(360deg); }
