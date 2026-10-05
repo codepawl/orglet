@@ -1,4 +1,4 @@
-import type { CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, SearchValue, SpacesValue, UsageValue } from './protocol';
+import type { CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, SearchValue, SpaceChangeValue, SpacesValue, UsageValue } from './protocol';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
 
@@ -148,6 +148,18 @@ export function formatSpaces(value: SpacesValue): string {
     ]));
     return [`${space.name}: ${space.orglets.join(', ')}`, ...channels].join('\n');
   }).join('\n\n');
+}
+
+export function formatSpaceChange(value: SpaceChangeValue): string {
+  const orglets = (value.orglets ?? []).join(', ');
+  if (value.verb === 'add') return t('Đã tạo không gian {0} với {1}.', value.space ?? '', orglets);
+  if (value.verb === 'edit') return t('Đã lưu không gian {0}: {1}.', value.space ?? '', orglets);
+  if (value.verb === 'category') return t('Đã thêm mục {0} vào không gian {1}.', value.category ?? '', value.space ?? '');
+  if (value.verb === 'delete') return t('Đã xóa không gian {0}. Các kênh của nó vẫn còn.', value.space ?? '');
+  if (value.verb === 'out') return t('Đã đưa kênh #{0} ra ngoài không gian.', value.channel ?? '');
+  return value.category
+    ? t('Đã chuyển kênh #{0} vào mục {1} của không gian {2}.', value.channel ?? '', value.category, value.space ?? '')
+    : t('Đã chuyển kênh #{0} vào không gian {1}.', value.channel ?? '', value.space ?? '');
 }
 
 export function formatScheduleChange(kind: 'schedule-enable' | 'schedule-delete' | 'schedule-save', value: ScheduleValue): string {

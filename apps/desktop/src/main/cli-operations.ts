@@ -20,6 +20,7 @@ import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-t
 export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from './cli-chats';
 export { answerText, isTurnRunning, latestAnsweredRevision, turnAnswers, turnErrors } from './cli-chat-history';
 export type { CliDependencies } from './cli-turns';
+import { CliSpaces } from './cli-spaces';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -34,12 +35,14 @@ export class CliOperations {
   private readonly chatAdmin: CliChatAdmin;
   private readonly schedules: CliSchedules;
   private readonly library: CliLibrary;
+  private readonly spaceChanges: CliSpaces;
 
   constructor(private readonly dependencies: CliDependencies) {
     this.chatActions = new CliChatActions(dependencies);
     this.chatAdmin = new CliChatAdmin(dependencies);
     this.schedules = new CliSchedules(dependencies);
     this.library = new CliLibrary(dependencies);
+    this.spaceChanges = new CliSpaces(dependencies);
   }
 
   async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
@@ -65,6 +68,7 @@ export class CliOperations {
       case 'template': return this.chatAdmin.template(request);
       case 'schedules': return this.schedules.list();
       case 'spaces': return this.spaces();
+      case 'space-change': return this.spaceChanges.change(request);
       case 'schedule-enable': return this.schedules.enable(request);
       case 'schedule-delete': return this.schedules.remove(request);
       case 'schedule-save': return this.schedules.save(request);

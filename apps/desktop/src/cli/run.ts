@@ -6,10 +6,10 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
+import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
-import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type SpacesValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
+import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type SpacesValue, type SpaceChangeValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
@@ -106,6 +106,12 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'template': return { op: 'template', templateId: command.templateId, provider: command.provider };
     case 'schedules': return { op: 'schedules' };
     case 'spaces': return { op: 'spaces' };
+    case 'space': return {
+      op: 'space-change', verb: command.verb, names: command.names,
+      ...(command.space ? { space: command.space } : {}), ...(command.rename ? { rename: command.rename } : {}),
+      ...(command.category ? { category: command.category } : {}), ...(command.chat ? { chat: command.chat } : {}),
+      ...(command.confirmName ? { confirmName: command.confirmName } : {}),
+    };
     case 'schedule-enable': return { op: 'schedule-enable', schedule: command.schedule, enabled: command.enabled };
     case 'schedule-delete': return { op: 'schedule-delete', schedule: command.schedule, confirmName: command.confirmName };
     case 'schedule-save': return { op: 'schedule-save', ...(command.schedule ? { schedule: command.schedule } : {}), ...command.fields };
@@ -247,6 +253,9 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       return EXIT_CODES.ok;
     case 'spaces':
       if (!command.json) output.stdout(formatSpaces(value as SpacesValue));
+      return EXIT_CODES.ok;
+    case 'space':
+      if (!command.json) output.stdout(formatSpaceChange(value as SpaceChangeValue));
       return EXIT_CODES.ok;
     case 'schedule-enable':
     case 'schedule-delete':
