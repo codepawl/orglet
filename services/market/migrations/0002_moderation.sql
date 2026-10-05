@@ -66,27 +66,27 @@ CREATE TABLE moderation_events (
 CREATE INDEX moderation_audit_page ON moderation_events(listing_id,version,created_at,request_id);
 
 CREATE TRIGGER publisher_moderation_key BEFORE INSERT ON mutation_requests BEGIN
-  SELECT CASE WHEN EXISTS(SELECT 1 FROM moderation_requests WHERE actor_id=NEW.owner_id AND idempotency_key=NEW.idempotency_key)
-    THEN RAISE(ABORT,'market_idempotency') END;
+  SELECT (CASE WHEN EXISTS(SELECT 1 FROM moderation_requests WHERE actor_id=NEW.owner_id AND idempotency_key=NEW.idempotency_key)
+    THEN RAISE(ABORT,'market_idempotency') END);
 END;
 CREATE TRIGGER moderation_publisher_key BEFORE INSERT ON moderation_requests BEGIN
-  SELECT CASE WHEN EXISTS(SELECT 1 FROM mutation_requests WHERE owner_id=NEW.actor_id AND idempotency_key=NEW.idempotency_key)
-    THEN RAISE(ABORT,'market_idempotency') END;
+  SELECT (CASE WHEN EXISTS(SELECT 1 FROM mutation_requests WHERE owner_id=NEW.actor_id AND idempotency_key=NEW.idempotency_key)
+    THEN RAISE(ABORT,'market_idempotency') END);
 END;
 
 CREATE TRIGGER report_acceptance_guard BEFORE INSERT ON reports BEGIN
-  SELECT CASE WHEN NOT EXISTS(
+  SELECT (CASE WHEN NOT EXISTS(
     SELECT 1 FROM moderation_requests AS request JOIN listing_versions AS version USING(listing_id,version)
     JOIN listings USING(listing_id) JOIN version_reviews AS review USING(listing_id,version)
     WHERE request.request_id=NEW.created_request AND request.operation='report'
       AND request.created_at=NEW.created_at AND json_extract(request.receipt_json,'$.reportId')=NEW.report_id
       AND version.body_sha256=request.expected_sha AND version.review_digest=request.expected_digest
       AND listings.published_version IS NOT NULL AND listings.moderation_hidden=0 AND review.state='approved'
-  ) THEN RAISE(ABORT,'market_report_target') END;
-  SELECT CASE WHEN EXISTS(SELECT 1 FROM reports WHERE reporter_id=NEW.reporter_id AND listing_id=NEW.listing_id AND version=NEW.version)
-    THEN RAISE(ABORT,'market_report_duplicate') END;
-  SELECT CASE WHEN (SELECT count(*) FROM reports WHERE reporter_id=NEW.reporter_id AND created_at > NEW.created_at-86400) >= 10
-    THEN RAISE(ABORT,'market_report_rate') END;
+  ) THEN RAISE(ABORT,'market_report_target') END);
+  SELECT (CASE WHEN EXISTS(SELECT 1 FROM reports WHERE reporter_id=NEW.reporter_id AND listing_id=NEW.listing_id AND version=NEW.version)
+    THEN RAISE(ABORT,'market_report_duplicate') END);
+  SELECT (CASE WHEN (SELECT count(*) FROM reports WHERE reporter_id=NEW.reporter_id AND created_at > NEW.created_at-86400) >= 10
+    THEN RAISE(ABORT,'market_report_rate') END);
 END;
 
 CREATE TRIGGER report_counter AFTER INSERT ON reports BEGIN
@@ -98,7 +98,7 @@ CREATE TRIGGER report_review_revision AFTER UPDATE OF status ON reports WHEN OLD
 END;
 
 CREATE TRIGGER moderation_decision_guard BEFORE INSERT ON moderation_events BEGIN
-  SELECT CASE WHEN NOT EXISTS(
+  SELECT (CASE WHEN NOT EXISTS(
     SELECT 1 FROM moderation_requests AS request JOIN listings USING(listing_id)
     JOIN listing_versions AS version USING(listing_id,version) JOIN version_reviews AS review USING(listing_id,version)
     WHERE request.request_id=NEW.request_id AND request.operation=NEW.decision AND request.created_at=NEW.created_at
@@ -113,12 +113,12 @@ CREATE TRIGGER moderation_decision_guard BEFORE INSERT ON moderation_events BEGI
             AND version.publication_epoch=listings.publication_epoch
             AND (listings.published_version IS NULL OR listings.published_version < version.version)))
       ))
-  ) THEN RAISE(ABORT,'market_stale_review') END;
-  SELECT CASE WHEN NEW.decision='resolve' AND NOT EXISTS(
+  ) THEN RAISE(ABORT,'market_stale_review') END);
+  SELECT (CASE WHEN NEW.decision='resolve' AND NOT EXISTS(
     SELECT 1 FROM reports JOIN moderation_requests AS request ON request.request_id=NEW.request_id
     WHERE report_id=NEW.report_id AND reports.listing_id=NEW.listing_id AND reports.version=NEW.version
       AND reports.status='open' AND reports.revision=request.expected_report_revision
-  ) THEN RAISE(ABORT,'market_stale_report') END;
+  ) THEN RAISE(ABORT,'market_stale_report') END);
 END;
 
 CREATE TRIGGER moderation_hidden_pointer BEFORE UPDATE OF published_version ON listings

@@ -68,55 +68,55 @@ CREATE INDEX listing_owner ON listings(owner_id, created_at, listing_id);
 CREATE INDEX submission_hour ON listing_versions(submitted_by, submitted_at);
 
 CREATE TRIGGER request_target_guard BEFORE INSERT ON mutation_requests BEGIN
-  SELECT CASE WHEN NEW.operation != 'create' AND NOT EXISTS (
+  SELECT (CASE WHEN NEW.operation != 'create' AND NOT EXISTS (
     SELECT 1 FROM listings WHERE listing_id = NEW.listing_id AND owner_id = NEW.owner_id
-  ) THEN RAISE(ABORT, 'market_owner') END;
-  SELECT CASE WHEN EXISTS (SELECT 1 FROM reserved_listing_ids WHERE listing_id = NEW.listing_id)
-    THEN RAISE(ABORT, 'market_reserved') END;
+  ) THEN RAISE(ABORT, 'market_owner') END);
+  SELECT (CASE WHEN EXISTS (SELECT 1 FROM reserved_listing_ids WHERE listing_id = NEW.listing_id)
+    THEN RAISE(ABORT, 'market_reserved') END);
 END;
 
 CREATE TRIGGER listing_capacity_guard BEFORE INSERT ON listings BEGIN
-  SELECT CASE WHEN (SELECT operation FROM mutation_requests WHERE request_id = NEW.created_request) != 'create'
-    THEN RAISE(ABORT, 'market_request') END;
-  SELECT CASE WHEN (SELECT count(*) FROM listings WHERE owner_id = NEW.owner_id) >= (
+  SELECT (CASE WHEN (SELECT operation FROM mutation_requests WHERE request_id = NEW.created_request) != 'create'
+    THEN RAISE(ABORT, 'market_request') END);
+  SELECT (CASE WHEN (SELECT count(*) FROM listings WHERE owner_id = NEW.owner_id) >= (
     SELECT listing_cap FROM mutation_requests WHERE request_id = NEW.created_request
-  ) THEN RAISE(ABORT, 'market_capacity') END;
+  ) THEN RAISE(ABORT, 'market_capacity') END);
 END;
 
 CREATE TRIGGER version_submission_guard BEFORE INSERT ON listing_versions BEGIN
-  SELECT CASE WHEN json_extract(NEW.metadata_json, '$.kind') != (
+  SELECT (CASE WHEN json_extract(NEW.metadata_json, '$.kind') != (
     SELECT kind FROM listings WHERE listing_id = NEW.listing_id
-  ) THEN RAISE(ABORT, 'market_kind') END;
-  SELECT CASE WHEN NOT EXISTS (
+  ) THEN RAISE(ABORT, 'market_kind') END);
+  SELECT (CASE WHEN NOT EXISTS (
     SELECT 1 FROM mutation_requests WHERE request_id = NEW.request_id AND owner_id = NEW.submitted_by
       AND listing_id = NEW.listing_id AND result_version = NEW.version AND operation IN ('create', 'version')
       AND created_at = NEW.submitted_at
-  ) THEN RAISE(ABORT, 'market_request') END;
-  SELECT CASE WHEN NEW.publication_epoch != (
+  ) THEN RAISE(ABORT, 'market_request') END);
+  SELECT (CASE WHEN NEW.publication_epoch != (
     SELECT publication_epoch FROM listings WHERE listing_id = NEW.listing_id
-  ) THEN RAISE(ABORT, 'market_epoch') END;
-  SELECT CASE WHEN (SELECT count(*) FROM listing_versions
+  ) THEN RAISE(ABORT, 'market_epoch') END);
+  SELECT (CASE WHEN (SELECT count(*) FROM listing_versions
     WHERE submitted_by = NEW.submitted_by AND submitted_at > NEW.submitted_at - 3600) >= 5
-    THEN RAISE(ABORT, 'market_rate') END;
+    THEN RAISE(ABORT, 'market_rate') END);
 END;
 
 CREATE TRIGGER review_complete_guard BEFORE INSERT ON version_reviews BEGIN
-  SELECT CASE WHEN NEW.state != 'pending' THEN RAISE(ABORT, 'market_pending') END;
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT (CASE WHEN NEW.state != 'pending' THEN RAISE(ABORT, 'market_pending') END);
+  SELECT (CASE WHEN NOT EXISTS (
     SELECT 1 FROM listing_versions AS versions WHERE versions.listing_id = NEW.listing_id AND versions.version = NEW.version
       AND versions.chunk_count = (SELECT count(*) FROM version_body_chunks WHERE listing_id = NEW.listing_id AND version = NEW.version)
       AND versions.body_bytes = (SELECT sum(length(body)) FROM version_body_chunks WHERE listing_id = NEW.listing_id AND version = NEW.version)
       AND versions.chunk_count - 1 = (SELECT max(ordinal) FROM version_body_chunks WHERE listing_id = NEW.listing_id AND version = NEW.version)
-  ) THEN RAISE(ABORT, 'market_chunks') END;
+  ) THEN RAISE(ABORT, 'market_chunks') END);
 END;
 
 CREATE TRIGGER published_version_guard BEFORE UPDATE OF published_version ON listings
 WHEN NEW.published_version IS NOT NULL BEGIN
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT (CASE WHEN NOT EXISTS (
     SELECT 1 FROM listing_versions AS versions JOIN version_reviews AS reviews USING(listing_id, version)
     WHERE versions.listing_id = NEW.listing_id AND versions.version = NEW.published_version
       AND versions.publication_epoch = NEW.publication_epoch AND reviews.state = 'approved'
-  ) THEN RAISE(ABORT, 'market_review') END;
+  ) THEN RAISE(ABORT, 'market_review') END);
 END;
 
 CREATE TRIGGER receipt_immutable_update BEFORE UPDATE ON mutation_requests BEGIN SELECT RAISE(ABORT, 'market_immutable'); END;

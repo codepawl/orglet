@@ -44,20 +44,20 @@ DROP TABLE listings_copy;
 CREATE INDEX listing_owner ON listings(owner_id, created_at, listing_id);
 
 CREATE TRIGGER listing_capacity_guard BEFORE INSERT ON listings BEGIN
-  SELECT CASE WHEN (SELECT operation FROM mutation_requests WHERE request_id = NEW.created_request) != 'create'
-    THEN RAISE(ABORT, 'market_request') END;
-  SELECT CASE WHEN (SELECT count(*) FROM listings WHERE owner_id = NEW.owner_id) >= (
+  SELECT (CASE WHEN (SELECT operation FROM mutation_requests WHERE request_id = NEW.created_request) != 'create'
+    THEN RAISE(ABORT, 'market_request') END);
+  SELECT (CASE WHEN (SELECT count(*) FROM listings WHERE owner_id = NEW.owner_id) >= (
     SELECT listing_cap FROM mutation_requests WHERE request_id = NEW.created_request
-  ) THEN RAISE(ABORT, 'market_capacity') END;
+  ) THEN RAISE(ABORT, 'market_capacity') END);
 END;
 
 CREATE TRIGGER published_version_guard BEFORE UPDATE OF published_version ON listings
 WHEN NEW.published_version IS NOT NULL BEGIN
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT (CASE WHEN NOT EXISTS (
     SELECT 1 FROM listing_versions AS versions JOIN version_reviews AS reviews USING(listing_id, version)
     WHERE versions.listing_id = NEW.listing_id AND versions.version = NEW.published_version
       AND versions.publication_epoch = NEW.publication_epoch AND reviews.state = 'approved'
-  ) THEN RAISE(ABORT, 'market_review') END;
+  ) THEN RAISE(ABORT, 'market_review') END);
 END;
 
 CREATE TRIGGER listing_identity_update BEFORE UPDATE OF listing_id, owner_id, kind, created_request, created_at ON listings
