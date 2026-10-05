@@ -72,3 +72,10 @@ it('keeps the message box as wide as the thread and the chat\'s opening lines, s
   expect(widthOf('.thread-composer')).toBe(widthOf('.thread-content'));
   expect(widthOf('.team-chat-start > .fresh-chat')).toBe(widthOf('.thread-content'));
 });
+
+// User, 2026-10-05: opening a channel from a DM folded the member column in while the main card changed width.
+it('puts a chat\'s own right column in place at once, and keeps the fold for the buttons', () => {
+  expect(css).toContain('.app.chat-switching { transition:none; }');
+  expect(css).toContain('.details-pane.with-chat, .members-pane.with-chat { animation:none; }');
+  expect(css).toMatch(/\.members-pane \{[^}]*animation:pane-in/);
+});

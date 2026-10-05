@@ -131,6 +131,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-pane { display:flex; flex-direction:column; min-height:0; background:transparent; border-radius:var(--panel-radius); overflow:hidden; transform-origin:-28px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
 /* The right panels open out of the header's end, where the controls that show them are. */
 @keyframes pane-in { from { opacity:0; transform:scale(.2); } to { opacity:1; transform:none; } }
+/* Another chat brings its own layout (user, 2026-10-05): its right column is in place at once and the main card
+   takes its width at once, instead of a column folding in while the messages reflow under a moving edge. The fold
+   and the width's motion stay for the buttons that show and hide a column. */
+.app.chat-switching { transition:none; }
+.details-pane.with-chat, .members-pane.with-chat { animation:none; }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
 .details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
 .details-head h2 { font-size:15px; font-weight:600; }

@@ -2,6 +2,7 @@ import { useRef, useState, type CSSProperties } from 'react';
 import { MessageCircle, Pencil, UserRound, UserRoundMinus, UserRoundPlus } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
+import { arrivedWithChat } from '../chatSwitch';
 import { AnchoredPopover } from './AnchoredPopover';
 import { Avatar, workerInk } from './Avatar';
 import { ProviderMark } from './ProviderMark';
@@ -35,7 +36,9 @@ export function MemberColumn({ you, members, others, working, leadId, onMessage,
   onAdd: (worker: Worker) => void;
 }) {
   const youWord = t('Bạn');
-  return <aside className="members-pane" aria-label={t('Thành viên')}>
+  // A column that came with the chat is in place at once; one the person asked for folds in.
+  const [cameWithChat] = useState(() => arrivedWithChat());
+  return <aside className={`members-pane${cameWithChat ? ' with-chat' : ''}`} aria-label={t('Thành viên')}>
     <div className="members-head">
       <h2>{t('Thành viên — {0}', [members.length + 1])}</h2>
     </div>

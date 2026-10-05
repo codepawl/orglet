@@ -109,6 +109,7 @@ import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry, type AreaRailFolder } from './components/AreaRail';
 import type { RowMenuItem } from './components/RowMenu';
 import { SpaceMark } from './components/SpaceMark';
+import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
 import { Boxes, CircleUserRound, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
@@ -800,6 +801,20 @@ export function App() {
   // an Open row only takes it off the list.
   const [openChats, setOpenChats] = useState<OpenChats>(readOpenChats);
   const activeChatKey = workspace ? chatKeyForView({ selected, teamId, workerId, pendingGroup: Boolean(emptyChannelId) }, workspace.tasks) : undefined;
+  // Another chat brings its own layout: the right column is in place at once instead of folding in while the main
+  // card changes width under the messages (renderer/chatSwitch.ts). Set while rendering, so it is on the same frame.
+  const [layoutChatKey, setLayoutChatKey] = useState(activeChatKey);
+  const [chatSwitching, setChatSwitching] = useState(false);
+  if (layoutChatKey !== activeChatKey) {
+    setLayoutChatKey(activeChatKey);
+    setChatSwitching(true);
+    markChatSwitch();
+  }
+  useEffect(() => {
+    if (!chatSwitching) return;
+    const timer = setTimeout(() => setChatSwitching(false), CHAT_SWITCH_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [chatSwitching, activeChatKey]);
   // The first orglet is on screen for one frame before the start reopens the last chat; it is not a visit.
   const [chatsBooted, setChatsBooted] = useState(false);
   useEffect(() => { if (workspace && !workspace.workers.length) setChatsBooted(true); }, [workspace]);
@@ -2332,7 +2347,7 @@ export function App() {
     { label: t('Tạo không gian'), icon: Boxes, onSelect: () => setSpaceDraft({}) },
     { label: t('Tạo lịch chạy'), icon: LucideCalendarClock, onSelect: () => openRoutines({ editing: true }) },
   ];
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}${chatSwitching ? ' chat-switching' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}

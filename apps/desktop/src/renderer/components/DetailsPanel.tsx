@@ -1,6 +1,7 @@
 import { chatTurnRevisions, chatTurnInput, chatTurnMessageId } from '../../shared/chat-turns';
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
+import { arrivedWithChat } from '../chatSwitch';
 import { t, currentLocale, tMessage, withNodes, NODE_MARKERS } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
 import { ProviderMark } from './ProviderMark';
@@ -402,6 +403,8 @@ export function DetailsPanel({ workspace, team, worker, group, groupName, detail
   const worked = detail ? durationLabel(workedMilliseconds(detail.runs, detail.events)) : undefined;
   const latestOutcome = detail && recovery?.taskId === detail.task.id ? latestTurnOutcome(detail, recovery) : null;
   const pane = useRef<HTMLElement>(null);
+  // A panel that came with the chat is in place at once; one the person opened folds in.
+  const [cameWithChat] = useState(() => arrivedWithChat());
   const heading = useRef<HTMLHeadingElement>(null);
   // Opening Details moves focus onto its heading, so the keyboard carries on inside the panel, and closing it, with
   // its button or Escape, gives focus back to what opened it (COD-284). A link that opens Details on one message or
@@ -416,7 +419,7 @@ export function DetailsPanel({ workspace, team, worker, group, groupName, detail
     };
   }, []);
 
-  return <aside ref={pane} className="details-pane" aria-label={t('Chi tiết')}>
+  return <aside ref={pane} className={`details-pane${cameWithChat ? ' with-chat' : ''}`} aria-label={t('Chi tiết')}>
     <div className="details-head">
       <h2 ref={heading} tabIndex={-1}>{t('Chi tiết')}</h2>
       <Button size="icon" aria-label={t('Đóng panel')} onClick={onClose}><X size={18} /></Button>

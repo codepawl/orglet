@@ -106,6 +106,23 @@ try {
   assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed with the loose ones');
   void third;
 
+  // Opening a channel from a DM brings its member column at once: the column does not fold in, and the main card's
+  // width does not travel under the messages. The fold stays for the button that shows and hides the column.
+  const rightColumnMotion = () => page.evaluate(() => document.getAnimations().map(animation => animation.animationName ?? animation.transitionProperty).filter(name => name === 'pane-in' || name === 'grid-template-columns'));
+  await page.locator('.sidebar .tree-item .worker-row > button.worker').first().click();
+  await page.locator('.members-pane').waitFor({ state: 'detached' });
+  await page.waitForTimeout(400);
+  await page.locator('.sidebar .channel-row > .worker-row > button.worker').first().click();
+  await page.locator('.members-pane').waitFor();
+  assert.deepEqual(await rightColumnMotion(), [], 'a chat\'s own column is in place at once');
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Ẩn danh sách thành viên', exact: true }).click();
+  await page.locator('.members-pane').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Hiện danh sách thành viên', exact: true }).click();
+  await page.locator('.members-pane').waitFor();
+  assert.ok((await rightColumnMotion()).includes('pane-in'), 'the column still folds in when the person asks for it');
+  await page.waitForTimeout(300);
+
   // Deleting the space keeps its channel, outside every space.
   await page.locator('.area-tile[data-name="Launch"]').click();
   await page.getByRole('button', { name: 'Tùy chọn không gian Launch', exact: true }).click();
