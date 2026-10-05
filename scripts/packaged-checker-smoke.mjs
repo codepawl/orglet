@@ -88,7 +88,13 @@ try {
   await openHome(page);
   await page.locator('.sidebar').getByRole('button', { name: 'Thêm Tí', exact: true }).click();
   await page.getByRole('button', { name: 'Nhập mẫu', exact: true }).click();
-  // The imported crew's channel is in the space kept for channels made outside the spaces.
+  // The imported crew's channel is put into the space kept for channels made outside the spaces. The import
+  // itself lands on Home when it ends, so wait for both before opening that space.
+  await page.waitForFunction(async () => {
+    const state = await window.orglet.call('workspace', {});
+    return [...state.tasks.map(task => task.channel), ...state.emptyChannels].some(channel => channel?.name === 'Imported review' && channel.spaceId);
+  });
+  await page.waitForTimeout(500);
   await openChannels(page);
   await page.getByRole('button', { name: 'Tùy chọn kênh #Imported review', exact: true }).waitFor();
   const importedWorkspace = await page.evaluate(() => window.orglet.call('workspace', {}));

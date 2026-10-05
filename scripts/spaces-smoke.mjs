@@ -157,10 +157,12 @@ try {
   const widthBefore = await columnWidth();
   const columnEdge = page.getByRole('separator', { name: 'Kéo để đổi độ rộng cột thành viên', exact: true });
   await columnEdge.focus();
+  // A step from the keyboard eases to its width, so wait for it to arrive.
+  const columnReaches = expected => page.waitForFunction(width => Math.round(document.querySelector('.members-pane').getBoundingClientRect().width) === width, expected);
   await page.keyboard.press('ArrowLeft');
-  assert.equal(await columnWidth(), widthBefore + 16, 'the edge widens the column');
+  await columnReaches(widthBefore + 16);
   await page.keyboard.press('ArrowRight');
-  assert.equal(await columnWidth(), widthBefore);
+  await columnReaches(widthBefore);
   await shot(page, 'member-column');
   // Dragging the edge follows the pointer exactly, wherever on the edge it was taken: 40 px left is 40 px wider.
   const edgeBox = await columnEdge.boundingBox();
