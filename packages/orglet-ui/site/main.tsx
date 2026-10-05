@@ -171,6 +171,9 @@ function Prose({ source, navigate }: { source: string; navigate: (path: string) 
 }
 
 const FRAME_BORDER = 2;
+// The host serves an HTML file at its name without the extension and redirects the longer address there, which
+// would cost every frame a second request. Vite's own server only knows the file name.
+const PREVIEW_PATH = import.meta.env.DEV ? '/preview.html' : '/preview';
 const FRAME_MINIMUM_HEIGHT = 340;
 
 /** A story that opens a dialog, a menu or a toast, in a frame of its own. A skeleton holds its place until it loads. */
@@ -193,7 +196,7 @@ function FramedStory({ story, theme, zoom }: { story: StoryEntry; theme: Theme; 
   const query = new URLSearchParams({ file: story.file, story: story.exportName, theme, frame: frameId, zoom: String(zoom) });
   return <div className="site-frame" style={{ height }}>
     {!loaded && <Skeleton shape="block" className="site-frame-wait" />}
-    <iframe src={`/preview.html?${query}`} title={`${story.title} preview`} loading="lazy" onLoad={() => setLoaded(true)} />
+    <iframe src={`${PREVIEW_PATH}?${query}`} title={`${story.title} preview`} loading="lazy" onLoad={() => setLoaded(true)} />
   </div>;
 }
 
