@@ -47,7 +47,7 @@ try {
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch', 'the sidebar lists the new space');
   // The space's tile is a filled mark with no letter on it, not one more icon; its name is the tile's tooltip.
   assert.equal(await page.locator('.area-tile[data-name="Launch"] > .space-mark').textContent(), '');
-  assert.ok((await page.locator('.area-tile[data-name="Launch"] .space-mark-dither path').getAttribute('d')).length > 500, 'the fill is a dither of cells');
+  assert.match(await page.locator('.area-tile[data-name="Launch"] > .space-mark').evaluate(element => getComputedStyle(element).backgroundImage), /linear-gradient/);
   const made = (await workspace(page)).spaces[0];
   assert.equal(made.name, 'Launch');
   assert.equal(made.orgletIds.length, 2);

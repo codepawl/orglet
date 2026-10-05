@@ -8,7 +8,7 @@ import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunningItem } from '../../apps/desktop/src/shared/running';
 import { categoryNames, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
 import { folderKey, spaceFolderNames } from '../../apps/desktop/src/renderer/areas';
-import { DITHER_CELLS, ditherCellOn, spaceDitherFlip, spaceHues } from '../../apps/desktop/src/renderer/components/SpaceMark';
+import { spaceHues } from '../../apps/desktop/src/renderer/components/SpaceMark';
 import { SAVED_LIMIT, SAVED_TEXT_LIMIT, savedExcerpt, withSaved, withoutSaved, type SavedMessage } from '../../apps/desktop/src/renderer/saved';
 import { activityCounts } from '../../apps/desktop/src/renderer/components/ActivityPage';
 
@@ -132,21 +132,7 @@ describe('a space\'s mark on the rail', () => {
   it('picks the same gradient for a space every time', () => {
     const seeds = Array.from({ length: 200 }, (_, index) => `space-${index}`);
     for (const seed of seeds) expect(spaceHues(seed)).toEqual(spaceHues(seed));
-    // With no letter on the tile the fill tells spaces apart: many different pairs, and four corners to gather in.
+    // With no letter on the tile the fill tells spaces apart, so there are many different pairs.
     expect(new Set(seeds.map(seed => spaceHues(seed).join())).size).toBeGreaterThan(100);
-    expect(new Set(seeds.map(seed => spaceDitherFlip(seed).join())).size).toBe(4);
-    for (const seed of seeds) expect(spaceDitherFlip(seed)).toEqual(spaceDitherFlip(seed));
-  });
-
-  it('dithers from the first colour at the top left to the second at the bottom right', () => {
-    const on = (rows: readonly number[]) => rows.reduce((total, row) => total + Array.from({ length: DITHER_CELLS }, (_, column) => ditherCellOn(column, row)).filter(Boolean).length, 0);
-    expect(ditherCellOn(0, 0)).toBe(false);
-    expect(ditherCellOn(DITHER_CELLS - 1, DITHER_CELLS - 1)).toBe(true);
-    // The second colour thickens row by row, and about half the tile ends up in each colour.
-    expect(on([0, 1, 2, 3])).toBeLessThan(on([5, 6, 7, 8]));
-    expect(on([5, 6, 7, 8])).toBeLessThan(on([10, 11, 12, 13]));
-    const all = on(Array.from({ length: DITHER_CELLS }, (_, row) => row));
-    expect(all).toBeGreaterThan(DITHER_CELLS * DITHER_CELLS * 0.4);
-    expect(all).toBeLessThan(DITHER_CELLS * DITHER_CELLS * 0.6);
   });
 });
