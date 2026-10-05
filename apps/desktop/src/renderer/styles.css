@@ -279,8 +279,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
    eye rises a little and the right one drops. */
 .orglet-mark { --mark-ink:var(--text); position:relative; display:inline-block; width:29px; height:29px; border-radius:46% 46% 46% 17%; background:radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--mark-ink) 72%, white), var(--mark-ink) 48%, color-mix(in srgb, var(--mark-ink) 78%, black)); font-size:0; line-height:0; flex-shrink:0; }
 .orglet-mark::before,.orglet-mark::after { content:''; position:absolute; top:21.4%; width:14.3%; height:28.6%; border-radius:999px; background:var(--bg); }
-.orglet-mark::before { left:35.7%; transform:translateY(-9%) rotate(14deg); }
-.orglet-mark::after { left:57.1%; transform:translateY(9%) rotate(14deg); }
+.orglet-mark::before { left:35.7%; --eye-lean:-9%; }
+.orglet-mark::after { left:57.1%; --eye-lean:9%; }
+/* The mark is an orglet at rest, so it does what a face at rest does: one blink every idle cycle and nothing else.
+   Each eye keeps its lean through the blink, which is why the lean is a variable the keyframes read. */
+.orglet-mark::before,.orglet-mark::after { transform:translateY(var(--eye-lean)) rotate(14deg); animation:mark-blink var(--motion-idle) infinite; }
+@keyframes mark-blink { 0%,95%,100% { transform:translateY(var(--eye-lean)) rotate(14deg) scaleY(1); } 97.5% { transform:translateY(var(--eye-lean)) rotate(14deg) scaleY(.12); } }
+@media (prefers-reduced-motion: reduce) { .orglet-mark::before,.orglet-mark::after { animation:none; } }
 /* At the sizes the app draws the mark, the eyes are placed in whole pixels so they stay crisp at device scale 1
    (COD-154): the percentages above put a 2.7px eye at 6.8px. The brand mark is 20px (even, like the row it sits
    in, so it centres on a whole pixel), a byline mark 25px, `.large` 42px. */
@@ -1831,8 +1836,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
      Finishing  `.message-byline.landed`: one nod on a spring as the answer lands, over the idle look-up, which
                 carries on underneath. `landed` is set only for a run that finished after the chat was opened, so
                 an old chat opens with every face still.
-     Needs you  `.assistant-message.needs-you`: a slow breath. The one loop allowed while the app waits, because
-                waiting on the person is the point and the face must stay findable.
+     Needs you  `.assistant-message.needs-you`: a slow breath, the eyes raised to you and closing once at the top
+                of every other breath. The one loop allowed while the app waits, because waiting on the person is
+                the point and the face must stay findable.
      Arriving   `.tree-item.arriving`: a row that was just created rises into the list once, and its face gives one
                 small hop once the row has settled. Rows present at startup do not. The picker preview hops the
                 same way when a different mascot is chosen (its `key` is the mascot, so the face remounts).
@@ -1949,12 +1955,22 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 
 /* Needs you: waiting on a person is not working, so it breathes slowly instead of turning its head. */
 .assistant-message.needs-you .avatar .mascot { animation:mascot-breathe var(--motion-cycle) ease-in-out infinite; }
+/* The eyes wait with the head: they look up at you and blink slowly, once every two breaths, at the top of one. */
+.assistant-message.needs-you .avatar .mascot-eyes { --gaze-y:-0.9px; animation:mascot-wait-eyes calc(var(--motion-cycle) * 2) ease-in-out infinite; }
+@keyframes mascot-wait-eyes { 0%,21%,29%,100% { transform:translateY(var(--gaze-y)) scaleY(1); } 25% { transform:translateY(var(--gaze-y)) scaleY(.12); } }
 @keyframes mascot-breathe { 0%,100% { transform:translateY(var(--mascot-lift)) scale(1); } 50% { transform:translateY(var(--mascot-lift)) scale(1.06); } }
 
 /* Arriving: a worker or team that was just created rises into the list once, and its face hops once the row has
    settled. (The picker preview is a 3D face and hops in on its own, see orgletStage.ts.) */
 .tree-item.arriving { animation:row-arrive .32s var(--ease-out) 1; }
 .tree-item.arriving .mascot { animation:mascot-hop var(--motion-gesture) var(--ease-spring) .32s 1; }
+/* The eyes hop too: up with the head, then shut for a moment as it lands. */
+.tree-item.arriving .mascot-eyes { animation:mascot-arrive-eyes var(--motion-gesture) ease-out .32s 1; }
+@keyframes mascot-arrive-eyes {
+  0%,100% { transform:translateY(var(--gaze-y)) scaleY(1); }
+  35% { transform:translateY(var(--gaze-y)) translateY(-1px) scaleY(1); }
+  70% { transform:translateY(var(--gaze-y)) scaleY(.12); }
+}
 @keyframes row-arrive { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
 
 /* Reduced motion: no loops, no gestures, no glides. A state still shows (the eyes still drop or lift, the row still
@@ -1963,7 +1979,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   .avatar .mascot,.avatar-face,.mascot-eyes,.mascot-choice .mascot,
   .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.mascot-choice:is(:hover, :focus-visible) .mascot { transition:none; }
   .avatar.alive .mascot,.avatar.alive .mascot-eyes,.message-byline.working .mascot,.message-byline.working .mascot-eyes,.assistant-message:has(> .message-main > .live-run) .message-byline.working .mascot-eyes,
-  .message-byline.landed .avatar .mascot,.message-byline.landed .avatar .mascot-eyes,.assistant-message.needs-you .avatar .mascot,.tree-item.arriving .mascot { animation:none; }
+  .message-byline.landed .avatar .mascot,.message-byline.landed .avatar .mascot-eyes,.assistant-message.needs-you .avatar .mascot,.assistant-message.needs-you .avatar .mascot-eyes,
+  .tree-item.arriving .mascot,.tree-item.arriving .mascot-eyes { animation:none; }
   .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.assistant-message:has(> .message-main > .live-run) .message-byline.working .mascot { transform:translateY(var(--mascot-lift)); filter:none; }
   .mascot-choice:is(:hover, :focus-visible) .mascot { transform:none; }
   .tree-item.arriving { animation:row-arrive-quiet .32s var(--ease-out) 1; }
@@ -2488,6 +2505,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .live-island[data-state=writing] .avatar .mascot-eyes { --gaze-y:1.6px; animation:mascot-write calc(var(--motion-cycle) * 1.5) ease-in-out infinite; }
 @keyframes mascot-write { 0%,100% { transform:translateY(var(--gaze-y)) translateX(-1.4px); } 50% { transform:translateY(var(--gaze-y)) translateX(1.4px); } }
 .live-island[data-state=waiting] .avatar .mascot { animation:mascot-breathe var(--motion-cycle) ease-in-out infinite; }
+.live-island[data-state=waiting] .avatar .mascot-eyes { --gaze-y:-0.9px; animation:mascot-wait-eyes calc(var(--motion-cycle) * 2) ease-in-out infinite; }
 .live-island-faces .avatar:not(:only-child) :is(.mascot,.mascot-eyes) { animation-delay:var(--idle-delay, 0s); }
 /* Reduced motion: the loops and the width morph are already off (the global rule above), so a state is a cut:
    the eyes still drop or lift, and the head keeps its lift so the art never shifts. */
@@ -2959,7 +2977,13 @@ button.crew-node:hover { background:var(--row-hover); }
 .orglet-cursor-body { position:absolute; display:block; width:20px; height:20px; }
 .orglet-cursor-body svg { display:block; overflow:visible; filter:drop-shadow(0 1px 1.5px #00000059); }
 .orglet-cursor-shape { fill:currentColor; stroke:var(--bg); stroke-width:5; stroke-linejoin:round; paint-order:stroke; }
-.orglet-cursor-eyes { transition:transform 200ms ease-out; }
+.orglet-cursor-eyes { transform-box:fill-box; transform-origin:center; transition:transform 200ms ease-out; }
+/* The cursor is the orglet, so its eyes live like a face's: a blink now and then while it points, and on a press
+   they squeeze shut with the body and open again. While it types they stay on the field (below). */
+.orglet-cursor:not([data-action=type]) .orglet-cursor-eyes { animation:orglet-cursor-blink 5s infinite; }
+.orglet-cursor:not([data-action=type]) .orglet-cursor-pressed .orglet-cursor-eyes { animation:orglet-cursor-wince 260ms ease-out 1, orglet-cursor-blink 5s 260ms infinite; }
+@keyframes orglet-cursor-blink { 0%,94%,100% { transform:scaleY(1); } 97% { transform:scaleY(.12); } }
+@keyframes orglet-cursor-wince { 0%,100% { transform:scaleY(1); } 35% { transform:scaleY(.2); } }
 .orglet-cursor[data-action=type] .orglet-cursor-eyes { transform:translate(0, 3.6px); animation:orglet-cursor-write 1.4s ease-in-out infinite; }
 @keyframes orglet-cursor-write { 0%,100% { transform:translate(-2.4px, 3.6px); } 50% { transform:translate(2.4px, 3.6px); } }
 .orglet-cursor-pressed { animation:orglet-cursor-press 260ms var(--org-ease-out, ease-out); }
@@ -2971,6 +2995,7 @@ button.crew-node:hover { background:var(--row-hover); }
 @media (prefers-reduced-motion:reduce) {
   .orglet-cursor[data-glide] { transition:none; }
   .orglet-cursor-pressed, .orglet-cursor-ripple, .orglet-cursor[data-action=type] .orglet-cursor-eyes, .orglet-glow { animation:none; }
+  .orglet-cursor:not([data-action=type]) .orglet-cursor-eyes, .orglet-cursor:not([data-action=type]) .orglet-cursor-pressed .orglet-cursor-eyes { animation:none; }
   .orglet-glow { opacity:1; }
 }
 
