@@ -20,7 +20,8 @@ try {
   const page = await app.firstWindow();
   await page.setViewportSize({ width: 1200, height: 820 });
   await useVietnamese(page);
-  // Three more Demo orglets, and the channel their template makes, which stays outside every space.
+  // Three more Demo orglets, and the channel their template makes outside every space, which the window puts into
+  // the space kept for such channels.
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   const orglets = (await workspace(page)).workers.map(worker => worker.name);
   assert.ok(orglets.length >= 3, 'the template added orglets');
@@ -66,7 +67,7 @@ try {
   await shot(page, 'profile-menu');
   await page.keyboard.press('Escape');
   await page.locator('.org-row-menu-panel').waitFor({ state: 'detached' });
-  const made = (await workspace(page)).spaces[0];
+  const made = (await workspace(page)).spaces.find(space => space.name === 'Launch');
   assert.equal(made.name, 'Launch');
   assert.equal(made.orgletIds.length, 2);
   assert.equal(made.categories[0].name, 'Copy');
@@ -126,13 +127,17 @@ try {
   await page.locator('.sidebar .channel-row').first().dragTo(page.locator('.channel-drop').filter({ hasText: 'Copy' }));
   await page.waitForFunction(async categoryId => (await window.orglet.call('workspace', {})).tasks.some(task => task.channel?.name === 'general' && task.channel.categoryId === categoryId), made.categories[0].id);
 
-  // The template's channel is outside every space, so Home lists it beside the DMs; the space's tile lists only its own.
+  // The template's channel was made outside every space: it is in the space kept for such channels, the space's
+  // tile lists only its own, and Home lists direct messages only.
   assert.equal(await page.locator('.sidebar .channel-row').count(), 1, 'the space lists its one channel');
-  assert.equal(await page.locator('.area-tile[data-name="Kênh"]').count(), 0, 'the rail has no tile for channels');
-  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
+  await page.locator('.area-tile[data-name="Kênh"]').click();
   await page.locator('.sidebar .channel-row').first().waitFor();
+  assert.equal(await page.locator('.sidebar-title').textContent(), 'Kênh');
+  assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed in another space');
+  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
+  await page.locator('.sidebar .tree-item').first().waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Trò chuyện');
-  assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed with the loose ones');
+  assert.equal(await page.locator('.sidebar .channel-row').count(), 0, 'Home lists direct messages only');
   void third;
 
   // Opening a channel from a DM brings its member column at once: the column does not fold in, and the main card's
@@ -141,9 +146,42 @@ try {
   await page.locator('.sidebar .tree-item .worker-row > button.worker').first().click();
   await page.locator('.members-pane').waitFor({ state: 'detached' });
   await page.waitForTimeout(400);
+  await page.locator('.area-tile[data-name="Launch"]').click();
   await page.locator('.sidebar .channel-row > .worker-row > button.worker').first().click();
   await page.locator('.members-pane').waitFor();
   assert.deepEqual(await rightColumnMotion(), [], 'a chat\'s own column is in place at once');
+  // The member column is a card like the sidebar, and its edge resizes it; the width is kept.
+  const columnGround = selector => page.locator(selector).evaluate(element => getComputedStyle(element).backgroundColor);
+  assert.equal(await columnGround('.members-pane'), await columnGround('.app > .sidebar'), 'the member column has the sidebar\'s ground');
+  const columnWidth = () => page.locator('.members-pane').evaluate(element => Math.round(element.getBoundingClientRect().width));
+  const widthBefore = await columnWidth();
+  const columnEdge = page.getByRole('separator', { name: 'Kéo để đổi độ rộng cột thành viên', exact: true });
+  await columnEdge.focus();
+  // A step from the keyboard eases to its width, so wait for it to arrive.
+  const columnReaches = expected => page.waitForFunction(width => Math.round(document.querySelector('.members-pane').getBoundingClientRect().width) === width, expected);
+  await page.keyboard.press('ArrowLeft');
+  await columnReaches(widthBefore + 16);
+  await page.keyboard.press('ArrowRight');
+  await columnReaches(widthBefore);
+  await shot(page, 'member-column');
+  // Dragging the edge follows the pointer exactly, wherever on the edge it was taken: 40 px left is 40 px wider.
+  const edgeBox = await columnEdge.boundingBox();
+  await page.mouse.move(edgeBox.x + 2, edgeBox.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(edgeBox.x + 2 - 20, edgeBox.y + 120);
+  await page.mouse.move(edgeBox.x + 2 - 40, edgeBox.y + 120);
+  await page.waitForFunction(expected => Math.round(document.querySelector('.members-pane').getBoundingClientRect().width) === expected, widthBefore + 40);
+  await page.mouse.up();
+  assert.equal(await columnWidth(), widthBefore + 40, 'the width the drag left is kept');
+  await columnEdge.dblclick();
+  // The column eases back, so wait for it to arrive.
+  await page.waitForFunction(expected => Math.round(document.querySelector('.members-pane').getBoundingClientRect().width) === expected, widthBefore);
+  assert.equal(await columnWidth(), widthBefore, 'a double click goes back to the default');
+  // The person's own row opens their account.
+  await page.locator('.member-row.member-you').click();
+  await page.getByRole('dialog').waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').waitFor({ state: 'detached' });
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Ẩn danh sách thành viên', exact: true }).click();
   await page.locator('.members-pane').waitFor({ state: 'detached' });
@@ -159,10 +197,15 @@ try {
   await shot(page, 'delete-space');
   await page.getByRole('menuitem', { name: 'Xóa không gian', exact: true }).click();
   await page.locator('.area-tile[data-name="Launch"]').waitFor({ state: 'detached' });
+  // The channel it leaves is taken into the space kept for channels outside the spaces.
+  await page.waitForFunction(async () => {
+    const state = await window.orglet.call('workspace', {});
+    const home = state.spaces.find(space => space.name === 'Kênh');
+    return Boolean(home) && state.tasks.some(task => task.channel?.name === 'general' && task.channel.spaceId === home.id);
+  });
   const after = await workspace(page);
-  assert.equal(after.spaces.length, 0);
+  assert.deepEqual(after.spaces.map(space => space.name), ['Kênh']);
   const kept = after.tasks.find(task => task.channel?.name === 'general');
-  assert.equal(kept.channel.spaceId, undefined);
   assert.equal(kept.assignees.length, 2, 'the channel keeps the orglets it had');
   // A space from the marketplace: its orglets, its categories and its channels arrive together, and nothing else.
   // The profile has not opened the marketplace, so the catalog is the one that ships with the app.
@@ -221,8 +264,8 @@ try {
   // Several spaces side by side: each tile has its own fill, so they are told apart at a glance.
   const firstOrgletId = (await workspace(page)).workers[0].id;
   for (const name of ['Ra mắt', 'Khách hàng', 'Nghiên cứu']) await page.evaluate(fields => window.orglet.call('createSpace', fields), { name, orgletIds: [firstOrgletId], categories: [] });
-  await page.locator('.area-tile > .space-mark').nth(3).waitFor();
-  assert.deepEqual(await page.locator('.area-tile:has(> .space-mark)').evaluateAll(tiles => tiles.map(tile => tile.dataset.name)), ['Launch', 'Ra mắt', 'Khách hàng', 'Nghiên cứu']);
+  await page.locator('.area-tile > .space-mark').nth(4).waitFor();
+  assert.deepEqual(await page.locator('.area-tile:has(> .space-mark)').evaluateAll(tiles => tiles.map(tile => tile.dataset.name)), ['Kênh', 'Launch', 'Ra mắt', 'Khách hàng', 'Nghiên cứu']);
   // The pointer on a tile shows its name beside it, and it goes when the pointer leaves.
   await page.locator('.area-tile[data-name="Khách hàng"]').hover();
   assert.equal(await page.locator('.area-tip').textContent(), 'Khách hàng');

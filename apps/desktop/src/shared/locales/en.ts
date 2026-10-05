@@ -4265,6 +4265,7 @@ export const en: Dictionary = {
   "Thêm nhóm": "Add category",
   "Tạo nhóm": "Create category",
   "Tiến tới": "Forward",
+  "Kéo để đổi độ rộng cột thành viên": "Drag to resize the member column",
   "Nhóm mới": "New category",
   "Đặt tên cho nhóm.": "Give the category a name.",
   "Đã tạo nhóm": "Category created",

@@ -106,6 +106,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-resizer::after { content:''; display:block; width:3px; height:100%; margin:0 auto; border-radius:999px; background:transparent; transition:background .12s; }
 .details-resizer:hover::after,.details-resizer:focus-visible::after,.app.resizing .details-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
 .details-resizer:focus-visible { outline:none; }
+/* The member column is dragged by its edge the same way (user, 2026-10-05). */
+.members-resizer { right:calc(var(--shell-gap) + var(--members-width) + var(--shell-gap) / 2); }
 /* Folding gives the sidebar's column to the chat; the area rail stays put. */
 .app.sidebar-hidden { --sidebar-column-width:0px; }
 /* Every panel has its place: the left column, the main card, the right panel. */
@@ -3073,10 +3075,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
    takes the sidebar's hover and selected pair; the open area wears the selected tint, never a line. Home first, then the
    areas, then Library and Schedules, then the one + Create. It stops short of the person's face at its bottom. */
 .area-rail, .members-pane, .user-panel { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent); }
-.area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:var(--panel-inset) 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
+.area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:0 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
 .area-rail::-webkit-scrollbar { width:0; height:0; }
 .area-rail-list { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0; padding:0; list-style:none; }
-/* Back and forward, side by side above the tiles: small and quiet, since they are used far less than the tiles. */
+/* Back and forward, side by side above the tiles: small and quiet, since they are used far less than the tiles. They
+   start level with the top edge of the cards beside the rail (user, 2026-10-05), so the rail has no top padding. */
 .area-trail { display:flex; align-items:center; justify-content:center; gap:2px; flex-shrink:0; margin-bottom:-4px; }
 .area-trail-step { display:grid; place-items:center; width:24px; height:24px; min-height:24px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
 .area-trail-step:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
@@ -3188,7 +3191,8 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .saved-text { overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* The member column of a channel (COD-366), at the right where Discord keeps it, in the right panel's place. */
-.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; transform-origin:-60px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
+/* A card like the sidebar's (user, 2026-10-05): on the window's bare ground it read as unfinished beside the cards. */
+.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; background:var(--bg); box-shadow:var(--panel-shadow); transform-origin:-60px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
 .members-head { display:flex; align-items:center; min-height:32px; padding:var(--panel-inset) 10px 8px 16px; }
 .members-head h2 { font-size:13px; font-weight:500; color:var(--muted); }
 .members-list { display:flex; flex-direction:column; flex:1; gap:2px; min-height:0; margin:0; padding:0 8px 16px; overflow:auto; list-style:none; }
@@ -3220,8 +3224,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .member-row.member-outside { box-sizing:border-box; cursor:default; opacity:.6; }
 .member-row.member-outside:hover { background:transparent; }
 /* The person's own row opens nothing, so it does not answer the pointer. */
-.member-row.member-you { box-sizing:border-box; cursor:default; }
-.member-row.member-you:hover { background:transparent; }
+.member-row.member-you { box-sizing:border-box; }
 .member-text { display:flex; flex-direction:column; min-width:0; gap:1px; }
 .member-name { display:flex; align-items:center; gap:6px; font-weight:500; }
 .member-lead { padding:1px 6px; border-radius:999px; background:var(--row-active); color:var(--muted); font-size:11px; font-weight:500; }

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
-import { useVietnamese, openThreadByBrief, openChannels, openSettings, expandSidebar } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
@@ -85,9 +85,17 @@ try {
   await page.keyboard.press('Escape');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
   // A template file is imported from Home's Add orglet page; a channel is no longer made from Home's sidebar.
-  await openChannels(page);
+  await openHome(page);
   await page.locator('.sidebar').getByRole('button', { name: 'Thêm Tí', exact: true }).click();
   await page.getByRole('button', { name: 'Nhập mẫu', exact: true }).click();
+  // The imported crew's channel is put into the space kept for channels made outside the spaces. The import
+  // itself lands on Home when it ends, so wait for both before opening that space.
+  await page.waitForFunction(async () => {
+    const state = await window.orglet.call('workspace', {});
+    return [...state.tasks.map(task => task.channel), ...state.emptyChannels].some(channel => channel?.name === 'Imported review' && channel.spaceId);
+  });
+  await page.waitForTimeout(500);
+  await openChannels(page);
   await page.getByRole('button', { name: 'Tùy chọn kênh #Imported review', exact: true }).waitFor();
   const importedWorkspace = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(importedWorkspace.teams.length, 2); assert.equal(importedWorkspace.tasks.length, 2);

@@ -961,6 +961,11 @@ export class CoreService {
         this.notify();
         return spaceId;
       }
+      case 'adoptLooseChannels': {
+        const spaceId = this.spaces.adoptLoose(commands.adoptLooseChannels.parse(args).name);
+        if (spaceId) this.notify();
+        return spaceId ?? null;
+      }
       case 'createChannel': {
         const channelId = this.channels.create(commands.createChannel.parse(args));
         this.notify();

@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, Bookmark, BellRing, ChevronRight, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
+import { Bookmark, BellRing, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
-import { Button } from './components/ui';
+import { Button, Drawer } from './components/ui';
 import { PanelPage } from './components/PanelPage';
 import { SkillEditor } from './components/Editors';
 import { WorkerDialog, workerProviderOptions } from './components/WorkerDialog';
@@ -114,12 +114,12 @@ import type { HomePageView } from './components/FriendsPage';
 import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
-import { Boxes, CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
+import { CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
-import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
+import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
 import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
@@ -150,6 +150,8 @@ function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string
 const SIDEBAR_WIDTH = { min: 240, max: 420, default: 240, step: 16 };
 // The right panel takes the room the list column gave up to the tab strip (COD-340).
 const DETAILS_WIDTH = { min: 280, max: 720, default: 400, step: 16 };
+/** The member column of a channel: wide enough for a face and a name, never as wide as Details. */
+const MEMBERS_WIDTH = { min: 200, max: 420, default: 240, step: 16 };
 /** Whose rows the sidebar lists: an area's, or those of a page opened from the rail. */
 type SidebarList = Area | 'library' | 'schedules' | `space:${string}`;
 /** The folded left column, the same as --rail-width in styles.css. */
@@ -288,23 +290,6 @@ export function App() {
   const openLibraryKnowledge = (item?: Knowledge) => { setFromLibrary(true); setEditingKnowledge(item); setPanel('knowledge'); };
   const openLibrarySkill = (skill?: Skill) => { setFromLibrary(true); setEditingSkill(skill); setPanel('skill'); };
   const backToLibrary = () => setPanel('library');
-  /** The breadcrumb the schedules editor uses, pointing back at the Library. */
-  const libraryTitle = (current: string) => fromLibrary
-    ? <span className="breadcrumb">
-      <button type="button" className="breadcrumb-link" onClick={backToLibrary}>{t('Thư viện')}</button>
-      <ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" />
-      <span aria-current="page">{current}</span>
-    </span>
-    : current;
-  /**
-   * The way back out of an editor, drawn beside the close button rather than in front of the title (user,
-   * 2026-09-23): the two ways out of the panel sit together, and the title reads as a path, not a control.
-   */
-  const drawerBack = panel === 'routines' && routineView.editing
-    ? <Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button>
-    : (panel === 'skill' || panel === 'knowledge') && fromLibrary
-      ? <Button size="icon" aria-label={t('Quay lại Thư viện')} onClick={backToLibrary}><ArrowLeft size={18} /></Button>
-      : undefined;
   // Library and Schedules are pages in the main panel, not dialogs: the rail and the sidebar stay in reach beside
   // them, so going to a chat or an area has to leave the page.
   const pagePanelOpen = panel === 'library' || panel === 'skill' || panel === 'knowledge' || panel === 'routines';
@@ -418,10 +403,11 @@ export function App() {
   // narrow window folds it for them.
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => readSidebarMode() === 'full' && innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   // Dragging tracks the pointer; a width is the distance from the window edge minus the gap the panel sits in.
-  const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight' });
-  const detailsPane = usePaneWidth({ storageKey: 'orglet.details-width', bounds: DETAILS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft' });
+  const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight', cssVariable: '--sidebar-width' });
+  const detailsPane = usePaneWidth({ storageKey: 'orglet.details-width', bounds: DETAILS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft', cssVariable: '--details-width' });
   const sidebarWidth = sidebarPane.width;
-  const resizing = sidebarPane.resizing || detailsPane.resizing;
+  const membersPane = usePaneWidth({ storageKey: 'orglet.members-width', bounds: MEMBERS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft', cssVariable: '--members-width' });
+  const resizing = sidebarPane.resizing || detailsPane.resizing || membersPane.resizing;
   const windowWidth = useWindowWidth();
   // The rail stays on screen whenever the full sidebar is not a column of its own: folded, or laid over a narrow window.
   const narrowWindow = windowWidth <= 780;
@@ -452,6 +438,29 @@ export function App() {
   // one selected when they were created; otherwise a late refresh replaces the open task with nothing.
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const workspaceRef = useRef(workspace); workspaceRef.current = workspace;
+  // A channel outside every space has no row, since Home lists direct messages only: a crew from a template, a
+  // channel the terminal made, the channels a deleted space left. The core puts them into the space kept for them.
+  // One call at a time. A set of channels the core could not take is not asked for again, so a refusal cannot loop;
+  // a set it did take is forgotten, since a save still on its way can put one of them outside again. A running
+  // channel is not taken, so each channel's state is part of the set: it is asked for again once its run ends.
+  const adoptRefused = useRef('');
+  const adopting = useRef(false);
+  // Counts the calls that came back, so the check runs once more after each: a channel put outside while a call
+  // was on its way changes the workspace before the call ends, and nothing else would look again.
+  const [adoptReturns, setAdoptReturns] = useState(0);
+  useEffect(() => {
+    if (!workspace) return;
+    const outside = (channel: { spaceId?: string } | undefined) => Boolean(channel) && !workspace.spaces.some(space => space.id === channel!.spaceId);
+    const waiting = [
+      ...workspace.tasks.filter(task => !task.deletedAt && outside(task.channel)).map(task => `${task.id}:${task.status}`),
+      ...workspace.emptyChannels.filter(outside).map(channel => channel.id),
+    ].join();
+    if (!waiting || adopting.current || adoptRefused.current === waiting) return;
+    adopting.current = true;
+    void orglet.call('adoptLooseChannels', { name: t('Kênh') })
+      .then(spaceId => { adoptRefused.current = spaceId ? '' : waiting; }, () => { adoptRefused.current = waiting; })
+      .finally(() => { adopting.current = false; setAdoptReturns(count => count + 1); });
+  }, [workspace, adoptReturns]);
   // Set when the first-run account question is answered, so the refresh that follows moves to the app as a transition.
   const leavingAccountChoice = useRef(false);
   // The open chat, once a refresh found the workspace no longer lists it, and where the view goes instead (COD-282).
@@ -2221,9 +2230,7 @@ export function App() {
   // A channel is in a space only while that space exists; one whose space is gone is listed with the loose channels.
   const channelOfEntry = (entry: (typeof channelEntries)[number]) => entry.kind === 'chat' ? entry.task.channel : entry.channel;
   const spaceOfEntry = (entry: (typeof channelEntries)[number]) => workspace.spaces.find(space => space.id === channelOfEntry(entry)?.spaceId);
-  const looseChannelEntries = channelEntries.filter(entry => !spaceOfEntry(entry));
   const openSpace = workspace.spaces.find(space => space.id === openSpaceId);
-  const channelGroupList = groupChannels(looseChannelEntries, entry => entry.kind === 'chat' ? entry.task.channel?.category : entry.channel.category);
   const activityCountsNow = activityCounts(workspace.running ?? [], savedMessages, pendingRoutines + knowledgeToReview);
   const workingIds = workingOrgletIds(workspace.running ?? []);
   const headerSpace = workspace.spaces.find(space => space.id === headerChannel?.spaceId);
@@ -2381,12 +2388,6 @@ export function App() {
     setArea('home');
     toast(t('Đã xóa không gian'), 'success', space.name);
   }, space.name);
-  const spaceFromCategory = (category: string) => action(async () => {
-    const spaceId = await orglet.call('spaceFromCategory', { category });
-    setOpenSpace(spaceId);
-    setArea('channels');
-    toast(t('Đã tạo không gian'), 'success', category);
-  }, category);
   // While the sidebar is folded, a tile opens it for good. The tile of the area already on screen only opens it, so
   // Home there does not also jump to Friends.
   const folderNames = spaceFolderNames(workspace.spaces);
@@ -2462,10 +2463,11 @@ export function App() {
     }
     folder.entries.push(spaceTile);
   }
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}${chatSwitching ? ' chat-switching' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}${chatSwitching ? ' chat-switching' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px`, '--members-width': `${membersPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
+    {membersShown && <button type="button" className="details-resizer members-resizer" aria-label={t('Kéo để đổi độ rộng cột thành viên')} {...membersPane.handleProps} />}
     <aside className={`sidebar${sidebar ? '' : sidebarPeek ? ' peek' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={(!sidebar && !sidebarPeek) || undefined}
       onPointerEnter={sidebar ? undefined : () => peekSidebar(true)} onPointerLeave={sidebar ? undefined : () => peekSidebar(false)}>
       <div className="sidebar-head">
@@ -2506,16 +2508,8 @@ export function App() {
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
-      {/* The channels outside every space, like group chats beside the DMs: the rail has a tile for each space and
-          none for these (user, 2026-10-05). Ones with a category keep their own section under it. They are only
-          listed here: a new channel is made in a space, so these sections have no way to add one. */}
-      {channelGroupList.some(group => group.name === undefined) && <SidebarSection id="loose-channels" title={t('Kênh')}>
-        {channelGroupList.filter(group => group.name === undefined).flatMap(group => group.entries).map(renderChannelEntry)}
-      </SidebarSection>}
-      {channelGroupList.filter(group => group.name !== undefined).map(group => <SidebarSection key={group.name!.toLowerCase()} id={`category-${group.name!.toLowerCase()}`} title={group.name!}
-        action={<RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />}>
-        {group.entries.map(renderChannelEntry)}
-      </SidebarSection>)}
+      {/* Home lists direct messages only (user, 2026-10-05): a channel lives in a space, under its tile on the rail.
+          One that arrives outside every space is put into the space kept for them (`adoptLooseChannels`). */}
       </>}
       {sidebarSpace && <>
         {sidebarSpaceEntries.length === 0 && sidebarSpace.categories.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
@@ -2568,20 +2562,25 @@ export function App() {
       onDwell={dwellAbout}
       trailing={updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
     <main className="main-pane" id="main-content" tabIndex={-1}>
-      {pagePanelOpen ? <PanelPage pageKey={`${panel}:${libraryTab}:${routineView.editing}`} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
+      {pagePanelOpen ? <PanelPage pageKey={`${panel === 'routines' ? 'routines' : 'library'}:${libraryTab}`} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
         icon={panel === 'routines' ? <CalendarClock size={16} aria-hidden="true" /> : <BookOpen size={16} aria-hidden="true" />}
-        description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined}
-        actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack}
-        title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) : panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : t('Thư viện')}>
+        description={panel === 'routines' ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.'))}
+        actions={panel === 'routines' ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined}
+        title={panel === 'routines' ? t('Lịch chạy') : t('Thư viện')}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
-      {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}
-      {panel === 'library' && <div className="form">
+      {/* A skill and a note are edited in a dialog over the Library (user, 2026-10-05), so the list stays behind them. */}
+      {panel === 'skill' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingSkill?.package ? 'Review skill' : t('Chỉnh skill')}>
+        <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />
+      </Drawer>}
+      {panel !== 'routines' && <div className="form">
         <div className="tab-row"><div className="tabs" role="tablist" aria-label={t('Thư viện')} onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return; event.preventDefault(); const next = libraryTab === 'skills' ? 'knowledge' : 'skills'; setLibraryTab(next); document.getElementById(`library-tab-${next}`)?.focus(); }}>{(['skills', 'knowledge'] as const).map(tab => <Button key={tab} id={`library-tab-${tab}`} role="tab" aria-selected={libraryTab === tab} aria-controls="library-panel" tabIndex={libraryTab === tab ? 0 : -1} onClick={() => setLibraryTab(tab)}><span className="tab-label">{tab === 'skills' ? 'Skills' : 'Knowledge'}<span className="tab-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span></span></Button>)}</div>
           <div className="tab-row-actions">{libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}</div></div>
         <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
       </div>}
-      {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />}
+      {panel === 'knowledge' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingKnowledge ? 'Knowledge' : t('Knowledge mới')}>
+        <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />
+      </Drawer>}
       </PanelPage> : page ?? <>
       <ChatHeader contentKey={`${activeChatKey}:${chatViewList.map(view => `${view.name}${view.count ?? ''}`).join()}`}
         views={chatViewList.length > 1 ? <ChatViewTabs views={chatViewList} current={chatView} onSelect={showChatView} /> : null}
@@ -2650,7 +2649,7 @@ export function App() {
         : null}
       </>}
     </main>
-    {membersShown && headerChannel && <MemberColumn you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
+    {membersShown && headerChannel && <MemberColumn onYou={() => openSettings('account')} you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
       onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
       others={headerSpace && headerChannel.access === 'listed' ? workspace.workers.filter(worker => scopeOrgletIds(headerSpace, headerChannel.categoryId).includes(worker.id) && !headerChannel.workers.some(member => member.id === worker.id)) : []}
       onAdd={member => action(async () => {

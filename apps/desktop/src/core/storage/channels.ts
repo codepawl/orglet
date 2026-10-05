@@ -287,11 +287,16 @@ export class Channels {
     return [...onRows, ...waiting];
   }
 
-  /** The channels outside every space that are listed under this category, written in or empty. */
+  /** The channels outside every space, written in or empty. */
+  loose(): Channel[] {
+    const outside = (channel: Channel) => !channel.spaceId;
+    const onRows = this.store.all<Task>('tasks').flatMap(task => !task.deletedAt && task.channel && outside(task.channel) ? [task.channel] : []);
+    return [...onRows, ...emptyChannels(this.store).filter(outside)];
+  }
+
+  /** The channels outside every space that are listed under this category. */
   looseInCategory(category: string): Channel[] {
-    const named = (channel: Channel) => !channel.spaceId && channel.category?.toLowerCase() === category.toLowerCase();
-    const onRows = this.store.all<Task>('tasks').flatMap(task => !task.deletedAt && task.channel && named(task.channel) ? [task.channel] : []);
-    return [...onRows, ...emptyChannels(this.store).filter(named)];
+    return this.loose().filter(channel => channel.category?.toLowerCase() === category.toLowerCase());
   }
 
   /**
