@@ -205,7 +205,8 @@ try {
   await page.setViewportSize({ width: 1200, height: 820 });
   await call(page, 'createChannel', { name: 'Public crew', topic: 'A crew for the publishing fixture.', members: [{ kind: 'orglet', id: worker.id }], mode: 'lead', lead: { synthesizerId: worker.id, instructions: 'Combine the reviewed research.', workflow: 'parallel', monthlyBudgetMicros: 1000000 } });
   await expandSidebar(page);
-  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
+  // The channel was made outside every space, so it is in the space kept for such channels.
+  await page.locator('.area-tile[data-name="Kênh"]').click();
   await page.getByRole('button', { name: 'Tùy chọn kênh #Public crew', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Xuất bản lên marketplace', exact: true }).click();
   await preparePreview(page);
