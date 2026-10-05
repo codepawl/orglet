@@ -144,6 +144,11 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('template'), token: CliToken, templateId: z.enum(TEMPLATE_IDS), provider: z.enum(['demo', 'openai']) }).strict(),
   z.object({ op: z.literal('schedules'), token: CliToken }).strict(),
   z.object({ op: z.literal('spaces'), token: CliToken }).strict(),
+  z.object({
+    op: z.literal('space-change'), token: CliToken, verb: z.enum(['add', 'edit', 'category', 'move', 'out', 'delete']),
+    space: ChatName.optional(), names: z.array(ChatName).max(50), rename: ChatName.optional(), category: ChatName.optional(),
+    chat: ChatId.optional(), confirmName: ChatName.optional(),
+  }).strict(),
   z.object({ op: z.literal('schedule-enable'), token: CliToken, schedule: ScheduleName, enabled: z.boolean() }).strict(),
   z.object({ op: z.literal('schedule-delete'), token: CliToken, schedule: ScheduleName, confirmName: ScheduleName }).strict(),
   /**
@@ -323,6 +328,8 @@ export type CliSpaceRow = {
   channels: { name: string; category?: string; access: 'inherit' | 'listed'; orglets: string[] }[];
 };
 export type SpacesValue = { spaces: CliSpaceRow[] };
+/** What `orglet space` changed: the space by its name now, and the channel or category the step was about. */
+export type SpaceChangeValue = { verb: 'add' | 'edit' | 'category' | 'move' | 'out' | 'delete'; space?: string; channel?: string; category?: string; orglets?: string[] };
 /** What `orglet search` found (COD-354): names that match, and one message per chat with the words around the match. */
 export type SearchValue = {
   orglets: string[];

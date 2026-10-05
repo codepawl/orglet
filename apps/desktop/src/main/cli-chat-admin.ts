@@ -1,6 +1,6 @@
 import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
-import type { Space } from '../shared/spaces';
+import { placeNamed, spaceNamed } from './cli-spaces';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
@@ -175,32 +175,6 @@ export class CliChatAdmin {
 }
 
 /** The orglets and crews these names find, each once, in the order named (COD-361). */
-/** The space with this name, or the only one whose name starts with it. */
-function spaceNamed(workspace: Workspace, query: string): Space {
-  const spaces = workspace.spaces ?? [];
-  const wanted = query.trim().toLocaleLowerCase();
-  const exact = spaces.filter(space => space.name.toLocaleLowerCase() === wanted);
-  const found = exact.length ? exact : spaces.filter(space => space.name.toLocaleLowerCase().startsWith(wanted));
-  if (found.length === 1) return found[0];
-  const names = (found.length ? found : spaces).map(space => space.name).join(', ');
-  if (found.length > 1) throw new CliFailure('ambiguous', `"${query}" khớp với nhiều không gian: ${names}. Gõ tên đầy đủ hơn.`);
-  if (!names) throw new CliFailure('not_found', 'Chưa có không gian nào.');
-  throw new CliFailure('not_found', `Không có không gian nào tên "${query}". Có: ${names}.`);
-}
-
-/** A space, or one of its categories, as the place of a new channel, with the orglets a channel there inherits. */
-function placeNamed(workspace: Workspace, spaceName: string, categoryName: string | undefined): { spaceId: string; categoryId?: string; orgletIds: readonly string[] } {
-  const space = spaceNamed(workspace, spaceName);
-  if (categoryName === undefined) return { spaceId: space.id, orgletIds: space.orgletIds };
-  const wanted = categoryName.trim().toLocaleLowerCase();
-  const category = space.categories.find(item => item.name.toLocaleLowerCase() === wanted);
-  if (!category) {
-    const names = space.categories.map(item => item.name).join(', ');
-    throw new CliFailure('not_found', names ? `Không gian "${space.name}" không có mục "${categoryName}". Có: ${names}.` : `Không gian "${space.name}" chưa có mục nào.`);
-  }
-  return { spaceId: space.id, categoryId: category.id, orgletIds: category.orgletIds ?? space.orgletIds };
-}
-
 function uniqueMembers(workspace: Workspace, names: readonly string[]): ChannelMember[] {
   const everyone = chatsOf({ workers: workspace.workers, teams: workspace.teams });
   const members: ChannelMember[] = [];

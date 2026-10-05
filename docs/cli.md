@@ -50,6 +50,7 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet preferences [--language …] [--theme …]` | Shows or changes the app's language and theme |
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category and who is in it |
+| `orglet space add\|edit\|category\|move\|out\|delete` | Creates, changes or deletes a space, and moves a channel into or out of one. See [Spaces](#spaces). |
 | `orglet schedule add\|edit\|on\|off\|delete "<name>"` | Creates, changes, switches or deletes a schedule. See [Schedules](#schedules). |
 
 It can create, edit and remove orglets and channels, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
@@ -384,6 +385,19 @@ orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 ```
 
 `channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. `--space <name>` puts the channel in that space, and `--category <name>` in one of its categories; a space is found by its name or the start of it. In a space `--with` can be left out: the channel then takes every orglet of its category or space and follows that list when it changes. With `--with` it keeps the orglets named. `orglet chats --space <name>` lists only the channels of that space. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
+
+### Spaces
+
+```
+orglet space add "Launch" --with Researcher --with Writer
+orglet space edit "Launch" --rename "Liftoff" --with Researcher
+orglet space category "Launch" --category Drafts
+orglet space move "Launch" --chat cccc0000 --category Drafts
+orglet space out --chat cccc0000
+orglet space delete "Launch" --confirm "Launch"
+```
+
+The same as a space's settings in the app. `add` makes a space with these orglets. `edit` renames it with `--rename`, and with `--with` replaces the whole list of its orglets. `category` adds one category. `move` puts a channel in the space, or in one of its categories with `--category`; `out` takes the channel out of every space. `delete` needs the space's full name in `--confirm` and keeps its channels, which are then in no space. A space is found by its name or the start of it, except for `--confirm`. A space holds orglets, so `--with` does not take a channel's name. The command sets no permission and no folder, and it does not remove a category or set a category's own orglets: those are in the app.
 
 ### Rename, archive, restore and delete chats
 
