@@ -3,7 +3,7 @@ export type ComponentPage = { name: string; exports: string[]; group: string; su
 export type Guide = { slug: string; title: string; summary: string; body: string };
 export type StoryEntry = { file: string; exportName: string; title: string };
 
-export const GROUP_ORDER = ['Actions', 'Forms', 'Navigation', 'Overlays', 'Feedback', 'Display', 'Utilities'];
+export const GROUP_ORDER = ['Foundations', 'Actions', 'Forms', 'Navigation', 'Overlays', 'Feedback', 'Display', 'Utilities'];
 const GUIDE_ORDER = ['installation', 'theming', 'agents'];
 
 // A page whose stories sit in a file with another name, and which of that file's stories are its own.

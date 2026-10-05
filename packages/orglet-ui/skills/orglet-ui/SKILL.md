@@ -28,6 +28,7 @@ accessibility notes. In an installed package the pages are in `node_modules/@cod
 <!-- components:start -->
 | Need | Use | Page |
 |---|---|---|
+| The basic icons an application needs, drawn on one grid with one stroke, so no icon library is required. | `AlertIcon`, `ArrowLeftIcon`, `ArrowRightIcon`, `ArrowUpRightIcon`, `BellIcon`, `BookIcon`, `CalendarIcon`, `CheckIcon`, `ChevronDownIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronUpIcon`, `CloseIcon`, `CodeIcon`, `CopyIcon`, `DownloadIcon`, `ErrorIcon`, `EyeIcon`, `FileIcon`, `FileTextIcon`, `GitHubIcon`, `InfoIcon`, `MenuIcon`, `MinusIcon`, `MonitorIcon`, `MoonIcon`, `MoreHorizontalIcon`, `MoreVerticalIcon`, `PackageIcon`, `PencilIcon`, `PlusIcon`, `SearchIcon`, `SettingsIcon`, `SuccessIcon`, `SunIcon`, `TrashIcon`, `UserIcon` | [Icons](../../docs/components/Icons.md) |
 | A button in four looks, or a square holding one icon. | `Button` | [Button](../../docs/components/Button.md) |
 | A menu of a row's actions behind one icon button, with an in-panel question for destructive items. | `RowMenu` | [RowMenu](../../docs/components/RowMenu.md) |
 | One choice out of a few small icon buttons, such as the tool or colour of a drawing bar. | `ToolbarToggleGroup` | [ToolbarToggleGroup](../../docs/components/ToolbarToggleGroup.md) |

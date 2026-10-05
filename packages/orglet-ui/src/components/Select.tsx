@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../cn';
+import { CheckIcon, ChevronDownIcon } from '../icons';
 import './Select.css';
 
 /**
@@ -245,7 +246,7 @@ export function Select({
         ? <><span style={current.labelStyle}>{current.label}</span>{showDetail && current.detail && <span className="org-select-detail"> · {current.detail}</span>}</>
         : <span className="org-select-placeholder">{placeholder}</span>}
     </span>
-    <ChevronGlyph />
+    <ChevronDownIcon className="org-select-chevron" />
   </button>;
 
   let lastGroup: string | undefined;
@@ -269,7 +270,7 @@ export function Select({
           {option.detail && <span className="org-select-detail" title={option.detail}>{option.detail}</span>}
         </span>
         {option.badge && <span className="org-select-option-badge">{option.badge}</span>}
-        <CheckGlyph />
+        <CheckIcon className="org-select-check" />
       </li>];
     })}
   </ul>, container());
@@ -277,15 +278,3 @@ export function Select({
   return <>{button}{menu}</>;
 }
 
-/** The trigger's chevron and the chosen option's tick, drawn here so the kit needs no icon library. */
-function ChevronGlyph() {
-  return <svg className="org-select-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="m6 9 6 6 6-6" />
-  </svg>;
-}
-
-function CheckGlyph() {
-  return <svg className="org-select-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M20 6 9 17l-5-5" />
-  </svg>;
-}
