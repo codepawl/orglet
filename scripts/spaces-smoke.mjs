@@ -43,7 +43,7 @@ try {
   await shot(page, 'space-dialog');
   await spaceDialog.getByRole('button', { name: 'Tạo không gian', exact: true }).click();
   await spaceDialog.waitFor({ state: 'detached' });
-  await page.locator('.area-tile.active[title="Launch"]').waitFor();
+  await page.locator('.area-tile.active[data-name="Launch"]').waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch', 'the sidebar lists the new space');
   // The space's tile is a filled mark with no letter on it, not one more icon; its name is the tile's tooltip.
   assert.equal(await page.locator('.area-tile[data-name="Launch"] > .space-mark').textContent(), '');
