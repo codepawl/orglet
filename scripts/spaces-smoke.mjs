@@ -150,6 +150,18 @@ try {
   await page.locator('.sidebar .channel-row > .worker-row > button.worker').first().click();
   await page.locator('.members-pane').waitFor();
   assert.deepEqual(await rightColumnMotion(), [], 'a chat\'s own column is in place at once');
+  // The member column is a card like the sidebar, and its edge resizes it; the width is kept.
+  const columnGround = selector => page.locator(selector).evaluate(element => getComputedStyle(element).backgroundColor);
+  assert.equal(await columnGround('.members-pane'), await columnGround('.app > .sidebar'), 'the member column has the sidebar\'s ground');
+  const columnWidth = () => page.locator('.members-pane').evaluate(element => Math.round(element.getBoundingClientRect().width));
+  const widthBefore = await columnWidth();
+  const columnEdge = page.getByRole('separator', { name: 'Kéo để đổi độ rộng cột thành viên', exact: true });
+  await columnEdge.focus();
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await columnWidth(), widthBefore + 16, 'the edge widens the column');
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await columnWidth(), widthBefore);
+  await shot(page, 'member-column');
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: 'Ẩn danh sách thành viên', exact: true }).click();
   await page.locator('.members-pane').waitFor({ state: 'detached' });

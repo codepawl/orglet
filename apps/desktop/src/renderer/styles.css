@@ -106,6 +106,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-resizer::after { content:''; display:block; width:3px; height:100%; margin:0 auto; border-radius:999px; background:transparent; transition:background .12s; }
 .details-resizer:hover::after,.details-resizer:focus-visible::after,.app.resizing .details-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
 .details-resizer:focus-visible { outline:none; }
+/* The member column is dragged by its edge the same way (user, 2026-10-05). */
+.members-resizer { right:calc(var(--shell-gap) + var(--members-width) + var(--shell-gap) / 2); }
 /* Folding gives the sidebar's column to the chat; the area rail stays put. */
 .app.sidebar-hidden { --sidebar-column-width:0px; }
 /* Every panel has its place: the left column, the main card, the right panel. */
@@ -3189,7 +3191,8 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .saved-text { overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* The member column of a channel (COD-366), at the right where Discord keeps it, in the right panel's place. */
-.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; transform-origin:-60px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
+/* A card like the sidebar's (user, 2026-10-05): on the window's bare ground it read as unfinished beside the cards. */
+.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; background:var(--bg); box-shadow:var(--panel-shadow); transform-origin:-60px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
 .members-head { display:flex; align-items:center; min-height:32px; padding:var(--panel-inset) 10px 8px 16px; }
 .members-head h2 { font-size:13px; font-weight:500; color:var(--muted); }
 .members-list { display:flex; flex-direction:column; flex:1; gap:2px; min-height:0; margin:0; padding:0 8px 16px; overflow:auto; list-style:none; }

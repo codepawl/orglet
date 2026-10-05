@@ -150,6 +150,8 @@ function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string
 const SIDEBAR_WIDTH = { min: 240, max: 420, default: 240, step: 16 };
 // The right panel takes the room the list column gave up to the tab strip (COD-340).
 const DETAILS_WIDTH = { min: 280, max: 720, default: 400, step: 16 };
+/** The member column of a channel: wide enough for a face and a name, never as wide as Details. */
+const MEMBERS_WIDTH = { min: 200, max: 420, default: 240, step: 16 };
 /** Whose rows the sidebar lists: an area's, or those of a page opened from the rail. */
 type SidebarList = Area | 'library' | 'schedules' | `space:${string}`;
 /** The folded left column, the same as --rail-width in styles.css. */
@@ -421,7 +423,8 @@ export function App() {
   const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight' });
   const detailsPane = usePaneWidth({ storageKey: 'orglet.details-width', bounds: DETAILS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft' });
   const sidebarWidth = sidebarPane.width;
-  const resizing = sidebarPane.resizing || detailsPane.resizing;
+  const membersPane = usePaneWidth({ storageKey: 'orglet.members-width', bounds: MEMBERS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft' });
+  const resizing = sidebarPane.resizing || detailsPane.resizing || membersPane.resizing;
   const windowWidth = useWindowWidth();
   // The rail stays on screen whenever the full sidebar is not a column of its own: folded, or laid over a narrow window.
   const narrowWindow = windowWidth <= 780;
@@ -2473,10 +2476,11 @@ export function App() {
     }
     folder.entries.push(spaceTile);
   }
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}${chatSwitching ? ' chat-switching' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}${chatSwitching ? ' chat-switching' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px`, '--members-width': `${membersPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
+    {membersShown && <button type="button" className="details-resizer members-resizer" aria-label={t('Kéo để đổi độ rộng cột thành viên')} {...membersPane.handleProps} />}
     <aside className={`sidebar${sidebar ? '' : sidebarPeek ? ' peek' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={(!sidebar && !sidebarPeek) || undefined}
       onPointerEnter={sidebar ? undefined : () => peekSidebar(true)} onPointerLeave={sidebar ? undefined : () => peekSidebar(false)}>
       <div className="sidebar-head">
