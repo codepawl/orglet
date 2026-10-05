@@ -300,7 +300,7 @@ export type Mood = 'idle' | 'thinking' | 'working';
 
 type Particle = { kind: 'note' | 'z'; text: string; x: number; y: number; velocityX: number; velocityY: number; born: number; life: number; size: number; wobble: number };
 
-export type Personality = { stiffness: number; ratio: number; blinkEvery: number; phase: number; side: number };
+export type Personality = { stiffness: number; ratio: number; blinkEvery: number; phase: number; side: number; lean: number };
 
 export type OrgletModel = {
   look: Look;
@@ -319,6 +319,13 @@ export type OrgletModel = {
   sideFront: Record<number, boolean>;
 };
 
+/*
+ * How far an orglet leans at rest, in radians (owner, 2026-10-05): each one tips a little to the left or to the
+ * right, its own amount, so a row of them does not stand to attention.
+ */
+const LEAN_LEAST = 0.05;
+const LEAN_MOST = 0.15;
+
 function personalityFrom(seed: number): Personality {
   const random = createRandom(seed);
   return {
@@ -328,6 +335,8 @@ function personalityFrom(seed: number): Personality {
     blinkEvery: 4 + random() * 4,
     phase: random() * TAU,
     side: random() < 0.5 ? -1 : 1,
+    // Drawn last, so the numbers above are the ones a seed always gave.
+    lean: (random() < 0.5 ? -1 : 1) * (LEAN_LEAST + random() * (LEAN_MOST - LEAN_LEAST)),
   };
 }
 
@@ -340,7 +349,7 @@ export function createOrglet(id: MascotId, seed: number, now: number): OrgletMod
     personality,
     yaw: createSpring(0),
     pitch: createSpring(0),
-    roll: createSpring(0),
+    roll: createSpring(personality.lean),
     spin: createSpring(0),
     lift: createSpring(0),
     scaleX: createSpring(1),
@@ -551,7 +560,7 @@ function basePose(model: OrgletModel, attention: Attention, now: number, reduced
   const pose: Pose = {
     yaw: 0,
     pitch: 0,
-    roll: 0,
+    roll: model.personality.lean,
     lift: 0,
     scaleX: 1,
     scaleY: 1,

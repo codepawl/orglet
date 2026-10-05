@@ -3106,7 +3106,7 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .channel-drop { border-radius:10px; }
 .channel-drop.over { background:var(--row-hover); }
 .channel-uncategorized.channel-drop:empty { min-height:12px; }
-.sidebar-empty { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:4px 12px; }
+.sidebar-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 12px; text-align:center; }
 
 /* The person sits in the rail, under the areas: a face the size of a tile that opens their menu (user, 2026-10-04).
    A waiting update stacks above it. Like the rail, it has no ground of its own. */

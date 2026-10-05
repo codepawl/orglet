@@ -91,12 +91,13 @@ function FolderTiles({ folder }: { folder: AreaRailFolder }) {
  * A tile's name shows beside it while the pointer is on it (user, 2026-10-05), the way Discord names a server.
  * Spaces can sit in folders (user, 2026-10-05): a folder is an outlined group with its own tile, which opens and closes it.
  */
-export function AreaRail({ entries, spaces, createItems, onHover }: {
+export function AreaRail({ entries, spaces, onCreateSpace, onHover }: {
   /** The app's own places: Home, Activity, Library, Schedules. */
   entries: readonly AreaRailEntry[];
   /** The person's spaces and their folders, under a divider of their own (user, 2026-10-05), the way Discord parts its servers from Home. */
   spaces: readonly (AreaRailEntry | AreaRailFolder)[];
-  createItems: RowMenuItem[];
+  /** The **+** under the spaces makes a space and nothing else (user, 2026-10-05): the rail lists spaces, so that is what it adds. */
+  onCreateSpace: () => void;
   /** The pointer came over the rail or left it, so a folded sidebar can show itself for a look. */
   onHover?: (inside: boolean) => void;
 }) {
@@ -116,7 +117,10 @@ export function AreaRail({ entries, spaces, createItems, onHover }: {
     {spaces.length > 0 && <ul className="area-rail-list" aria-label={t('Không gian')}>
       {spaces.map(entry => <li key={entry.key}>{'kind' in entry ? <FolderTiles folder={entry} /> : <Tile entry={entry} />}</li>)}
     </ul>}
-    <RowMenu label={t('Tạo mới')} icon={Plus} className="area-tile area-create" align="start" items={createItems} />
+    <button type="button" className="area-tile area-create" aria-label={t('Tạo không gian')} data-name={t('Tạo không gian')} onClick={() => { control.hide(); onCreateSpace(); }}
+      onPointerEnter={event => control.show(t('Tạo không gian'), event.currentTarget)} onPointerLeave={control.hide} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) control.show(t('Tạo không gian'), event.currentTarget); }} onBlur={control.hide}>
+      <Plus size={20} />
+    </button>
     {/* The tile's accessible name already says this, so the tip is for the eye only. */}
     {tip && <div className="area-tip" aria-hidden="true" style={{ top: tip.top, left: tip.left }}>{tip.label}</div>}
   </nav></TipContext.Provider>;

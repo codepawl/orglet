@@ -202,3 +202,17 @@ it('keeps the 3D canvas out of layout and out of the way of the pointer', () => 
   expect(css).toContain('@keyframes mascot-cheer-eyes');
   expect(css).toMatch(/\.message-byline\.landed \.avatar \.mascot-eyes \{ animation:mascot-blink[^}]*mascot-cheer-eyes/);
 });
+
+it('rests each orglet at a small lean of its own, to the left or to the right', () => {
+  const leans = [1, 2, 3, 4, 5, 6, 7, 8].map(seed => createOrglet('classic', seed, 0).personality.lean);
+  for (const lean of leans) {
+    expect(Math.abs(lean)).toBeGreaterThanOrEqual(0.05);
+    expect(Math.abs(lean)).toBeLessThanOrEqual(0.15);
+  }
+  expect(leans.some(lean => lean < 0) && leans.some(lean => lean > 0)).toBe(true);
+  // A face starts at its lean and stays there with nothing to look at.
+  const model = createOrglet('classic', 3, 0);
+  expect(model.roll.value).toBe(model.personality.lean);
+  updateOrglet(model, { x: 0, y: 0, present: false, near: false, noticed: false }, 1, 0.016, false);
+  expect(model.roll.target).toBe(model.personality.lean);
+});

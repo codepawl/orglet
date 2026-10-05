@@ -2336,13 +2336,6 @@ export function App() {
     }
     folder.entries.push(spaceTile);
   }
-  const createItems = [
-    { label: t('Thêm Tí'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
-    // A channel is made in a space (user, 2026-10-05), so the item is there only while one is open.
-    ...(openSpace && area === 'channels' ? [{ label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({ spaceId: openSpace.id }) }] : []),
-    { label: t('Tạo không gian'), icon: Boxes, onSelect: () => setSpaceDraft({}) },
-    { label: t('Tạo lịch chạy'), icon: LucideCalendarClock, onSelect: () => openRoutines({ editing: true }) },
-  ];
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}${chatSwitching ? ' chat-switching' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
@@ -2433,7 +2426,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} createItems={createItems} onHover={sidebar ? undefined : peekSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} onHover={sidebar ? undefined : peekSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },

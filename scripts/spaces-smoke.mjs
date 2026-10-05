@@ -27,8 +27,7 @@ try {
   const [first, second, third] = orglets;
 
   // A new space from the rail's +, with two orglets and one category.
-  await page.getByRole('button', { name: 'Tạo mới', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Tạo không gian', exact: true }).click();
+  await page.locator('.area-create').click();
   const spaceDialog = page.getByRole('dialog');
   await spaceDialog.getByRole('textbox', { name: 'Tên không gian' }).fill('Launch');
   await spaceDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
