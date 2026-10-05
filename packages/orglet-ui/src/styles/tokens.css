@@ -55,6 +55,12 @@
   --org-icon-size: 32px;
   --org-radius: 9px;
   --org-radius-menu: 12px;
+  /* Elevation, in three steps. `xs` is the barely-there lift under a field, an outlined button or a card; `md` is every
+     floating panel (menus, popovers, tips, toasts); `lg` is a dialog. A panel pairs its shadow with a hairline in
+     `--org-border`, so it keeps its edge on any page. Each is a shadow list, so a component can put more in front. */
+  --org-shadow-xs: 0 1px 2px #0000000d;
+  --org-shadow-md: 0 2px 6px #0000000f, 0 10px 28px #0000001f;
+  --org-shadow-lg: 0 4px 12px #00000012, 0 18px 48px #00000033;
   /* A select's trigger follows the control height unless tuned on its own; its menu rows are a touch taller. */
   --org-select-height: var(--org-control-height);
   --org-select-radius: var(--org-radius);
@@ -95,6 +101,10 @@
   --org-focus: #a6c1ff;
   --org-overlay: #00000059;
   --org-toast-error: #a82626;
+  /* On a dark page a shadow has little to darken, so the values are heavier. */
+  --org-shadow-xs: 0 1px 2px #0000004d;
+  --org-shadow-md: 0 2px 6px #0000004d, 0 10px 28px #00000073;
+  --org-shadow-lg: 0 4px 12px #0000004d, 0 18px 48px #00000099;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -118,6 +128,9 @@
     --org-focus: #a6c1ff;
     --org-overlay: #00000059;
     --org-toast-error: #a82626;
+    --org-shadow-xs: 0 1px 2px #0000004d;
+    --org-shadow-md: 0 2px 6px #0000004d, 0 10px 28px #00000073;
+    --org-shadow-lg: 0 4px 12px #0000004d, 0 18px 48px #00000099;
   }
 }
 

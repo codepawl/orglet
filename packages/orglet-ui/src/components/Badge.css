@@ -10,6 +10,8 @@
   padding: 0 7px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--org-badge-tone) 14%, var(--org-bg, #fff));
+  /* A hairline in the tone keeps the pill's edge on any background, and takes no room. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--org-badge-tone) 24%, transparent);
   color: color-mix(in srgb, var(--org-badge-tone) 65%, var(--org-text, #1f1f1f));
   font-size: 12px;
   font-weight: 500;

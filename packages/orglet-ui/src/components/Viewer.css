@@ -10,7 +10,7 @@
   overflow: hidden;
   border-radius: 14px;
   background: var(--org-surface, #f4f4f4);
-  box-shadow: 0 20px 60px #00000040;
+  box-shadow: 0 0 0 1px var(--org-border, #e5e5e5), var(--org-shadow-lg, 0 4px 12px #00000012, 0 18px 48px #00000033);
 }
 /* Close, title and actions on one row; the outer columns are equal, so the title stays centred whatever the actions. */
 .org-viewer-toolbar {

@@ -7,10 +7,14 @@
   border: 1px solid var(--org-border, #e5e5e5);
   border-radius: 10px;
   background: var(--org-bg, #fff);
+  box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d);
+  transition: border-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
 }
+.org-money-input:hover:not(:focus-within) { border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5)); }
+/* The ring of every field in the kit; the host page's own outline on the inner input stays off. */
 .org-money-input:focus-within {
-  border-color: var(--org-focus, #4473d3);
-  box-shadow: 0 0 0 1px var(--org-focus, #4473d3);
+  border-color: var(--org-focus, #576b99);
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
 }
 .org-money-input > span {
   color: var(--org-muted, #666);
@@ -39,4 +43,6 @@
   -moz-appearance: textfield;
   appearance: textfield;
 }
-.org-money-input-invalid { border-color: var(--org-error, #c62828); }
+.org-money-input-invalid,
+.org-money-input-invalid:hover:not(:focus-within) { border-color: var(--org-error, #a82626); }
+.org-money-input-invalid:focus-within { box-shadow: 0 0 0 1px var(--org-error, #a82626), 0 0 0 4px color-mix(in srgb, var(--org-error, #a82626) 22%, transparent); }

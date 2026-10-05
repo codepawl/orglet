@@ -1,6 +1,7 @@
 /*
- * A text field is a box with one border, and that border is where every state is said: hover darkens it, focus is
- * the ring the page gives every focusable thing, failing validation turns it red and shakes it once.
+ * A text field is a box with one hairline on the page colour and a barely-there shadow. The hairline is where every
+ * state is said: hover darkens it, focus draws the kit's ring over it (a box-shadow, so it takes no room), failing
+ * validation turns it red and shakes it once.
  */
 .org-input {
   width: 100%;
@@ -13,9 +14,21 @@
   font: inherit;
   font-size: 13px;
   font-weight: 400;
+  box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d);
+  transition: border-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
 }
-.org-input:hover:not(:disabled):not(:focus) { border-color: var(--org-muted, #666); }
-.org-input:disabled { opacity: .55; }
+.org-input:hover:not(:disabled):not(:focus) { border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5)); }
+/* The ring is two pixels of focus colour with a soft halo, read as one. The transparent outline only shows in forced
+   colours, and keeps a host page's own focus outline from drawing a second ring. */
+.org-input:focus-visible {
+  outline: 2px solid transparent;
+  border-color: var(--org-focus, #576b99);
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
+}
+.org-input:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
 .org-input::placeholder { color: var(--org-muted, #666); }
 
 .org-textarea {
@@ -26,6 +39,10 @@
 }
 
 .org-input[aria-invalid=true] { border-color: var(--org-error, #a82626); }
+.org-input[aria-invalid=true]:focus-visible {
+  border-color: var(--org-error, #a82626);
+  box-shadow: 0 0 0 1px var(--org-error, #a82626), 0 0 0 4px color-mix(in srgb, var(--org-error, #a82626) 22%, transparent);
+}
 /* The shake replays whenever `data-flash` changes, which is how submitting the same bad value twice stays visible. */
 .org-input[aria-invalid=true][data-flash] { animation: org-field-flash .55s ease-in-out 2; }
 @keyframes org-field-flash {
