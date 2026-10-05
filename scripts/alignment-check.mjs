@@ -347,8 +347,11 @@ const SCREENS = [
   // A crew turn at work: the island on the prompt bar, with the member on the held model still working (COD-167).
   { name: 'crew-chat-island', needs: 'islandCrew', open: async (page, context) => {
     context.islandTaskId = await callCore(page, 'createTask', { workerId: context.researcher.id, teamId: context.islandCrew.id, brief: 'Check the last three run logs and say what failed.', sourceIds: [], consent: true, providerScopes: ['ollama'], budgetMicros: 100_000 });
-    await openArea(page, 'Kênh');
-    await page.getByRole('button', { name: `#${context.islandCrew.name}`, exact: true }).first().click();
+    // The crew's first turn makes its channel, outside every space, and a running channel is not moved into one:
+    // it has no row yet, so it is opened the way a chat without a row is, from search.
+    await page.keyboard.press('Control+K');
+    await page.getByRole('dialog').getByRole('combobox').fill(context.islandCrew.name);
+    await page.getByRole('dialog').getByRole('option').filter({ hasText: context.islandCrew.name }).first().click();
     await page.locator('.live-island:not(.leaving)').waitFor();
   }, close: async (page, context) => {
     await callCore(page, 'cancel', { id: context.islandTaskId });

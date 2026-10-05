@@ -441,7 +441,8 @@ export function App() {
   // A channel outside every space has no row, since Home lists direct messages only: a crew from a template, a
   // channel the terminal made, the channels a deleted space left. The core puts them into the space kept for them.
   // One call at a time. A set of channels the core could not take is not asked for again, so a refusal cannot loop;
-  // a set it did take is forgotten, since a save still on its way can put one of them outside again.
+  // a set it did take is forgotten, since a save still on its way can put one of them outside again. A running
+  // channel is not taken, so each channel's state is part of the set: it is asked for again once its run ends.
   const adoptRefused = useRef('');
   const adopting = useRef(false);
   // Counts the calls that came back, so the check runs once more after each: a channel put outside while a call
@@ -451,7 +452,7 @@ export function App() {
     if (!workspace) return;
     const outside = (channel: { spaceId?: string } | undefined) => Boolean(channel) && !workspace.spaces.some(space => space.id === channel!.spaceId);
     const waiting = [
-      ...workspace.tasks.filter(task => !task.deletedAt && outside(task.channel)).map(task => task.id),
+      ...workspace.tasks.filter(task => !task.deletedAt && outside(task.channel)).map(task => `${task.id}:${task.status}`),
       ...workspace.emptyChannels.filter(outside).map(channel => channel.id),
     ].join();
     if (!waiting || adopting.current || adoptRefused.current === waiting) return;
