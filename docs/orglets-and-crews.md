@@ -16,7 +16,7 @@ The dialog has four tabs:
 
 | Tab | What is there |
 |---|---|
-| **General** | Avatar, name, description, instructions, model, limit per task. The avatar Orglet picks is a face and colour your other orglets do not already show, when one fits, and it stays once saved. |
+| **General** | Avatar, name, description, instructions, model, limit per task. The avatar Orglet picks is a face and colour your other orglets do not already show, when one fits, and it stays once saved. A face is a body and a pair of eyes: every body is the Orglet bubble with its small corner in another place or with other proportions (tall, wide, leaf, soft), and the eyes smile, wink, narrow or open wide. The sides of a body bow a little, and a large face is a round solid with no flat edge, so it stays one volume when it turns to look. Nothing is worn: the hats and accessories earlier versions had are gone, and an orglet that had one now has the body that took its place. **Customize** lists the faces by body. |
 | **Skill** | A reusable set of instructions the orglet works from. Skill packages imported from a folder must be reviewed in the Library before you can pick them. |
 | **Permissions** | What the orglet's own chat may do: attached sources, data checks, the web, a working folder, and proposing app changes. See [Permissions](permissions-and-learning.md#permissions). |
 | **Memory** | What the orglet remembered from its chats. Edit, pin or delete lines here. See [Memory](memory.md). |
@@ -45,12 +45,12 @@ A channel is a named conversation, like **#launch** or **#research**, with a top
 
 ### Make one
 
-1. Click **+** next to **Channels**.
+1. Open a space from the rail and click **+** in its sidebar. A channel is made in a space.
 2. On **General**, give it a name and, if you like, a topic.
 3. On **Members**, tick the orglets that belong in it.
 4. On **How it works**, pick how the channel answers a message (see below), then choose **Create channel**.
 
-You can also pick two or more orglets in the sidebar (the pencil next to the section, or Ctrl-click) and choose the **#** button in the bar that appears. The dialog opens with them ticked.
+
 
 The channel opens empty, with its orglets' faces above the message box, and waits in **Channels** until you write in it. Its header shows **#name** and the topic; **Members** in the chat's menu (⋮) changes who is in it. **Channel settings** in the header's **⋯** or the row's menu changes the name, topic, members and how it works; a change applies from the next message. Rename it in place from the row's menu or by clicking its name in the header. Archive and delete are in the same menus. A channel with no messages yet has nothing to archive, so it can only be deleted.
 

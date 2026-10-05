@@ -84,9 +84,10 @@ try {
   template.team.name = 'Imported review'; await writeFile(templatePath, JSON.stringify(template));
   await page.keyboard.press('Escape');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
+  // A template file is imported from Home's Add orglet page; a channel is no longer made from Home's sidebar.
   await openChannels(page);
-  await page.getByRole('button', { name: 'Tạo kênh', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Nhập template', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Thêm Tí', exact: true }).click();
+  await page.getByRole('button', { name: 'Nhập mẫu', exact: true }).click();
   await page.getByRole('button', { name: 'Tùy chọn kênh #Imported review', exact: true }).waitFor();
   const importedWorkspace = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(importedWorkspace.teams.length, 2); assert.equal(importedWorkspace.tasks.length, 2);

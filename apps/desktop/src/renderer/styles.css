@@ -47,7 +47,7 @@
   color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
-  --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg));
+  --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 78%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
@@ -131,6 +131,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-pane { display:flex; flex-direction:column; min-height:0; background:transparent; border-radius:var(--panel-radius); overflow:hidden; transform-origin:-28px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
 /* The right panels open out of the header's end, where the controls that show them are. */
 @keyframes pane-in { from { opacity:0; transform:scale(.2); } to { opacity:1; transform:none; } }
+/* Another chat brings its own layout (user, 2026-10-05): its right column is in place at once and the main card
+   takes its width at once, instead of a column folding in while the messages reflow under a moving edge. The fold
+   and the width's motion stay for the buttons that show and hide a column. */
+.app.chat-switching { transition:none; }
+.details-pane.with-chat, .members-pane.with-chat { animation:none; }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
 .details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
 .details-head h2 { font-size:15px; font-weight:600; }
@@ -269,10 +274,18 @@ svg { flex-shrink:0; stroke-width:1.7; }
    matte shade, and the two pseudo-elements are the eyes: upright capsules in the page colour, 2/14 of the side
    wide and 4/14 tall, set high and a touch to the right, on the same 14-unit grid the icon is drawn on so the
    sizes agree. Percentages mean a new size only sets width and height. */
-.orglet-mark { position:relative; display:inline-block; width:29px; height:29px; border-radius:31% 31% 31% 15%; background:linear-gradient(135deg, color-mix(in srgb, var(--text) 86%, white), var(--text) 50%, color-mix(in srgb, var(--text) 84%, black)); font-size:0; line-height:0; flex-shrink:0; }
+/* The mark is the app icon's drawing (assets/icon.svg, redrawn 2026-10-05): the bubble with bowed sides, lit as a
+   matte ball from the top left, and two eyes that lean to the right. The pair leans about its middle, so the left
+   eye rises a little and the right one drops. */
+.orglet-mark { --mark-ink:var(--text); position:relative; display:inline-block; width:29px; height:29px; border-radius:46% 46% 46% 17%; background:radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--mark-ink) 72%, white), var(--mark-ink) 48%, color-mix(in srgb, var(--mark-ink) 78%, black)); font-size:0; line-height:0; flex-shrink:0; }
 .orglet-mark::before,.orglet-mark::after { content:''; position:absolute; top:21.4%; width:14.3%; height:28.6%; border-radius:999px; background:var(--bg); }
-.orglet-mark::before { left:35.7%; }
-.orglet-mark::after { left:57.1%; }
+.orglet-mark::before { left:35.7%; --eye-lean:-9%; }
+.orglet-mark::after { left:57.1%; --eye-lean:9%; }
+/* The mark is an orglet at rest, so it does what a face at rest does: one blink every idle cycle and nothing else.
+   Each eye keeps its lean through the blink, which is why the lean is a variable the keyframes read. */
+.orglet-mark::before,.orglet-mark::after { transform:translateY(var(--eye-lean)) rotate(14deg); animation:mark-blink var(--motion-idle) infinite; }
+@keyframes mark-blink { 0%,95%,100% { transform:translateY(var(--eye-lean)) rotate(14deg) scaleY(1); } 97.5% { transform:translateY(var(--eye-lean)) rotate(14deg) scaleY(.12); } }
+@media (prefers-reduced-motion: reduce) { .orglet-mark::before,.orglet-mark::after { animation:none; } }
 /* At the sizes the app draws the mark, the eyes are placed in whole pixels so they stay crisp at device scale 1
    (COD-154): the percentages above put a 2.7px eye at 6.8px. The brand mark is 20px (even, like the row it sits
    in, so it centres on a whole pixel), a byline mark 25px, `.large` 42px. */
@@ -285,7 +298,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Settings → Màu logo (COD-154): with "Theo màu nhấn" the mark's body takes the accent, with the same matte shade,
    and its eyes take the accent's ink so a pale accent still shows them. The startup screen has no workspace yet and
    so its face (`.startup-face`, the 3D orglet) stays monochrome. */
-:root[data-logo-color=accent] .orglet-mark { background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent) 50%, color-mix(in srgb, var(--accent) 84%, black)); }
+:root[data-logo-color=accent] .orglet-mark { --mark-ink:var(--accent); }
 :root[data-logo-color=accent] .orglet-mark::before,:root[data-logo-color=accent] .orglet-mark::after { background:var(--accent-ink); }
 .orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
 .orglet-mark.small { width:25px; height:25px; }
@@ -413,8 +426,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Which model answers this chat, beside its name in the top bar (user, 2026-09-19). Quiet, because it is context
    rather than a warning: the old Demo badge shouted, and only ever appeared for Demo. */
 .topbar-provider { display:inline-flex; align-items:center; align-self:center; gap:5px; flex-shrink:0; font-size:12px; font-weight:500; line-height:20px; color:var(--muted); white-space:nowrap; }
-/* Inline rather than a flex row, so the model's baseline is its text's, not its mark's; the mark sits on the text's middle. */
-.topbar-provider > .provider-mark { display:inline-flex; flex-shrink:0; }
+/* The mark sits on the text's middle and keeps its own centring: as a flex box with no alignment it pushed its
+   glyph into the top left corner of its square (user, 2026-10-05). */
+.topbar-provider > .provider-mark { display:inline-grid; place-items:center; flex-shrink:0; }
 /* Beside a byline: the role this worker played for the team, then the model that wrote the message. */
 .byline-role { font-size:11px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 8px; }
 .byline-provider { font-size:11px; font-weight:500; color:var(--muted); }
@@ -440,11 +454,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer.expanded.has-context { grid-template-areas:"context context" "input send"; }
 .composer.expanded.has-context.has-attachments { grid-template-areas:"context context" "attach attach" "input send"; }
 .composer-context { grid-area:context; min-width:0; }
-/* Focus inside the bar darkens its outline. Typing in it rings the whole pill in the focus colour, two pixels like
-   every other focus ring (COD-284): the border turns and an inset line adds the second pixel, so nothing around the
-   bar moves and the idle bar stays as quiet as before. A button inside the bar keeps its own ring instead. */
-.composer:focus-within { border-color:var(--bar-line-focus); }
-.composer:has(> textarea:focus-visible) { border-color:var(--focus); box-shadow:inset 0 0 0 1px var(--focus), 0 1px 2px #0000000d, 0 6px 20px #00000014; }
+/* Focus inside the bar darkens its outline and deepens its shadow a little, and that is all (user, 2026-10-05): the
+   bar used to ring itself in the focus colour while typing (COD-284), which read as a different control. The line
+   keeps its one pixel, so nothing around the bar moves. A button inside the bar keeps its own ring. */
+.composer:focus-within { border-color:var(--bar-line-focus); box-shadow:0 1px 3px #00000014, 0 8px 24px #0000001f; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
@@ -615,8 +628,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* A size container, so the island's label can be capped from the bar's width (`cqw` in `.live-island-label`)
    rather than from the island's own measured width, which would let a measurement of zero lock it at zero. */
 /* The bar's bottom edge keeps the panel's inset from the card's rounded corner (the disclaimer line that used to sit
-   below it is gone, owner 2026-10-01), so the add button and the ring never sit in the curve. */
-.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) var(--panel-inset); container-type:inline-size; }
+   below it is gone, owner 2026-10-01), so the add button and the ring never sit in the curve. The bar is as wide as
+   the thread above it (user, 2026-10-05): at 900px against the thread's 960px it stood 30px in from the messages
+   and the chat's opening lines once the main card was wider than both, which is the case with the sidebar folded. */
+.thread-composer { width:100%; max-width:960px; margin:0 auto; padding:8px var(--page-x) var(--panel-inset); container-type:inline-size; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
    the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
@@ -1007,6 +1022,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .search-result-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
 .search-result-head { display:flex; align-items:baseline; gap:8px; min-width:0; }
 .search-result-name { flex:0 1 auto; min-width:0; font-size:15px; line-height:20px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.search-result-hash { flex-shrink:0; margin-right:3px; color:var(--muted); vertical-align:-1px; }
 .search-result-detail { flex:1 1 0; min-width:0; font-size:13px; line-height:20px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .search-result-snippet { font-size:13px; line-height:18px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .search-mark { background:none; color:var(--text); font-weight:600; }
@@ -1820,8 +1836,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
      Finishing  `.message-byline.landed`: one nod on a spring as the answer lands, over the idle look-up, which
                 carries on underneath. `landed` is set only for a run that finished after the chat was opened, so
                 an old chat opens with every face still.
-     Needs you  `.assistant-message.needs-you`: a slow breath. The one loop allowed while the app waits, because
-                waiting on the person is the point and the face must stay findable.
+     Needs you  `.assistant-message.needs-you`: a slow breath, the eyes raised to you and closing once at the top
+                of every other breath. The one loop allowed while the app waits, because waiting on the person is
+                the point and the face must stay findable.
      Arriving   `.tree-item.arriving`: a row that was just created rises into the list once, and its face gives one
                 small hop once the row has settled. Rows present at startup do not. The picker preview hops the
                 same way when a different mascot is chosen (its `key` is the mascot, so the face remounts).
@@ -1938,12 +1955,22 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 
 /* Needs you: waiting on a person is not working, so it breathes slowly instead of turning its head. */
 .assistant-message.needs-you .avatar .mascot { animation:mascot-breathe var(--motion-cycle) ease-in-out infinite; }
+/* The eyes wait with the head: they look up at you and blink slowly, once every two breaths, at the top of one. */
+.assistant-message.needs-you .avatar .mascot-eyes { --gaze-y:-0.9px; animation:mascot-wait-eyes calc(var(--motion-cycle) * 2) ease-in-out infinite; }
+@keyframes mascot-wait-eyes { 0%,21%,29%,100% { transform:translateY(var(--gaze-y)) scaleY(1); } 25% { transform:translateY(var(--gaze-y)) scaleY(.12); } }
 @keyframes mascot-breathe { 0%,100% { transform:translateY(var(--mascot-lift)) scale(1); } 50% { transform:translateY(var(--mascot-lift)) scale(1.06); } }
 
 /* Arriving: a worker or team that was just created rises into the list once, and its face hops once the row has
    settled. (The picker preview is a 3D face and hops in on its own, see orgletStage.ts.) */
 .tree-item.arriving { animation:row-arrive .32s var(--ease-out) 1; }
 .tree-item.arriving .mascot { animation:mascot-hop var(--motion-gesture) var(--ease-spring) .32s 1; }
+/* The eyes hop too: up with the head, then shut for a moment as it lands. */
+.tree-item.arriving .mascot-eyes { animation:mascot-arrive-eyes var(--motion-gesture) ease-out .32s 1; }
+@keyframes mascot-arrive-eyes {
+  0%,100% { transform:translateY(var(--gaze-y)) scaleY(1); }
+  35% { transform:translateY(var(--gaze-y)) translateY(-1px) scaleY(1); }
+  70% { transform:translateY(var(--gaze-y)) scaleY(.12); }
+}
 @keyframes row-arrive { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
 
 /* Reduced motion: no loops, no gestures, no glides. A state still shows (the eyes still drop or lift, the row still
@@ -1952,7 +1979,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   .avatar .mascot,.avatar-face,.mascot-eyes,.mascot-choice .mascot,
   .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.mascot-choice:is(:hover, :focus-visible) .mascot { transition:none; }
   .avatar.alive .mascot,.avatar.alive .mascot-eyes,.message-byline.working .mascot,.message-byline.working .mascot-eyes,.assistant-message:has(> .message-main > .live-run) .message-byline.working .mascot-eyes,
-  .message-byline.landed .avatar .mascot,.message-byline.landed .avatar .mascot-eyes,.assistant-message.needs-you .avatar .mascot,.tree-item.arriving .mascot { animation:none; }
+  .message-byline.landed .avatar .mascot,.message-byline.landed .avatar .mascot-eyes,.assistant-message.needs-you .avatar .mascot,.assistant-message.needs-you .avatar .mascot-eyes,
+  .tree-item.arriving .mascot,.tree-item.arriving .mascot-eyes { animation:none; }
   .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.assistant-message:has(> .message-main > .live-run) .message-byline.working .mascot { transform:translateY(var(--mascot-lift)); filter:none; }
   .mascot-choice:is(:hover, :focus-visible) .mascot { transform:none; }
   .tree-item.arriving { animation:row-arrive-quiet .32s var(--ease-out) 1; }
@@ -2387,14 +2415,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   transform-origin:50% calc(100% - var(--island-reach));
   animation:island-rise 200ms var(--ease-out);
 }
-/* One outline for tab and bar: the same colour the bar's own focus rule sets. */
-.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); }
-/* Typing rings the bar in two pixels, its border and an inset line (COD-284); the tab and its corners carry the same
-   second line on the inside of the shape, so the ring runs round the tab too instead of stepping at the corners. */
-.thread-composer:has(.composer > textarea:focus-visible) .live-island {
-  --island-line:var(--focus); --island-ring:0 0 0 1px var(--focus),;
-  box-shadow:inset 1px 1px 0 0 var(--focus), inset -1px 0 0 0 var(--focus), var(--island-shadow);
-}
+/* One outline for tab and bar: the same darker line the bar's own focus rule sets, and the same deeper shadow, with
+   no change of colour (user, 2026-10-05). */
+.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -4px 16px #0000001c; }
 /* The corner's box starts a fillet above the bar's top edge and ends under the bar's top border, so its bottom border
    is the bar's. The clip lets the fill reach the tab's bottom and two pixels into the tab, over the soft edge of the
    tab's typing ring, and keeps the ring's shadow off the box's top and outer edges, where it left a faint line; the
@@ -2403,7 +2426,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   content:""; position:absolute; box-sizing:content-box;
   top:calc(100% - var(--island-reach) - var(--island-fillet)); width:var(--island-fillet); height:var(--island-fillet);
   border:0 solid var(--island-line); border-bottom-width:1px;
-  box-shadow:var(--island-ring,) 0 0 0 var(--island-fillet) var(--bg);
+  box-shadow:0 0 0 var(--island-fillet) var(--bg);
 }
 .live-island::before { right:100%; border-right-width:1px; border-bottom-right-radius:var(--island-fillet); clip-path:inset(1px -2px calc(-1 * var(--island-reach)) 1px); }
 .live-island::after { left:100%; border-left-width:1px; border-bottom-left-radius:var(--island-fillet); clip-path:inset(1px 1px calc(-1 * var(--island-reach)) -2px); }
@@ -2482,6 +2505,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .live-island[data-state=writing] .avatar .mascot-eyes { --gaze-y:1.6px; animation:mascot-write calc(var(--motion-cycle) * 1.5) ease-in-out infinite; }
 @keyframes mascot-write { 0%,100% { transform:translateY(var(--gaze-y)) translateX(-1.4px); } 50% { transform:translateY(var(--gaze-y)) translateX(1.4px); } }
 .live-island[data-state=waiting] .avatar .mascot { animation:mascot-breathe var(--motion-cycle) ease-in-out infinite; }
+.live-island[data-state=waiting] .avatar .mascot-eyes { --gaze-y:-0.9px; animation:mascot-wait-eyes calc(var(--motion-cycle) * 2) ease-in-out infinite; }
 .live-island-faces .avatar:not(:only-child) :is(.mascot,.mascot-eyes) { animation-delay:var(--idle-delay, 0s); }
 /* Reduced motion: the loops and the width morph are already off (the global rule above), so a state is a cut:
    the eyes still drop or lift, and the head keeps its lift so the art never shifts. */
@@ -2541,6 +2565,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    the close button and the actions. Opening in the default app is always an icon; in a narrow window Ask, Edit and
    Save keep only their icons too (each button carries its name as its label). */
 .source-viewer.source-file { width:min(1040px, calc(100vw - 32px)); }
+/* A file's viewer is as tall as what it shows, up to the window (user, 2026-10-05: a three-row table sat in a dialog as
+   tall as the window, most of it empty). An edit keeps the full height it works in. */
+.source-viewer:not(.source-editing) { height:fit-content; min-height:200px; max-height:calc(100dvh - 40px); }
+.source-viewer:not(.source-editing) .org-viewer-scroll { min-height:0; padding-bottom:24px; }
 .source-viewer .source-open-external .source-action-label { display:none; }
 .source-viewer .source-open-external { width:34px; padding:0; justify-content:center; }
 @media (max-width: 900px) {
@@ -2953,7 +2981,13 @@ button.crew-node:hover { background:var(--row-hover); }
 .orglet-cursor-body { position:absolute; display:block; width:20px; height:20px; }
 .orglet-cursor-body svg { display:block; overflow:visible; filter:drop-shadow(0 1px 1.5px #00000059); }
 .orglet-cursor-shape { fill:currentColor; stroke:var(--bg); stroke-width:5; stroke-linejoin:round; paint-order:stroke; }
-.orglet-cursor-eyes { transition:transform 200ms ease-out; }
+.orglet-cursor-eyes { transform-box:fill-box; transform-origin:center; transition:transform 200ms ease-out; }
+/* The cursor is the orglet, so its eyes live like a face's: a blink now and then while it points, and on a press
+   they squeeze shut with the body and open again. While it types they stay on the field (below). */
+.orglet-cursor:not([data-action=type]) .orglet-cursor-eyes { animation:orglet-cursor-blink 5s infinite; }
+.orglet-cursor:not([data-action=type]) .orglet-cursor-pressed .orglet-cursor-eyes { animation:orglet-cursor-wince 260ms ease-out 1, orglet-cursor-blink 5s 260ms infinite; }
+@keyframes orglet-cursor-blink { 0%,94%,100% { transform:scaleY(1); } 97% { transform:scaleY(.12); } }
+@keyframes orglet-cursor-wince { 0%,100% { transform:scaleY(1); } 35% { transform:scaleY(.2); } }
 .orglet-cursor[data-action=type] .orglet-cursor-eyes { transform:translate(0, 3.6px); animation:orglet-cursor-write 1.4s ease-in-out infinite; }
 @keyframes orglet-cursor-write { 0%,100% { transform:translate(-2.4px, 3.6px); } 50% { transform:translate(2.4px, 3.6px); } }
 .orglet-cursor-pressed { animation:orglet-cursor-press 260ms var(--org-ease-out, ease-out); }
@@ -2965,6 +2999,7 @@ button.crew-node:hover { background:var(--row-hover); }
 @media (prefers-reduced-motion:reduce) {
   .orglet-cursor[data-glide] { transition:none; }
   .orglet-cursor-pressed, .orglet-cursor-ripple, .orglet-cursor[data-action=type] .orglet-cursor-eyes, .orglet-glow { animation:none; }
+  .orglet-cursor:not([data-action=type]) .orglet-cursor-eyes, .orglet-cursor:not([data-action=type]) .orglet-cursor-pressed .orglet-cursor-eyes { animation:none; }
   .orglet-glow { opacity:1; }
 }
 
@@ -3041,9 +3076,21 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:var(--panel-inset) 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
 .area-rail::-webkit-scrollbar { width:0; height:0; }
 .area-rail-list { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0; padding:0; list-style:none; }
+/* Back and forward, side by side above the tiles: small and quiet, since they are used far less than the tiles. */
+.area-trail { display:flex; align-items:center; justify-content:center; gap:2px; flex-shrink:0; margin-bottom:-4px; }
+.area-trail-step { display:grid; place-items:center; width:24px; height:24px; min-height:24px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
+.area-trail-step:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
+.area-trail-step:disabled { cursor:default; opacity:.35; }
+/* The one divider of the rail (user, 2026-10-05): a short bar between the app's own places and the person's spaces. */
+.area-rail-divider { flex-shrink:0; width:24px; height:2px; margin:-2px 0; border-radius:1px; background:color-mix(in srgb, var(--text) 14%, transparent); }
 .area-tile { position:relative; display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border:0; border-radius:14px; background:transparent; color:var(--muted); cursor:pointer; }
 .area-tile:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
 .area-tile.active { background:var(--row-active); color:var(--text); }
+/* The open area's icon is filled, and the others stay outlines (user, 2026-10-05). Each icon has a filled drawing
+   of its own (`railIcons.tsx`), as big as its outline; `--rail-cut` is the tile's ground, for the lines that stay
+   readable inside the fill. A folder's outline is one closed shape, so it is simply filled. */
+.area-tile.active { --rail-cut:color-mix(in srgb, var(--text) 12%, var(--window)); }
+.area-folder-tile.active > svg { fill:currentColor; }
 .area-tile:disabled { cursor:default; opacity:.6; }
 /* A space's tile is filled with its own gradient and carries no letter (user, 2026-10-05), so it reads as a place
    of the person's own beside the rail's icons. The gradient is shaded the way the mascots and the Orglet mark are:
@@ -3060,7 +3107,9 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-tip { position:fixed; z-index:30; transform:translateY(-50%); max-width:260px; padding:6px 10px; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--bg); box-shadow:0 8px 24px #0000001f; color:var(--text); font-size:13px; font-weight:600; line-height:1.3; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
 /* A tile's menu opens on a right click; its trigger shows only on a keyboard focus, so the rail stays a column of tiles. */
 .area-tile-slot { position:relative; display:grid; place-items:center; }
-.area-tile-slot > .org-row-menu, .area-tile-slot > .row-menu { position:absolute; inset:auto -2px -2px auto; }
+/* The menu's wrapper lies over the tile's corner; it takes no pointer, or a click on that corner would miss the tile. */
+.area-tile-slot > .org-row-menu, .area-tile-slot > .row-menu { position:absolute; inset:auto -2px -2px auto; pointer-events:none; }
+.area-tile-slot .org-row-menu-panel { pointer-events:auto; }
 .area-tile-menu { width:18px; height:18px; min-height:18px; padding:0; border:0; border-radius:6px; background:var(--surface); color:var(--text); opacity:0; pointer-events:none; }
 .area-tile-menu:focus-visible, .area-tile-menu[aria-expanded="true"] { opacity:1; pointer-events:auto; }
 /* A folder of spaces: an outline around its tiles, never a ground of its own, so a tile's hover tint is not a
@@ -3069,9 +3118,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-folder.open { padding:4px; margin:-4px; border-radius:18px; box-shadow:inset 0 0 0 1px var(--border); }
 .area-folder-tile { color:var(--muted); }
 .area-create { color:var(--muted); }
-.area-count { position:absolute; top:-3px; right:-3px; display:grid; place-items:center; min-width:16px; height:16px; padding:0 4px; border-radius:999px; font-size:10px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; box-shadow:0 0 0 2px var(--window); }
-.area-count.accent { background:var(--accent); color:var(--accent-ink); }
-.area-count.quiet { background:var(--surface); color:var(--text); }
+/* What waits in an area is a dot on the tile's corner (user, 2026-10-05), ringed in the window's ground so it reads
+   over the icon: the accent colour when it waits for the person, a quiet grey when it is only news. */
+.area-dot { position:absolute; top:5px; right:5px; width:9px; height:9px; border-radius:50%; box-shadow:0 0 0 2px var(--window); }
+.area-dot.accent { background:var(--accent); }
+.area-dot.quiet { background:color-mix(in srgb, var(--text) 45%, var(--window)); }
 
 /* The sidebar's head and the lists the areas put in it (COD-366): a title with its buttons, Home's search box and Friends
    item, Activity's views, and the channels without a category, which sit above the categories. */
@@ -3092,14 +3143,23 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
    height while it is empty so that there is something to drop on. */
 .channel-drop { border-radius:10px; }
 .channel-drop.over { background:var(--row-hover); }
+/* Where a dragged channel will land: a bar above the row it is over. A drop mark, shown only during a drag. */
+.channel-slot { border-radius:10px; }
+.channel-slot.over { box-shadow:inset 0 2px 0 var(--accent); }
 .channel-uncategorized.channel-drop:empty { min-height:12px; }
-.sidebar-empty { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:4px 12px; }
+.sidebar-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 12px; text-align:center; }
 
 /* The person sits in the rail, under the areas: a face the size of a tile that opens their menu (user, 2026-10-04).
    A waiting update stacks above it. Like the rail, it has no ground of its own. */
 .user-panel { position:absolute; z-index:6; left:var(--shell-gap); bottom:var(--shell-gap); display:flex; flex-direction:column; align-items:center; gap:6px; width:var(--area-rail-width); }
-.user-panel-who { display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border-radius:14px; }
-.user-panel-who:hover:not(:disabled), .user-panel-who[aria-expanded="true"] { background:var(--row-hover); }
+/* The face is the button (user, 2026-10-05: a bordered tile around a bordered letter read as a box in a box). It is
+   the size of a space's fill, takes a soft fill of its own colour, lifts a little under the pointer, gives under
+   a press, and wears the open space's ring while its menu is open. */
+.user-panel-who, .user-panel-who:hover:not(:disabled), .user-panel-who[aria-expanded="true"] { display:grid; place-items:center; width:42px; height:42px; min-height:42px; padding:0; border:0; border-radius:14px; background:transparent; }
+.user-panel-face > .avatar { width:32px; height:32px; border-radius:10px; font-size:13px; background:color-mix(in srgb, var(--avatar-color) 18%, var(--window)); box-shadow:none; transition:transform var(--motion-quick) var(--ease-out), background var(--motion-quick) var(--ease-out), box-shadow var(--motion-quick) var(--ease-out); }
+.user-panel-who:hover:not(:disabled) .avatar { background:color-mix(in srgb, var(--avatar-color) 30%, var(--window)); }
+.user-panel-who:active:not(:disabled) .avatar { transform:scale(.94); }
+.user-panel-who[aria-expanded="true"] .avatar { box-shadow:0 0 0 2px var(--window), 0 0 0 4px var(--text); }
 .user-panel-face { position:relative; display:grid; place-items:center; flex-shrink:0; }
 .user-panel-face .connection-dot { position:absolute; right:-2px; bottom:-2px; box-shadow:0 0 0 2px var(--window); }
 

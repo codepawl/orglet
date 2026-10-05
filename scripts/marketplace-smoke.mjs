@@ -17,7 +17,7 @@ const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}
 const settle = page => page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => undefined))));
 async function openDiscover(page) {
   await openHome(page);
-  await page.locator('.sidebar').getByRole('button', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: 'Marketplace', exact: true }).click();
   await page.locator('.marketplace-listing').first().waitFor();
 }
 let app = await launch();
@@ -31,7 +31,7 @@ try {
   assert.ok(await page.locator('.marketplace-listing').count() <= 3);
   assert.match(await page.locator('.marketplace-source').innerText(), /Danh mục/);
   await page.screenshot({ path: 'test-results/marketplace-light-wide.png' });
-  await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByRole('button', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByRole('button', { name: 'Thêm', exact: true }).click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research friend', exact: true }).waitFor();
   const orglet = (await workspace(page)).workers.find(worker => worker.name === 'Research friend');
   assert.ok(orglet);
@@ -42,7 +42,7 @@ try {
   await openDiscover(page);
   await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByText('Đã thêm', { exact: true }).waitFor();
   assert.equal(await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByRole('button', { name: 'Thêm bản nữa', exact: true }).isEnabled(), true);
-  await page.locator('.marketplace-listing').filter({ hasText: 'Research and review' }).getByRole('button', { name: 'Thêm bạn', exact: true }).click();
+  await page.locator('.marketplace-listing').filter({ hasText: 'Research and review' }).getByRole('button', { name: 'Thêm', exact: true }).click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research and review', exact: true }).waitFor();
   const crew = (await workspace(page)).teams.find(team => team.name === 'Research and review');
   assert.ok(crew);
@@ -56,7 +56,9 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.setViewportSize({ width: 740, height: 600 });
   await page.screenshot({ path: 'test-results/marketplace-dark-narrow.png' });
-  assert.equal(await page.locator('.marketplace-listing').count(), 2);
+  // The online catalog and the one that ships with the app also list a space; a catalog server from before spaces lists two.
+  const listed = await page.locator('.marketplace-listing').count();
+  assert.ok(listed === 2 || listed === 3, `${listed} listings`);
   const overflow = await page.locator('.marketplace').evaluate(element => element.scrollWidth > element.clientWidth);
   assert.equal(overflow, false, 'Discover content fits the narrow panel');
   const before = await page.evaluate(() => window.orglet.call('marketInstallations', {}));

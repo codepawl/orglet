@@ -7,8 +7,9 @@ import { bubbleOutline, eyeColor } from './mascots';
  * than an arrow. A thin rim in the page colour keeps it visible on any background. It is only ever drawn by Orglet,
  * over the browser's live view or on the desktop glow; the system cursor is never changed.
  *
- * It glides between points, squashes a little and leaves a ripple in its colour on a press, and rests with its eyes on
- * the field while it types. Under reduced motion it simply sits where it is.
+ * It glides between points and blinks now and then like any orglet, squashes a little with its eyes squeezed shut and
+ * leaves a ripple in its colour on a press, and rests with its eyes on the field while it types. Under reduced motion
+ * it simply sits where it is.
  */
 
 export type OrgletCursorAction = 'move' | 'press' | 'type';

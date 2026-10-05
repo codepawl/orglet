@@ -1,7 +1,8 @@
 import { useId, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
-import { Briefcase, ChartColumn, Check, ChevronDown, Code, Headset, PenLine, Plus, Shuffle, ShieldCheck, SlidersHorizontal, Smile, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Plus, Shuffle, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { t } from '../i18n';
-import { Mascot, isMascot, mascotIds, mascots, type MascotGlyph, type MascotId } from './mascots';
+import { Mascot, isMascot, mascotIds, mascotName, type MascotGlyph, type MascotId } from './mascots';
+import { bodyPath, bodyShapeIds, bodyShapes } from './orgletShapes';
 import { autoMascot, avatarPalette, mascotCategoryIds, mascotCategoryLabels, mascotColors, seedHash, suggestedColors, suggestedMascots, type MascotCategory, type MascotHints } from './mascotSuggest';
 import { Orglet3D, type FaceMotion } from './Orglet3D';
 import { ColorPicker } from './ColorPicker';
@@ -113,10 +114,10 @@ const radioKeys = (event: KeyboardEvent<HTMLDivElement>) => {
 };
 
 const categoryOf = (id: MascotId) => (Object.keys(mascotCategoryIds) as MascotCategory[]).find(category => mascotCategoryIds[category].includes(id));
-const categoryIcons: Record<MascotCategory, ReactNode> = {
-  basic: <Smile size={16} />, office: <Briefcase size={16} />, research: <ChartColumn size={16} />, content: <PenLine size={16} />,
-  quality: <ShieldCheck size={16} />, tech: <Code size={16} />, support: <Headset size={16} />,
-};
+/** A group's mark is its body itself, small and flat: the groups are the bodies (owner, 2026-10-05). */
+const categoryIcons = Object.assign({}, ...bodyShapeIds.map(body => ({
+  [body]: <svg width="16" height="16" viewBox="0 0 64 66" aria-hidden="true" focusable="false"><path d={bodyPath(bodyShapes[body])} fill="currentColor" /></svg>,
+}))) as Record<MascotCategory, ReactNode>;
 
 /**
  * Picks an avatar with as little effort as the user wants (user decision 2026-09-17: people are lazy to choose).
@@ -136,10 +137,10 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
   const face = isMascot(value.mascot) ? value.mascot : autoMascot(mascotIds, seed, { name, description: hint });
   const [open, setOpen] = useState(false);
   const [colorPanel, setColorPanel] = useState(false);
-  const [category, setCategory] = useState<MascotCategory>(() => categoryOf(face) ?? 'basic');
+  const [category, setCategory] = useState<MascotCategory>(() => categoryOf(face) ?? 'base');
   // Every choice makes the preview smile (the "say cheese" of the standalone page, COD-156).
   const [cheer, setCheer] = useState(0);
-  const choose = (mascot: MascotId, patch: AvatarValue = {}) => { set({ mascot, emoji: undefined, letter: undefined, ...patch }); setCategory(categoryOf(mascot) ?? 'basic'); setCheer(count => count + 1); };
+  const choose = (mascot: MascotId, patch: AvatarValue = {}) => { set({ mascot, emoji: undefined, letter: undefined, ...patch }); setCategory(categoryOf(mascot) ?? 'base'); setCheer(count => count + 1); };
   const suggest = () => {
     const options = suggestedMascots(suggestionHints, { taken });
     const next = options[(options.indexOf(face) + 1) % options.length];
@@ -166,7 +167,7 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
       <div className="avatar-picker-toolbar">
         <Button type="button" variant="outline" className="avatar-action" onClick={suggest} title={t('Chọn linh vật khác hợp với tên, mô tả và kỹ năng')}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button>
         <Button type="button" variant="outline" className="avatar-action" onClick={randomize}><Shuffle size={15} aria-hidden="true" />{t('Ngẫu nhiên')}</Button>
-        <Button type="button" variant="outline" className="avatar-action avatar-customize" aria-expanded={open} aria-controls={`${ids}-custom`} onClick={() => { if (!open) setCategory(categoryOf(face) ?? 'basic'); setOpen(!open); }}><SlidersHorizontal size={15} aria-hidden="true" />{t('Tùy chỉnh')}<ChevronDown size={15} aria-hidden="true" /></Button>
+        <Button type="button" variant="outline" className="avatar-action avatar-customize" aria-expanded={open} aria-controls={`${ids}-custom`} onClick={() => { if (!open) setCategory(categoryOf(face) ?? 'base'); setOpen(!open); }}><SlidersHorizontal size={15} aria-hidden="true" />{t('Tùy chỉnh')}<ChevronDown size={15} aria-hidden="true" /></Button>
       </div>
     </div>
     <div id={`${ids}-custom`} className="avatar-custom" hidden={!open}>
@@ -179,7 +180,7 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
             const checked = face === id;
             const focusable = checked || (index === 0 && !mascotCategoryIds[category].includes(face));
             // Each tile is a 3D face that turns and hops only while the pointer or the keyboard is on it.
-            return <button key={id} type="button" role="radio" aria-checked={checked} tabIndex={focusable ? 0 : -1} className="avatar-choice mascot-choice" aria-label={t(mascots[id].name)} title={t(mascots[id].name)} onClick={() => choose(id)}><Orglet3D id={id} seed={index} size={32} color="grid" motion={{ follow: 'hover' }} /></button>;
+            return <button key={id} type="button" role="radio" aria-checked={checked} tabIndex={focusable ? 0 : -1} className="avatar-choice mascot-choice" aria-label={mascotName(id)} title={mascotName(id)} onClick={() => choose(id)}><Orglet3D id={id} seed={index} size={32} color="grid" motion={{ follow: 'hover' }} /></button>;
           })}
         </div>
       </div>

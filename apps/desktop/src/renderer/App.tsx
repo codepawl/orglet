@@ -43,7 +43,7 @@ import { suggestStarters } from '../shared/starters';
 import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
-import { CHANNEL_DRAG_TYPE, ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
+import { CHANNEL_DRAG_TYPE, CATEGORY_DRAG_TYPE, ChannelRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
 import { chatsUnder, type ChatOwner } from '../shared/schedule-runs';
 import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
@@ -89,7 +89,7 @@ import { permissionsForLevel, permissionState, type WorkspaceLevel } from '../sh
 import { ComposerPermissionHint, type PermissionHintControls } from './permissionHints';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 import { noSelection, pruneSelection, selectRange, toggleSelection, type SelectionPickMode, type SidebarSelection, type SidebarSelectionSection } from './sidebarSelection';
-import { channelFromRecipient, channelMembersFromSelection, channelNameOf, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from './channelChat';
+import { channelFromRecipient, channelNameOf, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from './channelChat';
 import { CHANNEL_NAME_LIMIT, channelLabel, isChannelChat } from '../shared/channels';
 import { ChannelDialog, type ChannelDraft } from './components/ChannelDialog';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
@@ -109,15 +109,19 @@ import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry, type AreaRailFolder } from './components/AreaRail';
 import type { RowMenuItem } from './components/RowMenu';
 import { SpaceMark } from './components/SpaceMark';
+import { BellFilled, BookFilled, CalendarClockFilled, ChatFilled } from './components/railIcons';
+import type { HomePageView } from './components/FriendsPage';
+import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
-import { Boxes, CircleUserRound, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
+import { Boxes, CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
 import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
 import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, groupChannels, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
+import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
 import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
 import { ConnectWays, type ConnectWay } from './components/ConnectWays';
@@ -207,6 +211,8 @@ function freshFaceSize(count: number): 'xl' | 'lg' {
 }
 
 
+/** How many places back and forward remember. */
+const TRAIL_LIMIT = 50;
 type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'library' | 'skill' | 'knowledge' | 'activity' | 'thread' | null;
 export function App() {
   useLanguage();
@@ -360,8 +366,11 @@ export function App() {
   const [spaceDraft, setSpaceDraft] = useState<SpaceDraft>();
   // Where a dragged channel would land in the open space: a category's id, or `root` for directly in the space.
   const [channelDropAt, setChannelDropAt] = useState<string>();
+  const [categoryDraft, setCategoryDraft] = useState<CategoryDraft>();
   const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
   const [friendsOpen, setFriendsOpen] = useState(false);
+  // Which of Home's two pages is open: making an orglet, or the marketplace, which has its own row in the sidebar.
+  const [homePage, setHomePage] = useState<HomePageView>('add');
   const [activityTab, setActivityTab] = useState<ActivityTab>('needs');
   const [membersOpen, setMembersOpen] = useState(() => { try { return localStorage.getItem('orglet.members') !== 'hidden'; } catch { return true; } });
   const toggleMembers = () => setMembersOpen(current => { try { localStorage.setItem('orglet.members', current ? 'hidden' : 'shown'); } catch { /* chrome only */ } return !current; });
@@ -783,13 +792,6 @@ export function App() {
     if (matchMedia('(max-width: 780px)').matches) setSidebar(false);
     setTimeout(() => composer.current?.focus(), 0);
   };
-  /** Several orglets picked in the sidebar start a new channel with them in it. */
-  const newChannelFromSelection = () => {
-    const members = channelMembersFromSelection(selection);
-    if (!members) return;
-    clearSelection();
-    setChannelDraft({ members });
-  };
   /** A channel just created opens empty, once the workspace lists it. */
   const channelCreated = (channelId: string) => {
     void refresh().then(() => showEmptyChannel(channelId));
@@ -800,6 +802,20 @@ export function App() {
   // an Open row only takes it off the list.
   const [openChats, setOpenChats] = useState<OpenChats>(readOpenChats);
   const activeChatKey = workspace ? chatKeyForView({ selected, teamId, workerId, pendingGroup: Boolean(emptyChannelId) }, workspace.tasks) : undefined;
+  // Another chat brings its own layout: the right column is in place at once instead of folding in while the main
+  // card changes width under the messages (renderer/chatSwitch.ts). Set while rendering, so it is on the same frame.
+  const [layoutChatKey, setLayoutChatKey] = useState(activeChatKey);
+  const [chatSwitching, setChatSwitching] = useState(false);
+  if (layoutChatKey !== activeChatKey) {
+    setLayoutChatKey(activeChatKey);
+    setChatSwitching(true);
+    markChatSwitch();
+  }
+  useEffect(() => {
+    if (!chatSwitching) return;
+    const timer = setTimeout(() => setChatSwitching(false), CHAT_SWITCH_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [chatSwitching, activeChatKey]);
   // The first orglet is on screen for one frame before the start reopens the last chat; it is not a visit.
   const [chatsBooted, setChatsBooted] = useState(false);
   useEffect(() => { if (workspace && !workspace.workers.length) setChatsBooted(true); }, [workspace]);
@@ -1606,6 +1622,82 @@ export function App() {
   const isArriving = useArrivals(workspace ? workspace.workers.map(item => `worker-${item.id}`) : [], Boolean(workspace));
   // The shell is drawn before the workspace arrives (COD-218): the same frame, the same sidebar width, the lists
   // and the chat filled in as skeletons, so the window never opens on a blank page or a centred wait.
+  /*
+   * Back and forward (user, 2026-10-05), the two arrows at the top of the rail. A place is what the window shows:
+   * the area and its space, the chat or the empty channel in the main panel, the page over it, and the tab each of
+   * those is on. Every place the person reaches is added to the trail, and travelling along it puts those back.
+   * The trail lives for the session only: it is the window's chrome, never a row.
+   */
+  const place = {
+    area, spaceId: openSpaceId, chat: selected, emptyChannelId, friends: friendsOpen, homePage, activityTab, libraryTab,
+    page: panel === 'routines' ? 'routines' as const : panel === 'library' || panel === 'skill' || panel === 'knowledge' ? 'library' as const : null,
+  };
+  type Place = typeof place;
+  const placeKey = JSON.stringify(place);
+  const trail = useRef<{ places: Place[]; at: number; travelling: boolean }>({ places: [], at: -1, travelling: false });
+  const [trailEnds, setTrailEnds] = useState({ back: false, forward: false });
+  useEffect(() => {
+    if (!workspace) return;
+    const current = trail.current;
+    if (current.travelling) {
+      // What travelling actually reached, which is not the place it left if a chat on the trail is gone.
+      current.travelling = false;
+      current.places[current.at] = place;
+    } else if (current.at < 0 || JSON.stringify(current.places[current.at]) !== placeKey) {
+      current.places = [...current.places.slice(0, current.at + 1), place].slice(-TRAIL_LIMIT);
+      current.at = current.places.length - 1;
+    }
+    setTrailEnds({ back: current.at > 0, forward: current.at < current.places.length - 1 });
+  }, [placeKey, Boolean(workspace)]);
+  const travel = (step: -1 | 1) => {
+    const current = trail.current;
+    const target = current.places[current.at + step];
+    if (!target || !workspace) return;
+    // An unsaved schedule asks its one question first, as leaving its page any other way does.
+    if (pagePanelRef.current && routineDirty.current) {
+      void leaveRoutine(() => travel(step));
+      return;
+    }
+    current.at += step;
+    if (JSON.stringify(target) === placeKey) {
+      setTrailEnds({ back: current.at > 0, forward: current.at < current.places.length - 1 });
+      return;
+    }
+    current.travelling = true;
+    const chatThere = target.chat !== null && workspace.tasks.some(task => task.id === target.chat && !task.deletedAt);
+    if (chatThere) openInPane(target.chat!);
+    setPanel(target.page);
+    pagePanelRef.current = target.page !== null;
+    setLibraryTab(target.libraryTab);
+    setActivityTab(target.activityTab);
+    setHomePage(target.homePage);
+    setArea(target.area);
+    setOpenSpace(target.spaceId);
+    setFriendsOpen(target.friends);
+    setEmptyChannelId(target.emptyChannelId);
+  };
+  const travelRef = useRef(travel);
+  travelRef.current = travel;
+  useEffect(() => {
+    // Alt+Left and Alt+Right, and the mouse's own back and forward buttons, the way a browser has them.
+    const keydown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+      if (document.querySelector('[role=dialog]')) return;
+      event.preventDefault();
+      travelRef.current(event.key === 'ArrowLeft' ? -1 : 1);
+    };
+    const mouseup = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return;
+      event.preventDefault();
+      travelRef.current(event.button === 3 ? -1 : 1);
+    };
+    window.addEventListener('keydown', keydown);
+    window.addEventListener('mouseup', mouseup);
+    return () => {
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('mouseup', mouseup);
+    };
+  }, []);
   if (!workspace) return <Startup error={error} onRetry={window.orglet ? () => void refresh() : undefined} sidebar={sidebar} sidebarWidth={sidebarWidth} />;
   // A new install asks once, before the app, whether to sign in or stay local (COD-337); the answer is kept and the
   // workspace it comes back in drops this screen. Anyone who already has chats, or updated from an older build, never sees it.
@@ -1959,11 +2051,8 @@ export function App() {
   };
   const selectionCount = selection.ids.length;
   const deleteSelectionQuestion = t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
-  // Two or more orglets picked together start a channel (COD-215, COD-361); one orglet is its own DM.
-  const canStartChannel = channelMembersFromSelection(selection) !== undefined;
   const selectionBar = selection.section && <div className="selection-bar" role="toolbar" aria-label={t('Mục đã chọn')}>
     <span className="selection-count">{t('{0} đã chọn', [selectionCount])}</span>
-    {canStartChannel && <Button size="icon" className="row-action" aria-label={t('Tạo kênh với các mục đã chọn')} title={t('Tạo kênh với các mục đã chọn')} onClick={newChannelFromSelection}><Hash size={16} /></Button>}
     <Button size="icon" className="row-action" aria-label={t('Lưu trữ')} title={t('Lưu trữ')} onClick={() => void applyToSelection('archive')}><Archive size={16} /></Button>
     <RowMenu className="row-action danger" label={t('Xóa')} icon={Trash} asksOnOpen items={[{ label: t('Xóa'), icon: Trash, danger: true, onSelect: () => void applyToSelection('delete'), confirm: { question: deleteSelectionQuestion, label: t('Xóa') } }]} />
     <Button size="icon" className="row-action" aria-label={t('Bỏ chọn')} title={t('Bỏ chọn')} onClick={clearSelection}><SidebarX size={16} /></Button>
@@ -2162,7 +2251,7 @@ export function App() {
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
       onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     : area === 'home' && friendsOpen
-      ? <FriendsPage archived={workspace.archivedWorkers} busy={friendsBusy}
+      ? <FriendsPage view={homePage} archived={workspace.archivedWorkers} busy={friendsBusy}
         onCreate={name => { setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }} onRestore={member => archiveEntity('worker', member.id, false)}
         onMarketAdded={async result => {
           await refresh();
@@ -2179,7 +2268,7 @@ export function App() {
     if (!leavingPage(goToActivity)) setArea('activity');
   };
   const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
-    { key: 'home', icon: <MessagesSquare size={20} />, label: t('Bạn bè và tin nhắn'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
+    { key: 'home', icon: <MessagesSquare size={20} />, activeIcon: ChatFilled, label: t('Trò chuyện'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
       clearSelection();
       // Home is always a chat (user, 2026-10-04): the DM that was open, else the last orglet written to, else the
@@ -2207,9 +2296,9 @@ export function App() {
         setArea('channels');
       },
     })),
-    { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },
-    { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
-    { key: 'schedules', icon: <CalendarClock size={20} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
+    { key: 'activity', icon: <Bell size={20} />, activeIcon: BellFilled, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },
+    { key: 'library', icon: <BookOpen size={20} />, activeIcon: BookFilled, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library' || panel === 'skill' || panel === 'knowledge', count: knowledgeToReview, onSelect: () => { const open = () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }; if (panel === 'routines') void leaveRoutine(open); else open(); } },
+    { key: 'schedules', icon: <CalendarClock size={20} />, activeIcon: CalendarClockFilled, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), active: panel === 'routines', count: pendingRoutines, onSelect: () => openRoutines() },
   ];
   // What the sidebar lists: the open page's own rows, else the area's. A folded sidebar taking a look lists the tile
   // under the pointer instead.
@@ -2218,28 +2307,74 @@ export function App() {
   const sidebarFor = !sidebar && peekList ? peekList : shownList;
   // The space the sidebar lists, which a folded sidebar's look can make another one than the space on screen.
   const sidebarSpace = workspace.spaces.find(space => `space:${space.id}` === sidebarFor);
-  const sidebarSpaceEntries = sidebarSpace ? channelEntries.filter(entry => spaceOfEntry(entry)?.id === sidebarSpace.id) : [];
+  // In the order the person keeps them (`reorder`): a channel never placed stays after the placed ones, newest first.
+  const channelOrder = workspace.channelOrder ?? [];
+  const idOfEntry = (entry: (typeof channelEntries)[number]) => channelOfEntry(entry)?.id ?? '';
+  const placeOfEntry = (entry: (typeof channelEntries)[number], index: number) => channelOrder.includes(idOfEntry(entry)) ? channelOrder.indexOf(idOfEntry(entry)) : channelOrder.length + index;
+  const sidebarSpaceEntries = sidebarSpace
+    ? channelEntries.filter(entry => spaceOfEntry(entry)?.id === sidebarSpace.id).map((entry, index) => ({ entry, place: placeOfEntry(entry, index) })).sort((first, second) => first.place - second.place).map(item => item.entry)
+    : [];
   const categoryOfEntry = (entry: (typeof channelEntries)[number]) => sidebarSpace?.categories.find(category => category.id === channelOfEntry(entry)?.categoryId);
-  /** Moves a channel of the listed space to another of its categories, or directly into the space. */
-  const moveChannelTo = (channelId: string, categoryId: string | null) => {
+  /**
+   * Puts a channel of the listed space somewhere else in it (user, 2026-10-05): on another channel's row it takes
+   * that row's category and place, and on a category, or on the space's own list, it goes last there. Dropped on a
+   * row below it in its own category it lands after that row, and otherwise before it.
+   */
+  const placeChannel = (channelId: string, target: { rowId?: string; categoryId: string | null }) => {
     const channel = sidebarSpaceEntries.map(channelOfEntry).find(item => item?.id === channelId);
-    if (!channel || (channel.categoryId ?? null) === categoryId) return;
-    action(() => orglet.call('updateChannel', { id: channel.id, name: channel.name, topic: channel.topic ?? '', members: channel.members, categoryId }), channelLabel(channel.name));
+    if (!channel || channelId === target.rowId) return;
+    const ids = sidebarSpaceEntries.map(idOfEntry);
+    const moved = (channel.categoryId ?? null) !== target.categoryId;
+    const next = ids.filter(id => id !== channelId);
+    const after = !moved && target.rowId !== undefined && ids.indexOf(channelId) < ids.indexOf(target.rowId);
+    next.splice(target.rowId === undefined ? next.length : next.indexOf(target.rowId) + (after ? 1 : 0), 0, channelId);
+    if (!moved && next.join() === ids.join()) return;
+    const inSpace = new Set(ids);
+    action(async () => {
+      if (moved) await orglet.call('updateChannel', { id: channel.id, name: channel.name, topic: channel.topic ?? '', members: channel.members, categoryId: target.categoryId });
+      await orglet.call('reorder', { kind: 'channels', ids: [...channelOrder.filter(id => !inSpace.has(id)), ...next] });
+    }, channelLabel(channel.name));
   };
-  const channelDrop = (key: string, categoryId: string | null) => ({
-    onDragOver: (event: DragEvent<HTMLElement>) => {
-      if (!event.dataTransfer.types.includes(CHANNEL_DRAG_TYPE)) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-      setChannelDropAt(key);
-    },
-    onDragLeave: () => setChannelDropAt(current => current === key ? undefined : current),
-    onDrop: (event: DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      setChannelDropAt(undefined);
-      moveChannelTo(event.dataTransfer.getData(CHANNEL_DRAG_TYPE), categoryId);
-    },
-  });
+  /** Puts a category of the listed space at another one's place: after it when it was above, before it when below. */
+  const placeCategory = (categoryId: string, targetId: string) => {
+    if (!sidebarSpace || categoryId === targetId) return;
+    const ids = sidebarSpace.categories.map(category => category.id);
+    if (!ids.includes(categoryId)) return;
+    const next = ids.filter(id => id !== categoryId);
+    next.splice(next.indexOf(targetId) + (ids.indexOf(categoryId) < ids.indexOf(targetId) ? 1 : 0), 0, categoryId);
+    const everySpace = workspace.spaces.flatMap(space => space.id === sidebarSpace.id ? next : space.categories.map(category => category.id));
+    action(() => orglet.call('reorder', { kind: 'categories', ids: everySpace }), sidebarSpace.categories.find(category => category.id === categoryId)?.name);
+  };
+  const dropTarget = (key: string, dropped: (kind: 'channel' | 'category', id: string) => void, takesCategory = false) => {
+    const kindOf = (event: DragEvent<HTMLElement>) => event.dataTransfer.types.includes(CHANNEL_DRAG_TYPE) ? 'channel' as const : takesCategory && event.dataTransfer.types.includes(CATEGORY_DRAG_TYPE) ? 'category' as const : undefined;
+    return {
+      onDragOver: (event: DragEvent<HTMLElement>) => {
+        if (!kindOf(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        setChannelDropAt(key);
+      },
+      onDragLeave: () => setChannelDropAt(current => current === key ? undefined : current),
+      onDrop: (event: DragEvent<HTMLElement>) => {
+        const kind = kindOf(event);
+        if (!kind) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setChannelDropAt(undefined);
+        dropped(kind, event.dataTransfer.getData(kind === 'channel' ? CHANNEL_DRAG_TYPE : CATEGORY_DRAG_TYPE));
+      },
+    };
+  };
+  /** A channel's row in a space, as a place another channel can be dropped. */
+  const channelSlot = (entry: (typeof channelEntries)[number], categoryId: string | null) => <div key={idOfEntry(entry)} className={`channel-slot${channelDropAt === `row:${idOfEntry(entry)}` ? ' over' : ''}`}
+    {...dropTarget(`row:${idOfEntry(entry)}`, (_kind, id) => placeChannel(id, { rowId: idOfEntry(entry), categoryId }))}>{renderChannelEntry(entry)}</div>;
+  /** A category's heading starts a drag of the category; a drag that started on one of its channels is the channel's. */
+  const startCategoryDrag = (categoryId: string) => (event: DragEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('.channel-row')) return;
+    event.dataTransfer.setData(CATEGORY_DRAG_TYPE, categoryId);
+    event.dataTransfer.effectAllowed = 'move';
+  };
   const deleteSpace = (space: { id: string; name: string }) => action(async () => {
     await orglet.call('deleteSpace', { id: space.id });
     setOpenSpace('');
@@ -2297,7 +2432,8 @@ export function App() {
     },
   }));
   // The rail as it is drawn: a space with a folder sits inside that folder's group, at the place of its first space.
-  const railEntries: (AreaRailEntry | AreaRailFolder)[] = [];
+  const railEntries: AreaRailEntry[] = [];
+  const railSpaces: (AreaRailEntry | AreaRailFolder)[] = [];
   const railFolders = new Map<string, AreaRailFolder>();
   for (const tile of railTiles) {
     const space = workspace.spaces.find(item => `space:${item.id}` === tile.key);
@@ -2307,7 +2443,7 @@ export function App() {
     }
     const spaceTile = { ...tile, menuItems: spaceTileMenu(space) };
     if (!space.folder) {
-      railEntries.push(spaceTile);
+      railSpaces.push(spaceTile);
       continue;
     }
     const key = folderKey(space.folder);
@@ -2322,17 +2458,11 @@ export function App() {
         ],
       };
       railFolders.set(key, folder);
-      railEntries.push(folder);
+      railSpaces.push(folder);
     }
     folder.entries.push(spaceTile);
   }
-  const createItems = [
-    { label: t('Thêm bạn (tạo Tí)'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setNewOrgletName(''); setPanel('worker'); } },
-    { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft(openSpace && area === 'channels' ? { spaceId: openSpace.id } : {}) },
-    { label: t('Tạo không gian'), icon: Boxes, onSelect: () => setSpaceDraft({}) },
-    { label: t('Tạo lịch chạy'), icon: LucideCalendarClock, onSelect: () => openRoutines({ editing: true }) },
-  ];
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${sidePaneOpen ? ' with-details' : ''}${membersShown ? ' with-members' : ''}${chatSwitching ? ' chat-switching' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
@@ -2340,11 +2470,14 @@ export function App() {
       onPointerEnter={sidebar ? undefined : () => peekSidebar(true)} onPointerLeave={sidebar ? undefined : () => peekSidebar(false)}>
       <div className="sidebar-head">
         <strong className="sidebar-title">{sidebarSpace ? sidebarSpace.name : sidebarFor === 'home' ? t('Trò chuyện') : sidebarFor === 'activity' ? t('Hoạt động') : sidebarFor === 'library' ? t('Thư viện') : t('Lịch chạy')}</strong>
-        {sidebarSpace && <Button size="icon" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><Plus size={18} /></Button>}
+        {/* What a space holds is made from its + (user, 2026-10-05): a channel, or a category for channels to sit in. */}
+        {sidebarSpace && <RowMenu label={t('Tạo trong không gian {0}', [sidebarSpace.name])} icon={Plus} className="org-button-icon" items={[
+          { label: t('Tạo kênh'), icon: Hash, onSelect: () => setChannelDraft({ spaceId: sidebarSpace.id }) },
+          { label: t('Tạo nhóm'), icon: FolderTree, onSelect: () => setCategoryDraft({ space: sidebarSpace }) },
+        ]} />}
         {sidebarSpace && <RowMenu label={t('Tùy chọn không gian {0}', [sidebarSpace.name])} icon={EllipsisVertical} className="org-button-icon" items={[
           { label: t('Thiết lập không gian'), icon: SlidersHorizontal, onSelect: () => setSpaceDraft({ space: sidebarSpace }) },
           { label: t('Thành viên'), icon: Users, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'members' }) },
-          { label: t('Nhóm'), icon: FolderTree, onSelect: () => setSpaceDraft({ space: sidebarSpace, initialTab: 'categories' }) },
           { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'space', entityId: sidebarSpace.id, name: sidebarSpace.name }) },
           { label: t('Xóa không gian'), icon: Trash, danger: true, onSelect: () => deleteSpace(sidebarSpace), confirm: { question: t('Xóa không gian {0}? Các kênh của nó vẫn còn, nằm ngoài mọi không gian.', [sidebarSpace.name]), label: t('Xóa không gian') } },
         ]} />}
@@ -2355,10 +2488,13 @@ export function App() {
       {sidebarFor === 'home' && <button type="button" className="sidebar-search" aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={16} aria-hidden="true" /><span>{t('Tìm hoặc bắt đầu trò chuyện')}</span></button>}
       <div className="sidebar-scroll">
       {sidebarFor === 'home' && <>
-      <nav className="sidebar-nav" aria-label={t('Thêm bạn')}>
-        <button type="button" className={`sidebar-nav-item${friendsOpen ? ' active' : ''}`} aria-current={friendsOpen ? 'page' : undefined} onClick={() => { clearSelection(); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
-          <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm bạn')}</span>
-        </button>
+      <nav className="sidebar-nav" aria-label={t('Thêm Tí')}>
+        {(['add', 'market'] as const).map(view => {
+          const open = friendsOpen && homePage === view;
+          return <button key={view} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => { clearSelection(); setHomePage(view); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
+            {view === 'add' ? <UserRoundPlus size={18} aria-hidden="true" /> : <Store size={18} aria-hidden="true" />}<span className="sidebar-nav-name">{view === 'add' ? t('Thêm Tí') : 'Marketplace'}</span>
+          </button>;
+        })}
       </nav>
       {/* The chats kept at hand that have no row anywhere else in the sidebar (COD-355), so no chat is listed twice. */}
       {openChatItems.length > 0 && <SidebarSection id="open" title={t('Đang mở')}>
@@ -2371,26 +2507,23 @@ export function App() {
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
       {/* The channels outside every space, like group chats beside the DMs: the rail has a tile for each space and
-          none for these (user, 2026-10-05). Ones with a category keep their own section under it. */}
-      <SidebarSection id="loose-channels" title={t('Kênh')} action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh')} title={t('Tạo kênh')} onClick={() => setChannelDraft({})}><Plus size={16} /></Button>}>
-        {channelGroupList.length === 0 && <p className="empty-history">{t('Chưa có kênh nào.')}</p>}
+          none for these (user, 2026-10-05). Ones with a category keep their own section under it. They are only
+          listed here: a new channel is made in a space, so these sections have no way to add one. */}
+      {channelGroupList.some(group => group.name === undefined) && <SidebarSection id="loose-channels" title={t('Kênh')}>
         {channelGroupList.filter(group => group.name === undefined).flatMap(group => group.entries).map(renderChannelEntry)}
-      </SidebarSection>
+      </SidebarSection>}
       {channelGroupList.filter(group => group.name !== undefined).map(group => <SidebarSection key={group.name!.toLowerCase()} id={`category-${group.name!.toLowerCase()}`} title={group.name!}
-        action={<>
-          <RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />
-          <Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [group.name!])} title={t('Tạo kênh trong {0}', [group.name!])} onClick={() => setChannelDraft({ category: group.name })}><Plus size={16} /></Button>
-        </>}>
+        action={<RowMenu label={t('Tùy chọn nhóm {0}', [group.name!])} icon={EllipsisVertical} items={[{ label: t('Tạo không gian từ nhóm này'), icon: Boxes, onSelect: () => spaceFromCategory(group.name!) }]} />}>
         {group.entries.map(renderChannelEntry)}
       </SidebarSection>)}
       </>}
       {sidebarSpace && <>
         {sidebarSpaceEntries.length === 0 && sidebarSpace.categories.length === 0 && <div className="sidebar-empty"><p className="empty-history">{t('Chưa có kênh nào.')}</p><Button variant="outline" onClick={() => setChannelDraft({ spaceId: sidebarSpace.id })}><LucidePlus size={16} />{t('Tạo kênh')}</Button></div>}
         {/* The channels directly in the space. With categories it is also where a dragged channel leaves its category. */}
-        {(sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) || sidebarSpace.categories.length > 0) && <div className={`channel-uncategorized channel-drop${channelDropAt === 'root' ? ' over' : ''}`} {...channelDrop('root', null)}>{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(renderChannelEntry)}</div>}
-        {sidebarSpace.categories.map(category => <div key={category.id} className={`channel-drop${channelDropAt === category.id ? ' over' : ''}`} {...channelDrop(category.id, category.id)}><SidebarSection id={`space-category-${category.id}`} title={category.name}
+        {(sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) || sidebarSpace.categories.length > 0) && <div className={`channel-uncategorized channel-drop${channelDropAt === 'root' ? ' over' : ''}`} {...dropTarget('root', (_kind, id) => placeChannel(id, { categoryId: null }))}>{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(entry => channelSlot(entry, null))}</div>}
+        {sidebarSpace.categories.map(category => <div key={category.id} className={`channel-drop${channelDropAt === category.id ? ' over' : ''}`} draggable onDragStart={startCategoryDrag(category.id)} {...dropTarget(category.id, (kind, id) => kind === 'channel' ? placeChannel(id, { categoryId: category.id }) : placeCategory(id, category.id), true)}><SidebarSection id={`space-category-${category.id}`} title={category.name}
           action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [category.name])} title={t('Tạo kênh trong {0}', [category.name])} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id, categoryId: category.id })}><Plus size={16} /></Button>}>
-          {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(renderChannelEntry)}
+          {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(entry => channelSlot(entry, category.id))}
         </SidebarSection></div>)}
       </>}
       {/* A page's own list: the sidebar always belongs to what the main panel shows, never to the area left behind. */}
@@ -2422,7 +2555,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} createItems={createItems} onHover={sidebar ? undefined : peekSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
@@ -2599,6 +2732,7 @@ export function App() {
     {publishingSource && <MarketPublishingDialog key={`${publishingSource.kind}:${publishingSource.entityId}`} source={publishingSource} sourceRevision={publishingSourceRevision(workspace, publishingSource)} requiresSuggestion={publishingRequiresSuggestion(workspace, publishingSource)} onClose={() => setPublishingSource(undefined)} />}
     {spaceDraft && <SpaceDialog key={`space:${spaceDraft.space?.id ?? 'new'}`} open draft={spaceDraft} workspace={workspace} onClose={() => setSpaceDraft(undefined)}
       onCreated={spaceId => { setOpenSpace(spaceId); setArea('channels'); }} />}
+    {categoryDraft && <CategoryDialog key={`category:${categoryDraft.space.id}`} open draft={categoryDraft} workspace={workspace} onClose={() => setCategoryDraft(undefined)} />}
     {channelDraft && <ChannelDialog key={`channel:${channelDraft.id ?? 'new'}`} open draft={channelDraft} workspace={workspace} onClose={() => setChannelDraft(undefined)} onCreated={channelCreated} />}
     {privacyTaskId && workspace.tasks.find(task => task.id === privacyTaskId) && <LocalOnlyDialog key={`privacy:${privacyTaskId}`} task={workspace.tasks.find(task => task.id === privacyTaskId)!} workspace={workspace} onClose={() => setPrivacyTaskId(undefined)} />}
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />

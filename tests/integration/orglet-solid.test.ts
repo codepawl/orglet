@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
+import { bodyShapeIds, mascotShapes } from '../../apps/desktop/src/renderer/components/orgletShapes';
 import { avatarRenderer, mascotGlyph, solidSizes } from '../../apps/desktop/src/renderer/components/Avatar';
 import {
-  FRONT, addAct, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, looks, oklchLightness, projectPoint, updateOrglet,
+  BODY_HALF, FACE_SHRINK, FRONT, addAct, bodyGeometries, bodyOutline, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, looks, oklchLightness, projectPoint, updateOrglet,
   type Attention, type Palette,
 } from '../../apps/desktop/src/renderer/components/orgletSolid';
 import { parseCssColour } from '../../apps/desktop/src/renderer/components/orgletStage';
@@ -34,7 +35,8 @@ it('projects a face that looks straight ahead onto the grid unchanged, and turns
   expect(ahead.facing).toBe(true);
   const [x, y] = projectPoint(ahead, 10, -6, FRONT);
   expect(x).toBeGreaterThan(10);
-  expect(x).toBeLessThan(10.6);
+  // A touch of perspective only: the plate is 12 units forward of the centre.
+  expect(x).toBeLessThan(11);
   expect(y).toBeLessThan(-6);
   // Positive yaw looks right: the front face's centre moves right and the head is lit from its right.
   const right = buildRotation(0.6, 0, 0);
@@ -47,32 +49,50 @@ it('projects a face that looks straight ahead onto the grid unchanged, and turns
   expect(buildRotation(0, 0, Math.PI * 2).facing).toBe(true);
 });
 
-it('takes the slab silhouette as the convex hull of the front and back outlines', () => {
+it('takes the silhouette as the convex hull of the cross-sections', () => {
   const square = [[0, 0], [4, 0], [4, 4], [0, 4], [2, 2], [1, 3]];
   const hull = convexHull(square);
   expect(hull).toHaveLength(4);
   expect(hull).toEqual(expect.arrayContaining([[0, 0], [4, 0], [4, 4], [0, 4]]));
 });
 
-it('gives every mascot a 3D look, and keeps the worn rule: a shape in the body colour carries an ink rim', () => {
+it('gives every mascot a 3D look with a body and eyes of its own, and nothing worn', () => {
   expect(Object.keys(looks).sort()).toEqual([...mascotIds].sort());
-  const unrimmed: string[] = [];
-  let wornShapes = 0;
-  for (const id of mascotIds) {
-    for (const shape of looks[id].shapes) {
-      if (shape.fill !== 'body') continue;
-      wornShapes += 1;
-      if (shape.stroke !== 'ink') unrimmed.push(`${id}: a shape filled with the body colour has no rim`);
-    }
-  }
-  expect(unrimmed).toEqual([]);
-  expect(wornShapes).toBeGreaterThan(20);
+  // Owner, 2026-10-05: no hat and nothing worn. What tells two orglets apart is the body and the eyes.
+  for (const id of mascotIds) expect(looks[id].shapes, id).toEqual([]);
+  const pairs = mascotIds.map(id => `${looks[id].body}/${looks[id].face}`);
+  expect(new Set(pairs).size).toBe(mascotIds.length);
+  for (const id of mascotIds) expect(looks[id].body, id).toBe(mascotShapes[id].body);
   // The expressions of mascots.tsx live in the eyes here too.
+  expect(looks.classic).toMatchObject({ body: 'base', face: 'plain', eyeDy: 0 });
   expect(looks.happy.face).toBe('happy');
   expect(looks.wink.face).toBe('wink');
   expect(looks.sleepy.face).toBe('sleepy');
-  expect(looks.cool.face).toBe('shades');
-  expect(looks.focused.face).toBe('glasses');
+  expect(looks.focused.face).toBe('narrow');
+});
+
+it('builds every body as a closed convex outline that stands on the same line', () => {
+  for (const id of bodyShapeIds) {
+    const geometry = bodyGeometries[id];
+    const lowest = Math.max(...geometry.rim.map(point => point[1]));
+    // The bowed bottom touches the line at one point, which the outline samples to within a few hundredths.
+    expect(lowest, id).toBeCloseTo(BODY_HALF, 1);
+    // A body is convex, and its sides bow, so its hull keeps every point of the outline.
+    expect(convexHull(geometry.rim).length, id).toBeGreaterThan(geometry.rim.length * 0.9);
+    // The face plate is the same outline shrunk about the body's centre: the dome's smallest cross-section.
+    const faceWidth = Math.max(...geometry.face.map(point => point[0])) - Math.min(...geometry.face.map(point => point[0]));
+    const rimWidth = Math.max(...geometry.rim.map(point => point[0])) - Math.min(...geometry.rim.map(point => point[0]));
+    expect(faceWidth / rimWidth, id).toBeCloseTo(1 - FACE_SHRINK, 5);
+    // The dome has no side: every ring is smaller and further forward than the one before, from the rim to the plate.
+    const widths = geometry.shoulders.map(shoulder => Math.max(...shoulder.outline.map(point => point[0])) - Math.min(...shoulder.outline.map(point => point[0])));
+    expect([rimWidth, ...widths, faceWidth], id).toEqual([rimWidth, ...widths, faceWidth].slice().sort((first, second) => second - first));
+    const depths = geometry.shoulders.map(shoulder => shoulder.z);
+    expect([0, ...depths, FRONT], id).toEqual([0, ...depths, FRONT].slice().sort((first, second) => first - second));
+  }
+  // The logo's own body is what `bodyOutline` still names.
+  expect(bodyOutline).toBe(bodyGeometries.base.rim);
+  expect(bodyGeometries.wide.widthRatio).toBeGreaterThan(1);
+  expect(bodyGeometries.tall.widthRatio).toBeLessThan(1);
 });
 
 it('renders the large avatar sizes as the 3D solid and keeps the list sizes on the whole-pixel glyphs', () => {
@@ -181,4 +201,18 @@ it('keeps the 3D canvas out of layout and out of the way of the pointer', () => 
   // The small faces keep their own motion, and their landing became the happy hop.
   expect(css).toContain('@keyframes mascot-cheer-eyes');
   expect(css).toMatch(/\.message-byline\.landed \.avatar \.mascot-eyes \{ animation:mascot-blink[^}]*mascot-cheer-eyes/);
+});
+
+it('rests each orglet at a small lean of its own, to the left or to the right', () => {
+  const leans = [1, 2, 3, 4, 5, 6, 7, 8].map(seed => createOrglet('classic', seed, 0).personality.lean);
+  for (const lean of leans) {
+    expect(Math.abs(lean)).toBeGreaterThanOrEqual(0.05);
+    expect(Math.abs(lean)).toBeLessThanOrEqual(0.15);
+  }
+  expect(leans.some(lean => lean < 0) && leans.some(lean => lean > 0)).toBe(true);
+  // A face starts at its lean and stays there with nothing to look at.
+  const model = createOrglet('classic', 3, 0);
+  expect(model.roll.value).toBe(model.personality.lean);
+  updateOrglet(model, { x: 0, y: 0, present: false, near: false, noticed: false }, 1, 0.016, false);
+  expect(model.roll.target).toBe(model.personality.lean);
 });

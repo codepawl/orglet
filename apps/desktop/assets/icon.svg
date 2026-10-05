@@ -1,22 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-  <!-- The logo is an orglet (COD-154): the Orglet bubble with two upright capsule eyes, near-black and matte, the
-       same drawing the in-app mark (.orglet-mark) and the mascots (mascots.tsx) use. Drawn on a 16-unit grid so
-       the body edges and the 2x4 eyes land on whole pixels at 16 and 32px. The body carries a thin lighter edge,
-       brightest at the top left, so the shape still separates from a dark taskbar; on a light ground it reads as
-       the lit edge of a matte object. Regenerate icon.png, icon.ico and icon.icns with scripts/build-icon.cjs. -->
+  <!-- The logo is an orglet (COD-154; redrawn 2026-10-05 on the owner's pick): the Orglet bubble with bowed sides,
+       the way the orglets' bodies are drawn, lit as a matte ball from the top left, with two capsule eyes that lean
+       to the right. The in-app mark (.orglet-mark) is the same drawing in CSS. A faint light line follows the edge so
+       the shape still separates from a dark taskbar. Regenerate icon.png, icon.ico and icon.icns with
+       scripts/build-icon.cjs. -->
   <defs>
-    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#454545"/>
-      <stop offset=".5" stop-color="#1e1e1e"/>
-      <stop offset="1" stop-color="#0e0e0e"/>
-    </linearGradient>
-    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#9a9a9a"/>
-      <stop offset="1" stop-color="#383838"/>
-    </linearGradient>
+    <radialGradient id="ball" cx=".34" cy=".28" r=".85">
+      <stop offset="0" stop-color="#5a5a5e"/>
+      <stop offset=".45" stop-color="#232325"/>
+      <stop offset="1" stop-color="#070708"/>
+    </radialGradient>
   </defs>
-  <path d="M5.4 1h5.2a4.4 4.4 0 0 1 4.4 4.4v5.2a4.4 4.4 0 0 1-4.4 4.4H3.1A2.1 2.1 0 0 1 1 12.9V5.4A4.4 4.4 0 0 1 5.4 1z" fill="url(#edge)"/>
-  <path d="M5.55 1.55h4.9a4 4 0 0 1 4 4v4.9a4 4 0 0 1-4 4H3.45a1.9 1.9 0 0 1-1.9-1.9V5.55a4 4 0 0 1 4-4z" fill="url(#shade)"/>
-  <rect x="6" y="4" width="2" height="4" rx="1" fill="#fff"/>
-  <rect x="9" y="4" width="2" height="4" rx="1" fill="#fff"/>
+  <path d="M8 .9C12.7.9 15.1 3.3 15.1 8S12.7 15.1 8 15.1H3.5C1.9 15.1.9 14.1.9 12.5V8C.9 3.3 3.3.9 8 .9z" fill="url(#ball)" stroke="#fff" stroke-opacity=".12" stroke-width=".3"/>
+  <g transform="rotate(14 8.5 6)" fill="#fff">
+    <rect x="5.9" y="4" width="2" height="4.2" rx="1"/>
+    <rect x="9.1" y="4" width="2" height="4.2" rx="1"/>
+  </g>
 </svg>

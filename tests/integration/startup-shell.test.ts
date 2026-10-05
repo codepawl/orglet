@@ -24,7 +24,7 @@ it('draws the whole shell before any workspace exists: area rail, sidebar, user 
   expect(html).toContain('class="area-rail"');
   expect(html).toContain('class="user-panel"');
   expect(html).toContain('class="user-panel-face"');
-  for (const label of ['Friends and direct messages', 'Activity', 'Library', 'Schedules']) expect(html).toContain(label);
+  for (const label of ['Chat', 'Activity', 'Library', 'Schedules']) expect(html).toContain(label);
   expect(html).toContain('<form class="composer"');
   expect(html).toMatch(/<textarea[^>]*disabled/);
   // The face does the waiting where the chat's face will be, and the copy says what is happening.

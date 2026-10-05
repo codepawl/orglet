@@ -8,6 +8,7 @@ import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunningItem } from '../../apps/desktop/src/shared/running';
 import { categoryNames, groupChannels, workingOrgletIds } from '../../apps/desktop/src/renderer/areas';
 import { folderKey, spaceFolderNames } from '../../apps/desktop/src/renderer/areas';
+import { arrivedWithChat, CHAT_SWITCH_SETTLE_MS, markChatSwitch } from '../../apps/desktop/src/renderer/chatSwitch';
 import { spaceHues } from '../../apps/desktop/src/renderer/components/SpaceMark';
 import { SAVED_LIMIT, SAVED_TEXT_LIMIT, savedExcerpt, withSaved, withoutSaved, type SavedMessage } from '../../apps/desktop/src/renderer/saved';
 import { activityCounts } from '../../apps/desktop/src/renderer/components/ActivityPage';
@@ -134,5 +135,16 @@ describe('a space\'s mark on the rail', () => {
     for (const seed of seeds) expect(spaceHues(seed)).toEqual(spaceHues(seed));
     // With no letter on the tile the fill tells spaces apart, so there are many different pairs.
     expect(new Set(seeds.map(seed => spaceHues(seed).join())).size).toBeGreaterThan(100);
+  });
+});
+
+describe('a chat\'s own right column', () => {
+  it('counts as arriving with the chat only just after a chat switch', () => {
+    expect(arrivedWithChat(1_000)).toBe(false);
+    markChatSwitch(1_000);
+    expect(arrivedWithChat(1_000)).toBe(true);
+    expect(arrivedWithChat(1_000 + CHAT_SWITCH_SETTLE_MS - 1)).toBe(true);
+    // Later, the person showing the column with its button gets the fold.
+    expect(arrivedWithChat(1_000 + CHAT_SWITCH_SETTLE_MS)).toBe(false);
   });
 });

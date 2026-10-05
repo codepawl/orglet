@@ -44,9 +44,9 @@ On the server, migration `0003_space_listings.sql` widens the `kind` check of `l
 |---|---|---|---|
 | **Catalog API** | `market.orglet.codepawl.com`, a Worker in this repository (`services/market`, AGPL-3.0) | Phase one: immutable curated catalog and bodies in Git. Phase two: D1 for listings, versions and reports; content-addressed text bodies if separate storage is needed | Phase one needs no database or bindings. Mutable publishing will use D1 on the same Cloudflare account as identity and sync. Listings have no screenshots or image uploads. |
 | **Identity** | `accounts.codepawl.com` | The existing service | Publishing sends the access token the desktop already holds. The market Worker verifies it locally against the accounts JWKS, the way `access-token.ts` does, with its own audience added. |
-| **Desktop** | `core/market/` (fetch, verify, add), the Add friend page in the renderer | Zod contracts in `shared/market.ts` | Core fetches and verifies without account tokens; core turns a verified listing into local rows through the template import path; the renderer only shows it. |
+| **Desktop** | `core/market/` (fetch, verify, add), the Marketplace page in the renderer | Zod contracts in `shared/market.ts` | Core fetches and verifies without account tokens; core turns a verified listing into local rows through the template import path; the renderer only shows it. |
 
-The catalog is cached on the computer, so the Add friend page opens instantly and works offline with what was last seen.
+The catalog is cached on the computer, so the Marketplace page opens instantly and works offline with what was last seen.
 
 ## Adding a friend
 
@@ -87,7 +87,7 @@ The marketplace does not wait for sync. Friends you add are ordinary orglets, so
 
 | Phase | What | Proves |
 |---|---|---|
-| **1. Curated catalog** | `services/market` read API, CodePawl's own listings, the Add friend page's Discover section, Add friend, the update card. No account needed. | People find and add ready-made friends. |
+| **1. Curated catalog** | `services/market` read API, CodePawl's own listings, the Marketplace page's Discover section, Add, the update card. No account needed. | People find and add ready-made friends. |
 | **2. Publishing** | Publish and unpublish from an account, secret scan, review queue, Report, rate limits. | Others can share safely. |
 | **3. With sync** | Added friends and their origin sync across computers (needs sync phase 3). | One friends list everywhere. |
 | Later | Search ranking by adds, ratings, collections, the web catalog on `orglet.codepawl.com`. | |
@@ -101,7 +101,7 @@ The marketplace does not wait for sync. Friends you add are ordinary orglets, so
 
 ## Phase-one behavior
 
-**Home → Add friend → Marketplace → Discover** opens a validated local catalog immediately and refreshes the public read API in the background. It labels an online catalog, a previously saved catalog, and the bundled CodePawl seed separately. Saved pages and Add actions remain usable while refreshing. Selecting a cached page fences the initial background response, so a late refresh cannot replace that selection. A failed refresh says so and keeps the local copy; it never reports a successful server fetch. Downloaded bodies are size-capped, SHA-256 checked and strictly parsed before caching or import. A corrupt cache cannot bypass those checks. An existing version cannot change its hash or move backward during refresh.
+**Home → Marketplace → Discover** opens a validated local catalog immediately and refreshes the public read API in the background. It labels an online catalog, a previously saved catalog, and the bundled CodePawl seed separately. Saved pages and Add actions remain usable while refreshing. Selecting a cached page fences the initial background response, so a late refresh cannot replace that selection. A failed refresh says so and keeps the local copy; it never reports a successful server fetch. Downloaded bodies are size-capped, SHA-256 checked and strictly parsed before caching or import. A corrupt cache cannot bypass those checks. An existing version cannot change its hash or move backward during refresh.
 
 Listings keep names and summaries ahead of grouped type, public author, language/version and license metadata. **Added** and **Update available** describe local copies. **Add another copy** creates a separate friend; it does not replace or update an existing copy. Report and per-version reviewer actions live in the listing's keyboard-accessible options menu. Closing a report returns focus to that menu's persistent trigger.
 

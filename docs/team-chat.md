@@ -104,7 +104,7 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 **The member column.** In a space, a channel with its own list shows a second, dimmed group: the orglets its place has that are not in the channel, with **Add to this channel**. **Remove from channel** gives the channel its own list first, or the space would put the orglet straight back.
 
-**Loose channels.** The rail has no tile for the channels outside every space (owner, 2026-10-05): Home lists them under the direct messages, and `areaOfTask` puts a chat in a space's area only when its channel's space exists.
+**Loose channels.** The rail has no tile for the channels outside every space (owner, 2026-10-05), and the window makes a channel only in a space: Home's sections for loose channels have no **+**, the rail's **+** makes a space and nothing else, and picking several orglets no longer offers one. The core, a template and the `orglet channel` command can still make a loose channel. Home lists them under the direct messages, and `areaOfTask` puts a chat in a space's area only when its channel's space exists.
 
 **Folders.** A space can name a `folder` (`Space.folder`, at most `SPACE_FOLDER_LIMIT` characters). Spaces that name the same folder, ignoring case, share one group on the rail, at the place of the first of them (`spaceFolderNames` and `folderKey` in `renderer/areas.ts`, `AreaRailFolder` in `AreaRail.tsx`). There is no folder record: a folder exists while a space names it, so it travels with the space in a backup and in sync. `updateSpace` keeps the folder when the field is left out, which is what the terminal and older callers send, and `null` or an empty name takes the space out. Which folders are closed is UI chrome (`orglet.closedSpaceFolders`). A tile's menu opens on a right click, and its small trigger takes keyboard focus.
 
@@ -112,7 +112,11 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 **Backups and the terminal.** A backup carries the spaces (`spaces` in its payload); restoring keeps a space this computer already has. `orglet spaces` lists each space with its orglets and channels.
 
-**Moving by dragging.** A channel row in a space is draggable (`dragId` on `ChannelRow`). A category of that space, or the list directly in the space, takes the drop and saves the channel with its new `categoryId`, so its orglets are resolved again for the new place.
+**Moving by dragging.** A channel row in a space is draggable (`dragId` on `ChannelRow`). A category of that space, or the list directly in the space, takes the drop and saves the channel with its new `categoryId`, so its orglets are resolved again for the new place; the channel goes last there. A drop on another channel's row (`channelSlot` in `App.tsx`) gives the channel that row's category and the place before it, or after it when the row is below it in the same category. A category is dragged by its heading and dropped on another category (`placeCategory`).
+
+**Order.** The order is the setting `sidebarOrder`, written by `reorder` with `kind: 'channels'` or `kind: 'categories'`: one list of ids each for every space. It is not part of the space's record, so placing a row never resolves the space's channels again and is not refused while one runs. `Store.workspace()` returns each space's categories in that order and the channel list as `Workspace.channelOrder`; an id never placed stays after the placed ones, and the sidebar lists unplaced channels newest first.
+
+**Making.** The **+** in a space's head opens a menu (owner, 2026-10-05): **Create channel**, and **Create category**, which opens the space's settings on Categories with one more empty category.
 
 **What a new channel starts with.** A space can set `defaults.capabilities`: whether a new channel in it reads attached files, checks data and reads the web (`SPACE_DEFAULT_CAPABILITIES`). The space dialog's **Permissions** tab edits them, and sends them only once the space has a setting or the person touched one. A channel with no choice of its own takes them on its first message (`spaceChatCapabilities` in `createTask`), and its empty chat shows them. The browser, desktop apps and the working folder stay each chat's own choice.
 

@@ -149,6 +149,8 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
 
 /** What a dragged channel row carries: its channel's id. A category of the channel's space takes the drop. */
 export const CHANNEL_DRAG_TYPE = 'application/x-orglet-channel';
+/** A category of a space, dragged to another place among the space's categories. */
+export const CATEGORY_DRAG_TYPE = 'application/x-orglet-category';
 
 /**
  * One channel in the sidebar's Channels section (COD-361): its status mark, the `#` every channel wears where an

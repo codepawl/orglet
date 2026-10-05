@@ -27,8 +27,7 @@ try {
   const [first, second, third] = orglets;
 
   // A new space from the rail's +, with two orglets and one category.
-  await page.getByRole('button', { name: 'Tạo mới', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Tạo không gian', exact: true }).click();
+  await page.locator('.area-create').click();
   const spaceDialog = page.getByRole('dialog');
   await spaceDialog.getByRole('textbox', { name: 'Tên không gian' }).fill('Launch');
   await spaceDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
@@ -48,6 +47,25 @@ try {
   // The space's tile is a filled mark with no letter on it, not one more icon; its name is the tile's tooltip.
   assert.equal(await page.locator('.area-tile[data-name="Launch"] > .space-mark').textContent(), '');
   assert.match(await page.locator('.area-tile[data-name="Launch"] > .space-mark').evaluate(element => getComputedStyle(element).backgroundImage), /linear-gradient/);
+  // The whole tile takes the pointer, the corner its menu's wrapper lies over included.
+  const missedCorners = await page.locator('.area-tile[data-name="Launch"]').evaluate(tile => {
+    const box = tile.getBoundingClientRect();
+    // Eight pixels in, which is inside the tile's rounded corner.
+    const corners = [[box.left + 8, box.top + 8], [box.right - 8, box.top + 8], [box.left + 8, box.bottom - 8], [box.right - 8, box.bottom - 8]];
+    return corners.filter(([x, y]) => !tile.contains(document.elementFromPoint(x, y))).length;
+  });
+  assert.equal(missedCorners, 0, 'every corner of a space tile selects it');
+  // The spaces sit under a divider, below the app's own places.
+  const railOrder = await page.locator('.area-rail').evaluate(rail => [...rail.children].map(child => child.className));
+  assert.deepEqual(railOrder.slice(0, 4), ['area-trail', 'area-rail-list', 'area-rail-divider', 'area-rail-list'], 'back and forward, places, a divider, then spaces');
+  assert.equal(await page.locator('.area-rail-divider + .area-rail-list .area-tile[data-name="Launch"]').count(), 1, 'the space is under the divider');
+  // The person's face is the button: its menu opens on it and it wears a ring meanwhile, with no tile behind it.
+  await page.locator('.user-panel-who').click();
+  await page.locator('.org-row-menu-panel').waitFor();
+  assert.equal(await page.locator('.user-panel-who').evaluate(button => getComputedStyle(button).backgroundColor), 'rgba(0, 0, 0, 0)', 'no tile behind the open face');
+  await shot(page, 'profile-menu');
+  await page.keyboard.press('Escape');
+  await page.locator('.org-row-menu-panel').waitFor({ state: 'detached' });
   const made = (await workspace(page)).spaces[0];
   assert.equal(made.name, 'Launch');
   assert.equal(made.orgletIds.length, 2);
@@ -55,7 +73,18 @@ try {
   assert.deepEqual([...made.defaults.capabilities].sort(), ['dataset.check', 'network.web', 'source.read']);
 
   // A channel in the space takes every orglet of the space, and only they answer.
-  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo kênh', exact: true }).click();
+  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo trong không gian Launch', exact: true }).click();
+  assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Tạo kênh', 'Tạo nhóm'], 'the space\'s + makes a channel or a category');
+  // Create category opens a dialog of its own, which adds the category to the space.
+  await page.getByRole('menuitem', { name: 'Tạo nhóm', exact: true }).click();
+  const categoryDialog = page.getByRole('dialog');
+  await categoryDialog.getByRole('heading', { name: 'Nhóm mới', exact: true }).waitFor();
+  await categoryDialog.getByRole('textbox', { name: 'Tên nhóm' }).fill('Review');
+  await categoryDialog.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
+  await categoryDialog.waitFor({ state: 'detached' });
+  assert.deepEqual((await workspace(page)).spaces.find(space => space.name === 'Launch').categories.map(category => category.name), ['Copy', 'Review']);
+  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo trong không gian Launch', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Tạo kênh', exact: true }).click();
   const channelDialog = page.getByRole('dialog');
   await channelDialog.getByRole('textbox', { name: 'Tên kênh' }).fill('general');
   await channelDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
@@ -100,11 +129,28 @@ try {
   // The template's channel is outside every space, so Home lists it beside the DMs; the space's tile lists only its own.
   assert.equal(await page.locator('.sidebar .channel-row').count(), 1, 'the space lists its one channel');
   assert.equal(await page.locator('.area-tile[data-name="Kênh"]').count(), 0, 'the rail has no tile for channels');
-  await page.locator('.area-tile[data-name="Bạn bè và tin nhắn"]').click();
+  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
   await page.locator('.sidebar .channel-row').first().waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Trò chuyện');
   assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed with the loose ones');
   void third;
+
+  // Opening a channel from a DM brings its member column at once: the column does not fold in, and the main card's
+  // width does not travel under the messages. The fold stays for the button that shows and hides the column.
+  const rightColumnMotion = () => page.evaluate(() => document.getAnimations().map(animation => animation.animationName ?? animation.transitionProperty).filter(name => name === 'pane-in' || name === 'grid-template-columns'));
+  await page.locator('.sidebar .tree-item .worker-row > button.worker').first().click();
+  await page.locator('.members-pane').waitFor({ state: 'detached' });
+  await page.waitForTimeout(400);
+  await page.locator('.sidebar .channel-row > .worker-row > button.worker').first().click();
+  await page.locator('.members-pane').waitFor();
+  assert.deepEqual(await rightColumnMotion(), [], 'a chat\'s own column is in place at once');
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Ẩn danh sách thành viên', exact: true }).click();
+  await page.locator('.members-pane').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Hiện danh sách thành viên', exact: true }).click();
+  await page.locator('.members-pane').waitFor();
+  assert.ok((await rightColumnMotion()).includes('pane-in'), 'the column still folds in when the person asks for it');
+  await page.waitForTimeout(300);
 
   // Deleting the space keeps its channel, outside every space.
   await page.locator('.area-tile[data-name="Launch"]').click();
@@ -188,6 +234,43 @@ try {
   await page.locator('.sidebar-title').hover();
   await page.locator('.area-tip').waitFor({ state: 'detached' });
   await shot(page, 'space-marks');
+  // Dragging a category's heading onto another one moves it there, and a channel dropped on a channel's row in
+  // another category takes that category and the place before that row.
+  await page.locator('.area-tile[data-name="Launch"]').click();
+  await page.locator('.sidebar .section-toggle').first().waitFor();
+  const sectionNames = () => page.locator('.sidebar .section-toggle').evaluateAll(toggles => toggles.map(toggle => toggle.textContent.trim()).join());
+  assert.equal(await sectionNames(), 'Research,Writing');
+  await page.locator('.sidebar .section-toggle', { hasText: 'Research' }).dragTo(page.locator('.sidebar .section-toggle', { hasText: 'Writing' }));
+  await page.waitForFunction(() => [...document.querySelectorAll('.sidebar .section-toggle')].map(toggle => toggle.textContent.trim()).join() === 'Writing,Research');
+  const channelIn = async name => {
+    const state = await workspace(page);
+    const launch = state.spaces.find(space => space.name === 'Launch');
+    const channel = [...state.tasks.map(task => task.channel), ...state.emptyChannels].find(item => item?.name === name && item.spaceId === launch.id);
+    return { id: channel.id, category: launch.categories.find(category => category.id === channel.categoryId)?.name, order: state.channelOrder };
+  };
+  assert.equal((await channelIn('sources')).category, 'Research');
+  await page.locator('.sidebar .channel-row', { hasText: 'sources' }).dragTo(page.locator('.sidebar .channel-row', { hasText: 'drafts' }));
+  await page.waitForFunction(async () => {
+    const state = await window.orglet.call('workspace', {});
+    return state.channelOrder.length > 0;
+  });
+  const movedSources = await channelIn('sources');
+  const drafts = await channelIn('drafts');
+  assert.equal(movedSources.category, 'Writing', 'the channel took the category of the row it was dropped on');
+  assert.ok(movedSources.order.indexOf(movedSources.id) < movedSources.order.indexOf(drafts.id), 'and the place before that row');
+  await shot(page, 'space-dragged');
+  // Back and forward, at the top of the rail, travel along the places the window has shown.
+  const back = page.getByRole('button', { name: 'Quay lại', exact: true });
+  const forward = page.getByRole('button', { name: 'Tiến tới', exact: true });
+  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
+  await page.locator('.area-tile.active[data-name="Trò chuyện"]').waitFor();
+  assert.equal(await forward.isDisabled(), true, 'nothing lies ahead of the newest place');
+  await back.click();
+  await page.locator('.area-tile.active[data-name="Launch"]').waitFor();
+  assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch');
+  await forward.click();
+  await page.locator('.area-tile.active[data-name="Trò chuyện"]').waitFor();
+  await shot(page, 'trail');
   console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it, put it in a folder and take it out.');
 } finally {
   await app.close();
