@@ -111,16 +111,16 @@ Copy this list into the release issue or tag notes and tick a step only after yo
    Finish the Squirrel installer with no error dialog. This is a per-user install (typically under `%LOCALAPPDATA%\orglet`), not Program Files.
 
 4. **First launch**  
-   Open Orglet from the Start Menu. The window should open. New installs default to US English and include a **Researcher** worker on **Demo**.
+   Open Orglet from the Start Menu. The window should open. New installs default to US English and include a **Researcher** orglet with no model connected.
 
 5. **Settings → Local harnesses**  
    Open **Settings** → **Local harnesses**. The tab must open and list Claude Code, Codex, Cursor Agent and Gemini CLI. On a clean machine they are usually **Not installed**. That is enough here. Also open **Settings** → **Connections** and confirm OpenAI / Anthropic / Grok (xAI) / OpenRouter / OpenCode Zen / OpenCode Go show with no keys and Ollama is off. Fixture detected / signed-out / auth-error states are CI's job (`pnpm test:harness`).
 
-6. **Create a Demo worker**  
-   In the sidebar, create a worker (**+** next to Workers), keep **Model** on **Demo**, save. Using the seeded Researcher also counts as Demo; still create one extra worker so the create path is exercised.
+6. **Create an orglet**  
+   Create an orglet from the sidebar and save it with no model connected, so the create path is exercised.
 
-7. **Send a Demo task**  
-   Start a task, assign that Demo worker, send a short message. Expect a labelled Demo sample reply and no API call. Do not import API keys or start Claude Code / Codex for this gate.
+7. **Send a message with no model**  
+   Open that orglet's chat and send a short message. Expect the orglet to say it has no model connected and to show the ways to connect one, with no API call. Do not import API keys or start Claude Code / Codex for this gate.
 
 8. **Uninstall**  
    Quit Orglet. Uninstall from **Settings → Apps → Installed apps** (Orglet / orglet). Confirm it is gone from the Start Menu and that the old shortcut no longer launches. `%APPDATA%\orglet` may remain; that is leftover workspace data, not a failed uninstall. Remove it by hand if the VM will be reused.
