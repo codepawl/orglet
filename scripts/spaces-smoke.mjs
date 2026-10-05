@@ -48,6 +48,14 @@ try {
   // The space's tile is a filled mark with no letter on it, not one more icon; its name is the tile's tooltip.
   assert.equal(await page.locator('.area-tile[data-name="Launch"] > .space-mark').textContent(), '');
   assert.match(await page.locator('.area-tile[data-name="Launch"] > .space-mark').evaluate(element => getComputedStyle(element).backgroundImage), /linear-gradient/);
+  // The whole tile takes the pointer, the corner its menu's wrapper lies over included.
+  const missedCorners = await page.locator('.area-tile[data-name="Launch"]').evaluate(tile => {
+    const box = tile.getBoundingClientRect();
+    // Eight pixels in, which is inside the tile's rounded corner.
+    const corners = [[box.left + 8, box.top + 8], [box.right - 8, box.top + 8], [box.left + 8, box.bottom - 8], [box.right - 8, box.bottom - 8]];
+    return corners.filter(([x, y]) => !tile.contains(document.elementFromPoint(x, y))).length;
+  });
+  assert.equal(missedCorners, 0, 'every corner of a space tile selects it');
   const made = (await workspace(page)).spaces[0];
   assert.equal(made.name, 'Launch');
   assert.equal(made.orgletIds.length, 2);

@@ -3067,7 +3067,9 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-tip { position:fixed; z-index:30; transform:translateY(-50%); max-width:260px; padding:6px 10px; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--bg); box-shadow:0 8px 24px #0000001f; color:var(--text); font-size:13px; font-weight:600; line-height:1.3; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
 /* A tile's menu opens on a right click; its trigger shows only on a keyboard focus, so the rail stays a column of tiles. */
 .area-tile-slot { position:relative; display:grid; place-items:center; }
-.area-tile-slot > .org-row-menu, .area-tile-slot > .row-menu { position:absolute; inset:auto -2px -2px auto; }
+/* The menu's wrapper lies over the tile's corner; it takes no pointer, or a click on that corner would miss the tile. */
+.area-tile-slot > .org-row-menu, .area-tile-slot > .row-menu { position:absolute; inset:auto -2px -2px auto; pointer-events:none; }
+.area-tile-slot .org-row-menu-panel { pointer-events:auto; }
 .area-tile-menu { width:18px; height:18px; min-height:18px; padding:0; border:0; border-radius:6px; background:var(--surface); color:var(--text); opacity:0; pointer-events:none; }
 .area-tile-menu:focus-visible, .area-tile-menu[aria-expanded="true"] { opacity:1; pointer-events:auto; }
 /* A folder of spaces: an outline around its tiles, never a ground of its own, so a tile's hover tint is not a
