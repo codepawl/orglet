@@ -1,6 +1,6 @@
 ---
 name: Tabs
-exports: Tabs, TabPanel
+exports: Tabs, TabPanel, TabItem
 group: Navigation
 summary: Tabs on a page, as quiet text buttons, with a panel for each.
 ---

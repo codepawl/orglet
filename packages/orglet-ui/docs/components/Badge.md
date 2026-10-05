@@ -1,6 +1,6 @@
 ---
 name: Badge
-exports: Badge
+exports: Badge, BadgeTone
 group: Display
 summary: A small pill for a count or a short state word.
 ---

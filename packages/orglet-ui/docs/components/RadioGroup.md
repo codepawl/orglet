@@ -1,6 +1,6 @@
 ---
 name: RadioGroup
-exports: RadioGroup
+exports: RadioGroup, RadioOption
 group: Forms
 summary: One choice out of a few labelled options, each with an optional description.
 ---

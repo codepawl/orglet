@@ -1,6 +1,6 @@
 ---
 name: Tooltip
-exports: Tooltip
+exports: Tooltip, TooltipSide
 group: Overlays
 summary: A short text label for a control, shown on hover and keyboard focus.
 ---

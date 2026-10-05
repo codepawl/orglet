@@ -1,0 +1,2067 @@
+# Button
+
+A button in four looks, or a square holding one icon.
+
+Exports: Button, ButtonSize, ButtonVariant
+
+## When to use
+
+- Anything a person clicks to act: save, cancel, open, delete.
+- `primary` for the one main action of a place, `outline` for a secondary action, `ghost` (the default) for quiet
+  actions, `danger` for a yes that cannot be undone.
+- `size="icon"` for a square holding one icon.
+
+## When not to
+
+- Navigation to another page or site: use a link.
+- An on/off setting: use `Switch`.
+- One choice out of a few icons: use `ToolbarToggleGroup`.
+- Two `primary` buttons in one place: the second steps down to `outline`.
+
+## Example
+
+```tsx
+import { Button } from '@codepawlhq/orglet-ui';
+import { Trash2 } from 'lucide-react';
+
+<Button type="button" variant="primary" onClick={save}>Save</Button>
+<Button type="button" variant="outline" onClick={close}>Cancel</Button>
+<Button type="button" size="icon" aria-label="Delete" onClick={remove}><Trash2 size={16} aria-hidden /></Button>
+```
+
+## Props
+
+Every `<button>` prop passes through, `ref` included.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `variant` | `'ghost' \| 'outline' \| 'primary' \| 'danger'` | `'ghost'` | The look. |
+| `size` | `'default' \| 'icon'` | `'default'` | `icon` is a square for a single icon. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- `type` is not set for you. Inside a form a button submits, so a button that only acts says `type="button"`.
+- An icon-only button needs `aria-label`, and its icon is `aria-hidden`.
+- An icon sits left of the text, never right.
+
+---
+
+# RowMenu
+
+A menu of a row's actions behind one icon button, with an in-panel question for destructive items.
+
+Exports: RowMenu, RowMenuIcon, RowMenuItem
+
+## When to use
+
+- The actions of one row in a list: rename, duplicate, delete.
+- A destructive item that should ask first: give it `confirm` and the question appears inside the same panel.
+- A right-click menu on a row: set `contextMenuOf` to a selector of the ancestor that owns the click.
+
+## When not to
+
+- One action only, with no question: use a `Button`.
+- Choosing a value for a field: use `Select`.
+- A question that needs a full sentence of explanation or is not tied to a row: use `confirmAction` from `Confirm`.
+- An on/off setting: use `Switch`.
+
+## Example
+
+```tsx
+import { RowMenu, type RowMenuItem } from '@codepawlhq/orglet-ui';
+import { Copy, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+
+const items: RowMenuItem[] = [
+  { label: 'Rename', icon: Pencil, onSelect: rename, shortcut: 'F2' },
+  { label: 'Duplicate', icon: Copy, onSelect: duplicate },
+  { label: 'Delete', icon: Trash2, danger: true, onSelect: remove, confirm: { question: 'Delete this chat?', label: 'Delete' } },
+];
+
+<RowMenu label="Chat actions" icon={MoreHorizontal} items={items} cancelLabel="No" />
+```
+
+## Props
+
+### RowMenu
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | Names the trigger and the panel. Also the trigger's tooltip. |
+| `items` | `RowMenuItem[]` | required | The entries, in order. |
+| `icon` | `RowMenuIcon` | required | What the trigger shows. |
+| `cancelLabel` | `string` | required | The way back from a question, such as "No". |
+| `children` | `ReactNode` | | A trigger wider than one icon. Shown in place of the icon, and the button drops its square size. |
+| `className` | `string` | | Classes for the trigger button. |
+| `align` | `'start' \| 'end'` | `'end'` | Which edge of the trigger the panel lines up with. |
+| `asksOnOpen` | `boolean` | `false` | A menu of one item with `confirm` opens straight on its question. |
+| `contextMenuOf` | `string` | | A selector. A right-click inside the closest matching ancestor opens the menu at the pointer. |
+| `disabled` | `boolean` | `false` | Disables the trigger. |
+
+### RowMenuItem
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | The item's text. Also its key, so it is unique in one menu. |
+| `icon` | `RowMenuIcon` | required | An icon component that takes `size`, such as one from lucide-react. Sits left of the label. |
+| `onSelect` | `() => void` | required | Runs after the menu closes, or after the question is confirmed. |
+| `danger` | `boolean` | | Draws the item in the danger colour. |
+| `confirm` | `{ question: string; label: string }` | | Asks inside the panel before running `onSelect`. |
+| `shortcut` | `string` | | The keys that do the same thing, shown quietly at the item's end and announced on the trigger. |
+
+### RowMenuIcon
+
+A type: any icon component that takes `size` and `aria-hidden`, such as one from lucide-react. It is used by `icon` on the menu and on each item.
+
+## Accessibility
+
+- The trigger has `aria-haspopup="menu"` and `aria-expanded`. The panel has `role="menu"` and items have `role="menuitem"`.
+- Arrow keys move between items and wrap. Escape closes the panel and returns focus to the trigger, or backs out of a question first.
+- The panel also closes on a pointer outside, on resize and when focus leaves.
+- The panel is portaled into the open dialog, or the page, so a row's overflow cannot clip it.
+- Icons are `aria-hidden`. The shortcut is shown but hidden from assistive technology, and `aria-keyshortcuts` on the trigger carries it.
+
+---
+
+# ToolbarToggleGroup
+
+One choice out of a few small icon buttons, such as the tool or colour of a drawing bar.
+
+Exports: ToolbarToggleGroup, ToolbarToggleItem
+
+## When to use
+
+- Picking one option out of a few that are best shown as icons: a drawing tool, a stroke width, a colour.
+- A choice that stays visible in a toolbar and applies at once.
+- Options that have a keyboard shortcut handled elsewhere: pass it in `shortcut` so it is shown and announced.
+
+## When not to
+
+- A single on/off setting: use `Switch`.
+- A long list or options that need words: use `Select`.
+- Picking several items from a list: use `Checkbox`.
+- A plain action with no state: use `Button` with `size="icon"`.
+
+## Example
+
+```tsx
+import { ToolbarToggleGroup, type ToolbarToggleItem } from '@codepawlhq/orglet-ui';
+import { Highlighter, Pen, Square } from 'lucide-react';
+
+const tools: ToolbarToggleItem[] = [
+  { value: 'pen', label: 'Pen', icon: <Pen size={16} aria-hidden />, shortcut: 'P' },
+  { value: 'highlight', label: 'Highlighter', icon: <Highlighter size={16} aria-hidden />, shortcut: 'H' },
+  { value: 'box', label: 'Rectangle', icon: <Square size={16} aria-hidden />, shortcut: 'R' },
+];
+
+<ToolbarToggleGroup label="Drawing tool" items={tools} value={tool} onValueChange={setTool} />
+```
+
+## Props
+
+### ToolbarToggleGroup
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | Names the radio group. |
+| `items` | `readonly ToolbarToggleItem[]` | required | The choices, in order. |
+| `value` | `string` | required | The `value` of the picked item. |
+| `onValueChange` | `(value: string) => void` | required | Called when an item is clicked or reached with the arrow keys. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+### ToolbarToggleItem
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `value` | `string` | required | What `value` and `onValueChange` carry. |
+| `label` | `string` | required | What a screen reader hears and the tooltip shows. |
+| `icon` | `ReactNode` | required | What the button draws. Mark it `aria-hidden`. |
+| `shortcut` | `string` | | The key that picks it, shown in the tooltip and set as `aria-keyshortcuts`. The kit does not handle the key. |
+
+## Accessibility
+
+- It is a `radiogroup`. Only the picked button is in the Tab order, so the group is one Tab stop.
+- Arrow keys, Home and End move the choice and the focus together, and wrap at the ends.
+- Each button is named by its `label`, never by its icon.
+- The picked state is a pale tint behind the icon and also `aria-checked`.
+
+---
+
+# Checkbox
+
+A tick for picking items out of a list or confirming something once, with a label and optional description.
+
+Exports: Checkbox
+
+## When to use
+
+- Picking some items out of a list: files to attach, channels to join.
+- Confirming something once: "I have read the terms".
+- A choice the form cannot be saved without: set `required` to draw the red asterisk.
+
+## When not to
+
+- A setting with two states, on and off: use `Switch` (or `SwitchField` for a whole row).
+- Exactly one choice out of a few: use `Select`, or `ToolbarToggleGroup` for icons.
+- An action: use `Button`.
+
+## Example
+
+```tsx
+import { Checkbox } from '@codepawlhq/orglet-ui';
+
+<Checkbox checked={allowed} onChange={event => setAllowed(event.target.checked)} required description="You can change this later.">
+  I allow this orglet to read the folder
+</Checkbox>
+```
+
+## Props
+
+Every `<input>` prop except `type` and `children` passes through to the real input, `ref` included.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `children` | `ReactNode` | required | The label text. |
+| `description` | `ReactNode` | | A second, quieter line under the label. |
+| `required` | `boolean` | | Draws a red asterisk in CSS and sets `aria-required`. It does not set native `required`, so there is no browser bubble. |
+| `labelProps` | `Omit<ComponentProps<'label'>, 'children' \| 'className'>` | | Props for the wrapping `<label>`. |
+| `className` | `string` | | Applied last, on the wrapping label. |
+
+## Accessibility
+
+- It is a real, visually hidden `<input type="checkbox">`, so keyboard, forms, screen readers and tests work as usual.
+- The asterisk is drawn in CSS and never lands in the accessible name.
+- The description is part of the label, so it is read with it.
+- The form says what is wrong in its own words when a required tick is missing.
+
+---
+
+# ColorPicker
+
+A colour panel with an area, a hue slider, a hex field, presets and the person's saved colours.
+
+Exports: ColorPicker, normalizeHex, ColorPickerLabels, ColorPickerProps
+
+## When to use
+
+- Choosing a custom colour, beside a row of preset swatches, inside a popover.
+- Letting a person keep their own colours: it shows `saved` swatches with a way to save the current one and remove any.
+- `normalizeHex` to check text a person typed: it returns a lowercase `#rrggbb`, or `undefined`.
+
+## When not to
+
+- A handful of fixed colours as icons in a toolbar: use `ToolbarToggleGroup`.
+- A choice from a named list: use `Select`.
+- Free text: use `Input`.
+
+## Example
+
+```tsx
+import { AnchoredPopover, Button, ColorPicker, normalizeHex, type ColorPickerLabels } from '@codepawlhq/orglet-ui';
+
+const labels: ColorPickerLabels = {
+  panel: 'Colour',
+  area: 'Saturation and brightness',
+  areaValue: (saturation, brightness) => `Saturation ${saturation}%, brightness ${brightness}%`,
+  hue: 'Hue',
+  hex: 'Hex colour',
+  save: 'Save',
+  presets: 'Presets',
+  saved: 'Saved',
+  presetColor: color => `Use ${color}`,
+  savedColor: color => `Use saved ${color}`,
+  removeColor: color => `Remove ${color}`,
+  removeTitle: 'Remove from saved',
+  done: 'Done',
+};
+
+<Button ref={anchor} type="button" onClick={() => setOpen(true)}>Colour</Button>
+<AnchoredPopover anchor={anchor} open={open} onClose={() => setOpen(false)} label="Colour">
+  <ColorPicker
+    value={color}
+    onChange={setColor}
+    presets={['#e5484d', '#3e63dd', '#30a46c']}
+    saved={savedColors}
+    onSave={hex => setSavedColors([...savedColors, hex])}
+    onRemove={hex => setSavedColors(savedColors.filter(item => item !== hex))}
+    onClose={() => setOpen(false)}
+    labels={labels}
+  />
+</AnchoredPopover>
+```
+
+## Props
+
+### ColorPicker
+
+Takes `ColorPickerProps`.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `value` | `string` | required | The current colour as `#rrggbb`. |
+| `onChange` | `(hex: string) => void` | required | Called live as the colour changes, with a lowercase `#rrggbb`. |
+| `presets` | `readonly string[]` | required | Swatches offered as presets. |
+| `saved` | `readonly string[]` | required | The person's saved colours. The section is hidden when empty. |
+| `onSave` | `(hex: string) => void` | required | Called by the save button. It is disabled when the colour is already saved. |
+| `onRemove` | `(hex: string) => void` | required | Called to remove a saved colour. |
+| `onClose` | `() => void` | required | Called by the done button and by Escape. |
+| `labels` | `ColorPickerLabels` | required | Every string the picker shows or announces. |
+| `id` | `string` | | Set on the panel. |
+
+### ColorPickerLabels
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `panel` | `string` | required | Names the whole panel. |
+| `area` | `string` | required | Names the saturation and brightness area. |
+| `areaValue` | `(saturation: number, brightness: number) => string` | required | What the area announces, from whole percentages. |
+| `hue` | `string` | required | Names the hue slider. |
+| `hex` | `string` | required | Names the hex field. |
+| `save` | `string` | required | The save button's text. |
+| `presets` | `string` | required | Title of the presets section. |
+| `saved` | `string` | required | Title of the saved section. |
+| `presetColor` | `(color: string) => string` | required | Names a preset swatch. |
+| `savedColor` | `(color: string) => string` | required | Names a saved swatch. |
+| `removeColor` | `(color: string) => string` | required | Names a saved swatch's remove button. |
+| `removeTitle` | `string` | required | The remove button's tooltip. |
+| `done` | `string` | required | The done button's text. |
+
+### normalizeHex
+
+`normalizeHex(text: string): string | undefined`. It trims the text, drops a leading `#`, lowercases it, and returns `#rrggbb` when that is six hex digits.
+
+## Accessibility
+
+- The area is a `slider`: arrow keys move it, Shift makes bigger steps, and `areaValue` is its spoken value.
+- The hue is a native range input. The hex field is a text input with its own name.
+- Swatches are buttons with `aria-pressed`, and the picked one also shows a tick, so colour is not the only sign.
+- It sets `data-popup-open`, so Escape closes the panel and not a dialog around it.
+- Every string comes in `labels`, so the application passes them in its own language.
+
+---
+
+# EditableText
+
+A name that is renamed where it is shown: text at rest, an input when clicked.
+
+Exports: EditableText
+
+## When to use
+
+- A title shown in a header or list that people may rename in place: a chat, an orglet, a channel.
+- Saving that may be async: `onCommit` can return a promise, and the new text shows while it runs.
+
+## When not to
+
+- A field in a form with a Save button: use `Input`.
+- Text that is long or spans several lines: use `Textarea`.
+- A rename that needs an explanation or a confirmation: use a dialog.
+
+## Example
+
+```tsx
+import { EditableText } from '@codepawlhq/orglet-ui';
+
+<EditableText
+  value={chat.name}
+  label={`Rename ${chat.name}`}
+  maxLength={80}
+  onCommit={async next => { await renameChat(chat.id, next); }}
+/>
+```
+
+## Props
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `value` | `string` | required | The current text. |
+| `onCommit` | `(next: string) => void \| Promise<void>` | required | Saves the new text. If it throws, the old text returns and the error is rethrown for the application to show. |
+| `label` | `string` | required | The accessible name and the tooltip, such as "Rename Researcher". |
+| `maxLength` | `number` | | The input's maximum length. |
+| `disabled` | `boolean` | | Stops editing. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- At rest it is a `<button>` named by `label`. A click, Enter or F2 starts editing with the text selected.
+- Enter or leaving the field keeps the change. Escape puts the old value back and does not close a dialog around it.
+- An empty or unchanged value commits nothing.
+- It shows the outline of an input on hover and keyboard focus, so it reads as editable.
+
+---
+
+# Field
+
+A single-line text input and a multi-line textarea with a shared invalid state and shake.
+
+Exports: Input, Textarea
+
+## When to use
+
+- `Input` for one line of text: a name, a path, a search.
+- `Textarea` for several lines: instructions, a message.
+- Marking a failed validation with `invalid`, and replaying the shake on each failed submit with `flash`.
+
+## When not to
+
+- An amount of money: use `MoneyInput`.
+- One value from a fixed list: use `Select`.
+- A name edited where it is shown: use `EditableText`.
+- An on/off setting: use `Switch`. A tick for picking from a list: use `Checkbox`.
+- A bare field with no name: give it a `<label>` around it or `aria-label`. The kit does not invent one.
+
+## Example
+
+```tsx
+import { FieldLabel, Input, Textarea } from '@codepawlhq/orglet-ui';
+import { FileText, Tag } from 'lucide-react';
+
+<label>
+  <FieldLabel icon={Tag} required>Name</FieldLabel>
+  <Input value={name} onChange={event => setName(event.target.value)} invalid={nameError} flash={failedSubmits} />
+</label>
+<label>
+  <FieldLabel icon={FileText}>Instructions</FieldLabel>
+  <Textarea rows={4} value={instructions} onChange={event => setInstructions(event.target.value)} />
+</label>
+```
+
+## Props
+
+Every `<input>` prop passes through to `Input`, and every `<textarea>` prop to `Textarea`. `ref` is included.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `invalid` | `boolean` | | Sets `aria-invalid` and draws the error border. |
+| `flash` | `number` | | A counter the form increments on every failed submit, so the shake plays each time. Only used with `invalid`. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- Name every field with a wrapping `<label>` or `aria-label`.
+- `invalid` sets `aria-invalid="true"`. Say what is wrong in text near the field, with a mark, not by colour alone.
+- `Textarea` grows downwards only, so the form around it does not rearrange.
+
+---
+
+# FieldLabel
+
+A field's title with a small leading icon and an optional required asterisk drawn outside its name.
+
+Exports: FieldLabel, FieldLabelIcon
+
+## When to use
+
+- The title above a field when an icon helps people find it in a long form.
+- A required field: `required` draws the asterisk without adding it to the accessible name.
+
+## When not to
+
+- A title with no icon: write plain text in the `<label>`.
+- A section's heading with actions: use `PanelHeading`.
+- Naming a field only for assistive technology: use `aria-label` on the control.
+
+## Example
+
+```tsx
+import { FieldLabel, Input } from '@codepawlhq/orglet-ui';
+import { FolderOpen } from 'lucide-react';
+
+<label>
+  <FieldLabel icon={FolderOpen} required>Working folder</FieldLabel>
+  <Input value={folder} onChange={event => setFolder(event.target.value)} />
+</label>
+```
+
+## Props
+
+### FieldLabel
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `icon` | `FieldLabelIcon` | required | An icon component that takes `size`, such as one from lucide-react. It sits left of the text. |
+| `children` | `ReactNode` | required | The title. |
+| `required` | `boolean` | | Draws a red asterisk in CSS with empty alternative text. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+### FieldLabelIcon
+
+A type: any icon component that takes `size` and `aria-hidden`, such as one from lucide-react.
+
+## Accessibility
+
+- The icon is decorative and `aria-hidden`, so the accessible name is the text.
+- The asterisk never becomes part of the field's name. Mark the control itself `required` or `aria-required` when assistive technology should know.
+- It renders a `<span>`, so put it inside a `<label>` that also wraps the control.
+
+---
+
+# MoneyInput
+
+A field for an amount of money, with the currency symbol before it and its code after it.
+
+Exports: MoneyInput
+
+## When to use
+
+- A budget, a price or a limit the person types as a number.
+- When the currency should be visible but not editable: pass `symbol` and `code`.
+
+## When not to
+
+- Plain text or a number that is not money: use `Input`.
+- Choosing a currency: use `Select`.
+- Converting or validating the amount: that is the application's job, the field keeps the text as typed.
+
+## Example
+
+```tsx
+import { FieldLabel, MoneyInput } from '@codepawlhq/orglet-ui';
+import { Wallet } from 'lucide-react';
+
+<label>
+  <FieldLabel icon={Wallet}>Budget per day</FieldLabel>
+  <MoneyInput value={budget} onChange={setBudget} symbol="$" code="USD" invalid={budgetError} flash={failedSubmits} />
+</label>
+```
+
+## Props
+
+Every `<input>` prop except `value` and `onChange` passes through to the input.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `value` | `string` | required | The text as typed. |
+| `onChange` | `(value: string) => void` | required | Called with the new text, not an event. |
+| `symbol` | `string` | required | Drawn before the number, such as "$". |
+| `code` | `string` | required | Drawn after the number, such as "USD". |
+| `invalid` | `boolean` | | Sets `aria-invalid` and a red border. |
+| `flash` | `number` | | A counter that replays the shake. Only used with `invalid`. |
+| `className` | `string` | | Applied last, on the wrapper. |
+
+## Accessibility
+
+- Name it with a `<label>` around it or `aria-label`. The symbol and code are `aria-hidden`.
+- The input uses `inputMode="decimal"`, so touch keyboards show a number pad.
+- Say the currency in the label if it is not obvious, since assistive technology does not read the code.
+
+---
+
+# RadioGroup
+
+One choice out of a few labelled options, each with an optional description.
+
+Exports: RadioGroup, RadioOption
+
+## When to use
+
+- Picking exactly one of a few options that a person should see together, such as how often to send a report.
+- Options that need a sentence of explanation each: use `description`.
+
+## When not to
+
+- Picking several: use `Checkbox`.
+- An on/off setting: use `Switch`.
+- A long list or a choice with groups and icons: use `Select`.
+- A few icons rather than words: use `ToolbarToggleGroup`.
+
+## Example
+
+```tsx
+import { RadioGroup } from '@codepawlhq/orglet-ui';
+
+<RadioGroup
+  label="Send the report"
+  name="schedule"
+  value={schedule}
+  onChange={setSchedule}
+  options={[
+    { value: 'daily', label: 'Every day', description: 'At 08:00 on workdays' },
+    { value: 'weekly', label: 'Every week' },
+    { value: 'never', label: 'Never', disabled: true },
+  ]}
+/>
+```
+
+## Props
+
+Every `<fieldset>` prop passes through, except `name` and `onChange`, which mean something else here.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `ReactNode` | | The group's title, drawn as its `<legend>` and used as its name. |
+| `options` | `{ value, label, description?, disabled? }[]` | | The choices. |
+| `value` | `string` | | The picked option's value, or an empty string for none. |
+| `onChange` | `(value: string) => void` | | Called with the value of the option chosen. |
+| `name` | `string` | made up | The form field name. |
+| `required` | `boolean` | `false` | Draws the red asterisk and sets `aria-required`, without the browser's validation bubble. |
+| `disabled` | `boolean` | `false` | Disables every option. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- Every option is a real, visually hidden `<input type="radio">` with a drawn mark, so forms, the arrow keys and screen readers work as the browser has them. The group is one Tab stop; the arrow keys move the choice.
+- The `<fieldset>` is a radio group named by its legend. The required asterisk is drawn in CSS with empty alternative text, so it stays out of the name.
+- A visible focus ring appears around the mark on keyboard focus.
+
+---
+
+# Select
+
+A single-choice dropdown with groups, details, icons and full keyboard support.
+
+Exports: Select, SelectOption
+
+## When to use
+
+- One value out of a list that is too long or too wordy for icon buttons: a model, a folder, a language.
+- Options that need a second line (`detail`), an icon, a group title, a badge or their own font.
+- A row that is an action, not a value, such as "More": give it `onSelect`.
+
+## When not to
+
+- Two states, on and off: use `Switch`.
+- Several items picked from a list: use `Checkbox`.
+- A few icon choices in a toolbar: use `ToolbarToggleGroup`.
+- Free text: use `Input`.
+- A menu of actions on a row: use `RowMenu`.
+
+## Example
+
+```tsx
+import { Select, type SelectOption } from '@codepawlhq/orglet-ui';
+
+const models: SelectOption[] = [
+  { value: 'fast', label: 'Fast', detail: 'Cheap, good for drafts', group: 'Models' },
+  { value: 'deep', label: 'Deep', detail: 'Slower, better at hard tasks', group: 'Models', note: 'default' },
+];
+
+<Select value={model} options={models} onChange={setModel} ariaLabel="Model" placeholder="Pick a model" />
+```
+
+## Props
+
+### Select
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `value` | `string` | required | The chosen option's `value`. |
+| `options` | `SelectOption[]` | required | The choices, in order. |
+| `onChange` | `(value: string) => void` | required | Called when a different option is chosen. |
+| `ariaLabel` | `string` | | The accessible name, when there is no visible title. |
+| `labelledBy` | `string` | | The id of a visible title that names it. |
+| `describedBy` | `string` | | The id of a description. |
+| `placeholder` | `string` | | Shown while nothing is chosen. |
+| `disabled` | `boolean` | | Disables the trigger. |
+| `size` | `'md' \| 'sm'` | `'md'` | The trigger's height. |
+| `className` | `string` | | Classes for the trigger button. |
+| `menuMinWidth` | `number` | `0` | The menu is at least this wide in pixels. |
+| `showDetail` | `boolean` | `true` | Show the chosen option's detail in the trigger. |
+| `showIcon` | `boolean` | `true` | Show the chosen option's icon in the trigger. The menu keeps its icons. |
+| `inlineDetail` | `boolean` | `false` | Put each option's detail on the label's line. |
+| `invalid` | `boolean` | | Sets `aria-invalid` and a red border. |
+| `flash` | `number` | | A counter that replays the shake each time it changes. Only used with `invalid`. |
+| `field` | `string` | | Set as the trigger's `data-field`, the name a form uses to find and focus it. |
+| `ref` | `Ref<HTMLButtonElement>` | | The trigger button. |
+
+### SelectOption
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `value` | `string` | required | What `value` and `onChange` carry. |
+| `label` | `string` | required | The option's text. |
+| `note` | `string` | | A small muted word after the label in the menu, such as "default". |
+| `detail` | `string` | | A second, muted line. |
+| `icon` | `ReactNode` | | Sits left of the label. |
+| `disabled` | `boolean` | | Cannot be chosen and is skipped by the keys. |
+| `dimmed` | `boolean` | | Greyed but still works. |
+| `group` | `string` | | Starts a titled group where it changes. |
+| `badge` | `ReactNode` | | A small chip at the row's end. |
+| `labelStyle` | `CSSProperties` | | Draws the label in what it names, such as a font family. |
+| `spaced` | `boolean` | | Starts the row after a small gap, a group with no title. |
+| `onSelect` | `() => void` | | Makes the row an action: it runs and the list stays open. |
+
+## Accessibility
+
+- It follows the select-only combobox pattern: the trigger is `role="combobox"`, the list is a `listbox` and options are `option`.
+- Name it with `ariaLabel` or `labelledBy`.
+- Keys: arrows, Page Up and Down, Home and End, type to jump, Enter or Space to choose, Escape to close without closing a dialog around it.
+- The menu is portaled into the open dialog or the page, and flips above the trigger when there is more room there.
+- The chosen option is marked with a tick as well as `aria-selected`.
+
+---
+
+# Switch
+
+An on/off switch for a setting that applies at once, bare or as a titled settings row.
+
+Exports: Switch, SwitchField
+
+## When to use
+
+- A setting with exactly two states that takes effect the moment it changes.
+- `SwitchField` for a row in a form: the title on the left, the switch on the right, an optional description under the title.
+- Bare `Switch` inside a row you lay out yourself, named by `labelledBy` (the row's title) or `label`.
+
+## When not to
+
+- Picking items out of a list, or confirming once: use `Checkbox`.
+- A choice out of several: use `Select` or `ToolbarToggleGroup`.
+- An action: use `Button`.
+
+## Example
+
+```tsx
+import { Switch, SwitchField } from '@codepawlhq/orglet-ui';
+
+<SwitchField checked={notify} onChange={setNotify} description="A sound plays when an orglet finishes.">
+  Play a sound
+</SwitchField>
+<Switch checked={compact} onChange={setCompact} label="Compact lists" />
+```
+
+## Props
+
+### Switch
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `checked` | `boolean` | required | Whether the setting is on. |
+| `onChange` | `(checked: boolean) => void` | required | Called with the new state on click. |
+| `disabled` | `boolean` | | Disables the switch. |
+| `label` | `string` | | The accessible name, when there is no visible title. |
+| `labelledBy` | `string` | | The id of the visible title that names it. |
+| `describedBy` | `string` | | The id of a description. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+### SwitchField
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `checked` | `boolean` | required | Whether the setting is on. |
+| `onChange` | `(checked: boolean) => void` | required | Called with the new state on click. |
+| `children` | `ReactNode` | required | The setting's title. It names the switch. |
+| `description` | `ReactNode` | | A quieter line under the title. |
+| `disabled` | `boolean` | | Disables the switch and dims the row. |
+| `className` | `string` | | Applied last, on the row. |
+
+## Accessibility
+
+- It is a `<button role="switch">` with `aria-checked`, so Space and Enter toggle it.
+- It needs a name: `label`, `labelledBy`, or use `SwitchField`, which wires its title for you.
+- The shape alone says it is a switch, so the control is not mistaken for a tick.
+
+---
+
+# Tabs
+
+Tabs on a page, as quiet text buttons, with a panel for each.
+
+Exports: Tabs, TabPanel, TabItem
+
+## When to use
+
+- Switching between a few sections of one page or panel, where only one shows at a time.
+- Tabs outside a dialog. The tabs of a settings dialog are `TabbedDialog`.
+
+## When not to
+
+- Going to another page or place: use links or navigation.
+- A choice that changes a setting: use `RadioGroup`, or `ToolbarToggleGroup` for icons.
+- More than a handful of sections: group them, or use a side list.
+
+## Example
+
+```tsx
+import { useId, useState } from 'react';
+import { TabPanel, Tabs } from '@codepawlhq/orglet-ui';
+
+const tabs = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'history', label: 'History' },
+];
+
+function Report() {
+  const id = useId();
+  const [value, setValue] = useState('overview');
+  return <>
+    <Tabs id={id} label="Report sections" tabs={tabs} value={value} onChange={setValue} />
+    {tabs.map(tab => <TabPanel key={tab.id} tabsId={id} tabId={tab.id} value={value}>{tab.label}</TabPanel>)}
+  </>;
+}
+```
+
+## Props
+
+`Tabs`: every `<div>` prop passes through.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `id` | `string` | | Ties the tabs to their panels. Pass the same value as `tabsId` to each `TabPanel`. |
+| `label` | `string` | | Names the tab list for assistive technology. |
+| `tabs` | `{ id, label, icon?, disabled? }[]` | | The tabs. `icon` is decorative. |
+| `value` | `string` | | The `id` of the open tab. |
+| `onChange` | `(tabId: string) => void` | | Called when a tab opens, by click or key. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+`TabPanel`: every `<div>` prop passes through.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `tabsId` | `string` | | The `id` of its `Tabs`. |
+| `tabId` | `string` | | The tab this panel belongs to. |
+| `value` | `string` | | The open tab. The panel is hidden unless it equals `tabId`. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- It follows the WAI-ARIA tabs pattern with automatic activation: the arrow keys, Home and End move the focus and open the tab at once, skipping a disabled tab.
+- Only the open tab is in the Tab order, so Tab goes from the list to its panel.
+- Each tab has `aria-controls` and each panel `aria-labelledby`, built from `id`, so they always match. A panel takes focus from Tab, so one with no focusable content can still be scrolled.
+- The open tab is shown by its fill and text colour, and `aria-selected` says it to assistive technology.
+
+---
+
+# AnchoredPopover
+
+A panel that floats beside its trigger, flips above when there is no room and closes on Escape.
+
+Exports: AnchoredPopover
+
+## When to use
+
+- A small panel opened by a button: a colour picker, a filter, a quick form.
+- Anywhere an inline panel would push the layout around.
+- Inside a dialog: it portals into that dialog, so the focus trap and scrolling still hold.
+
+## When not to
+
+- A list of actions on a row: use `RowMenu`.
+- A choice from a list: use `Select`.
+- Technical detail on hover: use `InfoTip`.
+- A short message that needs no interaction: use `showToast` from `Toaster`.
+- A full-size panel: use `Drawer`.
+
+## Example
+
+```tsx
+import { AnchoredPopover, Button, Input } from '@codepawlhq/orglet-ui';
+import { useRef, useState } from 'react';
+
+const anchor = useRef<HTMLButtonElement>(null);
+const [open, setOpen] = useState(false);
+
+<Button ref={anchor} type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}>Filter</Button>
+<AnchoredPopover anchor={anchor} open={open} onClose={() => setOpen(false)} label="Filter chats">
+  <Input aria-label="Search" placeholder="Search" />
+</AnchoredPopover>
+```
+
+## Props
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `anchor` | `RefObject<HTMLElement \| null>` | required | The element it sits beside. A click on its own control does not count as outside. |
+| `open` | `boolean` | required | Whether it is shown. Nothing renders when false. |
+| `onClose` | `() => void` | required | Called on Escape and on a pointer outside. |
+| `label` | `string` | required | The popover's accessible name. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+| `children` | `ReactNode` | required | The content. |
+
+## Accessibility
+
+- It is `role="dialog"` with `aria-label`. Focus moves to its first control once it is placed.
+- Escape closes it and gives focus back to the anchor.
+- It sets `data-popup-open`, so a dialog around it stays open on that Escape.
+- Content taller than the room is held to the room and scrolls inside.
+- Give the anchor `aria-expanded` yourself, since the anchor is your element.
+
+---
+
+# Confirm
+
+Ask one yes-or-no question in a small modal and await the answer, from anywhere in the application.
+
+Exports: confirmAction, Confirmer
+
+## When to use
+
+- A yes that cannot be undone: deleting a chat, erasing data. Use `tone: 'danger'`.
+- A choice the person must make before the action goes on, where you want `await` instead of state.
+- Render one `Confirmer` in the application and call `confirmAction` from any handler.
+
+## When not to
+
+- A question tied to a row's menu item: use `confirm` on the `RowMenu` item, which asks inside the panel.
+- A form with several fields: use `TabbedFormDialog`.
+- A message that needs no answer: use `showToast` from `Toaster`.
+- Something that can be undone: do it, and offer the undo in a toast action.
+
+## Example
+
+```tsx
+import { Confirmer, confirmAction } from '@codepawlhq/orglet-ui';
+
+async function deleteChat(chatId: string) {
+  const confirmed = await confirmAction({
+    title: 'Delete this chat?',
+    description: 'Its messages and files are removed from this computer.',
+    confirmLabel: 'Delete',
+    tone: 'danger',
+  });
+  if (confirmed) await removeChat(chatId);
+}
+
+// Once, near the root of the application:
+<Confirmer confirmLabel="Yes" cancelLabel="No" />
+```
+
+## Props
+
+### confirmAction
+
+`confirmAction(options): Promise<boolean>`. It resolves `true` only when the person confirms. A second question while one is open answers the first with `false`.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `title` | `string` | required | The question. |
+| `description` | `string` | | A sentence of detail under it. |
+| `confirmLabel` | `string` | the `Confirmer`'s | The yes button's text. |
+| `cancelLabel` | `string` | the `Confirmer`'s | The no button's text. |
+| `tone` | `'default' \| 'danger'` | `'default'` | `danger` draws the yes as a danger button. |
+
+### Confirmer
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `confirmLabel` | `string` | required | The yes text when a question brings none. |
+| `cancelLabel` | `string` | required | The no text when a question brings none. |
+
+## Accessibility
+
+- It is an `alertdialog`. The title names it and the description describes it.
+- The safe answer, the cancel button, takes focus when it opens.
+- Escape and a click on the backdrop answer `false`.
+- Focus returns to what asked when the dialog closes.
+- A danger yes is also worded as the action ("Delete"), not "Yes", so colour is not the only cue.
+
+---
+
+# DialogOverlay
+
+The pieces to make your own Radix dialog behave like the kit's: backdrop, Escape order and focus return.
+
+Exports: DialogOverlay, keepOpenForPopup, OPEN_POPUP_SELECTOR, useReturnFocus
+
+## When to use
+
+- Building a dialog the kit does not have, on Radix `Dialog`, that should look and behave like the others.
+- `DialogOverlay` for the frosted backdrop inside a `Dialog.Portal`.
+- `keepOpenForPopup` on `Dialog.Content`'s `onEscapeKeyDown`, so Escape closes an open menu or list before the dialog.
+- `useReturnFocus` for a dialog opened from state, with no `Dialog.Trigger`: it remembers the opener and focuses it again on close.
+- `OPEN_POPUP_SELECTOR` when you write your own check for "is a popup open inside this dialog".
+
+## When not to
+
+- A panel, a settings dialog, a viewer or a question: use `Drawer`, `TabbedDialog`, `Viewer` or `Confirm`, which already use these.
+- A popover next to a trigger: use `AnchoredPopover`.
+
+## Example
+
+```tsx
+import * as Dialog from '@radix-ui/react-dialog';
+import { DialogOverlay, keepOpenForPopup, useReturnFocus } from '@codepawlhq/orglet-ui';
+
+function PlanDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const returnFocus = useReturnFocus();
+  return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
+    <Dialog.Portal>
+      <DialogOverlay />
+      <Dialog.Content onEscapeKeyDown={keepOpenForPopup} {...returnFocus}>
+        <Dialog.Title>Plan</Dialog.Title>
+        <PlanFields />
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>;
+}
+```
+
+## Props
+
+### DialogOverlay
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+### keepOpenForPopup
+
+`keepOpenForPopup(event: KeyboardEvent): void`. Pass it as `onEscapeKeyDown`. It calls `preventDefault` when focus is inside an open menu, list or picker, so only that closes.
+
+### OPEN_POPUP_SELECTOR
+
+A CSS selector string. It matches `[aria-haspopup][aria-expanded="true"]`, an expanded `[role="combobox"]`, and anything with `data-popup-open`. A disclosure that only shows more of a form is not matched on purpose.
+
+### useReturnFocus
+
+`useReturnFocus(onOpenAutoFocus?: (event: Event) => void)` returns `{ onOpenAutoFocus, onCloseAutoFocus }`. Spread it on `Dialog.Content`.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `onOpenAutoFocus` | `(event: Event) => void` | | Your own handler, run after the opener is remembered. |
+
+## Accessibility
+
+- Focus returns to the opener only when it would otherwise be lost: on the page, or still inside the closed dialog. A deliberate focus elsewhere is kept.
+- Escape order is menu first, dialog second. Mark your own popups with `data-popup-open` to join that order.
+- Give the dialog a `Dialog.Title`. Radix warns without one, and a dialog without a name is unusable to screen readers.
+
+---
+
+# Drawer
+
+A centred panel for an editor or a list, with a header, actions and a body that scrolls on its own.
+
+Exports: Drawer
+
+## When to use
+
+- An editor or a list that needs room and is opened from the page: a skill list, an instruction editor.
+- A header with a title or breadcrumb, a `description` and the panel's own `actions`.
+- Content that scrolls on its own while the header stays put.
+
+## When not to
+
+- One yes-or-no question: use `confirmAction` from `Confirm`.
+- Settings split into sections: use `TabbedDialog` or `TabbedFormDialog`.
+- Looking at one document, file or diff: use `Viewer`.
+- A small panel attached to a button: use `AnchoredPopover`.
+- A place reached from the navigation: open it as a page in the main panel, not as a dialog.
+
+## Example
+
+```tsx
+import { Button, Drawer } from '@codepawlhq/orglet-ui';
+import { Plus, X } from 'lucide-react';
+
+<Drawer
+  open={open}
+  onClose={() => setOpen(false)}
+  title="Skills"
+  description="What this orglet knows how to do."
+  closeLabel="Close"
+  closeIcon={<X size={16} aria-hidden />}
+  actions={<Button type="button" variant="primary"><Plus size={16} aria-hidden />New skill</Button>}
+>
+  <SkillList />
+</Drawer>
+```
+
+## Props
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `open` | `boolean` | required | Whether the panel is shown. |
+| `onClose` | `() => void` | required | Called on Escape, a click on the backdrop and the close button. |
+| `title` | `ReactNode` | required | The header's title. A breadcrumb works too. |
+| `description` | `ReactNode` | | A line under the title. |
+| `actions` | `ReactNode` | | The panel's own actions, left of the close button. |
+| `closeLabel` | `string` | required | The close button's accessible name. |
+| `closeIcon` | `ReactNode` | required | The close button's icon. |
+| `children` | `ReactNode` | required | The body. It scrolls on its own. |
+
+## Accessibility
+
+- It is a modal dialog built on Radix: focus is trapped inside and the title names it.
+- Focus returns to what opened it when it closes.
+- Escape closes an open menu or list inside the panel first, then the panel.
+- The close X belongs here because the panel is centred on the screen. Do not copy it onto side panels.
+
+---
+
+# InfoTip
+
+A small button that reveals technical detail such as ids and paths on hover, focus or click.
+
+Exports: InfoTip, InfoTipRow
+
+## When to use
+
+- Detail most people never need but some need to copy: an id, a path, a hash, a version.
+- Rows of label and value, some in monospace, some with a copy button.
+- Next to a title where there is no room for the detail itself.
+
+## When not to
+
+- A hint everyone needs: write it as text.
+- A panel with controls in it: use `AnchoredPopover`.
+- A list of actions: use `RowMenu`.
+- A result or an error: use `StatusMark` or `showToast`.
+
+## Example
+
+```tsx
+import { InfoTip, type InfoTipRow } from '@codepawlhq/orglet-ui';
+import { Info } from 'lucide-react';
+
+const rows: InfoTipRow[] = [
+  { label: 'Chat id', value: chat.id, mono: true, onCopy: () => navigator.clipboard.writeText(chat.id) },
+  { label: 'Folder', value: chat.folder, mono: true },
+  { label: 'Created', value: createdText },
+];
+
+<InfoTip label="Chat details" icon={<Info size={16} aria-hidden />} rows={rows} copyLabel={rowLabel => `Copy ${rowLabel}`} />
+```
+
+## Props
+
+### InfoTip
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | The trigger's accessible name. |
+| `rows` | `InfoTipRow[]` | required | The lines of the panel. |
+| `icon` | `ReactNode` | required | What the trigger shows. |
+| `copyLabel` | `(rowLabel: string) => string` | required | Names each row's copy button from the row's label. |
+
+### InfoTipRow
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | The row's name. |
+| `value` | `ReactNode` | required | The row's content. |
+| `mono` | `boolean` | | Draws the value in a monospace face, for ids and hashes. |
+| `onCopy` | `() => void \| Promise<void>` | | Adds a copy button. The application writes to the clipboard. The button shows a tick for a moment after. |
+
+## Accessibility
+
+- The trigger is a button with `aria-expanded`. The panel is `role="tooltip"` and described by id while open.
+- It opens on hover and keyboard focus, and a click pins it so a copy button can be reached.
+- Escape, focus leaving, a pointer outside and a resize close it. Escape does not close a dialog around it.
+- Hovering the panel keeps it open, and it closes shortly after the pointer leaves both.
+- The panel is portaled into the open dialog or the page, so a scrolling container cannot clip it.
+
+---
+
+# TabbedDialog
+
+The settings layout: tabs on the left, the open section on the right, with an optional Save footer.
+
+Exports: TabbedDialog, TabbedFormDialog, DialogTabs, DialogTab
+
+## When to use
+
+- Settings or an editor split into sections that share one frame.
+- `TabbedDialog` for changes that apply at once. With `onSubmit` and `footer`, its body forms one form.
+- `TabbedFormDialog` for a form with Cancel and Save pinned at the bottom, an `error` beside them and a busy state.
+- `DialogTabs` alone when you build the frame yourself.
+
+## When not to
+
+- One list or editor with no sections: use `Drawer`.
+- One question: use `confirmAction` from `Confirm`.
+- Looking at one file: use `Viewer`.
+- Tabs inside a page, not a dialog: build them with `DialogTabs` and your own panel, or navigate to a page.
+
+## Example
+
+```tsx
+import { Input, TabbedFormDialog, type DialogTab } from '@codepawlhq/orglet-ui';
+import { Settings2, Shield, X } from 'lucide-react';
+
+type SectionId = 'general' | 'access';
+const tabs: DialogTab<SectionId>[] = [
+  { id: 'general', label: 'General', icon: <Settings2 size={16} aria-hidden /> },
+  { id: 'access', label: 'Access', icon: <Shield size={16} aria-hidden /> },
+];
+
+<TabbedFormDialog
+  open={open}
+  onClose={() => setOpen(false)}
+  title="Orglet settings"
+  closeLabel="Close"
+  closeIcon={<X size={16} aria-hidden />}
+  tabs={tabs}
+  tab={tab}
+  onTab={setTab}
+  panelId="orglet-settings"
+  onSubmit={save}
+  submitLabel="Save"
+  busyLabel="Saving"
+  cancelLabel="Cancel"
+  busy={saving}
+  error={saveError}
+>
+  {tab === 'general' && <Input aria-label="Name" data-field="name" value={name} onChange={event => setName(event.target.value)} />}
+</TabbedFormDialog>
+```
+
+## Props
+
+### TabbedDialog
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `open` | `boolean` | required | Whether the dialog is shown. |
+| `onClose` | `() => void` | required | Called on Escape, the backdrop and the close button. |
+| `title` | `string` | required | The dialog's title. |
+| `closeLabel` | `string` | required | The close button's accessible name. |
+| `closeIcon` | `ReactNode` | required | The close button's icon. |
+| `tabsLabel` | `string` | `title` | Names the tab list. |
+| `tabs` | `DialogTab<T>[]` | required | The sections. |
+| `tab` | `T` | required | The open tab's `id`. |
+| `onTab` | `(tab: T) => void` | required | Called when another tab opens. |
+| `panelId` | `string` | required | The panel's id. Each tab is `${panelId}-tab-${id}`. |
+| `description` | `ReactNode` | | Under the open tab's title in the panel. |
+| `actions` | `ReactNode` | | Right of the open tab's title, such as an Add button. |
+| `onOpenAutoFocus` | `(event: Event) => void` | | Runs when the dialog opens, after the opener is remembered. |
+| `onSubmit` | `() => void` | | Makes the body and `footer` one form with `noValidate`. Validate in it. |
+| `footer` | `ReactNode` | | A row under the body. |
+| `children` | `ReactNode` | required | The open section's content. |
+
+### TabbedFormDialog
+
+Takes the `TabbedDialog` props except `onOpenAutoFocus`, `onSubmit` and `footer`, plus:
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `onSubmit` | `() => void` | required | Called on Save. |
+| `submitLabel` | `string` | required | The Save button's text. |
+| `busyLabel` | `string` | required | The Save button's text while `busy`. |
+| `cancelLabel` | `string` | required | The Cancel button's text. |
+| `busy` | `boolean` | required | Disables both buttons and shows `busyLabel`. |
+| `error` | `string` | | A message beside the buttons, announced as an alert. |
+| `focusField` | `string` | | The `data-field` to focus when the dialog opens, scrolled into view. |
+| `fieldsClassName` | `string` | | Classes for the box the fields sit in. |
+
+### DialogTabs
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | Names the tab list. |
+| `tabs` | `DialogTab<T>[]` | required | The tabs. |
+| `value` | `T` | required | The open tab's `id`. |
+| `onChange` | `(tab: T) => void` | required | Called when another tab opens. |
+| `panelId` | `string` | required | The id of the panel the tabs control. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+### DialogTab
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `id` | `T extends string` | required | The tab's identifier. |
+| `label` | `string` | required | The tab's text and the panel's heading. |
+| `icon` | `ReactNode` | | Sits left of the label. |
+| `buttonProps` | `Omit<ComponentProps<'button'>, 'id' \| 'role' \| 'type' \| 'onClick' \| 'tabIndex' \| 'children'>` | | Props for the tab's button, such as a handler that prefetches on hover. |
+
+## Accessibility
+
+- Tabs follow the WAI-ARIA tabs pattern: arrow keys move to the next tab and open it, and only the open tab is in the Tab order.
+- The panel is a `tabpanel` labelled by its tab.
+- A tab's icon sits left of its label.
+- Focus returns to what opened the dialog. Escape closes an open menu inside first.
+- Fields on hidden tabs are unmounted, so validate in `onSubmit` and open the tab at fault. The footer error is `role="alert"`.
+- The close X belongs here because the dialog is centred on the screen.
+
+---
+
+# Tooltip
+
+A short text label for a control, shown on hover and keyboard focus.
+
+Exports: Tooltip, TooltipSide
+
+## When to use
+
+- Naming an icon-only control, such as a toolbar button, for people who point at it.
+- Showing the shortcut that triggers a control, next to its name.
+
+## When not to
+
+- Anything a person must read or act on: put it in the surface, or use `InfoTip` for detail behind a button.
+- Links, buttons or copyable text inside the label: a tooltip is not interactive content.
+- A control that already shows its own text, where the label would only repeat it.
+
+## Example
+
+```tsx
+import { Button, Tooltip } from '@codepawlhq/orglet-ui';
+import { Trash2 } from 'lucide-react';
+
+<Tooltip label="Delete chat" shortcut="Ctrl+Shift+D">
+  <Button type="button" size="icon" aria-label="Delete chat" onClick={remove}>
+    <Trash2 size={16} aria-hidden />
+  </Button>
+</Tooltip>
+```
+
+## Props
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | | The text shown. Required. |
+| `shortcut` | `string` | | A key combination shown after the label, such as `Ctrl+K`. Handling the key is the caller's job. |
+| `side` | `'top' \| 'bottom'` | `'top'` | Where it sits. It moves to the other side when there is no room. |
+| `children` | `ReactElement` | | Exactly one element. It must accept `ref` and pointer and focus handlers, as a `Button` does. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- While shown, the label is `role="tooltip"` and the child gets `aria-describedby` pointing at it. The child keeps its own accessible name, so an icon-only button still needs `aria-label`.
+- It shows after a short hover and at once on keyboard focus, and hides on Escape, when the pointer leaves, on a press and when focus leaves. Escape closes only the tooltip, so a dialog around it stays open.
+- It appears inside the open dialog, or on the page, and stays inside the window.
+- The label never takes the pointer, and a tooltip is not the only place a control's meaning lives: a touch screen has no hover.
+
+---
+
+# Viewer
+
+A large Quick Look style dialog for looking at one document, file or diff.
+
+Exports: Viewer
+
+## When to use
+
+- Looking at one thing at full size: a document, an image, a PDF, a diff.
+- A title with an `icon` and a `meta` line, `actions` on the right and a content area that scrolls on its own.
+- An editing mode with its own tools: put them in `toolbar`, a second row that stays while the content scrolls.
+
+## When not to
+
+- An editor or list with a header of actions: use `Drawer`.
+- Settings in sections: use `TabbedDialog`.
+- A yes-or-no question: use `confirmAction` from `Confirm`.
+- A tool row inside the viewer: build it with `ToolbarToggleGroup` and `Button`.
+
+## Example
+
+```tsx
+import { Button, Viewer } from '@codepawlhq/orglet-ui';
+import { Download, FileText, X } from 'lucide-react';
+
+<Viewer
+  open={open}
+  onClose={() => setOpen(false)}
+  title="report.pdf"
+  icon={<FileText size={16} aria-hidden />}
+  meta="1.4 MB"
+  closeLabel="Close"
+  closeIcon={<X size={16} aria-hidden />}
+  actions={<Button type="button" variant="outline"><Download size={16} aria-hidden />Download</Button>}
+>
+  <FilePreview />
+</Viewer>
+```
+
+## Props
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `open` | `boolean` | required | Whether the viewer is shown. |
+| `onClose` | `() => void` | required | Called on Escape, the backdrop and the close button. |
+| `title` | `ReactNode` | required | Centred in the toolbar. |
+| `icon` | `ReactNode` | | Sits left of the title. |
+| `meta` | `ReactNode` | | A quiet line under the title. |
+| `actions` | `ReactNode` | | On the toolbar's right. |
+| `toolbar` | `ReactNode` | | A centred row of tools under the toolbar, for an editing mode. |
+| `closeLabel` | `string` | required | The close button's accessible name and tooltip. |
+| `closeIcon` | `ReactNode` | required | The close button's icon. |
+| `id` | `string` | | Set on the dialog. |
+| `className` | `string` | | Classes for the dialog, such as one that makes it wider. |
+| `children` | `ReactNode` | required | The content, on a grey backdrop that scrolls on its own. |
+
+## Accessibility
+
+- It is a modal dialog built on Radix, named by its title. Focus is trapped and returns to the opener on close.
+- Escape closes an open menu or list inside first, then the viewer.
+- The close button is on the left of the toolbar and is named by `closeLabel`.
+- The close X belongs here because the viewer is a centred dialog.
+
+---
+
+# Progress
+
+A bar for work whose size is known, such as 3 of 12 files.
+
+Exports: Progress
+
+## When to use
+
+- Work with a known total: files copied, a step of a few, an upload with a size.
+- `valueText` to say it in words next to the bar: `3 of 12`, `40%`.
+
+## When not to
+
+- A wait of unknown length: that is not progress. Show the shape of what is coming with a `Skeleton`. The kit has no spinner and no indeterminate bar.
+- A fixed amount used, such as storage: that is a measurement, not work under way.
+
+## Example
+
+```tsx
+import { Progress } from '@codepawlhq/orglet-ui';
+
+<Progress label="Files copied" value={3} max={12} valueText="3 of 12" />
+```
+
+## Props
+
+Every `<div>` prop passes through.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | | The accessible name. Required. |
+| `value` | `number` | | How far along. Held between `0` and `max`. |
+| `max` | `number` | `100` | The value that means done. |
+| `valueText` | `string` | | The progress in words, shown beside the bar and announced instead of the bare number. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- The bar is `role="progressbar"` with `aria-valuenow`, `aria-valuemin` and `aria-valuemax`, named by `label`. `valueText` becomes `aria-valuetext`.
+- The visible text is hidden from assistive technology, since the bar already announces it.
+- Nothing is announced on every change. When a finished state matters, tell the person in text or with a toast.
+
+---
+
+# Skeleton
+
+The only shape a wait may take: bars, blocks and circles where content will be.
+
+Exports: Skeleton, SkeletonText, SkeletonGroup
+
+## When to use
+
+- A wait that cannot be hidden by fetching early: a list, a page or a picture on its way.
+- `Skeleton` for one shape: a `line`, a `block` or a `circle`.
+- `SkeletonText` for a paragraph of several bars.
+- `SkeletonGroup` around the shapes of one thing, so a screen reader hears one sentence.
+
+## When not to
+
+- A spinner: the kit has none and will not get one. Show the shape of what is coming.
+- A result or an error: use `StatusMark`.
+- A short confirmation after an action: use `showToast` from `Toaster`.
+- Content that is already there: render it.
+
+## Example
+
+```tsx
+import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawlhq/orglet-ui';
+
+<SkeletonGroup label="Loading chats">
+  <Skeleton shape="circle" width={32} height={32} />
+  <Skeleton width="40%" />
+  <SkeletonText lines={3} />
+</SkeletonGroup>
+```
+
+## Props
+
+### Skeleton
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `shape` | `'line' \| 'block' \| 'circle'` | `'line'` | A bar for text, a block for a paragraph or picture, a circle for a face. |
+| `width` | `string \| number` | | A CSS length or a percentage. A line defaults to the full width of its box. |
+| `height` | `string \| number` | | A CSS length. |
+| `delay` | `number` | | Seconds into the shimmer it starts, so stacked lines do not pulse together. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+| `style` | `CSSProperties` | | Merged with the sizing props. |
+
+### SkeletonGroup
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | The sentence a screen reader hears, such as "Loading chats". |
+| `children` | `ReactNode` | required | The skeleton shapes. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+### SkeletonText
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `lines` | `number` | `3` | How many bars. The last one is shorter. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- Every skeleton shape is `aria-hidden`. The group is a polite `status` region carrying the one `label`.
+- The sentence is announced once and goes quiet when real content replaces the group.
+- The shimmer runs under a second a pass and stops under `prefers-reduced-motion`.
+
+---
+
+# StatusMark
+
+A small status glyph for the left of a title, with a different shape for every state.
+
+Exports: StatusMark, StatusMarkState, StatusMarkTone, StatusMarkVariant
+
+## When to use
+
+- The state of a thing beside its title: idle, waiting, paused, working, done, needs a person.
+- Any outcome or state in a list row, a result page or an inline notice. The mark leads, left of the text.
+- `decorative` when the mark sits inside a control that already has a name.
+
+## When not to
+
+- A message that goes away: use `showToast` from `Toaster`.
+- A wait for content: use `Skeleton`. The kit has no spinner.
+- Colour alone to tell states apart: pick the `variant`, since each has its own shape.
+- Deciding which state a thing is in: that belongs to the application.
+
+## Example
+
+```tsx
+import { StatusMark, type StatusMarkState } from '@codepawlhq/orglet-ui';
+
+const state: StatusMarkState = { variant: 'filled', tone: 'success' };
+
+<li>
+  <StatusMark variant={state.variant} tone={state.tone} label="Done, ready to read" />
+  <span>Weekly report</span>
+</li>
+<li>
+  <StatusMark variant="asking" tone="accent" label="Waiting for your answer" />
+  <span>Install the update</span>
+</li>
+```
+
+## Props
+
+### StatusMark
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `variant` | `StatusMarkVariant` | required | Picks the shape. |
+| `tone` | `StatusMarkTone` | `'muted'` | Picks the colour. |
+| `label` | `string` | required | What a screen reader hears. Also the tooltip. |
+| `decorative` | `boolean` | | Hides the mark from assistive technology, for use inside a named control. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+### StatusMarkVariant
+
+`'empty' | 'dashed' | 'paused' | 'filled' | 'busy' | 'asking'`. Each draws a different glyph.
+
+- `empty`: a dotted ring, nothing to report.
+- `dashed`: the dotted ring, a touch heavier, waiting on something outside the person. With `tone: 'error'` it becomes an exclamation stroke.
+- `paused`: two bars, stopped until the person goes on.
+- `filled`: a tick, something new to read. With `tone: 'error'` it becomes an exclamation stroke.
+- `busy`: a ring with a gap, turning.
+- `asking`: a head and shoulders, waiting for the person to answer, allow or review.
+
+### StatusMarkTone
+
+`'muted' | 'success' | 'error' | 'working' | 'accent'`. States that carry news sit on a soft tint of their own colour. `muted` stays plain.
+
+### StatusMarkState
+
+A type: `{ variant: StatusMarkVariant; tone: StatusMarkTone }`. Use it to keep a state in one value.
+
+## Accessibility
+
+- Unless `decorative`, it is `role="status"` with `aria-label` set to `label`. The glyph itself is `aria-hidden`.
+- The shape differs per variant, so the state is readable without colour.
+- Put the mark left of the title, never right.
+
+---
+
+# Toaster
+
+Short messages shown above everything, called from anywhere, with one optional action.
+
+Exports: showToast, Toaster, ToastAction, ToastTone
+
+## When to use
+
+- A short result of something the person did: saved, copied, failed.
+- A fault or a note that should stay long enough to read, and may offer one thing to do about it.
+- Call `showToast` from any handler and render one `Toaster` in the application.
+
+## When not to
+
+- A question that needs an answer: use `confirmAction` from `Confirm`.
+- A state that stays true, such as a run that is waiting: use `StatusMark` beside the thing.
+- A wait: use `Skeleton`. The kit has no spinner.
+- A notice about the chat's or the app's state: put it by the prompt bar or on its own surface, not in a toast.
+
+## Example
+
+```tsx
+import { Toaster, showToast } from '@codepawlhq/orglet-ui';
+import { CircleAlert, CircleCheck, Info } from 'lucide-react';
+
+showToast('Chat deleted', 'success', { label: 'Undo', onSelect: restoreChat });
+showToast('Could not save the file', 'error');
+
+// Once, near the root of the application:
+<Toaster icons={{
+  success: <CircleCheck size={16} aria-hidden />,
+  error: <CircleAlert size={16} aria-hidden />,
+  info: <Info size={16} aria-hidden />,
+}} />
+```
+
+## Props
+
+### showToast
+
+`showToast(text, tone?, action?)`. A repeated message replaces its older copy, and at most three are visible. A plain success goes after about 3 seconds, anything else after about 6.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `text` | `string` | required | The message. |
+| `tone` | `ToastTone` | `'success'` | `success`, `error` or `info`. |
+| `action` | `ToastAction` | | One thing to do about it. Choosing it dismisses the toast first. |
+
+### Toaster
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `icons` | `Record<ToastTone, ReactNode>` | required | The mark drawn per tone. Pick shapes that differ per tone, not only colours. |
+| `renderText` | `(text: string) => ReactNode` | `text => text` | Lets the application translate a message when it is shown. |
+
+### ToastTone
+
+`'success' | 'error' | 'info'`. `info` is a calm note that is neither a success nor a fault.
+
+### ToastAction
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `label` | `string` | required | The action button's text. |
+| `onSelect` | `() => void` | required | Runs when it is chosen. |
+
+## Accessibility
+
+- The container is a polite live region. An `error` toast has `role="alert"`, the others `role="status"`.
+- It is portaled to the page, so an open modal dialog does not hide the announcements.
+- Each toast leads with its tone's icon, left of the text, so the outcome is a shape and not colour alone.
+- Toasts are not focusable except their action, so keep the action to something that is also reachable elsewhere.
+
+---
+
+# Attachment
+
+A file as a same-width card with its kind's icon, name and size, plus helpers to read a file's kind and size.
+
+Exports: Attachment, fileKind, formatFileSize, FileKind
+
+## When to use
+
+- A file attached to a message or a composer: a row of same-width cards.
+- With `onOpen`, the whole card opens the file. With `onRemove`, a remove button shows on hover or focus.
+- `inactive` for a file that can no longer be used, with `meta` saying why.
+- `fileKind` to pick an icon from a file name, and `formatFileSize` to write a size in a locale.
+
+## When not to
+
+- A document you are reading at full size: use `Viewer`.
+- A command to copy: use `CommandBlock`.
+- A plain list of names with no card: write a list.
+
+## Example
+
+```tsx
+import { Attachment, fileKind, formatFileSize, type FileKind } from '@codepawlhq/orglet-ui';
+import { File, FileImage, X } from 'lucide-react';
+
+const icons: Record<FileKind, JSX.Element> = {
+  image: <FileImage size={20} aria-hidden />,
+  document: <File size={20} aria-hidden />,
+  video: <File size={20} aria-hidden />,
+  audio: <File size={20} aria-hidden />,
+  spreadsheet: <File size={20} aria-hidden />,
+  data: <File size={20} aria-hidden />,
+  code: <File size={20} aria-hidden />,
+  archive: <File size={20} aria-hidden />,
+  text: <File size={20} aria-hidden />,
+  file: <File size={20} aria-hidden />,
+};
+
+<ul>
+  {files.map(file => <Attachment
+    key={file.name}
+    name={file.name}
+    meta={`${fileKind(file.name)}, ${formatFileSize(file.size, 'en')}`}
+    icon={icons[fileKind(file.name)]}
+    onRemove={() => removeFile(file)}
+    removeLabel={`Remove ${file.name}`}
+    removeIcon={<X size={14} aria-hidden />}
+  />)}
+</ul>
+```
+
+## Props
+
+### Attachment
+
+It renders a list item. The parent is the list.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `name` | `string` | required | The file's name. Also the card's tooltip. |
+| `meta` | `string` | required | A line saying what it is and how big, or why it is inactive. |
+| `icon` | `ReactNode` | required | The kind's icon. |
+| `onOpen` | `() => void` | | Makes the whole card a button that opens the file. |
+| `onRemove` | `() => void` | | Adds a remove button. Needs `removeLabel` and `removeIcon`. |
+| `removeLabel` | `string` | | The remove button's accessible name. Required with `onRemove`. |
+| `removeIcon` | `ReactNode` | | The remove button's icon. Required with `onRemove`. |
+| `inactive` | `boolean` | `false` | Draws a file that can no longer be used quieter. |
+
+### fileKind
+
+`fileKind(name: string): FileKind`. Reads the kind from the extension of `name`, case-insensitive. A name with no extension, or an unknown one, is `'file'`.
+
+### formatFileSize
+
+`formatFileSize(bytes: number, locale?: string): string`. Gives "12 KB" or "1.4 MB": one decimal under ten, whole numbers above, from B to GB.
+
+### FileKind
+
+`'image' | 'video' | 'audio' | 'document' | 'spreadsheet' | 'data' | 'code' | 'archive' | 'text' | 'file'`.
+
+## Accessibility
+
+- With `onOpen` the card is one button, named by its name and meta. Without it the card is a plain list item.
+- The remove button keeps its place and shows on hover or visible focus, so nothing shifts when the pointer arrives.
+- The kind's icon is decorative and sits left of the text. Say what the file is in `meta`.
+- An inactive file says why in `meta`, as text, not only by looking quieter.
+
+---
+
+# Badge
+
+A small pill for a count or a short state word.
+
+Exports: Badge, BadgeTone
+
+## When to use
+
+- A count beside a label: unread messages, items in a list.
+- A short state word beside a title: Draft, Passed, Failed.
+- `tone` to say how it should weigh: `neutral` (the default), `accent`, `success`, `warning` or `error`.
+
+## When not to
+
+- A state shown by colour alone: pair it with a word, or put a `StatusMark` beside it.
+- A long sentence or an action: a badge is a label, not a button.
+- Anything that needs to be read first: a badge is a hint beside the main text.
+
+## Example
+
+```tsx
+import { Badge, StatusMark } from '@codepawlhq/orglet-ui';
+
+<Badge tone="accent" count={142} />
+<StatusMark variant="filled" tone="success" label="Passed" decorative />
+<Badge tone="success">Passed</Badge>
+```
+
+## Props
+
+Every `<span>` prop passes through.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `tone` | `'neutral' \| 'accent' \| 'success' \| 'warning' \| 'error'` | `'neutral'` | The colour, as a pale tint with readable text in both themes. |
+| `count` | `number` | | A number to show instead of `children`. |
+| `max` | `number` | `99` | The most a count shows exactly. Above it the badge reads `99+`. |
+| `children` | `ReactNode` | | The word shown when there is no `count`. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- Meaning never rests on colour alone. A state badge says its state in words, or sits beside a `StatusMark` whose shape differs per state.
+- It is a plain `<span>`, so a screen reader reads its text where it stands. Put the count's context in the text around it ("Messages 3") when the number alone would be unclear.
+- The tint and text colours are chosen to keep WCAG AA contrast in the light and dark themes.
+
+---
+
+# Card
+
+A quiet rounded surface that groups content, with an optional header.
+
+Exports: Card
+
+## When to use
+
+- Grouping a few related things on one surface: a setting and its explanation, a summary and its actions.
+- A header with a `title`, a `description` and `actions` on the right, above the content.
+- `interactive` when the whole card is one thing to open.
+
+## When not to
+
+- Separating parts of a page: use spacing, or a quiet background. A card draws no line between its header and body, and the kit has no separator.
+- Wrapping every block "to be safe": nested cards add noise, not structure.
+- An interactive card that also needs its own buttons: a button cannot hold a button, so `interactive` takes no `actions`. Use a plain card with a primary action instead.
+
+## Example
+
+```tsx
+import { Button, Card } from '@codepawlhq/orglet-ui';
+
+<Card title="Weekly report" description="Every Monday morning" actions={<Button type="button" variant="outline">Edit</Button>}>
+  Summarises last week's finished chats.
+</Card>
+
+<Card interactive title="Open the report" onClick={open}>Last run 2 hours ago</Card>
+```
+
+## Props
+
+Every `<section>` prop passes through, or every `<button>` prop when `interactive`.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `title` | `ReactNode` | | The header's first line. It also names the card. |
+| `description` | `ReactNode` | | A quieter line under the title. |
+| `actions` | `ReactNode` | | Controls on the header's right, vertically centred with the title block. Not allowed with `interactive`. |
+| `interactive` | `boolean` | `false` | Renders one `<button type="button">` with a hover wash and a focus ring. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- A plain card with a `title` is a `<section>` named by that title, so it is a landmark a screen reader can jump to.
+- An interactive card is a button named by its title. Its content must be phrasing text, with no controls inside.
+- The focus ring shows on keyboard focus only.
+
+---
+
+# CommandBlock
+
+A command to paste into a terminal, on a quiet card with a copy button.
+
+Exports: CommandBlock
+
+## When to use
+
+- A command people copy: an install line, a setup step.
+- A small control that changes the command, such as a terminal picker: put it in `toolbar`.
+- A long command in a narrow column: it breaks only after a path separator or a space, never inside a word.
+
+## When not to
+
+- Code to read, not run: use a plain code block.
+- A file: use `Attachment`.
+- A value with a copy button inside a tooltip: use a row of `InfoTip` with `onCopy`.
+
+## Example
+
+```tsx
+import { CommandBlock, showToast } from '@codepawlhq/orglet-ui';
+
+<CommandBlock
+  label="Install"
+  command="npx @codepawlhq/orglet"
+  copyLabel="Copy command"
+  onCopy={async command => {
+    await navigator.clipboard.writeText(command);
+    showToast('Copied');
+  }}
+/>
+```
+
+## Props
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `command` | `string` | required | The command shown, and the text `onCopy` receives. |
+| `copyLabel` | `string` | required | The copy button's accessible name and tooltip. |
+| `onCopy` | `(command: string) => void` | required | Writes the command to the clipboard. The component never touches it. |
+| `label` | `ReactNode` | | A short title above the card. |
+| `toolbar` | `ReactNode` | | Fills the card's top bar on the left. The copy button then sits at the bar's right. |
+| `copyIcon` | `ReactNode` | two sheets | Replaces the copy icon. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+
+## Accessibility
+
+- The copy button is a real button named by `copyLabel`. Its icon is `aria-hidden`.
+- The command sits in a `<code>` element. What is copied is the plain command, not the markup that lets it wrap.
+- Say what happened after copying, for example with `showToast`, since the component stays silent.
+
+---
+
+# PanelHeading
+
+A section's title with its description beneath and the section's own actions on the right.
+
+Exports: PanelHeading
+
+## When to use
+
+- The top of a section or a settings panel: a title, a line of description and the actions that belong to it.
+- Choosing the heading `level` (2 or 3) so the section sits correctly in the page's outline.
+
+## When not to
+
+- A field's title: use `FieldLabel`.
+- A dialog's title bar: the dialog components draw their own.
+- Divider lines between sections: use spacing or grouping instead.
+
+## Example
+
+```tsx
+import { Button, PanelHeading } from '@codepawlhq/orglet-ui';
+import { Plus } from 'lucide-react';
+
+<PanelHeading title="Skills" description="What this orglet knows how to do.">
+  <Button type="button" variant="primary"><Plus size={16} aria-hidden />New skill</Button>
+</PanelHeading>
+```
+
+## Props
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `title` | `ReactNode` | required | The heading's text. |
+| `description` | `ReactNode` | | A line under the title. It wraps before the actions do. |
+| `level` | `2 \| 3` | `2` | The heading element: `h2` or `h3`. |
+| `className` | `string` | | Applied last, so it overrides the kit's classes. |
+| `children` | `ReactNode` | | The section's actions, on the right, vertically centred. |
+
+## Accessibility
+
+- It renders a real `h2` or `h3`. Pick the level that fits the page, not the look.
+- Actions end flush with the section's right edge, so give each a visible surface: `primary` for the section's main add or create action, `outline` for a utility action. A bare `ghost` button with a label reads as shifted left. An icon-only `ghost` button is fine.
+- An icon in an action sits left of its text.
+
+---
+
+# ReactionBar
+
+Reactions thrown at one message: a trigger with a floating row of faces, and badges on the bubble's corner.
+
+Exports: ReactionBar, ReactionPicker, ReactionBadges, ReactionBadge, ReactionOption
+
+## When to use
+
+- Letting people react to a message with an emoji from a small set.
+- `ReactionBar` for the trigger that opens the row, in a message's action bar.
+- `ReactionBadges` for the reactions a message wears, on the bubble's corner.
+- `ReactionPicker` alone when you place the floating row yourself.
+
+## When not to
+
+- Free emoji input or a full emoji keyboard: build that in the application.
+- A rating or a vote that is stored with a meaning: use `ToolbarToggleGroup` or `Select`.
+- Storing reactions: the kit does not. The application stores and counts them.
+
+## Example
+
+```tsx
+import { ReactionBadges, ReactionBar, type ReactionBadge, type ReactionOption } from '@codepawlhq/orglet-ui';
+import { SmilePlus } from 'lucide-react';
+
+type Reaction = 'like' | 'laugh' | 'think';
+
+const options: ReactionOption<Reaction>[] = [
+  { name: 'like', emoji: '����', meaning: 'Like' },
+  { name: 'laugh', emoji: '����', meaning: 'Laugh' },
+  { name: 'think', emoji: '����', meaning: 'Think' },
+];
+
+const badges: ReactionBadge<Reaction>[] = [
+  { name: 'like', emoji: '����', count: 2, mine: true, label: 'Like, from you and Mai' },
+];
+
+<ReactionBar options={options} picked={mine} onPick={toggleReaction} label="React" icon={<SmilePlus size={16} aria-hidden />} />
+<ReactionBadges badges={badges} align="end" onPick={toggleReaction} />
+```
+
+## Props
+
+### ReactionBar
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `options` | `readonly ReactionOption<Name>[]` | required | The set to offer. |
+| `picked` | `Name` | | The reaction this person already left. It shows pressed. |
+| `onPick` | `(name: Name) => void` | required | Called with the picked name, or with the picked one again to take it off. |
+| `label` | `string` | required | Names the trigger and the row. |
+| `icon` | `ReactNode` | required | What the trigger shows. |
+
+### ReactionPicker
+
+The floating row itself.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `options` | `readonly ReactionOption<Name>[]` | required | The set to offer. |
+| `picked` | `Name` | | The pressed one. |
+| `label` | `string` | required | Names the group. |
+| `onPick` | `(name: Name) => void` | required | Called with the picked name. |
+
+### ReactionBadges
+
+The parent needs `position: relative`. It renders nothing when `badges` is empty.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `badges` | `readonly ReactionBadge<Name>[]` | required | The reactions on the message. |
+| `align` | `'start' \| 'end' \| 'inline'` | required | The corner: `start` (left) for the person's own right-aligned bubble, `end` for an answer, `inline` in the flow for a list with no bubble. |
+| `onPick` | `(name: Name) => void` | required | Called on a click. One this person left takes it off, any other adds or switches to it. |
+
+### ReactionOption
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `name` | `Name extends string` | required | What is stored. |
+| `emoji` | `string` | required | What is drawn. |
+| `meaning` | `string` | required | Names it for assistive technology and the tooltip. |
+
+### ReactionBadge
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `name` | `Name extends string` | required | What is stored. |
+| `emoji` | `string` | required | What is drawn. |
+| `count` | `number` | required | How many left it. Shown only above one. |
+| `mine` | `boolean` | required | Whether this person is among them. Sets `aria-pressed`. |
+| `label` | `string` | required | A label naming everyone, read by assistive technology. |
+
+## Accessibility
+
+- The trigger has `aria-haspopup` and `aria-expanded`. Escape closes the row and returns focus to the trigger.
+- Each option and each badge is a button with `aria-pressed`, named by its `meaning` or `label`. The emoji and count are `aria-hidden`.
+- The row floats above the trigger instead of pushing other actions sideways.
+- A pointer outside closes the row.
+
+---
+
+# cn
+
+Joins class names and lets the caller's class win over the kit's.
+
+Exports: cn
+
+## When to use
+
+- Combining class names, with conditions, in your own components.
+- Overriding a kit component's styles: every component ends its class list with the `className` it was given, and `cn` resolves conflicts the same way.
+
+## When not to
+
+- Inline styles: use the `style` prop where a component offers one.
+- Theming: change the `--org-` tokens instead of overriding classes one by one.
+
+## Example
+
+```tsx
+import { Button, cn } from '@codepawlhq/orglet-ui';
+
+<Button type="button" className={cn('wide', isActive && 'active')}>Export</Button>
+```
+
+## Props
+
+`cn(...inputs: ClassValue[]): string`. It takes the same inputs as `clsx` (strings, arrays, objects of conditions, falsy values) and merges conflicting utility classes, with the later one winning.
+
+| Prop | Type | Default | What it does |
+|---|---|---|---|
+| `...inputs` | `ClassValue[]` | | Class names, arrays, condition objects or falsy values. |
+
+## Accessibility
+
+- It only builds a class string and has no effect on semantics.
+- Overriding classes can hide a focus ring or lower contrast. Keep both when you restyle.

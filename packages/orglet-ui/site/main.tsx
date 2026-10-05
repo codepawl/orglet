@@ -102,6 +102,8 @@ function Prose({ source, navigate }: { source: string; navigate: (path: string) 
   </div>;
 }
 
+const FRAME_BORDER = 2;
+
 function StoryFrame({ story, theme, minimumHeight }: { story: StoryEntry; theme: Theme; minimumHeight: number }) {
   const frameId = useId();
   const [height, setHeight] = useState(minimumHeight);
@@ -109,7 +111,8 @@ function StoryFrame({ story, theme, minimumHeight }: { story: StoryEntry; theme:
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== 'orglet-ui-preview-height' || event.data.frame !== frameId) return;
-      setHeight(Math.max(minimumHeight, Math.min(Number(event.data.height) || 0, 720)));
+      // The frame's own border is inside its height, so the story needs that much more or it scrolls by two pixels.
+      setHeight(Math.max(minimumHeight, Math.min((Number(event.data.height) || 0) + FRAME_BORDER, 720)));
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
