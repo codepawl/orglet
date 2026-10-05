@@ -359,6 +359,7 @@ function actionClient() {
     rename: notUsed,
     archive: notUsed,
     schedules: notUsed,
+    spaces: notUsed,
     enableSchedule: notUsed,
     runSchedule: notUsed,
     search: notUsed,

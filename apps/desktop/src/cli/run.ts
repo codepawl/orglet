@@ -1,4 +1,6 @@
 import { resolve } from 'node:path';
+import { completionScript } from './completion';
+import { COMMAND_NAMES, VALUE_OPTIONS } from './arguments';
 import packageJson from '../../../../package.json';
 import { COMMAND_HELP, MAIN_HELP, parseArguments, UsageError, type ChatTarget, type ManagementCommand, type ParsedCommand } from './arguments';
 import { AppRefusal, appChatClient } from './chat-client';
@@ -6,10 +8,10 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
+import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatMarket, formatChannelCreated, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
-import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type SpacesValue, type SpaceChangeValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
+import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type SpacesValue, type SpaceChangeValue, type ChannelCreatedValue, type MarketListValue, type MarketInstalledValue, type MarketAddValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
@@ -50,7 +52,7 @@ export type RunExtras = {
 const TERMINAL_FAILURES = new Set(['failed', 'cancelled', 'interrupted']);
 const DEFAULT_COLUMNS = 80;
 
-type RequestCommand = Exclude<ParsedCommand, { kind: 'help' } | { kind: 'version' } | { kind: 'chat' } | ManagementCommand>;
+type RequestCommand = Exclude<ParsedCommand, { kind: 'help' } | { kind: 'version' } | { kind: 'chat' } | { kind: 'completion' } | ManagementCommand>;
 
 /** The request fields that name a chat: an orglet or crew by name, or a chat by its id (COD-354). */
 function targetFields(target: ChatTarget): ChatTarget {
@@ -93,7 +95,7 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'chats': return { op: 'chats', archived: command.archived, ...(command.space ? { space: command.space } : {}) };
     case 'side': return { op: 'side-thread', ...targetFields(command), message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'bring': return { op: 'bring', chat: command.chat, ...(command.message ? { message: command.message } : {}) };
-    case 'channel': return { op: 'channel', names: command.names, message: command.message, ...(command.name ? { name: command.name } : {}), ...(command.topic ? { topic: command.topic } : {}), ...(command.space ? { space: command.space } : {}), ...(command.category ? { category: command.category } : {}), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'channel': return { op: 'channel', names: command.names, ...(command.message ? { message: command.message } : {}), ...(command.name ? { name: command.name } : {}), ...(command.topic ? { topic: command.topic } : {}), ...(command.space ? { space: command.space } : {}), ...(command.category ? { category: command.category } : {}), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'members': return { op: 'members', chat: command.chat, names: command.names };
     case 'chat-change': return {
       op: 'chat-change',
@@ -106,17 +108,19 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'template': return { op: 'template', templateId: command.templateId, provider: command.provider };
     case 'schedules': return { op: 'schedules' };
     case 'spaces': return { op: 'spaces' };
+    case 'market': return { op: 'market', verb: command.verb, refresh: command.refresh, ...(command.listingId ? { listingId: command.listingId } : {}) };
     case 'space': return {
       op: 'space-change', verb: command.verb, names: command.names,
       ...(command.space ? { space: command.space } : {}), ...(command.rename ? { rename: command.rename } : {}),
       ...(command.category ? { category: command.category } : {}), ...(command.chat ? { chat: command.chat } : {}),
+      ...(command.channelName ? { channelName: command.channelName } : {}),
       ...(command.confirmName ? { confirmName: command.confirmName } : {}),
     };
     case 'schedule-enable': return { op: 'schedule-enable', schedule: command.schedule, enabled: command.enabled };
     case 'schedule-delete': return { op: 'schedule-delete', schedule: command.schedule, confirmName: command.confirmName };
     case 'schedule-save': return { op: 'schedule-save', ...(command.schedule ? { schedule: command.schedule } : {}), ...command.fields };
-    case 'search': return { op: 'search', query: command.query };
-    case 'running': return { op: 'running' };
+    case 'search': return { op: 'search', query: command.query, ...(command.space ? { space: command.space } : {}) };
+    case 'running': return { op: 'running', ...(command.space ? { space: command.space } : {}) };
     case 'library': return { op: 'library', kind: command.library, ...(command.query ? { query: command.query } : {}), ...(command.owner ? { owner: command.owner } : {}) };
     case 'memory-edit': return { op: 'memory-edit', id: command.id, ...(command.text ? { text: command.text } : {}), ...(command.pinned !== undefined ? { pinned: command.pinned } : {}) };
     case 'memory-delete': return { op: 'memory-delete', id: command.id, confirmed: true };
@@ -229,7 +233,10 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
     case 'revise':
     case 'answer': return reportControl(command.json, value as ControlValue, output, layout);
     case 'side':
-    case 'channel': return reportNewChat(command.json, value as SendValue, output, layout);
+    case 'channel':
+      if (command.message) return reportNewChat(command.json, value as SendValue, output, layout);
+      if (!command.json) output.stdout(formatChannelCreated(value as ChannelCreatedValue));
+      return EXIT_CODES.ok;
     case 'chats':
       if (!command.json) output.stdout(formatChats(value as ChatsValue));
       return EXIT_CODES.ok;
@@ -256,6 +263,9 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       return EXIT_CODES.ok;
     case 'space':
       if (!command.json) output.stdout(formatSpaceChange(value as SpaceChangeValue));
+      return EXIT_CODES.ok;
+    case 'market':
+      if (!command.json) output.stdout(formatMarket(value as MarketListValue | MarketInstalledValue | MarketAddValue));
       return EXIT_CODES.ok;
     case 'schedule-enable':
     case 'schedule-delete':
@@ -346,7 +356,7 @@ async function sendWaiting(to: string, terminal: StatusTerminal, userData: strin
 /** The chat a command waits on for an answer, if it does: `send`, `answer`, `side`, `channel`, and resume, retry and continue. */
 function waitedChat(command: RequestCommand): string | undefined {
   if (command.kind === 'send' || command.kind === 'revise' || command.kind === 'answer' || command.kind === 'side') return command.wait ? targetLabel(command) : undefined;
-  if (command.kind === 'channel') return command.wait ? command.name ?? command.names[0] : undefined;
+  if (command.kind === 'channel') return command.wait && command.message ? command.name ?? command.names[0] : undefined;
   if (command.kind !== 'control') return undefined;
   const startsTurn = command.action === 'resume' || command.action === 'retry' || command.action === 'continue';
   return startsTurn && command.wait ? targetLabel(command) : undefined;
@@ -397,6 +407,11 @@ export async function runCli(argumentList: readonly string[], output: Output, en
   }
   if (command.kind === 'help') {
     output.stdout(command.topic ? COMMAND_HELP[command.topic] : MAIN_HELP);
+    return EXIT_CODES.ok;
+  }
+  if (command.kind === 'completion') {
+    const flags = ['--json', '--no-wait', '--off', '--archived', '--called', '--pin', '--unpin', '--yes', '--refresh', '--help', '--version'];
+    output.stdout(completionScript(command.shell, COMMAND_NAMES, [...VALUE_OPTIONS, ...flags]));
     return EXIT_CODES.ok;
   }
   if (command.kind === 'version') {

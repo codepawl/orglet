@@ -191,7 +191,7 @@ describe('orglet chat slash commands', () => {
     expect(completeSlash('/li', names)).toEqual([['/list'], '/li']);
     expect(completeSlash('/', names)[0]).toEqual(['/to ', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
       '/history', '/revise', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
-      '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
+      '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule', '/spaces',
       '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme',
       '/new', '/edit', '/delete', '/help', '/exit']);
     expect(completeSlash('/t', names)).toEqual([['/to ', '/theme'], '/t']);

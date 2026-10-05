@@ -235,6 +235,19 @@ try {
   const afterRefusal = await app.firstWindow().then(page => page.evaluate(() => window.orglet.call('workspace', {})));
   assert.ok(afterRefusal.tasks.length >= 1, 'A refused request must not change anything');
 
+  // Spaces, the marketplace and shell completion: a space made here, a listing added by its id, and a script that
+  // comes from the command itself.
+  assert.match(expectOk(orglet(userData, 'space', 'add', 'Smoke space', '--with', 'Researcher'), 'orglet space add'), /Smoke space/);
+  assert.match(expectOk(orglet(userData, 'channel', '--name', 'ideas', '--space', 'Smoke space'), 'orglet channel with no message'), /#ideas/);
+  assert.match(expectOk(orglet(userData, 'market'), 'orglet market'), /launch-space\s+space/);
+  assert.match(expectOk(orglet(userData, 'market', 'add', 'launch-space'), 'orglet market add'), /Launch space/);
+  assert.match(expectOk(orglet(userData, 'market', 'installed'), 'orglet market installed'), /launch-space/);
+  const spaces = expectOk(orglet(userData, 'spaces'), 'orglet spaces');
+  assert.match(spaces, /Smoke space: Researcher/);
+  assert.match(spaces, /#ideas/);
+  assert.match(spaces, /#sources/, 'the listing brought its channels');
+  assert.match(expectOk(orglet(userData, 'completion', 'bash'), 'orglet completion'), /complete -o default -F _orglet_completion orglet/);
+
   // With the app closed, the command starts it on the same data folder and answers once it is up.
   const desktopClosed = app.waitForEvent('close');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
