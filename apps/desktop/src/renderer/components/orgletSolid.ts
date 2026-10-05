@@ -1,4 +1,5 @@
 import type { MascotId } from './mascots';
+import { BODY_BOX, bodyShapes, eyeShift, mascotShapes, type BodyShape, type BodyShapeId, type FaceId } from './orgletShapes';
 
 /*
  * An orglet in 3D (COD-156, from the owner's standalone "ORGLETS" page, 2026-09-21: "this orglet form is so good,
@@ -16,9 +17,8 @@ export type Point2 = readonly [number, number];
 export type Point3 = readonly [number, number, number];
 export type Rgb = readonly [number, number, number];
 
+/** Half the logo body's side, and how far below the centre every body's bottom edge is: they all stand on one line. */
 export const BODY_HALF = 22;
-const BODY_CORNER = 13.7;
-const BODY_TAIL = 6.5;
 export const DEPTH = 15;
 export const FRONT = DEPTH / 2;
 // Anything worn on the head sits just behind the face plane: enough parallax to feel like a hat on a head, close
@@ -121,18 +121,6 @@ function ellipseArcPoints(centreX: number, centreY: number, radiusX: number, rad
   return points;
 }
 
-// A half ellipse standing on baseY, the crown of most hats.
-function domePoints(centreX: number, baseY: number, radiusX: number, radiusY: number) {
-  return ellipseArcPoints(centreX, baseY, radiusX, radiusY, Math.PI, TAU, 18);
-}
-
-// The part of an ellipse above baseY, closed along the base (the headband).
-function domeClippedPoints(centreX: number, centreY: number, radiusX: number, radiusY: number, baseY: number) {
-  const sine = (baseY - centreY) / radiusY;
-  const offset = Math.asin(-sine);
-  return ellipseArcPoints(centreX, centreY, radiusX, radiusY, Math.PI + offset, TAU - offset, 18);
-}
-
 function roundedRectPoints(x: number, y: number, width: number, height: number, radius: number): Point2[] {
   const points: Point2[] = [];
   const corners: [number, number, number, number][] = [
@@ -150,40 +138,35 @@ function roundedRectPoints(x: number, y: number, width: number, height: number, 
   return points;
 }
 
-function circlePoints(centreX: number, centreY: number, radius: number, count = 22) {
-  return ellipseArcPoints(centreX, centreY, radius, radius, 0, TAU, count).slice(0, count);
-}
-
-function polygonPoints(gridPoints: readonly Point2[]) {
-  return gridPoints.map(([x, y]) => local(x, y));
-}
-
 function capsulePoints(centreX: number, centreY: number, width: number, height: number) {
   const radius = Math.min(width, height) / 2;
   return roundedRectPoints(centreX + 32 - width / 2, centreY + 33 - height / 2, width, height, radius);
 }
 
 /**
- * The bubble outline, clockwise from the top edge: three big corners and the small bottom-left one that makes it
- * a speech bubble, the logo's proportions (mascots.tsx `bubbleOutline`). `inset` shrinks it by that distance
- * everywhere, which for a rounded outline is exactly the same outline with every radius reduced by the inset and
- * every arc centre where it was; that is what makes the bevel below a true parallel curve and not a scaled copy,
- * so the logo's own proportions survive it.
+ * A body's outline, clockwise from the top edge: a rounded box with a radius of its own at each corner, which for
+ * the logo's body is three big corners and the small bottom-left one that makes it a speech bubble (`orgletShapes.ts`
+ * holds every body). `inset` shrinks it by that distance everywhere, which for a rounded outline is exactly the same
+ * outline with every radius reduced by the inset and every arc centre where it was; that is what makes the bevel
+ * below a true parallel curve and not a scaled copy, so the body's own proportions survive it.
  */
-export function buildBodyOutline(inset = 0): Point2[] {
+export function buildBodyOutline(inset = 0, shape: BodyShape = bodyShapes.base): Point2[] {
   const points: Point2[] = [];
-  const half = BODY_HALF - inset;
-  const corner = BODY_CORNER - inset;
-  const tail = BODY_TAIL - inset;
-  const cornerSteps = 10;
-  const tailSteps = 6;
-  const arcs: [number, number, number, number, number, number][] = [
-    [-half + corner, -half + corner, corner, Math.PI, Math.PI * 1.5, cornerSteps],
-    [half - corner, -half + corner, corner, Math.PI * 1.5, TAU, cornerSteps],
-    [half - corner, half - corner, corner, 0, Math.PI / 2, cornerSteps],
-    [-half + tail, half - tail, tail, Math.PI / 2, Math.PI, tailSteps],
+  const left = shape.left - BODY_BOX.centreX + inset;
+  const top = shape.top - BODY_BOX.centreY + inset;
+  const right = shape.left + shape.width - BODY_BOX.centreX - inset;
+  const bottom = shape.top + shape.height - BODY_BOX.centreY - inset;
+  // A corner smaller than the inset keeps a sliver of a radius, so the outline never folds back on itself.
+  const [topLeft, topRight, bottomRight, bottomLeft] = shape.corners.map(radius => Math.max(radius - inset, 0.6));
+  const stepsFor = (radius: number) => radius > 9 ? 10 : 6;
+  const arcs: [number, number, number, number, number][] = [
+    [left + topLeft, top + topLeft, topLeft, Math.PI, Math.PI * 1.5],
+    [right - topRight, top + topRight, topRight, Math.PI * 1.5, TAU],
+    [right - bottomRight, bottom - bottomRight, bottomRight, 0, Math.PI / 2],
+    [left + bottomLeft, bottom - bottomLeft, bottomLeft, Math.PI / 2, Math.PI],
   ];
-  for (const [centreX, centreY, radius, startAngle, endAngle, steps] of arcs) {
+  for (const [centreX, centreY, radius, startAngle, endAngle] of arcs) {
+    const steps = stepsFor(radius);
     for (let index = 0; index <= steps; index++) {
       const angle = startAngle + (endAngle - startAngle) * (index / steps);
       points.push([centreX + radius * Math.cos(angle), centreY + radius * Math.sin(angle)]);
@@ -191,7 +174,6 @@ export function buildBodyOutline(inset = 0): Point2[] {
   }
   return points;
 }
-export const bodyOutline = buildBodyOutline();
 
 /*
  * The rolled edge (user, 2026-09-22: the edges were still too sharp). The slab is not a cut-out with a crease where
@@ -206,13 +188,30 @@ export const RIM_Z = FRONT - BEVEL;
 const SHOULDER_ANGLES = [Math.PI / 6, Math.PI / 3];
 const bevelInset = (angle: number) => BEVEL * (1 - Math.cos(angle));
 const bevelDepth = (angle: number) => RIM_Z + BEVEL * Math.sin(angle);
-const shoulders = SHOULDER_ANGLES.map((angle, index) => ({
-  outline: buildBodyOutline(bevelInset(angle)),
-  z: bevelDepth(angle),
-  /** How far this ring has travelled from the side's colour to the face's. */
-  towardsFace: (index + 1) / (SHOULDER_ANGLES.length + 1),
-}));
-const faceOutline = buildBodyOutline(BEVEL);
+/** One body as the slab is built from it: the rim, the shoulders of the rolled edge and the face plate. */
+export type BodyGeometry = {
+  rim: Point2[];
+  shoulders: { outline: Point2[]; z: number; towardsFace: number }[];
+  face: Point2[];
+  /** The body's width against the logo's, which the contact shadow follows. */
+  widthRatio: number;
+};
+function buildGeometry(shape: BodyShape): BodyGeometry {
+  return {
+    rim: buildBodyOutline(0, shape),
+    shoulders: SHOULDER_ANGLES.map((angle, index) => ({
+      outline: buildBodyOutline(bevelInset(angle), shape),
+      z: bevelDepth(angle),
+      /** How far this ring has travelled from the side's colour to the face's. */
+      towardsFace: (index + 1) / (SHOULDER_ANGLES.length + 1),
+    })),
+    face: buildBodyOutline(BEVEL, shape),
+    widthRatio: shape.width / BODY_BOX.size,
+  };
+}
+/** Every body's geometry, built once: a face only ever reads the one its look names. */
+export const bodyGeometries = Object.fromEntries((Object.keys(bodyShapes) as BodyShapeId[]).map(id => [id, buildGeometry(bodyShapes[id])])) as Record<BodyShapeId, BodyGeometry>;
+export const bodyOutline = bodyGeometries.base.rim;
 /** Stroking a fill in its own paint rounds its corners, because the context joins with arcs. */
 const EDGE_ROUND = 1.1;
 
@@ -236,70 +235,21 @@ export type Shape = {
   propeller?: boolean;
 };
 
-function shape(points: readonly (Point2 | Point3)[], z: number, options: Partial<Shape>): Shape {
-  return { points, z, closed: true, lineWidth: 2, ...options };
-}
-function worn(points: readonly Point2[], z = HAT_Z) {
-  return shape(points, z, { fill: 'body', stroke: 'ink', lineWidth: 2 });
-}
-function inkLine(gridPoints: readonly Point2[], lineWidth: number, z = HAT_Z + 0.3) {
-  return shape(polygonPoints(gridPoints), z, { closed: false, stroke: 'ink', lineWidth });
-}
-function bodyLine(gridPoints: readonly Point2[], lineWidth: number, z = HAT_Z) {
-  return shape(polygonPoints(gridPoints), z, { closed: false, stroke: 'body', lineWidth });
-}
-function inkFill(points: readonly Point2[], z = FRONT + 0.4) {
-  return shape(points, z, { fill: 'ink' });
-}
-function colourFill(points: readonly Point2[], colour: Paint, z = HAT_Z) {
-  return shape(points, z, { fill: colour });
-}
-function colourLine(gridPoints: readonly Point2[], colour: Paint, lineWidth: number, z = HAT_Z) {
-  return shape(polygonPoints(gridPoints), z, { closed: false, stroke: colour, lineWidth });
-}
-const brim = (left: number, width: number) => worn(roundedRectPoints(left, 12.2, width, 2.6, 1.3));
-const lensRing = (centreX: number) => shape(circlePoints(centreX, EYE_Y + 33, 6.2, 26), FRONT + 2.5, { closed: true, stroke: 'eye', lineWidth: 2.2 });
-
 /** How the eyes are drawn: the sparing expressions of mascots.tsx, all in the eyes. */
-export type FaceStyle = 'plain' | 'happy' | 'wink' | 'curious' | 'delighted' | 'sleepy' | 'glasses' | 'shades';
-export type Look = { face: FaceStyle; shapes: readonly Shape[] };
+export type FaceStyle = 'plain' | 'happy' | 'wink' | 'curious' | 'delighted' | 'sleepy' | 'narrow';
+/** A mascot as the solid draws it: its body, its eyes, how far the eyes moved with the body's box, and nothing worn. */
+export type Look = { body: BodyShapeId; face: FaceStyle; eyeDy: number; shapes: readonly Shape[] };
+const faceStyles: Record<FaceId, FaceStyle> = { plain: 'plain', happy: 'happy', curious: 'curious', wink: 'wink', sleepy: 'sleepy', narrow: 'narrow', delighted: 'delighted' };
 
-/** Every mascot of mascots.tsx as a face style and the accessory it wears. */
-export const looks: Record<MascotId, Look> = {
-  classic: { face: 'plain', shapes: [] },
-  happy: { face: 'happy', shapes: [] },
-  curious: { face: 'curious', shapes: [] },
-  wink: { face: 'wink', shapes: [] },
-  sleepy: { face: 'sleepy', shapes: [bodyLine([[49, 6], [54, 6], [49, 11], [54, 11]], 2.4)] },
-  focused: { face: 'glasses', shapes: [lensRing(EYE_LEFT + 32), lensRing(EYE_RIGHT + 32)] },
-  antenna: { face: 'plain', shapes: [bodyLine([[32, 13], [32, 6]], 3.4), colourFill(circlePoints(32, 5, 3), '#ff8fa3')] },
-  sprout: { face: 'plain', shapes: [bodyLine([[32, 13], [32, 7]], 3), colourFill(polygonPoints([[32, 8], [30, 5.5], [26.5, 4], [23, 5], [25, 8], [29, 9]]), '#5fb878'), colourFill(polygonPoints([[32, 8], [34, 5.5], [37.5, 4], [41, 5], [39, 8], [35, 9]]), '#5fb878')] },
-  idea: { face: 'plain', shapes: [colourLine([[52, 4], [52, 11]], '#f2b33d', 2.6, FRONT), colourLine([[48.5, 7.5], [55.5, 7.5]], '#f2b33d', 2.6, FRONT)] },
-  headset: { face: 'plain', shapes: [
-    shape(ellipseArcPoints(32, 34, 23, 23, Math.PI, TAU, 24), 0, { closed: false, stroke: 'body', lineWidth: 3.2, behind: true }),
-    { ...worn(roundedRectPoints(3, 30, 7, 12, 3.5), 0), side: true },
-    { ...worn(roundedRectPoints(54, 30, 7, 12, 3.5), 0), side: true },
-  ] },
-  delighted: { face: 'delighted', shapes: [] },
-  cool: { face: 'shades', shapes: [shape(roundedRectPoints(20, 21, 28, 12, 5), FRONT + 2.5, { fill: 'dark', stroke: 'ink', lineWidth: 2 })] },
-  tie: { face: 'plain', shapes: [inkFill(polygonPoints([[29.5, 42], [34.5, 42], [33.3, 44.4], [35.2, 51], [32, 54], [28.8, 51], [30.7, 44.4]]))] },
-  bowtie: { face: 'plain', shapes: [inkFill(polygonPoints([[23.5, 41.5], [31, 45], [23.5, 48.5]])), inkFill(polygonPoints([[40.5, 41.5], [33, 45], [40.5, 48.5]])), inkFill(circlePoints(32, 45, 2.4))] },
-  briefcase: { face: 'plain', shapes: [worn(domePoints(32, 13.5, 10, 9)), brim(15.5, 33)] },
-  calendar: { face: 'plain', shapes: [worn(domePoints(32, 13.5, 10.5, 10)), worn(roundedRectPoints(41, 9.1, 10.5, 4.4, 2.2))] },
-  mail: { face: 'plain', shapes: [worn(polygonPoints([[17.5, 13.5], [32, 3], [46.5, 13.5]])), inkLine([[24, 13.5], [32, 7], [40, 13.5]], 1.6)] },
-  finance: { face: 'plain', shapes: [worn(roundedRectPoints(23.5, 3.5, 17, 10.5, 1.2)), brim(16, 32)] },
-  search: { face: 'plain', shapes: [worn(domePoints(32, 13.5, 11, 10)), brim(14.5, 35), worn(roundedRectPoints(15.5, 7.5, 4, 6.5, 2)), worn(roundedRectPoints(44.5, 7.5, 4, 6.5, 2))] },
-  chart: { face: 'plain', shapes: [worn(polygonPoints([[13.5, 8.5], [32, 2.5], [50.5, 8.5], [32, 14.5]])), bodyLine([[46.5, 10], [46.5, 15.5]], 1.8), worn(circlePoints(46.5, 16.5, 1.6))] },
-  target: { face: 'plain', shapes: [worn(domeClippedPoints(32, 18.2, 15, 12, 13)), worn(circlePoints(44, 7.5, 3))] },
-  writer: { face: 'plain', shapes: [worn(domePoints(32, 12.5, 12, 9)), worn(circlePoints(43, 4, 2.4))] },
-  notes: { face: 'plain', shapes: [worn(domePoints(32, 11.5, 11, 9)), worn(polygonPoints([[15, 11.5], [49, 11.5], [45, 15], [19, 15]]))] },
-  megaphone: { face: 'plain', shapes: [worn(polygonPoints([[32, 1.5], [43, 13.5], [21, 13.5]])), worn(circlePoints(32, 1.5, 2.6))] },
-  checker: { face: 'plain', shapes: [worn(polygonPoints([[20, 13.5], [21.5, 3], [27.5, 8.5], [32, 1], [36.5, 8.5], [42.5, 3], [44, 13.5]]))] },
-  guard: { face: 'plain', shapes: [worn(domePoints(32, 13.5, 11, 10.5)), brim(15, 34), inkLine([[32, 4.5], [32, 12]], 1.8)] },
-  coder: { face: 'plain', shapes: [worn(domePoints(32, 12, 10, 9.5)), worn(roundedRectPoints(19.5, 12, 25, 3, 1.2)), worn(circlePoints(32, 2.5, 2.6))] },
-  automation: { face: 'plain', shapes: [worn(domePoints(32, 13.5, 9.5, 9)), bodyLine([[32, 5.5], [32, 10.5]], 1.8), shape([], 0, { propeller: true })] },
-  care: { face: 'plain', shapes: [worn(roundedRectPoints(22, 5.5, 20, 8, 1.2)), inkLine([[29.5, 9.5], [34.5, 9.5]], 2), inkLine([[32, 7], [32, 12]], 2)] },
-};
+/**
+ * Every mascot of mascots.tsx, from the one table both drawings read (`orgletShapes.ts`). A look carried accessories
+ * until 2026-10-05 (owner: no hat and nothing worn); `shapes` stays for a thing a face may hold one day, and is empty.
+ */
+function lookOf(id: MascotId): Look {
+  const { body, face } = mascotShapes[id];
+  return { body, face: faceStyles[face], eyeDy: eyeShift(bodyShapes[body]).dy, shapes: [] };
+}
+export const looks: Record<MascotId, Look> = Object.assign({}, ...(Object.keys(mascotShapes) as MascotId[]).map(id => ({ [id]: lookOf(id) })));
 
 /* ---------- Springs. Every animated value is a spring pulled at a target; gestures either move the target or kick
    the velocity, and the spring makes the overshoot and the settle. */
@@ -975,9 +925,11 @@ type EyeSpec = { x: number; y: number; height: number; shut: boolean };
 
 function eyeSpec(model: OrgletModel): { left: EyeSpec; right: EyeSpec } {
   const style = model.look.face;
+  // The eyes keep their distance from the top edge, so they move with the tall and the wide body's box.
+  const eyeY = EYE_Y + model.look.eyeDy;
   const spec = {
-    left: { x: EYE_LEFT, y: EYE_Y, height: EYE_HEIGHT, shut: false },
-    right: { x: EYE_RIGHT, y: EYE_Y, height: EYE_HEIGHT, shut: false },
+    left: { x: EYE_LEFT, y: eyeY, height: EYE_HEIGHT, shut: false },
+    right: { x: EYE_RIGHT, y: eyeY, height: EYE_HEIGHT, shut: false },
   };
   if (style === 'curious') {
     spec.left.x += 1.5;
@@ -1001,9 +953,11 @@ function eyeSpec(model: OrgletModel): { left: EyeSpec; right: EyeSpec } {
     spec.left.y += 2;
     spec.right.y += 2;
   }
-  if (style === 'glasses') {
-    spec.left.height = 7.5;
-    spec.right.height = 7.5;
+  if (style === 'narrow') {
+    spec.left.height = 6.5;
+    spec.right.height = 6.5;
+    spec.left.y += 0.5;
+    spec.right.y += 0.5;
   }
   return spec;
 }
@@ -1061,7 +1015,7 @@ function drawEyes(context: Context, model: OrgletModel, rotation: Rotation, tone
     context.fillStyle = '#ff8fa3';
     context.globalAlpha = tones.alpha * 0.6 * clamp(blushAmount, 0, 1);
     for (const cheekX of [-10, 13]) {
-      const cheek = ellipseArcPoints(cheekX + 32 + gazeX * 0.3, 35.5, 3.2, 1.9, 0, TAU, 14).map(([x, y]) => projectPoint(rotation, x, y, eyeZ));
+      const cheek = ellipseArcPoints(cheekX + 32 + gazeX * 0.3, 35.5 + model.look.eyeDy, 3.2, 1.9, 0, TAU, 14).map(([x, y]) => projectPoint(rotation, x, y, eyeZ));
       tracePolygon(context, cheek, true);
       context.fill();
     }
@@ -1127,7 +1081,7 @@ function faceGradient(context: Context, front: readonly (readonly number[])[], t
 function drawShadow(context: Context, model: OrgletModel, tones: Tones, unit: number) {
   const height = clamp(-model.lift.value, 0, 40);
   const spread = 1 + height / 40;
-  const radiusX = 17 * unit * spread * model.scaleX.value;
+  const radiusX = 17 * unit * spread * model.scaleX.value * bodyGeometries[model.look.body].widthRatio;
   const radiusY = 3 * unit * spread;
   const alpha = 0.22 * Math.pow(1 - height / 42, 1.6) * tones.alpha;
   const gradient = context.createRadialGradient(0, 0, 0, 0, 0, 1);
@@ -1179,14 +1133,15 @@ export function drawOrglet(context: Context, model: OrgletModel, tones: Tones, l
 
   // The rolled edge: the widest cross-section is the rim at ±RIM_Z, the plates at ±FRONT are inset by the bevel,
   // and a shoulder sits at the 45° point between them.
-  const rimFront = bodyOutline.map(([x, y]) => projectPoint(rotation, x, y, RIM_Z));
-  const rimBack = bodyOutline.map(([x, y]) => projectPoint(rotation, x, y, -RIM_Z));
-  const front = faceOutline.map(([x, y]) => projectPoint(rotation, x, y, FRONT));
-  const back = faceOutline.map(([x, y]) => projectPoint(rotation, x, y, -FRONT));
+  const geometry = bodyGeometries[model.look.body];
+  const shoulders = geometry.shoulders;
+  const rimFront = geometry.rim.map(([x, y]) => projectPoint(rotation, x, y, RIM_Z));
+  const rimBack = geometry.rim.map(([x, y]) => projectPoint(rotation, x, y, -RIM_Z));
+  const front = geometry.face.map(([x, y]) => projectPoint(rotation, x, y, FRONT));
+  const back = geometry.face.map(([x, y]) => projectPoint(rotation, x, y, -FRONT));
   const frontCentre = projectPoint(rotation, 0, 0, FRONT);
   const backCentre = projectPoint(rotation, 0, 0, -FRONT);
-  // The slab's silhouette is the convex hull of every cross-section; the bubble is convex apart from its tail, and
-  // the tail is drawn again on the face plate on top.
+  // The slab's silhouette is the convex hull of every cross-section: every body is a rounded box, which is convex.
   const hull = convexHull(rimFront.concat(rimBack, front, back));
 
   const projectedShapes = model.look.shapes.map((record, index) => {

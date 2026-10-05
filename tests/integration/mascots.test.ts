@@ -1,7 +1,8 @@
 import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
-import { Mascot, bubbleOutline, eyeColor, mascots, mascotIds, smallGlyphs } from '../../apps/desktop/src/renderer/components/mascots';
+import { Mascot, bubbleOutline, eyeColor, mascots, mascotIds, smallBodyBox, smallGlyphs } from '../../apps/desktop/src/renderer/components/mascots';
+import { bodyPath, bodyShapeIds, bodyShapes, mascotShapes } from '../../apps/desktop/src/renderer/components/orgletShapes';
 import { mascotGlyph } from '../../apps/desktop/src/renderer/components/Avatar';
 import { autoMascot, avatarPalette, defaultAvatarColor, distinctAvatar, distinctMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
 
@@ -74,33 +75,25 @@ function painted(art: ReactNode): { name: string; fill?: string; stroke?: string
   return out;
 }
 
-it('never fills a mascot with the colour of the body it sits on', () => {
-  // The bubble is filled with the mascot colour, so a shape filled with that same colour and nothing else simply
-  // disappears into it. That is how a wink lost its open eye, sunglasses became invisible and a tie went missing
-  // (COD-106). A worn accessory is the exception and proves the rule: it fills with the body colour but carries
-  // an ink rim, which is what lets it read over the bubble.
-  //
-  // The mirror of this bug — a part drawn outside the body in the page colour, like an antenna stem — is not
-  // caught here. Telling inside from outside needs the rendered geometry, not the source, so those are held by
-  // the `outside` helper in mascots.tsx and by looking at them.
-  //
-  // The body paint is `--mascot-fill` (the shaded gradient, COD-131) with currentColor as its fallback; a shape in
-  // either is the body's own colour. The body itself is the one shape allowed to be, so it is skipped by its outline.
+it('draws a body, its eyes and nothing worn', () => {
+  // Owner, 2026-10-05: no hat and nothing worn. A hat in the body's own colour needed a rim in the page colour to
+  // read over the bubble (COD-106), and that rim read as a mistake. So a mascot paints exactly one shape in the body
+  // paint, which is its body from `orgletShapes.ts`, and everything else is an eye or a blush.
   const bodyColoured = (fill: string | undefined) => fill === 'currentColor' || Boolean(fill?.startsWith('var(--mascot-fill'));
-  const invisible: string[] = [];
-  let wornShapes = 0;
   for (const id of mascotIds) {
-    for (const shape of painted(mascots[id].art)) {
-      if (shape.d === bubbleOutline) continue;
-      if (!bodyColoured(shape.fill)) continue;
-      wornShapes += 1;
-      const rimmed = Boolean(shape.stroke && shape.stroke.includes('--mascot-ink'));
-      if (!rimmed) invisible.push(`${id}: a ${shape.name} is filled with the body colour and has no rim`);
+    const shapes = painted(mascots[id].art);
+    const bodies = shapes.filter(shape => bodyColoured(shape.fill));
+    expect(bodies.map(shape => shape.d), id).toEqual([bodyPath(bodyShapes[mascotShapes[id].body])]);
+    for (const shape of shapes) {
+      expect(shape.stroke ?? '', `${id}: nothing is rimmed in the page colour`).not.toContain('--mascot-ink');
+      if (bodyColoured(shape.fill) || shape.name === 'g') continue;
+      expect([shape.fill, shape.stroke].some(paint => paint === eyeColor || paint === '#ff8fa3'), `${id}: a ${shape.name} is neither an eye nor a blush`).toBe(true);
     }
   }
-  expect(invisible).toEqual([]);
-  // The rule has to see the hats, or a change to the body paint would silently switch it off.
-  expect(wornShapes).toBeGreaterThan(20);
+  // No two mascots share both a body and a face, so each reads as its own.
+  expect(new Set(mascotIds.map(id => `${mascots[id].body}/${mascots[id].face}`)).size).toBe(mascotIds.length);
+  // The cursor still draws the logo's own outline.
+  expect(bubbleOutline.startsWith('M23.7 13')).toBe(true);
 });
 
 it('lights every mascot from its own gradient, never a shared one', () => {
@@ -134,9 +127,21 @@ it('draws the small orglets on whole pixels', () => {
     for (const value of Object.values(glyph.eye)) expect(Number.isInteger(value), name).toBe(true);
     expect(glyph.eye.right - (glyph.eye.left + glyph.eye.width), name).toBeGreaterThanOrEqual(1);
     const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, glyph: name as keyof typeof smallGlyphs, key: id }))));
-    // Every default face draws its two capsules at exactly the glyph's whole-pixel rectangles.
+    // Every plain face draws its two capsules at whole-pixel rectangles, moved with its body's box by whole pixels.
     const eyeRects = markup.match(/<rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)" rx="[\d.]+" fill="oklch/g) ?? [];
-    expect(eyeRects.length, name).toBeGreaterThan(40);
+    expect(eyeRects.length, name).toBe(2 * mascotIds.filter(id => mascots[id].face === 'plain').length);
+    // Every body's box is whole pixels, centred on the canvas, inside it, and stands on the logo body's bottom line.
+    for (const id of bodyShapeIds) {
+      const box = smallBodyBox(glyph, bodyShapes[id]);
+      for (const value of [box.left, box.top, box.width, box.height]) expect(Number.isInteger(value), `${name} ${id}`).toBe(true);
+      expect(box.left * 2 + box.width, `${name} ${id}`).toBe(glyph.canvas);
+      expect(box.left, `${name} ${id}`).toBeGreaterThanOrEqual(0);
+      expect(box.top, `${name} ${id}`).toBeGreaterThanOrEqual(0);
+      expect(box.top + box.height, `${name} ${id}`).toBe(glyph.top + glyph.body);
+      for (const corner of box.corners) expect(corner * 2, `${name} ${id}`).toBeLessThanOrEqual(Math.min(box.width, box.height));
+    }
+    // The logo's own body is the box the glyph was tuned for.
+    expect(smallBodyBox(glyph, bodyShapes.base), name).toMatchObject({ left, top: glyph.top, width: glyph.body, height: glyph.body, corners: [glyph.corner, glyph.corner, glyph.corner, glyph.tail] });
     expect(markup, name).not.toContain('linearGradient');
     expect(markup, name).not.toContain('mascot-ground');
   }
@@ -156,7 +161,7 @@ it('draws white eyes on every body and dark ones only on a very light body', () 
   expect(eyeColor).toMatch(/^oklch\(from currentColor calc\(0\.25 \+ 0\.73 \* clamp\(0, \(0\.78 - l\) \* 1000, 1\)\) 0 0\)$/);
   const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, key: id }))));
   const eyeFills = markup.match(/<rect [^>]*rx="2\.2"[^>]*fill="([^"]+)"/g) ?? [];
-  expect(eyeFills.length).toBeGreaterThan(40);
+  expect(eyeFills.length).toBeGreaterThanOrEqual(30);
   for (const eye of eyeFills) expect(eye).toContain(`fill="${eyeColor}"`);
   expect(markup).not.toMatch(/<rect [^>]*rx="2\.2"[^>]*fill="var\(--mascot-ink/);
 });

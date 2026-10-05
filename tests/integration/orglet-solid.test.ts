@@ -2,9 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
+import { bodyShapeIds, mascotShapes } from '../../apps/desktop/src/renderer/components/orgletShapes';
 import { avatarRenderer, mascotGlyph, solidSizes } from '../../apps/desktop/src/renderer/components/Avatar';
 import {
-  FRONT, addAct, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, looks, oklchLightness, projectPoint, updateOrglet,
+  BEVEL, BODY_HALF, FRONT, addAct, bodyGeometries, bodyOutline, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, looks, oklchLightness, projectPoint, updateOrglet,
   type Attention, type Palette,
 } from '../../apps/desktop/src/renderer/components/orgletSolid';
 import { parseCssColour } from '../../apps/desktop/src/renderer/components/orgletStage';
@@ -54,25 +55,38 @@ it('takes the slab silhouette as the convex hull of the front and back outlines'
   expect(hull).toEqual(expect.arrayContaining([[0, 0], [4, 0], [4, 4], [0, 4]]));
 });
 
-it('gives every mascot a 3D look, and keeps the worn rule: a shape in the body colour carries an ink rim', () => {
+it('gives every mascot a 3D look with a body and eyes of its own, and nothing worn', () => {
   expect(Object.keys(looks).sort()).toEqual([...mascotIds].sort());
-  const unrimmed: string[] = [];
-  let wornShapes = 0;
-  for (const id of mascotIds) {
-    for (const shape of looks[id].shapes) {
-      if (shape.fill !== 'body') continue;
-      wornShapes += 1;
-      if (shape.stroke !== 'ink') unrimmed.push(`${id}: a shape filled with the body colour has no rim`);
-    }
-  }
-  expect(unrimmed).toEqual([]);
-  expect(wornShapes).toBeGreaterThan(20);
+  // Owner, 2026-10-05: no hat and nothing worn. What tells two orglets apart is the body and the eyes.
+  for (const id of mascotIds) expect(looks[id].shapes, id).toEqual([]);
+  const pairs = mascotIds.map(id => `${looks[id].body}/${looks[id].face}`);
+  expect(new Set(pairs).size).toBe(mascotIds.length);
+  for (const id of mascotIds) expect(looks[id].body, id).toBe(mascotShapes[id].body);
   // The expressions of mascots.tsx live in the eyes here too.
+  expect(looks.classic).toMatchObject({ body: 'base', face: 'plain', eyeDy: 0 });
   expect(looks.happy.face).toBe('happy');
   expect(looks.wink.face).toBe('wink');
   expect(looks.sleepy.face).toBe('sleepy');
-  expect(looks.cool.face).toBe('shades');
-  expect(looks.focused.face).toBe('glasses');
+  expect(looks.focused.face).toBe('narrow');
+});
+
+it('builds every body as a closed convex outline that stands on the same line', () => {
+  for (const id of bodyShapeIds) {
+    const geometry = bodyGeometries[id];
+    const lowest = Math.max(...geometry.rim.map(point => point[1]));
+    expect(lowest, id).toBeCloseTo(BODY_HALF, 5);
+    // A rounded box is convex: its hull keeps every point of the outline that is not on a straight edge's line.
+    expect(convexHull(geometry.rim).length, id).toBeGreaterThan(geometry.rim.length * 0.8);
+    // The face plate is the same outline inset by the bevel, never folded back on itself.
+    const faceWidth = Math.max(...geometry.face.map(point => point[0])) - Math.min(...geometry.face.map(point => point[0]));
+    const rimWidth = Math.max(...geometry.rim.map(point => point[0])) - Math.min(...geometry.rim.map(point => point[0]));
+    expect(rimWidth - faceWidth, id).toBeCloseTo(2 * BEVEL, 5);
+    expect(geometry.shoulders).toHaveLength(2);
+  }
+  // The logo's own body is what `bodyOutline` still names.
+  expect(bodyOutline).toBe(bodyGeometries.base.rim);
+  expect(bodyGeometries.wide.widthRatio).toBeGreaterThan(1);
+  expect(bodyGeometries.tall.widthRatio).toBeLessThan(1);
 });
 
 it('renders the large avatar sizes as the 3D solid and keeps the list sizes on the whole-pixel glyphs', () => {

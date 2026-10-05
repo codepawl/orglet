@@ -16,7 +16,7 @@ The dialog has four tabs:
 
 | Tab | What is there |
 |---|---|
-| **General** | Avatar, name, description, instructions, model, limit per task. The avatar Orglet picks is a face and colour your other orglets do not already show, when one fits, and it stays once saved. |
+| **General** | Avatar, name, description, instructions, model, limit per task. The avatar Orglet picks is a face and colour your other orglets do not already show, when one fits, and it stays once saved. A face is a body and a pair of eyes: every body is the Orglet bubble with its small corner in another place or with other proportions (tall, wide, leaf, soft), and the eyes smile, wink, narrow or open wide. Nothing is worn: the hats and accessories earlier versions had are gone, and an orglet that had one now has the body that took its place. **Customize** lists the faces by body. |
 | **Skill** | A reusable set of instructions the orglet works from. Skill packages imported from a folder must be reviewed in the Library before you can pick them. |
 | **Permissions** | What the orglet's own chat may do: attached sources, data checks, the web, a working folder, and proposing app changes. See [Permissions](permissions-and-learning.md#permissions). |
 | **Memory** | What the orglet remembered from its chats. Edit, pin or delete lines here. See [Memory](memory.md). |
