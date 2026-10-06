@@ -3208,6 +3208,9 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .friends-sources, .saved-list { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
 .friend-source { display:flex; align-items:center; gap:12px; min-height:56px; padding:6px 10px; border-radius:10px; }
 .friend-source-text { display:flex; flex-direction:column; flex:1; min-width:0; gap:2px; }
+/* A template's orglets as small faces before its name (user, 2026-10-06), at most three so the names line up; how many and who are in the tooltip. */
+.friend-template-name { display:flex; align-items:center; gap:8px; }
+.friend-faces { display:inline-flex; flex-shrink:0; gap:2px; border-radius:6px; }
 .friend-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
 .friend-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:var(--muted); }
 .friends-add-form { display:flex; align-items:center; gap:10px; margin-top:4px; }

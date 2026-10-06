@@ -32,7 +32,7 @@ async function setup(files: { name: string; content: string }[], idColumn: strin
   const paths = [];
   for (const file of files) { const path = join(directory, file.name); await writeFile(path, file.content); paths.push(path); }
   const sources = await core.sources.import(paths);
-  const template = await core.command('createTemplate', { templateId: 'eris-review', provider: 'openai' }) as Team;
+  const template = await core.command('createTemplate', { templateId: 'data-check', provider: 'openai' }) as Team;
   expect(template.preflight).toEqual({ idColumn: null, compareTwo: true });
   const team = await core.command('saveTeam', { ...template, name: 'Generic configured review', preflight: { idColumn, compareTwo: true } }) as Team;
   const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, sourceIds: sources.map(source => source.id), excludedSources, brief: 'Review selected evidence', consent: true, budgetMicros: 2_000_000 }) as string;

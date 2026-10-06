@@ -64,7 +64,7 @@ it('claims an on-time occurrence once and persists next due with the task', asyn
   await core.tick(); expect(store.workspace().tasks).toHaveLength(1);
 });
 it('preserves waiting evidence across restart and defers routines until explicit acceptance', async () => {
-  const team = await core.command('createTemplate', { templateId: 'eris-review', provider: 'demo' }) as Team;
+  const team = await core.command('createTemplate', { templateId: 'data-check', provider: 'demo' }) as Team;
   const routine = await save({ task: { workerId: team.synthesizerId, teamId: team.id, sourceIds: [], brief: 'Missing evidence', consent: false, budgetMicros: 1000 } });
   await core.tick(); current = new Date('2026-01-05T02:00:00Z'); await core.tick(); await idle();
   const taskId = store.get<Routine>('routines', routine.id).lastTaskId!;

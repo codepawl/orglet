@@ -6,7 +6,7 @@ import type { Team, Worker, Skill } from '../../apps/desktop/src/shared/contract
 let store: Store; let core: CoreService; let team: Team;
 beforeEach(async () => {
   store = new Store(':memory:'); core = new CoreService(store, () => {}, async () => { throw new Error('Import must not call a provider'); });
-  team = await core.command('createTemplate', { templateId: 'eris-review', provider: 'openai' }) as Team;
+  team = await core.command('createTemplate', { templateId: 'data-check', provider: 'openai' }) as Team;
 });
 afterEach(() => store.close());
 it('roundtrips saved configuration with fresh IDs and shared skill references without transferring workspace data', () => {
@@ -47,4 +47,14 @@ it('rejects invalid references and unknown fields atomically', () => {
   for (const mutate of mutations) { const value = JSON.parse(original); mutate(value); expect(() => core.templates.import(JSON.stringify(value))).toThrow(); expect(store.workspace()).toEqual(before); }
   expect(() => core.templates.import('invalid')).toThrow(/JSON/);
   expect(() => core.templates.import(' '.repeat(2 * 1024 * 1024 + 1))).toThrow(/2 MB/);
+});
+it('offers templates for everyday work, each making its channel, and none named after private work (user, 2026-10-06)', async () => {
+  const catalog = (await import('../../templates/catalog.json')).default as { id: string; name: string; members: { name: string }[] }[];
+  expect(catalog.map(item => item.id)).toEqual(['research-review', 'writing-desk', 'data-check']);
+  expect(JSON.stringify(catalog)).not.toMatch(/eris/i);
+  for (const item of catalog) {
+    const made = await core.command('createTemplate', { templateId: item.id, provider: 'demo' }) as Team;
+    expect(made.name).toBe(item.name);
+    expect(made.memberIds).toHaveLength(item.members.length);
+  }
 });

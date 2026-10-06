@@ -2244,8 +2244,9 @@ export function App() {
   const userStatus = runningNow > 0 || waitingForYou > 0 ? runningButtonLabel(runningNow, waitingForYou) : account?.status === 'signed_in' ? (account.email ? maskEmail(account.email) : t('Đã đăng nhập')) : t('Dùng trên máy này');
   const activityRailLabel = [t('Hoạt động'), activityCountsNow.needs > 0 ? t('{0} chờ bạn', [activityCountsNow.needs]) : '', unreadNotices > 0 ? t('{0} chưa đọc', [unreadNotices]) : ''].filter(Boolean).join(', ');
   const friendTemplates: FriendTemplate[] = [
-    { id: 'research-review', name: 'Research Review', description: t('Đọc nguồn, kiểm tra bằng chứng và tổng hợp kết luận.'), orglets: 3 },
-    { id: 'eris-review', name: 'Eris Review', description: t('Review challenge, dữ liệu và run logs; chỉ tạo báo cáo.'), orglets: 4 },
+    { id: 'research-review', name: 'Research Review', description: t('Đọc nguồn, kiểm tra bằng chứng và tổng hợp kết luận.'), members: ['Source researcher', 'Evidence reviewer', 'Research worker'] },
+    { id: 'writing-desk', name: 'Writing Desk', description: t('Viết nháp, biên tập rồi chốt một bản gọn gàng.'), members: ['Drafter', 'Editor', 'Writer'] },
+    { id: 'data-check', name: 'Data Check', description: t('So hai bảng dữ liệu và nhật ký kết quả; chỉ tạo báo cáo.'), members: ['Data reviewer', 'Comparison auditor', 'Run auditor', 'Review worker'] },
   ];
   const addTemplate = (templateId: FriendTemplate['id']) => action(async () => {
     setFriendsBusy(true);

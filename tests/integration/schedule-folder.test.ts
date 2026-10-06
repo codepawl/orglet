@@ -298,7 +298,7 @@ describe("a scheduled run's changes", () => {
   });
 
   it('are never held for a crew, whose next member works from them', async () => {
-    const team = await core.command('createTemplate', { templateId: 'eris-review', provider: 'demo' }) as Team;
+    const team = await core.command('createTemplate', { templateId: 'data-check', provider: 'demo' }) as Team;
     const routine = await save(folderOf(await pickFolder()), { enabled: false, task: { workerId: team.synthesizerId, teamId: team.id, sourceIds: [], brief: 'Crew check', consent: false, budgetMicros: 1000 } });
     expect(routine.workspace?.review).toBe(false);
   });

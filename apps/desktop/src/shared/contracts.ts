@@ -334,7 +334,7 @@ export const commands = {
   syncConflicts: z.object({}).strict(),
   resolveSyncConflict: ResolveSyncConflict,
   saveTeam: TeamInput.extend({ expectedRevision: z.number().int().positive().optional() }),
-  createTemplate: z.object({ templateId: z.enum(['research-review', 'eris-review']), provider: z.enum(['demo', 'openai']) }),
+  createTemplate: z.object({ templateId: z.enum(['research-review', 'writing-desk', 'data-check']), provider: z.enum(['demo', 'openai']) }),
   saveSkill: SkillInput,
   inspectSkill: z.object({ id: Id }),
   reviewSkill: z.object({ id: Id, hash: z.string().regex(/^[a-f0-9]{64}$/) }),
