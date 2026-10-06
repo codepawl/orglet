@@ -5,8 +5,9 @@ name: Release
 #      release. macOS (only when that build proved notarization) and Linux (experimental) are attached when their
 #      green builds exist and are skipped with a note otherwise;
 #   2. starts npm-installer.yml, which publishes @codepawlhq/orglet at the same version;
-#   3. opens a pull request in codepawl/codepawl-web that refreshes the site's release snapshot, when the
-#      CODEPAWL_WEB_TOKEN secret exists. The site already reads the latest release live.
+#   3. starts orglet-sync.yml in codepawl/codepawl-web, which refreshes the site's release snapshot and docs and
+#      deploys them, when the CODEPAWL_WEB_TOKEN secret exists. That workflow also runs once a day, and the site
+#      already reads the latest release live.
 # A tag made before this workflow existed carries an older copy of the repository, so publish it by hand:
 # Actions -> Release -> Run workflow, with that tag.
 on:
@@ -260,81 +261,26 @@ jobs:
           echo "Started npm installer for $TAG: https://github.com/$GH_REPO/actions/workflows/npm-installer.yml" >> "$GITHUB_STEP_SUMMARY"
 
   website:
-    name: open the website snapshot pull request
+    name: start the website sync
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: read
     env:
-      GH_REPO: ${{ github.repository }}
       TAG: ${{ inputs.tag || github.ref_name }}
-      VERSION: ${{ needs.publish.outputs.version }}
       WEB_TOKEN: ${{ secrets.CODEPAWL_WEB_TOKEN }}
-      RELEASE_TOKEN: ${{ github.token }}
     steps:
-      - name: Refresh src/orglet-release.json in codepawl/codepawl-web
+      - name: Run orglet-sync.yml in codepawl/codepawl-web
         run: |
           set -euo pipefail
-          if [ -z "$WEB_TOKEN" ]; then
-            echo "::notice::CODEPAWL_WEB_TOKEN is not set, so no website pull request. The site still reads the latest release live."
-            echo "- Website snapshot pull request skipped: \`CODEPAWL_WEB_TOKEN\` is not set" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
           web_repo=codepawl/codepawl-web
-          branch="orglet-release-$TAG"
-          if GH_TOKEN="$WEB_TOKEN" gh api "repos/$web_repo/branches/$branch" >/dev/null 2>&1; then
-            echo "::notice::$web_repo already has branch $branch; nothing to do"
+          # That workflow refreshes the site's release snapshot and the docs, commits them and deploys. It also runs
+          # once a day, so a release whose dispatch is skipped here still reaches the site within a day.
+          if [ -z "$WEB_TOKEN" ]; then
+            echo "::notice::CODEPAWL_WEB_TOKEN is not set, so the website sync was not started. It runs by itself once a day."
+            echo "- Website sync not started: \`CODEPAWL_WEB_TOKEN\` is not set. It runs by itself once a day" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # The snapshot lists exactly what the release carries, in the shape the site's parseManifest reads.
-          root="https://github.com/$GH_REPO/releases/download/$TAG"
-          names=$(GH_TOKEN="$RELEASE_TOKEN" gh release view "$TAG" --json assets \
-            --jq '.assets[] | select(.state == "uploaded") | .name')
-          entries=()
-          # The names the site's parseRelease accepts, in the order the snapshot lists them.
-          for candidate in "windows x64 Orglet-$VERSION.Setup.exe" \
-            "macos arm64 Orglet-darwin-arm64-$VERSION.zip" "macos x64 Orglet-darwin-x64-$VERSION.zip" \
-            "linux x64 Orglet-linux-x64-$VERSION.zip" "linux arm64 Orglet-linux-arm64-$VERSION.zip"; do
-            read -r platform architecture name <<<"$candidate"
-            if grep -qx "$name" <<<"$names"; then
-              entries+=("{ \"platform\": \"$platform\", \"architecture\": \"$architecture\", \"url\": \"$root/$name\" }")
-            fi
-          done
-          if [ "${#entries[@]}" -eq 0 ]; then
-            echo "::warning::the release has no website downloads; no snapshot pull request"
-            exit 0
-          fi
-          git clone --depth 1 "https://x-access-token:$WEB_TOKEN@github.com/$web_repo.git" web
-          snapshot=web/src/orglet-release.json
-          {
-            echo "{"
-            echo "  \"version\": \"$VERSION\","
-            echo "  \"downloads\": ["
-            last=$((${#entries[@]} - 1))
-            for index in "${!entries[@]}"; do
-              separator=","
-              [ "$index" -lt "$last" ] || separator=""
-              echo "    ${entries[$index]}$separator"
-            done
-            echo "  ]"
-            echo "}"
-          } > "$snapshot"
-          jq -e --arg version "$VERSION" '.version == $version and (.downloads | length > 0)' "$snapshot" >/dev/null
-          cat "$snapshot"
-          cd web
-          if git diff --quiet; then
-            echo "::notice::the website snapshot already names $TAG"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898728+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
-          git commit -am "Point the Orglet download snapshot at $TAG"
-          git push origin "$branch"
-          body="The Orglet release workflow made this after publishing [$TAG](https://github.com/$GH_REPO/releases/tag/$TAG).
-
-          The page already reads the latest release live through \`/api/orglet-release\`; this snapshot is what it shows when that GitHub call fails. The Pages project has no Git connection, so merging does not deploy: deploy as the README says."
-          GH_TOKEN="$WEB_TOKEN" gh pr create --repo "$web_repo" --head "$branch" --base main \
-            --title "Orglet $VERSION downloads snapshot" --body "$body"
-          echo "- Website snapshot pull request opened in $web_repo" >> "$GITHUB_STEP_SUMMARY"
+          GH_TOKEN="$WEB_TOKEN" gh workflow run orglet-sync.yml --repo "$web_repo" --ref main
+          echo "- Started the website sync for $TAG: https://github.com/$web_repo/actions/workflows/orglet-sync.yml" >> "$GITHUB_STEP_SUMMARY"
