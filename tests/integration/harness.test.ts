@@ -248,6 +248,10 @@ describe('command contract', () => {
     expect(() => parseCodexOutput('{"type":"turn.completed"}', null)).toThrow(HarnessError);
     expect(parseCodexOutput('{"type":"turn.completed"}', '{"title":"z"}').output).toEqual({ title: 'z' });
     expect(parseCursorOutput(JSON.stringify({ result: '{"title":"c"}' })).output).toEqual({ title: 'c' });
+    // Cursor Agent narrates before the object even when asked for the object only (measured on the Windows CLI, 2026-10-07).
+    const narrated = "Looking for the attached invoice source ID so I can select the correct Orglet `read_source` call.The workspace looks sparse; checking for an attachment.{\"call\":{\"name\":\"read_source\",\"arguments\":{\"sourceId\":\"a\"}},\"notes\":\"Need the {amounts}.\"}";
+    expect(parseCursorOutput(JSON.stringify({ result: narrated })).output).toEqual({ call: { name: "read_source", arguments: { sourceId: "a" } }, notes: "Need the {amounts}." });
+    expect(() => parseCursorOutput(JSON.stringify({ result: "{\"call\":{}} and then more words" }))).toThrow("schema");
     expect(() => parseCursorOutput(JSON.stringify({ error: 'Please run agent login' }))).toThrow('Harness trên máy');
   });
 

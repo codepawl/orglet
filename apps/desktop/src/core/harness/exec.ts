@@ -145,6 +145,28 @@ const authHint = (harness: HarnessId) => {
  */
 const looksLikeAuth = (text: string) => !/temporary network issue/i.test(text) && /not logged in|not authenticated|please run \/login|please run.*login|token_expired|401 unauthorized|invalid api key|authentication|unauthenticated/i.test(text);
 
+/**
+ * The JSON object an answer ends with. Cursor Agent writes what it is doing before the object even when told to return
+ * only the object ("Looking for the attached invoice…{"call":…}", measured 2026-10-07), so the whole text is tried
+ * first, then the longest tail that starts at a `{` and parses. Anything after the object means there is none.
+ */
+export function trailingJsonObject(text: string): unknown {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    if (!trimmed.endsWith('}')) return undefined;
+    for (let start = trimmed.indexOf('{'); start >= 0; start = trimmed.indexOf('{', start + 1)) {
+      try {
+        return JSON.parse(trimmed.slice(start));
+      } catch {
+        // A brace inside the narration, or an inner object; the next one may start the answer.
+      }
+    }
+    return undefined;
+  }
+}
+
 export function parseCursorOutput(stdout: string): HarnessResult {
   let data: unknown;
   try {
@@ -164,11 +186,9 @@ export function parseCursorOutput(stdout: string): HarnessResult {
     if ('result' in record) {
       const result = record.result;
       if (typeof result === 'string') {
-        try {
-          return { output: JSON.parse(result), costUsd: null };
-        } catch {
-          throw new HarnessError('Cursor Agent không trả về báo cáo đúng schema.');
-        }
+        const output = trailingJsonObject(result);
+        if (output === undefined) throw new HarnessError('Cursor Agent không trả về báo cáo đúng schema.');
+        return { output, costUsd: null };
       }
       if (result && typeof result === 'object') return { output: result, costUsd: null };
     }
