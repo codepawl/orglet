@@ -16,7 +16,7 @@ import { taskWorkers } from '../assignees';
 import { demoWorkerToConnect } from '../chatSettings';
 import { orglet } from '../api';
 import { clearReplyTarget, useReplyTarget } from './messageMarks';
-import { IslandDock, useDockedIsland } from './islandDock';
+import { IslandDock, useDockedIsland, type DockedIsland } from './islandDock';
 import { RowMenu } from './RowMenu';
 import { toast } from './toast';
 import { canStartSideThread } from '../../shared/side-threads';
@@ -26,7 +26,7 @@ import { overflowAttributes, useStripOverflow } from '../stripOverflow';
 import { ComposerPermissionHint, type PermissionHintControls } from '../permissionHints';
 import type { HarnessInfo } from '../../shared/harness';
 import { useComposerUsage } from '../planUsage';
-import { PlanUsageNote, UsageRing } from './PlanUsage';
+import { PlanUsageNote, UsageRing, harnessAccountLabel } from './PlanUsage';
 import { chatContextFor, usageRingFor, type ContextWorker } from '../../shared/composer-usage';
 import { isHarness } from '../../shared/harness';
 import { modelLists } from '../caches';
@@ -369,14 +369,14 @@ function useReportedWindowRefresh(runs: readonly Run[]) {
 }
 
 /** What a message box's foot shows for plan usage and context (COD-326); see `usePlanUsageBar`. */
-export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean };
+export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean; /** The plan that ran out, as the island on the bar while the thread docks nothing else. */ island?: DockedIsland };
 
 /**
  * Plan usage and context under a message box (COD-326): the ring at the far right of the toolbar row under the bar
- * (`Composer`'s `usage`), and the note line under that row from 80% of a plan allowance on. Once the account is out,
- * that line comes before a permission hint, since nothing would run; nearly out, it gives way to one. The island already says the account is out after a
- * run stopped on it (COD-225), so the line waits while it does. Switching selects the other account, as Settings
- * would; the next message runs on it. `workers` answer in the chat, and `runs` are the chat's (none in an empty chat),
+ * (`Composer`'s `usage`), and the note line under that row from 80% of a plan allowance on, which gives way to a
+ * permission hint. Once the account is out there is no line: the island on the bar says so (user, 2026-10-06), the
+ * thread's own after a run stopped on it (COD-225), else `island` here until the person dismisses it for that reset.
+ * Switching selects the other account, as Settings would; the next message runs on it. `workers` answer in the chat, and `runs` are the chat's (none in an empty chat),
  * for the context window of the model each orglet will use next.
  */
 export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, openSettings, dock }: {
@@ -391,6 +391,7 @@ export function usePlanUsageBar({ workers, harnesses, running, runs = [], action
 }): UsageFoot {
   const providers = workers.map(worker => worker.provider);
   const { view: usage, loading } = useComposerUsage(providers, harnesses, running);
+  const [dismissedOutKey, setDismissedOutKey] = useState<string>();
   const island = useDockedIsland(dock);
   const listed = [...new Set(providers.filter(provider => provider !== 'demo'))];
   const lists = useCachedEach(modelLists, listed);
@@ -401,9 +402,20 @@ export function usePlanUsageBar({ workers, harnesses, running, runs = [], action
     : loading ? <span className="usage-ring-waiting" aria-hidden="true"><Skeleton shape="circle" width={16} height={16} /></span> : undefined;
   if (!usage) return { ring, out: false };
   const switchAccount = (harness: HarnessInfo, accountId: string) => action(() => orglet.call('selectHarnessAccount', { harness: harness.id, id: accountId }));
-  const out = usage.shown.tone === 'out';
-  const noteShown = usage.shown.tone !== 'normal' && !(out && island?.kind === 'account');
-  return { ring, note: noteShown ? <PlanUsageNote usage={usage} onSwitch={switchAccount} /> : undefined, out };
+  const { shown, offer } = usage;
+  const out = shown.tone === 'out';
+  const noteShown = shown.tone !== 'normal' && !out;
+  // Out is said once, on the island; dismissing it holds until the allowance resets or another account runs out.
+  const outKey = `${shown.harness.id}:${shown.usage.accountId}:${shown.resetsAt ?? ''}`;
+  const target = offer?.kind === 'switch' ? offer : undefined;
+  const outIsland: DockedIsland | undefined = out && island === undefined && dismissedOutKey !== outKey ? {
+    kind: 'account', key: outKey, harnessName: shown.harness.name, retries: false,
+    ...(target ? { target: { label: harnessAccountLabel(shown.harness, target.accountId), usedPercent: target.usedPercent } } : {}),
+    ...(shown.resetsAt ? { resetsAt: shown.resetsAt } : {}),
+    switchAccount: () => { if (target) switchAccount(shown.harness, target.accountId); },
+    dismiss: () => setDismissedOutKey(outKey),
+  } : undefined;
+  return { ring, note: noteShown ? <PlanUsageNote usage={usage} onSwitch={switchAccount} /> : undefined, out, ...(outIsland ? { island: outIsland } : {}) };
 }
 
 /**
@@ -560,7 +572,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   const sendOptions = sideThreads ? <RowMenu className="composer-send-options" label={t('Tùy chọn gửi')} icon={ChevronUp} disabled={!text.trim() || blocked || submitting}
     items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
   return <div className="thread-composer">
-    <IslandDock dock={islandDock} />
+    <IslandDock dock={islandDock} fallback={planUsage.island} />
     <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} usage={planUsage.ring} label={t('Tin nhắn')} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(readOnly)} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}

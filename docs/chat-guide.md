@@ -110,15 +110,15 @@ Under the message box, at the right end of the row with the model picker, a smal
 
 Click the ring to see what it is made of:
 
-- **Context window**: the model the orglet will answer with next, how many tokens its latest answer in this chat sent, out of how many that model holds ("304.3k / 1M (30%)"), and how Orglet trims a long chat. Before the chat's first answer it shows the model's size with nothing used yet ("0 / 1M (0%)"). In a channel each orglet has its own line with its model. Each message sends up to the last 10 turns word for word; older turns are folded into a short summary.
+- **Context window**: the model the orglet will answer with next, how many tokens its latest answer in this chat sent, out of how many that model holds ("304.3k / 1M (30%)"). Before the chat's first answer it shows the model's size with nothing used yet ("0 / 1M (0%)"). In a channel each orglet has its own line with its model. The popover keeps to the figures; how a long chat is trimmed is here: each message sends up to the last 10 turns word for word, and older turns are folded into a short summary.
 - **Plan usage limits**: each allowance of the plan, with how much is used and when it resets, and which account it is. If Orglet could not read fresh numbers, for example because Claude Code's sign-in renews only when it runs, you see the last numbers with their time (**Figures as of 07:05**).
 - **View details** opens **Settings → Harness**.
 
-From 80% of a plan allowance, a line under that row says how much is used and when it resets. At 100%, the line says the plan ran out. If another account of the same app has room, the line offers it (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
+From 80% of a plan allowance, a line under that row says how much is used and when it resets. At 100% there is no line: the island on top of the message box says the plan ran out and when it resets (**Claude Code ran out · Resets Sat, 10/10, 9:00 AM**), and × hides it until that reset. If another account of the same app has room, the island offers it instead (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
 
 In a channel, the ring follows the account closest to its limit among the orglets in the chat, and the details list each app.
 
-The ring shows only what a provider reported. A model's size comes from its model list (OpenRouter today) or from what Claude Code said on an earlier answer with that model; until one of them says, the line reads **Window size unknown**. Codex reports neither its context use nor its window, so a Codex chat's ring follows its plan. Nothing shows for Demo, Cursor Agent or Gemini CLI, which report neither a plan nor a window.
+The ring shows only what a provider reported. A model's size comes from its model list (OpenRouter, and Anthropic's Models API, which Claude Code's list reads with your sign-in) or from what Claude Code said on an earlier answer with that model; until one of them says, the line reads **Window size unknown**. Codex reports neither its context use nor its window, so a Codex chat's ring follows its plan. Nothing shows for Demo, Cursor Agent or Gemini CLI, which report neither a plan nor a window.
 
 ## Side threads
 

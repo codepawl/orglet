@@ -26,6 +26,7 @@ import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
 import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, planFirstInput, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { IslandDock } from './components/islandDock';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -2655,6 +2656,8 @@ export function App() {
             onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />}
         </div>
         <div className="thread-composer">
+          {/* Nothing runs in an empty chat yet, so only a plan that ran out takes the island (user, 2026-10-06). */}
+          <IslandDock dock="new-chat" fallback={emptyChatUsage.island} />
           {composerBar}
           <ComposerFoot>{composerHint}</ComposerFoot>
           <SkippedFiles items={skippedSources} />

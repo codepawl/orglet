@@ -2434,6 +2434,7 @@ export const en: Dictionary = {
   '{0} hết hạn mức': '{0} ran out',
   'Dùng {0} · còn {1}%': 'Use {0} · {1}% left',
   'Chuyển sang {0} rồi chạy lại': 'Switch to {0} and run again',
+  'Chuyển sang {0}': 'Switch to {0}',
   // Plan usage per harness account (COD-223).
   'đã dùng {0}%': '{0}% used',
   'Đã dùng {0}%': '{0}% used',
@@ -2478,10 +2479,7 @@ export const en: Dictionary = {
   'Cửa sổ ngữ cảnh': 'Context window',
   'Chưa rõ sức chứa': 'Window size unknown',
   '{0} · chưa rõ sức chứa': '{0} · window size unknown',
-  'Sức chứa hiện ra khi danh sách model hoặc CLI cho biết.': 'The size shows once the model list or the CLI reports it.',
   '{0} / {1} ({2}%)': '{0} / {1} ({2}%)',
-  'Mỗi tin nhắn gửi nguyên văn tối đa {0} lượt gần nhất; lượt cũ hơn được gộp thành tóm tắt.': 'Each message sends up to the last {0} turns word for word; older turns are folded into a summary.',
-  'Lần gần nhất gửi nguyên văn {0} lượt; {1} lượt cũ hơn đã gộp thành tóm tắt.': 'Last time, {0} turns went word for word and {1} older ones were folded into a summary.',
   'Hạn mức gói': 'Plan usage limits',
   'Hạn mức gói · {0}': 'Plan usage limits · {0}',
   'Xem chi tiết': 'View details',
