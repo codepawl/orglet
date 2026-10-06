@@ -1,6 +1,7 @@
 import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
 import { placeNamed, spaceNamed } from './cli-spaces';
+import { inSavedOrder } from './cli-channels';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { ChannelCreatedValue, ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
@@ -33,13 +34,18 @@ export class CliChatAdmin {
     return this.dependencies.request('workspace', {}) as Promise<Workspace>;
   }
 
-  /** Open chats newest first, or with `archived` the archived ones, each with the short id `--chat` takes. */
+  /**
+   * Open chats newest first, or with `archived` the archived ones, each with the short id `--chat` takes. With
+   * `space`, only that space's channels, in the order the space shows them (the saved order, a channel never placed
+   * after those that are, newest first).
+   */
   async chats(request: Request<'chats'>): Promise<ChatsValue> {
     const workspace = await this.workspace();
     const space = request.space === undefined ? undefined : spaceNamed(workspace, request.space);
     const shown = workspace.tasks.filter(task => Boolean(task.archivedAt) === request.archived && (!space || task.channel?.spaceId === space.id));
-    const newest = [...shown].sort((first, second) => second.createdAt.localeCompare(first.createdAt)).slice(0, MAX_LISTED_CHATS);
-    return { chats: newest.map(task => chatRow(workspace, task)) };
+    const newest = [...shown].sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+    const ordered = space ? inSavedOrder(newest.map(task => ({ task, channel: task.channel! })), workspace.channelOrder ?? []).map(entry => entry.task) : newest;
+    return { chats: ordered.slice(0, MAX_LISTED_CHATS).map(task => chatRow(workspace, task)) };
   }
 
   /**
@@ -204,6 +210,7 @@ function memberNameOf(workspace: Workspace, member: ChannelMember): string {
 function chatRow(workspace: Workspace, task: Task): CliChatRow {
   const runners = taskRunners(workspace, task);
   const lead = runners.at(-1);
+  const spaceName = workspace.spaces?.find(space => space.id === task.channel?.spaceId)?.name;
   return {
     id: task.id,
     short: task.id.slice(0, SHORT_ID_LENGTH),
@@ -214,5 +221,6 @@ function chatRow(workspace: Workspace, task: Task): CliChatRow {
     archived: Boolean(task.archivedAt),
     createdAt: task.createdAt,
     ...(lead ? { color: defaultAvatarColor(lead) } : {}),
+    ...(spaceName ? { space: spaceName } : {}),
   };
 }

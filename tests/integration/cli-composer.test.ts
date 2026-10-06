@@ -197,7 +197,7 @@ describe('terminal composer', () => {
       expect(screen).toContain('▐••▌ Researcher');
       expect(screen).toContain('codex/configured-model');
       expect(screen).toContain('▦ Review crew');
-      expect(screen).toContain('crew · lead Researcher');
+      expect(screen).toContain('lead Researcher');
       expect(screen).not.toContain('Edit configuration; without a name');
       await session.key('\x1b[B');
       await session.key('\t');

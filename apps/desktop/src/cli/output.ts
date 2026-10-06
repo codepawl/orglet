@@ -1,5 +1,5 @@
-import type { CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, ChannelCreatedValue, MarketAddValue, MarketInstalledValue, MarketListValue, SearchValue, SpaceChangeValue, SpacesValue, UsageValue } from './protocol';
-import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
+import type { CliListedChannel, CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, ChannelCreatedValue, MarketAddValue, MarketInstalledValue, MarketListValue, SearchValue, SpaceChangeValue, SpacesValue, UsageValue } from './protocol';
+import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliChatKind, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
 
 /** Plain text for a person at a terminal; `--json` prints the values as they came instead (COD-234). */
@@ -9,7 +9,7 @@ function plural(count: number, one: string, many: string): string {
 }
 
 export function formatStatus(value: StatusValue): string {
-  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.crews, 'channel', 'channels')}`;
+  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.channels ?? value.crews, 'channel', 'channels')}`;
   const running = value.running > 0 ? `, ${plural(value.running, 'chat', 'chats')} working` : '';
   return `Orglet ${value.version} is running.\n${counts}${running}.`;
 }
@@ -23,11 +23,35 @@ export function formatList(value: ListValue): string {
   const lines: string[] = [];
   lines.push(value.orglets.length ? 'Orglets' : 'No orglets yet.');
   lines.push(...padded(value.orglets.map(orglet => [orglet.name, orglet.model ? `${orglet.provider}/${orglet.model}` : orglet.provider])));
-  if (value.crews.length) {
+  const channels = value.channels ?? channelsOfCrews(value.crews);
+  if (channels.length) {
     lines.push('', 'Channels');
-    lines.push(...padded(value.crews.map(crew => [crew.name, `lead ${crew.lead}`, crew.members.join(', ')])));
+    const groups = channelsBySpace(channels);
+    const anySpace = groups.some(group => group.space !== undefined);
+    for (const group of groups) {
+      const heading = group.space ?? (anySpace ? t('Chưa ở trong không gian nào') : undefined);
+      if (heading) lines.push(`  ${heading}`);
+      const rows = padded(group.channels.map(channel => [`#${channel.name}`, channel.lead ? t('Tí trưởng {0}', channel.lead) : t('lần lượt'), channel.members.join(', ')]));
+      lines.push(...(heading ? rows.map(row => `  ${row}`) : rows));
+    }
   }
   return lines.join('\n');
+}
+
+/** An app older than the channels listing sends only the channels with a lead, as crews. */
+function channelsOfCrews(crews: ListValue['crews']): CliListedChannel[] {
+  return crews.map(crew => ({ name: crew.name, mode: 'lead' as const, lead: crew.lead, members: crew.members }));
+}
+
+/** The channels in runs of one space, in the order given; `space` is undefined for a run outside every space or with none named. */
+export function channelsBySpace(channels: readonly CliListedChannel[]): { space?: string; channels: CliListedChannel[] }[] {
+  const groups: { space?: string; channels: CliListedChannel[] }[] = [];
+  for (const channel of channels) {
+    const last = groups.at(-1);
+    if (last && last.space === channel.space) last.channels.push(channel);
+    else groups.push({ ...(channel.space ? { space: channel.space } : {}), channels: [channel] });
+  }
+  return groups;
 }
 
 /** One answer prints as its text; several (a crew) each print under the name of the orglet that wrote it. */
@@ -80,7 +104,15 @@ const SHORT_CHAT_ID = 8;
 /** Chats one per line: the short id `--chat` takes, what kind of chat, its name, who answers and how it stands. */
 export function formatChats(value: ChatsValue): string {
   if (value.chats.length === 0) return t('Chưa có chat nào.');
-  return padded(value.chats.map(row => [row.short, row.kind, row.name, row.with.join(', '), row.status])).join('\n');
+  return padded(value.chats.map(row => [row.short, chatKindLabel(row.kind), row.name, row.with.join(', '), row.status])).join('\n');
+}
+
+/**
+ * The word a person reads for a kind of chat. A crew is a channel where the lead splits the work, so it reads as a
+ * channel; `--json` keeps `crew` for scripts that already match on it.
+ */
+export function chatKindLabel(kind: CliChatKind): string {
+  return kind === 'crew' ? 'channel' : kind;
 }
 
 /** Where a new side thread or channel is, so the next message can reach it. */
@@ -144,6 +176,7 @@ export function formatSpaces(value: SpacesValue): string {
     const channels = padded(space.channels.map(channel => [
       `  #${channel.name}`,
       channel.category ?? '',
+      channel.lead ? t('Tí trưởng {0}', channel.lead) : '',
       channel.access === 'inherit' ? t('mọi Tí của nơi nó nằm') : channel.orglets.join(', '),
     ]));
     return [`${space.name}: ${space.orglets.join(', ')}`, ...channels].join('\n');

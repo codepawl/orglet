@@ -22,7 +22,7 @@ function plural(count: number, one: string, many: string): string {
 export function styledStatus(value: StatusValue, mode: ColorMode): string {
   const colors = value.colors?.length ? value.colors.slice(0, STATUS_FACE_LIMIT) : [NEUTRAL_COLOR];
   const faces = renderMiniFaces(colors, mode);
-  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.crews, 'channel', 'channels')}`;
+  const counts = `${plural(value.orglets, 'orglet', 'orglets')}, ${plural(value.channels ?? value.crews, 'channel', 'channels')}`;
   const running = value.running > 0 ? `, ${plural(value.running, 'chat', 'chats')} working` : '';
   const title = `${paint(`Orglet ${value.version}`, { bold: true }, mode)} is running.`;
   return `${faces}  ${title}\n${muted(`${counts}${running}.`, mode)}`;
@@ -33,23 +33,35 @@ function listLines(entries: readonly ChatEntry[], layout: Layout): string[] {
   return entries.map(entry => entryLine(entry, false, { ...layout, maxRows: entries.length }, facesWidth, nameWidth));
 }
 
-/** `orglet list` with orglet faces and a distinct group icon for crews. */
+/** `orglet list` with orglet faces and a distinct group icon for channels, which sit under the space they are in. */
 export function styledList(value: ListValue, layout: Layout): string {
   const entries = entriesFromList(value);
   const orglets = entries.filter(entry => entry.kind === 'worker');
-  // A crew line says who leads it and who is in it, as the plain list does.
-  const crews = entries.filter(entry => entry.kind === 'team').map((entry, index) => {
-    const crew = value.crews[index];
-    return { ...entry, detail: `lead ${crew.lead}  ${crew.members.join(', ')}` };
-  });
+  const channels = entries.filter(entry => entry.kind === 'team');
   const lines: string[] = [];
   lines.push(orglets.length ? paint('Orglets', { bold: true }, layout.mode) : 'No orglets yet.');
   lines.push(...listLines(orglets, layout));
-  if (crews.length) {
+  if (channels.length) {
     lines.push('', paint('Channels', { bold: true }, layout.mode));
-    lines.push(...listLines(crews, layout));
+    const anySpace = channels.some(entry => entry.space !== undefined);
+    for (const group of groupedBySpace(channels)) {
+      const heading = group.space ?? (anySpace ? t('Chưa ở trong không gian nào') : undefined);
+      if (heading) lines.push(muted(heading, layout.mode));
+      lines.push(...listLines(group.entries, layout));
+    }
   }
   return lines.join('\n');
+}
+
+/** Entries in runs of one space, in the order given. */
+function groupedBySpace(entries: readonly ChatEntry[]): { space?: string; entries: ChatEntry[] }[] {
+  const groups: { space?: string; entries: ChatEntry[] }[] = [];
+  for (const entry of entries) {
+    const last = groups.at(-1);
+    if (last && last.space === entry.space) last.entries.push(entry);
+    else groups.push({ ...(entry.space ? { space: entry.space } : {}), entries: [entry] });
+  }
+  return groups;
 }
 
 /** The colour an answer is printed in: its own, else the chat's, else neutral for an app that sent none. */

@@ -255,9 +255,18 @@ export type CliTurn = {
   answers: CliAnswer[];
 };
 
-export type StatusValue = { version: string; orglets: number; crews: number; running: number; colors?: string[] };
+/** `channels` counts every channel, those that take turns too; `crews` is the older count of channels with a lead, kept for one release. */
+export type StatusValue = { version: string; orglets: number; channels?: number; crews: number; running: number; colors?: string[] };
+/**
+ * A channel as `orglet list` names it. `mode` is how it answers: `turns` has each orglet answer in turn, `lead` has the
+ * lead split the work. `chat` is the start of the id of its chat, which a channel nobody has written in yet lacks.
+ */
+export type CliListedChannel = { name: string; mode: 'turns' | 'lead'; lead?: string; members: string[]; space?: string; category?: string; colors?: string[]; chat?: string };
 export type ListValue = {
   orglets: { name: string; provider: string; providerId?: string; model?: string; color?: string; description?: string; billing?: string }[];
+  /** Every channel, grouped by space in the order the app keeps them. An app older than this field sends only `crews`. */
+  channels?: CliListedChannel[];
+  /** The channels where a lead splits the work, as before channels took turns; kept for one release, `channels` covers them. */
   crews: { name: string; lead: string; members: string[]; colors?: string[] }[];
 };
 export type SendValue = {
@@ -295,7 +304,7 @@ export type ControlValue = SendValue & { action: ChatControl | 'answer' | 'revis
 /** Which kind of chat a row is: an orglet's or crew's main chat, a side thread, a channel or a schedule's run. */
 export type CliChatKind = 'orglet' | 'crew' | 'side' | 'channel' | 'schedule';
 /** One chat as `orglet chats` lists it (COD-354); `short` is the start of its id that `--chat` takes. */
-export type CliChatRow = { id: string; short: string; kind: CliChatKind; name: string; with: string[]; status: string; archived: boolean; createdAt: string; color?: string };
+export type CliChatRow = { id: string; short: string; kind: CliChatKind; name: string; with: string[]; status: string; archived: boolean; createdAt: string; color?: string; space?: string };
 export type ChatsValue = { chats: CliChatRow[] };
 export type BringValue = { mainTaskId: string; chat: CliChat; ref: string };
 export type MembersValue = { taskId: string; names: string[] };
@@ -326,7 +335,7 @@ export type CliSpaceRow = {
   name: string;
   orglets: string[];
   categories: string[];
-  channels: { name: string; category?: string; access: 'inherit' | 'listed'; orglets: string[] }[];
+  channels: { name: string; mode?: 'turns' | 'lead'; lead?: string; category?: string; access: 'inherit' | 'listed'; orglets: string[] }[];
 };
 export type SpacesValue = { spaces: CliSpaceRow[] };
 /** The marketplace as `orglet market` lists it; `source` says whether the catalog came from the service, a saved copy or the app itself. */

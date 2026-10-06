@@ -13,6 +13,7 @@ import { assertOneTarget, chatOfTask, chatsOf, CliFailure, crewRoster, liveChatT
 import { chatTurns, isTurnRunning, latestAnsweredRevision, pendingQuestion, resolveMessage, turnAnswers, waitsForDesktop } from './cli-chat-history';
 import { CliChatActions } from './cli-chat-actions';
 import { CliChatAdmin } from './cli-chat-admin';
+import { channelRows, channelsOfSpace, listedChannelRow, listedChannels } from './cli-channels';
 import { CliSchedules } from './cli-schedules';
 import { CliLibrary } from './cli-library';
 import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
@@ -103,23 +104,33 @@ export class CliOperations {
     const workspace = await this.workspace();
     const running = workspace.tasks.filter(task => !task.deletedAt && !task.archivedAt && isTurnRunning(task)).length;
     const colors = workspace.workers.map(worker => defaultAvatarColor(worker));
-    return { version: this.dependencies.version(), orglets: workspace.workers.length, crews: workspace.teams.length, running, colors };
+    return { version: this.dependencies.version(), orglets: workspace.workers.length, channels: channelRows(workspace).length, crews: workspace.teams.length, running, colors };
   }
 
-  /** The spaces with their orglets and channels (docs/spaces-design.md), by name. A channel whose space is gone is not in one. */
+  /**
+   * The spaces with their orglets and channels (docs/spaces-design.md), by name, channels in the order the space shows
+   * them: directly in the space first, then each category in its order, each in the saved order of the channels.
+   */
   async spaces(): Promise<SpacesValue> {
     const workspace = await this.workspace();
     const nameOf = (orgletId: string) => workspace.workers.find(worker => worker.id === orgletId)?.name;
     const names = (orgletIds: readonly string[]) => orgletIds.flatMap(orgletId => nameOf(orgletId) ?? []);
-    const records = [...workspace.tasks.flatMap(task => task.channel && !task.archivedAt ? [task.channel] : []), ...(workspace.emptyChannels ?? [])];
+    const channels = listedChannels(workspace);
     return {
       spaces: (workspace.spaces ?? []).map(space => ({
         name: space.name,
         orglets: names(space.orgletIds),
         categories: space.categories.map(category => category.name),
-        channels: records.filter(channel => channel.spaceId === space.id).map(channel => {
-          const category = space.categories.find(item => item.id === channel.categoryId)?.name;
-          return { name: channel.name, ...(category ? { category } : {}), access: channel.access ?? 'inherit', orglets: names(channel.members.map(member => member.id)) };
+        channels: channelsOfSpace(space, channels, workspace.channelOrder ?? []).map(entry => {
+          const row = listedChannelRow(workspace, entry);
+          return {
+            name: row.name,
+            mode: row.mode,
+            ...(row.lead ? { lead: row.lead } : {}),
+            ...(row.category ? { category: row.category } : {}),
+            access: entry.channel.access ?? 'inherit',
+            orglets: names(entry.channel.members.map(member => member.id)),
+          };
         }),
       })),
     };
@@ -145,7 +156,7 @@ export class CliOperations {
       members: team.memberIds.map(nameOf),
       colors: crewRoster(team, workspace.workers).map(worker => defaultAvatarColor(worker)),
     }));
-    return { orglets, crews };
+    return { orglets, channels: channelRows(workspace), crews };
   }
 
   /**

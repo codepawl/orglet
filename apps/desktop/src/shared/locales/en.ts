@@ -4178,6 +4178,8 @@ export const en: Dictionary = {
   "Đã chuyển kênh #{0} vào không gian {1}.": "Moved the channel #{0} into the space {1}.",
   "Kênh này không nằm trong không gian nào.": "This channel is not in a space.",
   "Chỉ chuyển được một kênh vào không gian.": "Only a channel can be moved into a space.",
+  "Tí trưởng {0}": "lead {0}",
+  "Chưa ở trong không gian nào": "Not in a space",
   "Thư mục {0}": "Folder {0}",
   "Tùy chọn thư mục {0}": "Options for the folder {0}",
   "Chuyển vào thư mục {0}": "Move to the folder {0}",
