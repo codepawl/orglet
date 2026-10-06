@@ -1,4 +1,4 @@
-import type { Source, Task, TaskDetail, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
+import type { Task, TaskDetail, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import type { CliChat } from '../cli/protocol';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, SpacesValue, StatusValue } from '../cli/protocol';
@@ -13,9 +13,10 @@ import { assertOneTarget, chatOfTask, chatsOf, CliFailure, crewRoster, liveChatT
 import { chatTurns, isTurnRunning, latestAnsweredRevision, pendingQuestion, resolveMessage, turnAnswers, waitsForDesktop } from './cli-chat-history';
 import { CliChatActions } from './cli-chat-actions';
 import { CliChatAdmin } from './cli-chat-admin';
+import { channelRows, channelsOfSpace, listedChannelRow, listedChannels } from './cli-channels';
 import { CliSchedules } from './cli-schedules';
 import { CliLibrary } from './cli-library';
-import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
+import { importFiles, readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from './cli-chats';
 export { answerText, isTurnRunning, latestAnsweredRevision, turnAnswers, turnErrors } from './cli-chat-history';
@@ -87,7 +88,7 @@ export class CliOperations {
       case 'config':
       case 'save-orglet':
       case 'save-crew':
-      case 'delete-entity': return manageCli(request, this.dependencies.request);
+      case 'delete-entity': return manageCli(request, this.dependencies);
     }
   }
 
@@ -103,23 +104,33 @@ export class CliOperations {
     const workspace = await this.workspace();
     const running = workspace.tasks.filter(task => !task.deletedAt && !task.archivedAt && isTurnRunning(task)).length;
     const colors = workspace.workers.map(worker => defaultAvatarColor(worker));
-    return { version: this.dependencies.version(), orglets: workspace.workers.length, crews: workspace.teams.length, running, colors };
+    return { version: this.dependencies.version(), orglets: workspace.workers.length, channels: channelRows(workspace).length, crews: workspace.teams.length, running, colors };
   }
 
-  /** The spaces with their orglets and channels (docs/spaces-design.md), by name. A channel whose space is gone is not in one. */
+  /**
+   * The spaces with their orglets and channels (docs/spaces-design.md), by name, channels in the order the space shows
+   * them: directly in the space first, then each category in its order, each in the saved order of the channels.
+   */
   async spaces(): Promise<SpacesValue> {
     const workspace = await this.workspace();
     const nameOf = (orgletId: string) => workspace.workers.find(worker => worker.id === orgletId)?.name;
     const names = (orgletIds: readonly string[]) => orgletIds.flatMap(orgletId => nameOf(orgletId) ?? []);
-    const records = [...workspace.tasks.flatMap(task => task.channel && !task.archivedAt ? [task.channel] : []), ...(workspace.emptyChannels ?? [])];
+    const channels = listedChannels(workspace);
     return {
       spaces: (workspace.spaces ?? []).map(space => ({
         name: space.name,
         orglets: names(space.orgletIds),
         categories: space.categories.map(category => category.name),
-        channels: records.filter(channel => channel.spaceId === space.id).map(channel => {
-          const category = space.categories.find(item => item.id === channel.categoryId)?.name;
-          return { name: channel.name, ...(category ? { category } : {}), access: channel.access ?? 'inherit', orglets: names(channel.members.map(member => member.id)) };
+        channels: channelsOfSpace(space, channels, workspace.channelOrder ?? []).map(entry => {
+          const row = listedChannelRow(workspace, entry);
+          return {
+            name: row.name,
+            mode: row.mode,
+            ...(row.lead ? { lead: row.lead } : {}),
+            ...(row.category ? { category: row.category } : {}),
+            access: entry.channel.access ?? 'inherit',
+            orglets: names(entry.channel.members.map(member => member.id)),
+          };
         }),
       })),
     };
@@ -145,7 +156,7 @@ export class CliOperations {
       members: team.memberIds.map(nameOf),
       colors: crewRoster(team, workspace.workers).map(worker => defaultAvatarColor(worker)),
     }));
-    return { orglets, crews };
+    return { orglets, channels: channelRows(workspace), crews };
   }
 
   /**
@@ -163,8 +174,7 @@ export class CliOperations {
     const workspace = await this.workspace();
     const { chat, live, team, worker } = this.sendTarget(workspace, request);
     const replyTo = request.replyTo ? await this.replyTarget(live?.id, request.replyTo) : undefined;
-    const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
-    const sourceIds = sources.map(source => source.id);
+    const sourceIds = await importFiles(this.dependencies.request, request.files);
     const runners = live ? taskRunners(workspace, live) : team ? crewRoster(team, workspace.workers) : worker ? [worker] : [];
     const providerScopes = [...new Set(runners.map(item => item.provider).filter(provider => provider !== 'demo'))] as NonNullable<TaskInput['providerScopes']>;
     const unsubscribe = feed ? this.dependencies.observe?.(observation => feed.observe(observation)) : undefined;
@@ -246,9 +256,9 @@ export class CliOperations {
     const workspace = await this.workspace();
     const found = matchSchedule(request.schedule, workspace.routines);
     const routine = workspace.routines.find(item => item.id === found.id)!;
-    if (!routine.enabled) throw new CliFailure('failed', `"${routine.name}" đang tắt. Bật lịch trong app rồi chạy lại.`);
-    const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
-    const taskId = String(await this.dependencies.request('runRoutine', { id: routine.id, sourceIds: sources.map(source => source.id) }));
+    if (!routine.enabled) throw new CliFailure('failed', `"${routine.name}" đang tắt. Bật lịch bằng lệnh orglet schedule on rồi chạy lại.`);
+    const sourceIds = await importFiles(this.dependencies.request, request.files);
+    const taskId = String(await this.dependencies.request('runRoutine', { id: routine.id, sourceIds }));
     return { schedule: { id: routine.id, name: routine.name }, taskId };
   }
 
@@ -270,7 +280,7 @@ function modelField(worker: Worker, workspace: Workspace): { model?: string } {
 }
 
 function billingLabel(worker: Worker, workspace: Workspace): string {
-  if (worker.provider === 'demo') return 'sample replies';
+  if (worker.provider === 'demo') return 'no model connected';
   if (isHarness(worker.provider)) return 'CLI account';
   if (isLocalApi(worker.provider)) return 'local';
   if (isPlanApi(worker.provider)) return 'provider plan';

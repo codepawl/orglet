@@ -18,38 +18,38 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet` | In a terminal, opens a chat: pick an orglet or channel, then write to it. See [Chat in the terminal](#chat-in-the-terminal). |
 | `orglet chat [--to <name>]` | The same, and with `--to` it opens that chat straight away |
 | `orglet status` | Says whether the app is running, its version, and how many orglets and channels it has |
-| `orglet list` | Lists orglets with their provider and model, and channels with their lead and members |
+| `orglet list` | Lists orglets with their provider and model, then every channel under its space, with how it answers (its lead, or in turn) and its members. See [Channels](#channels). |
 | `orglet config [--json]` | Shows editable configurations and the IDs needed for JSON input |
 | `orglet create <orglet\|channel> --config <file.json>` | Creates an orglet or channel |
 | `orglet edit <orglet\|channel> "<name>" --config <patch.json>` | Changes the supplied configuration fields |
 | `orglet delete <orglet\|channel> "<name>" --confirm "<full name>"` | Removes a confirmed entity while retaining past chats |
 | `orglet send "message" --to <name> [--reply-to <number>]` | Sends a message into that chat and prints the answer, optionally as a reply |
 | `orglet read --to <name> [--turns <n>]` | Prints the latest answer in that chat, or its last turns, numbered |
-| `orglet revise "corrected text" --to <name> --message <number>` | Starts a new turn from your saved message; keeps earlier history |
+| `orglet revise "corrected text" --to <name> --message <number> [--file <path>]` | Starts a new turn from your saved message; keeps earlier history. `--file` adds files to it. |
 | `orglet react <reaction> --to <name>` | Reacts to the latest answer or a numbered message. See [react](#react). |
 | `orglet forward --to <name> --target <name>` | Forwards a message to up to five other chats. See [forward](#forward). |
 | `orglet answer "<answer>" --to <name>` | Answers the question an orglet is waiting on. See [answer](#answer). |
 | `orglet stop\|pause\|resume\|retry\|continue --to <name>` | The buttons under a chat's latest turn. See [Stop, pause, resume, retry, continue](#stop-pause-resume-retry-continue). |
-| `orglet chats [--archived] [--space <name>]` | Lists chats, side threads and channels with the short id `--chat` takes; `--space` lists only that space's channels. See [Chats by id](#chats-by-id). |
-| `orglet side "message" --to <orglet>` | Sends a message in a new side thread of that orglet |
+| `orglet chats [--archived] [--space <name>]` | Lists chats, side threads and channels with the short id `--chat` takes; `--space` lists only that space's channels, in the order the space shows them. See [Chats by id](#chats-by-id). |
+| `orglet side "message" --to <orglet> [--file <path>]` | Sends a message in a new side thread of that orglet |
 | `orglet bring --chat <id>` | Brings a side thread's answer into its main chat |
-| `orglet channel "message" --with <name> [--name <name>] [--topic <topic>] [--space <name> [--category <name>]]` | Creates a channel of those orglets and sends its first message (`group` is the older name). With `--space` the channel is in that space. |
+| `orglet channel "message" --with <name> [--name <name>] [--topic <topic>] [--space <name> [--category <name>]] [--file <path>]` | Creates a channel of those orglets and sends its first message (`group` is the older name). `--space` picks the space; without it the channel goes to the space named Channels. |
 | `orglet members --chat <id> --with <name> …` | Changes who is in a channel |
-| `orglet rename\|archive --to <name> \| --chat <id>` | Renames or archives a chat; `restore --chat <id>` brings it back |
+| `orglet rename\|archive --to <name> \| --chat <id>` | Renames or archives a chat (`rename` takes `--rename "<new name>"`); `restore --chat <id>` brings it back |
 | `orglet delete --chat <id> --confirm "<chat name>"` | Deletes a chat after its exact name |
 | `orglet archive\|restore <orglet\|channel> "<name>"` | Archives or restores an orglet or channel |
-| `orglet template <id> --provider <demo\|openai>` | Creates a channel from one of the app's templates |
+| `orglet template <id> --provider openai` | Creates a channel from one of the app's templates |
 | `orglet open [--to <name>]` | Brings the Orglet window forward, and with `--to` opens that chat |
 | `orglet run "<schedule>" [--file <path>]` | Starts a schedule now, with the files you attach. See [run](#run). |
 | `orglet search "<words>"` | Searches every chat, message and name. See [Search, Running and the Library](#search-running-and-the-library). |
 | `orglet running` | Every run working or waiting across chats, as the Running view shows them |
 | `orglet library [memory\|notes]` | Memories or notes, optionally one orglet's or channel's, or what `--query` finds |
-| `orglet memory edit\|delete <id>` | Edits, pins or deletes an approved memory |
+| `orglet memory edit <id>\|delete <id> --confirm "<id or text>"` | Edits, pins or deletes an approved memory |
 | `orglet usage` | Plan usage of the signed-in CLI accounts |
 | `orglet models <provider>` | The models a connection offers; `--to <orglet>` uses that orglet's |
 | `orglet preferences [--language …] [--theme …]` | Shows or changes the app's language and theme |
 | `orglet schedules` | Lists schedules with their timing and limits |
-| `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category and who is in it |
+| `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category, how it answers and who is in it, in the order the space shows them |
 | `orglet space add\|edit\|category\|uncategory\|move\|out\|delete` | Creates, changes or deletes a space and its categories, and moves a channel into or out of one. See [Spaces](#spaces). |
 | `orglet market [installed \| add <id>]` | Lists the marketplace, what was added from it, or adds a listing. See [The marketplace](#the-marketplace). |
 | `orglet completion <powershell\|bash\|zsh>` | Prints the completion script for that shell. See [Shell completion](#shell-completion). |
@@ -117,7 +117,7 @@ This uses the script `pnpm dev` builds into `.vite/build/orglet-cli.cjs`. It can
 
 Run `orglet` with no command, or `orglet chat`:
 
-1. One mascot sits beside the product name and version. Orglet rows have small mascots; channel rows have a ▦ group icon in the lead's colour. Both remain visible when colour is off. A channel in this list is one where a lead splits the work (older versions called it a crew); channels where the orglets take turns are listed by `orglet chats`.
+1. One mascot sits beside the product name and version. Orglet rows have small mascots; channel rows have a ▦ group icon in the lead's colour. Both remain visible when colour is off. Every channel is in this list, whether its lead splits the work (older versions called that a crew) or its orglets take turns. A channel where the orglets take turns opens by its chat's id, so one nobody has written in yet is not offered; send its first message from the app, or make a new one with `orglet channel`.
 2. The input shows **Search orglets or channels…** until you type. Orglets and Channels have separate bracketed headings with counts. While filtering, the count shows matches out of the total, such as **Orglets · 1/5**. Move through them with the Up and Down keys, or type part of a name to narrow the list. Matches stay grouped, with the closest name matches first in each section. Case and Vietnamese accents do not matter: `ke` finds "Kế toán". Press Enter to open the highlighted chat, or Tab to fill in its name. In a short terminal, the list scrolls to keep the selected chat and its section heading visible.
 3. The header shows the chat name, connection, selected model, billing category and your terminal's current directory. This directory does not grant folder access. The app still controls which folder the chat can use. The connection's exact plan tier and thinking effort are not reported; the terminal says so instead of guessing.
 4. The conversation sits above an input between two horizontal rules. Your turns start with **You**; answers start with the orglet's name. Type a message and press Enter. Ctrl+J adds a line; Shift+Enter also works in terminals that report it separately. Paste stays in the draft, including its newlines, until you press Enter to send it.
@@ -125,7 +125,7 @@ Run `orglet` with no command, or `orglet chat`:
 
 Model requests and observed tool calls appear as timestamped rows in the conversation, in the order they started. The current step has a light moving across its words; a finished step folds to one line. Ctrl+O opens or closes completed step details, including a tool target or an explicitly shared Codex reasoning summary, along with long answers and channel member replies. API connections show model request status without invented reasoning. A tool that returned an error says failed; an interrupted tool whose effect is uncertain stays marked outcome unknown. A returned tool call does not mean its requested work succeeded. Native harness steps are shown only when that harness reports them. Short steps are still retained even if they finish between chat polls. This live history belongs to the terminal session; `/read` retrieves saved answers, not transient reasoning. Page Up and Page Down scroll the conversation or an open details panel. Ctrl+G opens agent names, small mascots and connection details; Esc closes the panel. Left on an empty draft returns to the orglet and channel picker with the current chat highlighted. Esc returns to the chat, preserving its draft and transcript. While waiting, switching waits behind earlier queued work. Small terminals use a compact header and keep the input visible.
 
-Interactive chat requires a real connection. If an orglet or any member of its channel still uses Demo, a message is refused before sending. Use `/open` to choose a signed-in CLI or an API/local connection in the app, then `/list` to refresh and choose the chat again. One-shot commands retain their existing Demo support.
+Interactive chat requires a model. If an orglet or any member of its channel has no model connected, a message is refused before sending and the terminal says so. Use `/open` to bring the app forward and connect a signed-in CLI or an API or local connection, then `/list` to refresh and choose the chat again.
 
 Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to `, `/edit ` and `/delete ` offer entity names with orglet mascots or channel icons and connection/model or lead details, instead of repeating the command description on every row. A pasted message with several lines is sent as a message even when its first line starts with `/`.
 
@@ -333,7 +333,7 @@ Forwards one message, the newest answer by default, to up to five orglets' or ch
 
 ### revise
 
-Correct a saved message with `orglet revise "corrected text" --to Researcher --message 3`, or `/revise #3 corrected text` in the terminal chat. Use `/history` or `orglet read --turns 5` to find your message number. This starts a new turn and keeps earlier messages and answers unchanged. It reuses that message’s files, reply reference and plan choice, omitting files no longer allowed; it does not copy a forward’s attribution. Only your own numbered messages can be revised, and a running turn must stop first. `--chat <id>`, `--no-wait`, `--timeout` and `--json` work as with other message commands. If an old message has no saved input, the command reports that its original files cannot be recovered.
+Correct a saved message with `orglet revise "corrected text" --to Researcher --message 3`, or `/revise #3 corrected text` in the terminal chat. Use `/history` or `orglet read --turns 5` to find your message number. This starts a new turn and keeps earlier messages and answers unchanged. It reuses that message’s files, reply reference and plan choice, omitting files no longer allowed; it does not copy a forward’s attribution. Only your own numbered messages can be revised, and a running turn must stop first. `--file <path>` adds files to the new turn, beside the message's own. `--chat <id>`, `--no-wait`, `--timeout` and `--json` work as with other message commands. If an old message has no saved input, the command reports that its original files cannot be recovered.
 
 ### answer
 
@@ -343,7 +343,7 @@ orglet answer 2 --to Researcher
 
 Answers the question an orglet stopped on. A number picks that choice from the list `send` and `read` printed; anything else is sent as your own words, as the desktop's message box does while a question waits. Then the command waits for the turn to go on and prints the answer, like `send`, with the same `--no-wait`, `--timeout` and `--json`.
 
-A question that asks to use an MCP tool is an approval. `answer` refuses it and says to open the chat in the app.
+A question that asks to use an MCP tool is an approval. `answer` refuses it and says to open the chat in the app. `answer` takes no `--file`: the answer has nowhere to carry one. Send the file with `send --file` instead.
 
 ### Stop, pause, resume, retry, continue
 
@@ -374,7 +374,7 @@ orglet side "Try it with the 2025 numbers instead" --to Researcher
 orglet bring --chat 7f3a91c2
 ```
 
-`side` sends a message "in a new thread" from an orglet's main chat, as the app's composer does. The side thread starts with a copy of the main chat's permissions, folder and MCP grants, never more, and the main chat stays as it was. Channels have no side threads. The command waits for the answer like `send`, prints it, and says how to reach the side thread again with `--chat`.
+`side` sends a message "in a new thread" from an orglet's main chat, as the app's composer does, and takes `--file <path>` like `send`. The side thread starts with a copy of the main chat's permissions, folder and MCP grants, never more, and the main chat stays as it was. Channels have no side threads. The command waits for the answer like `send`, prints it, and says how to reach the side thread again with `--chat`.
 
 `bring` copies one answer of a side thread into its main chat as a quote, the latest by default or `--message 2.1`. It never starts a run there.
 
@@ -386,7 +386,11 @@ orglet send "And the budget?" --chat c41d0e88
 orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 ```
 
-`channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. `--space <name>` puts the channel in that space, and `--category <name>` in one of its categories; a space is found by its name or the start of it. With `--name` and no message the channel is only created, as **New channel** in the app does, and no chat starts. In a space `--with` can be left out: the channel then takes every orglet of its category or space and follows that list when it changes. With `--with` it keeps the orglets named. `orglet chats --space <name>` lists only the channels of that space. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
+`channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. `--file <path>` attaches a file to the first message, so it needs a message. `--space <name>` puts the channel in that space, and `--category <name>` in one of its categories; a space is found by its name or the start of it. Without `--space` the channel goes to the space named Channels, which the app keeps for channels that arrive outside every space, and the command says which space it is in. With `--name` and no message the channel is only created, as **New channel** in the app does, and no chat starts. In a space `--with` can be left out: the channel then takes every orglet of its category or space and follows that list when it changes. With `--with` it keeps the orglets named. `orglet chats --space <name>` lists only the channels of that space. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
+
+There is one kind of channel. Its **lead** splits the work and combines the answers, or its orglets **take turns**; `orglet list` and `orglet spaces` say which (`lead Writer`, or `in turn`). A channel with a lead was once a crew, and `orglet create channel`, `edit channel`, `delete channel`, `archive channel` and `restore channel` still change that record: a channel you create that way appears in the space named Channels, and one you edit takes the new name and members. `crew` and `team` are accepted in place of `channel` in those commands, and `group` in place of the `channel` command; none of them appears in the output.
+
+`orglet list` shows every channel under its space, with the channels outside every space last. Inside a space, the channels directly in it come first, then each category in the order the app shows them, and in each place the channels keep the order you gave them in the app, with one you never moved after those you did, newest first. `orglet spaces` and `orglet chats --space <name>` use the same order. With `--json`, `list` has a `channels` list; its `crews` list, the channels with a lead only, is still there for scripts and is going away in a later release.
 
 ### Spaces
 
@@ -429,14 +433,14 @@ eval "$(orglet completion zsh)"
 ### Rename, archive, restore and delete chats
 
 ```sh
-orglet rename --to Researcher --title "Q3 research"
+orglet rename --to Researcher --rename "Q3 research"
 orglet archive --chat 7f3a91c2
 orglet chats --archived
 orglet restore --chat 7f3a91c2
 orglet delete --chat 7f3a91c2 --confirm "Try it with the 2025 numbers instead"
 ```
 
-The same as the chat's menu in the app. An archived chat takes no new message until it is restored; archiving is refused while the chat is working. `restore` takes `--chat`, because an archived chat is no longer an orglet's main chat. `delete` needs the chat's name exactly as `orglet chats` prints it and cannot be undone.
+The same as the chat's menu in the app. `--rename` is the option every command that renames takes (schedules and spaces too); `--title` still works for a chat. An archived chat takes no new message until it is restored; archiving is refused while the chat is working. `restore` takes `--chat`, because an archived chat is no longer an orglet's main chat. `delete` needs the chat's name exactly as `orglet chats` prints it and cannot be undone.
 
 ### Archive and restore orglets and channels
 
@@ -453,7 +457,7 @@ Archiving takes an orglet or channel off the active list, keeping its chats and 
 orglet template research-review --provider openai
 ```
 
-Creates a channel from one of the app's templates (`research-review` or `eris-review`) with its orglets and evidence skill. `--provider demo` gives the new orglets sample replies; `--provider openai` puts them on the OpenAI connection, which must already be set up in the app.
+Creates a channel from one of the app's templates (`research-review` or `eris-review`) with its orglets and evidence skill. `--provider openai` puts the new orglets on the OpenAI connection, which must already be set up in the app. The channel goes to the space named Channels, and the command says so. Choose a model for each orglet in the app if you want one other than the default.
 
 ### open
 
@@ -474,7 +478,7 @@ Starts one of the app's schedules now: its brief goes to its orglet or channel, 
 Any schedule can be started this way. A schedule set to **Only when called** runs in no other way. The schedule must:
 
 - exist. `run` cannot create one (`orglet schedule add` does), and names match the way chat names do.
-- be switched on. A schedule that is off is refused with a message saying so.
+- be switched on. A schedule that is off is refused with a message that says to switch it on with `orglet schedule on "<name>"`.
 - be approved as it is now. If its orglet, channel, skill, model or trigger changed since it was saved, the app refuses and asks you to save it again, the same as for a scheduled run.
 - have finished its previous run. A run still going or waiting for you is refused.
 
@@ -511,7 +515,7 @@ orglet schedule delete "Morning review" --confirm "Morning review"
 | `--off` | With `add`, creates it switched off. |
 | `--rename "<name>"` | With `edit`, a new name. |
 
-A schedule made in the terminal has the name, orglet or channel, brief, timing and limits, and nothing else: no tool permissions, browser, desktop programs, sources, watched folder or working folder. Those are trust decisions, so they are set in the app. Its runs send the brief to the providers of the orglet or channel while you are away, so those providers must already be in the app's **Settings → Allowed providers**; otherwise the command refuses and says which ones. Demo orglets need nothing. An edit keeps everything the app set, and moving a schedule that has any of those settings to another orglet or channel is refused. The app saves the schedule as approved, as the desktop's Save does.
+A schedule made in the terminal has the name, orglet or channel, brief, timing and limits, and nothing else: no tool permissions, browser, desktop programs, sources, watched folder or working folder. Those are trust decisions, so they are set in the app. Its runs send the brief to the providers of the orglet or channel while you are away, so those providers must already be in the app's **Settings → Allowed providers**; otherwise the command refuses and says which ones. An orglet with no model connected needs no provider. An edit keeps everything the app set, and moving a schedule that has any of those settings to another orglet or channel is refused. The app saves the schedule as approved, as the desktop's Save does.
 
 ### Search, Running and the Library
 
@@ -520,14 +524,14 @@ orglet search "contract terms"
 orglet running
 orglet library memory --to Researcher
 orglet memory edit a1b2c3d4 --text "Prefers bullet points" --pin
-orglet memory delete a1b2c3d4 --yes
+orglet memory delete a1b2c3d4 --confirm "Prefers bullet points"
 ```
 
 `search` finds what the app's search finds: every message you wrote, every answer, chat names, and orglet and channel names, ignoring case and accents. It prints the matching names, then one line per chat with its id (for `read --chat`), who wrote the message and the words around the match.
 
 `running` lists every run working, waiting its turn or stopped at a checkpoint, across chats, as the Running view does: the chat's id and name, the orglet, its state, what it waits for (a provider slot, a teammate, an answer, an approval) and its connection. Stop or pause one with `orglet stop --chat <id>`.
 
-`library` lists memories (the default) or `notes`, approved and waiting for review, with `--to` for one orglet's or channel's and `--query` to search them as the Library does. `memory edit <id>` gives an approved memory new text, a pin or no pin, and `memory delete <id> --yes` deletes it for good, as an orglet's Memory tab does. A memory waiting for review is a proposal: approving or dismissing it stays in the desktop, so both commands refuse it.
+`library` lists memories (the default) or `notes`, approved and waiting for review, with `--to` for one orglet's or channel's and `--query` to search them as the Library does. `memory edit <id>` gives an approved memory new text, a pin or no pin, and `memory delete <id> --confirm "<id or text>"` deletes it for good, as an orglet's Memory tab does. `--confirm` takes the memory's id, whole or as the library prints it, or its exact text, the way the other deletes take a name. `--yes` still works as the older way to confirm. A memory waiting for review is a proposal: approving or dismissing it stays in the desktop, so both commands refuse it.
 
 ### usage and models
 
@@ -573,9 +577,11 @@ Messages that come from the app are in the app's language.
 - If an older app refuses the progress option before dispatch, chat retries once without it. The message is sent once, with the older app's usual waiting status.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
 - `react`, `forward`, `control` and `answer` name a chat by its orglet or channel and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
-- `chats`, `side-thread`, `bring`, `group`, `members`, `chat-change`, `archive-entity` and `template` call `startSideThread`, `bringIntoMainChat`, `createTask` with several orglets, `updateTask`, `renameTask`, `archiveTask`, `deleteTask`, `archiveEntity` and `createTemplate`. None of them carries a permission, folder, browser or MCP field; the protocol refuses a request that adds one.
+- `chats`, `side-thread`, `bring`, `channel`, `members`, `chat-change`, `archive-entity` and `template` call `startSideThread`, `bringIntoMainChat`, `createChannel` and then `createTask` for the channel's first message, `updateChannel`, `renameTask`, `archiveTask`, `deleteTask`, `archiveEntity` and `createTemplate`. `channel` without `--space`, and `template`, then call `adoptLooseChannels` with the same word for Channels the window passes, so the new channel is in the space the app keeps for them before its first message runs. `side-thread`, `channel` and `revise` import `--file` paths the way `send` does and pass the source ids on (`sourceIds` of `startSideThread`, `createTask` and `reviseTask`). None of them carries a permission, folder, browser or MCP field; the protocol refuses a request that adds one.
+- `space-change` and `spaces` call `createSpace`, `updateSpace` and `deleteSpace` for a space, and `updateChannel` for a channel moved into or out of one or into a category. `spaces`, `list`, `status` and `chats --space` put channels in the order the window does: the workspace's `channelOrder`, a channel not in it after those that are, newest first, and categories in the order of each space's `categories`.
+- `market` calls `marketCatalog` and `marketInstallations`, and `marketAdd` for `add`. Publishing, moderation and applying an update have no operation here.
 - `schedules`, `schedule-enable`, `schedule-delete` and `schedule-save` read the workspace's routines and call `saveRoutine` and `deleteRoutine`. `schedule-save` has fields for the name, target, brief, timing, limits and a clock or called trigger only; the app fills consent and provider scopes from the target's providers, and refuses providers not in **Settings → Allowed providers** (`providerConsent`). An edit sends the routine's own task back with only the given fields changed.
-- `search`, `running`, `library`, `usage` and `models` read through `searchChats`, the workspace's `running`, `knowledge` and `searchKnowledge`, `harnessUsage` and `modelList`. `memory-edit` and `memory-delete` call `updateMemory` and `deleteMemory`, only for an approved memory, because `updateMemory` approves what it saves. `preferences` sends `settings` with the current theme and connection limit and only the language or theme changed; main then updates its own language as for a save in the window.
+- `search`, `running`, `library`, `usage` and `models` read through `searchChats`, the workspace's `running`, `knowledge` and `searchKnowledge`, `harnessUsage` and `modelList`. `memory-edit` and `memory-delete` call `updateMemory` and `deleteMemory`, only for an approved memory, because `updateMemory` approves what it saves. A delete carries `--confirm` text that the app compares with the memory's id and text, or `--yes`; a request with neither is refused by the protocol. `preferences` sends `settings` with the current theme and connection limit and only the language or theme changed; main then updates its own language as for a save in the window.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
 - Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.

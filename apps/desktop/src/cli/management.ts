@@ -28,7 +28,7 @@ export const ManagementCatalog = z.object({
   providers: z.array(z.object({ id: ProviderId, name: z.string().max(80) }).strict()),
 }).strict();
 export type ManagementCatalog = z.infer<typeof ManagementCatalog>;
-export const ManagementResult = z.object({ kind: z.enum(['worker', 'team']), id: Id, name: z.string().max(80), revision: z.number().int().positive(), deleted: z.boolean().optional() }).strict();
+export const ManagementResult = z.object({ kind: z.enum(['worker', 'team']), id: Id, name: z.string().max(80), revision: z.number().int().positive(), deleted: z.boolean().optional(), space: z.string().max(80).optional() }).strict();
 export type ManagementResult = z.infer<typeof ManagementResult>;
 
 export type ManagementClient = {

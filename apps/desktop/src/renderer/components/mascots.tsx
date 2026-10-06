@@ -26,7 +26,8 @@ export const eyeColor = 'oklch(from currentColor calc(0.25 + 0.73 * clamp(0, (0.
 // The body paint: the shaded gradient inside `Mascot`, the flat avatar colour anywhere the art is drawn bare.
 const body = 'var(--mascot-fill, currentColor)';
 /** The logo's own bubble as a stroked outline, which the desktop cursor draws (`OrgletCursor.tsx`). */
-export const bubbleOutline = 'M23.7 13h16.6a11.7 11.7 0 0 1 11.7 11.7v16.6a11.7 11.7 0 0 1-11.7 11.7H16.5a4.5 4.5 0 0 1-4.5-4.5V24.7a11.7 11.7 0 0 1 11.7-11.7z';
+// It is the app icon's outline (assets/icon.svg) on the 64 grid: bowed sides and one tight corner at the bottom left.
+export const bubbleOutline = 'M32 13C45.24 13 52 19.76 52 33S45.24 53 32 53H19.32C14.82 53 12 50.18 12 45.68V33C12 19.76 18.76 13 32 13z';
 
 // The eyes: two upright capsules, high on the body and a little to the right, the way Grok's bots look. One group
 // so a blink squashes both and a glance moves both (`.mascot-eyes`).

@@ -81,6 +81,9 @@ export class CliLibrary {
   async deleteMemory(request: Request<'memory-delete'>): Promise<LibraryValue> {
     const workspace = await this.workspace();
     const memory = approvedMemory(workspace, request.id);
+    if (!request.confirmed && !confirmsMemory(memory, request.confirm)) {
+      throw new CliFailure('failed', 'Gõ đúng mã hoặc nội dung của ghi nhớ trong --confirm để xác nhận xóa.');
+    }
     await this.dependencies.request('deleteMemory', { id: memory.id });
     return { items: [libraryRow(workspace, memory)] };
   }
@@ -129,6 +132,14 @@ function approvedMemory(workspace: Workspace, prefix: string): Knowledge {
   if (matches.length === 0) throw new CliFailure('not_found', `Không có ghi nhớ nào có mã "${wanted}". Lệnh orglet library memory liệt kê chúng.`);
   if (matches[0].status !== 'approved') throw new CliFailure('failed', 'Ghi nhớ này đang chờ duyệt. Duyệt hoặc bỏ nó trong Thư viện của app.');
   return matches[0];
+}
+
+/** Whether what was typed to confirm a delete is the memory's id (whole, or as the terminal prints it) or its exact text. */
+function confirmsMemory(memory: Knowledge, typed: string | undefined): boolean {
+  if (typed === undefined) return false;
+  const wanted = typed.trim();
+  const idMatches = [memory.id, memory.id.slice(0, SHORT_ID_LENGTH)].some(id => id.toLowerCase() === wanted.replace(/^#/, '').toLowerCase());
+  return idMatches || wanted === memory.content.trim();
 }
 
 function orgletProvider(workspace: Workspace, to: string | undefined): ProviderId {

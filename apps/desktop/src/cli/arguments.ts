@@ -34,12 +34,12 @@ export type ParsedCommand =
   | ({ kind: 'react'; emoji: Reaction; active: boolean; message?: string; json: boolean } & ChatTarget)
   | ({ kind: 'forward'; targets: string[]; message?: string; note?: string; json: boolean } & ChatTarget)
   | ({ kind: 'control'; action: ChatControl; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
-  | ({ kind: 'revise'; text: string; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
+  | ({ kind: 'revise'; text: string; message: string; files?: string[]; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | ({ kind: 'answer'; answer: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | { kind: 'chats'; archived: boolean; space?: string; json: boolean }
-  | ({ kind: 'side'; message: string; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
+  | ({ kind: 'side'; message: string; files?: string[]; wait: boolean; timeoutSeconds: number; json: boolean } & ChatTarget)
   | { kind: 'bring'; chat: string; message?: string; json: boolean }
-  | { kind: 'channel'; names: string[]; message?: string; name?: string; topic?: string; space?: string; category?: string; wait: boolean; timeoutSeconds: number; json: boolean }
+  | { kind: 'channel'; names: string[]; message?: string; files?: string[]; name?: string; topic?: string; space?: string; category?: string; wait: boolean; timeoutSeconds: number; json: boolean }
   | { kind: 'members'; chat: string; names: string[]; json: boolean }
   | ({ kind: 'chat-change'; change: ChatChange; title?: string; confirmName?: string; json: boolean } & ChatTarget)
   | { kind: 'archive-entity'; entity: 'worker' | 'team'; name: string; archived: boolean; json: boolean }
@@ -56,7 +56,7 @@ export type ParsedCommand =
   | { kind: 'running'; space?: string; json: boolean }
   | { kind: 'library'; library: 'memory' | 'note'; query?: string; owner?: string; json: boolean }
   | { kind: 'memory-edit'; id: string; text?: string; pinned?: boolean; json: boolean }
-  | { kind: 'memory-delete'; id: string; json: boolean }
+  | { kind: 'memory-delete'; id: string; confirm?: string; json: boolean }
   | { kind: 'usage'; refresh: boolean; json: boolean }
   | { kind: 'models'; provider?: ProviderId; to?: string; refresh: boolean; json: boolean }
   | { kind: 'preferences'; language?: 'vi' | 'en' | 'en-GB'; theme?: 'system' | 'light' | 'dark'; json: boolean }
@@ -74,6 +74,11 @@ export const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 
 const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule', 'library', 'models'];
 /** Commands that name a chat with --chat, by the start of its id. */
 const CHAT_ID_COMMANDS: readonly CommandName[] = ['send', 'read', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'bring', 'members', 'rename', 'archive', 'restore', 'delete'];
+/**
+ * Commands whose message takes files with --file. `answer` is not one: the core's answer command has no field for
+ * sources, so there is nowhere to put a file.
+ */
+const FILE_COMMANDS: readonly CommandName[] = ['send', 'run', 'side', 'channel', 'group', 'revise'];
 /** Commands that start a turn and wait for it, so --no-wait and --timeout apply. */
 const WAITING_COMMANDS: readonly CommandName[] = ['send', 'answer', 'revise', 'resume', 'retry', 'continue', 'side', 'channel', 'group'];
 
@@ -134,6 +139,10 @@ Commands:
 Commands that name a chat with --to also take --chat <id>, the start of a chat's
 id as "orglet chats" prints it, for side threads, channels and older chats.
 
+A channel with a lead who splits the work was once called a crew. The older names
+still work as input: crew and team for channel in create, edit, delete, archive
+and restore, and group for the channel command.
+
 Options:
   -h, --help       Show help. "orglet <command> --help" shows a command's options.
   -v, --version    Show the version of this command
@@ -142,14 +151,19 @@ Exit codes: 0 ok, 1 failure, 2 usage error, 3 app not reachable.`;
 
 /** The help of `orglet channel` and of `orglet group`, its older name (COD-361). */
 function channelHelp(command: 'channel' | 'group'): string {
-  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\nVới --space, kênh nằm trong không gian đó; bỏ --with thì kênh nhận mọi Tí\ncủa không gian hoặc của mục. Bỏ tin nhắn và đặt --name thì chỉ tạo kênh.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --space <tên>        Không gian chứa kênh\n  --category <tên>     Mục của không gian đó chứa kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
+  return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\nVới --space, kênh nằm trong không gian đó; bỏ --with thì kênh nhận mọi Tí\ncủa không gian hoặc của mục. Bỏ tin nhắn và đặt --name thì chỉ tạo kênh.\nKhông có --space, kênh vào không gian dành cho các kênh, tên là Kênh.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --space <tên>        Không gian chứa kênh\n  --category <tên>     Mục của không gian đó chứa kênh\n  --file <đường dẫn>   Đính một tệp vào tin nhắn đầu tiên; lặp lại cho nhiều tệp\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
+}
+
+/** What `<orglet|channel>` also accepts, said in the help of every command that takes it. */
+function withEntityAliases(help: string): string {
+  return `${help}\n\n${t("crew và team vẫn dùng được thay cho channel (tên cũ).")}`;
 }
 
 export const COMMAND_HELP: Record<CommandName, string> = {
   config: t("Cách dùng: orglet config [--json]\n\nHiện cấu hình có thể sửa, ID, phiên bản, skill và tên kết nối.\nKhông bao gồm khóa hay quyền truy cập."),
-  create: t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nHội cần name, instructions, memberIds, synthesizerId, workflow và monthlyBudgetMicros.\nGiới hạn là số nguyên phần triệu USD."),
-  edit: t("Cách dùng: orglet edit <orglet|channel> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nTrong TUI, /edit mở thiết lập của chat đang chọn."),
-  delete: `${t("Cách dùng: orglet delete <orglet|channel> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nKênh, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`,
+  create: withEntityAliases(t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nKênh cần name, instructions, memberIds, synthesizerId, workflow và monthlyBudgetMicros.\nGiới hạn là số nguyên phần triệu USD.")),
+  edit: withEntityAliases(t("Cách dùng: orglet edit <orglet|channel> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nTrong TUI, /edit mở thiết lập của chat đang chọn.")),
+  delete: withEntityAliases(`${t("Cách dùng: orglet delete <orglet|channel> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nKênh, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`),
   chat: `Usage: orglet chat [--to <name>]
 
 Opens a chat in this terminal. Pick an orglet or channel with the arrow keys or by
@@ -211,17 +225,17 @@ Example:
   react: t("Cách dùng: orglet react <cảm xúc> --to <tên> [--message <số>] [--off] [--json]\n\nThả cảm xúc lên một tin nhắn, như nút cảm xúc trong app. Mỗi tin có một cảm\nxúc của bạn; cảm xúc mới thay cái cũ. Tí đọc cảm xúc ở lượt sau.\nCảm xúc: {0}.\n\nTùy chọn:\n  --to <tên>         Tí hoặc kênh (bắt buộc)\n  --message <số>     Tin nhắn theo số của read --turns, như 3 hoặc 3.1;\n                     mặc định là câu trả lời mới nhất\n  --off              Gỡ cảm xúc này\n  --json             In JSON cho máy đọc", Reaction.options.join(', ')),
   forward: t("Cách dùng: orglet forward --to <tên> --target <tên> [--target <tên>] [tùy chọn]\n\nChuyển tiếp một tin nhắn sang chat của Tí hoặc kênh khác, như tin của chính\nbạn, tối đa {0} nơi. Mỗi nơi nhận nó như một lượt mới và trả lời. Tệp chỉ\nđi kèm tên; đính tệp thật trong app.\n\nTùy chọn:\n  --to <tên>         Chat có tin nhắn (bắt buộc)\n  --target <tên>     Nơi nhận; lặp lại để gửi nhiều nơi\n  --message <số>     Tin nhắn theo số của read --turns; mặc định là câu trả\n                     lời mới nhất\n  --note <chữ>       Lời nhắn kèm theo\n  --json             In JSON cho máy đọc", MAX_FORWARD_TARGETS),
   answer: t("Cách dùng: orglet answer \"<câu trả lời>\" --to <tên> [--no-wait] [--timeout <giây>] [--json]\n\nTrả lời câu hỏi Tí đang chờ, rồi đợi lượt chạy tiếp như send. Gõ số của một\nlựa chọn (1, 2, 3) hoặc câu của bạn. read và send in câu hỏi cùng các lựa\nchọn. Câu hỏi xin quyền dùng công cụ MCP chỉ trả lời được trong app.\n\nTùy chọn:\n  --to <tên>           Tí hoặc kênh (bắt buộc)\n  --no-wait            Trả về ngay sau khi trả lời\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
-  revise: t('Cách dùng: orglet revise "<chữ đã sửa>" --to <tên> --message <số> [--no-wait] [--timeout <giây>] [--json]\n\nSửa tin nhắn của bạn và chạy một lượt mới với tệp gốc còn được phép dùng.\nLịch sử cũ giữ nguyên. Chờ lượt đang chạy dừng trước khi sửa. Dùng --chat <mã> để chọn chat theo mã.'),
+  revise: t('Cách dùng: orglet revise "<chữ đã sửa>" --to <tên> --message <số> [--file <đường dẫn>] [--no-wait] [--timeout <giây>] [--json]\n\nSửa tin nhắn của bạn và chạy một lượt mới với tệp gốc còn được phép dùng.\nLịch sử cũ giữ nguyên. Chờ lượt đang chạy dừng trước khi sửa. Dùng --chat <mã> để chọn chat theo mã.\nVới --file, các tệp đó được đính thêm vào lượt mới, cạnh tệp gốc.'),
   ...controlHelp(),
   chats: t("Cách dùng: orglet chats [--archived] [--space <tên>] [--json]\n\nLiệt kê chat, mới nhất trước: chat chính của Tí và kênh, chat phụ, kênh và lần\nchạy của lịch, mỗi chat có mã ngắn. Dùng mã với --chat trong các lệnh khác.\n\nTùy chọn:\n  --archived     Chỉ liệt kê chat đã lưu trữ\n  --space <tên>  Chỉ liệt kê kênh của không gian này\n  --json         In JSON cho máy đọc"),
-  side: t("Cách dùng: orglet side \"<tin nhắn>\" --to <tên Tí> [--no-wait] [--timeout <giây>] [--json]\n\nGửi tin trong một chat phụ mới của Tí, như \"Gửi trong luồng mới\" trong app.\nChat phụ mang quyền, thư mục và MCP của chat chính, không bao giờ rộng hơn.\nChat chính giữ nguyên. Lệnh in mã của chat phụ để nhắn tiếp bằng --chat.\n\nTùy chọn:\n  --to <tên>           Tí có chat chính (hoặc --chat <mã> của chat đó)\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
+  side: t("Cách dùng: orglet side \"<tin nhắn>\" --to <tên Tí> [--file <đường dẫn>] [--no-wait] [--timeout <giây>] [--json]\n\nGửi tin trong một chat phụ mới của Tí, như \"Gửi trong luồng mới\" trong app.\nChat phụ mang quyền, thư mục và MCP của chat chính, không bao giờ rộng hơn.\nChat chính giữ nguyên. Lệnh in mã của chat phụ để nhắn tiếp bằng --chat.\n\nTùy chọn:\n  --to <tên>           Tí có chat chính (hoặc --chat <mã> của chat đó)\n  --file <đường dẫn>   Đính một tệp vào tin này; lặp lại cho nhiều tệp\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {0})\n  --json               In JSON cho máy đọc", DEFAULT_WAIT_SECONDS),
   bring: t("Cách dùng: orglet bring --chat <mã chat phụ> [--message <số>] [--json]\n\nĐưa một câu trả lời của chat phụ vào chat chính dưới dạng trích dẫn. Không\nchạy lượt mới nào. Mặc định là câu trả lời mới nhất.\n\nTùy chọn:\n  --chat <mã>        Chat phụ (bắt buộc)\n  --message <số>     Câu trả lời theo số của read --turns, như 2.1\n  --json             In JSON cho máy đọc"),
   channel: channelHelp('channel'),
   group: channelHelp('group'),
   members: t("Cách dùng: orglet members --chat <mã> --with <tên> [--with <tên>] [--json]\n\nĐổi thành viên của một kênh, từ tin nhắn sau. Thay cả danh sách. Thành viên là\nTí hoặc kênh; một kênh trả lời bằng các Tí của nó.\n\nTùy chọn:\n  --chat <mã>      Kênh (bắt buộc)\n  --with <tên>     Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --json           In JSON cho máy đọc"),
-  rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --title \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc kênh không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc kênh\n  --chat <mã>        Chat theo mã của orglet chats\n  --title <tên>      Tên mới (bắt buộc)\n  --json             In JSON cho máy đọc"),
-  archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay kênh. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay kênh đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc kênh\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
-  restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay kênh đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
+  rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --rename \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc kênh không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc kênh\n  --chat <mã>        Chat theo mã của orglet chats\n  --rename <tên>     Tên mới (bắt buộc)\n  --title <tên>      Tên cũ của --rename\n  --json             In JSON cho máy đọc"),
+  archive: withEntityAliases(t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay kênh. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay kênh đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc kênh\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc")),
+  restore: withEntityAliases(t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay kênh đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc")),
   spaces: t("Cách dùng: orglet spaces [--json]\n\nLiệt kê không gian: Tí trong đó, rồi từng kênh với nhóm của nó và những Tí ở trong kênh."),
   space: t("Cách dùng: orglet space add \"<tên>\" --with <Tí> [--with <Tí>]\n       orglet space edit \"<tên>\" [--rename <tên mới>] [--with <Tí> ...]\n       orglet space category \"<tên>\" --category <tên mục> [--rename <tên mới>] [--with <Tí> ...]\n       orglet space uncategory \"<tên>\" --category <tên mục>\n       orglet space move \"<tên>\" (--chat <mã> | --name <tên kênh>) [--category <tên mục>]\n       orglet space out (--chat <mã> | --name <tên kênh>)\n       orglet space delete \"<tên>\" --confirm \"<tên đầy đủ>\"\n\nTạo và sửa không gian như trong app. edit với --with thay toàn bộ danh sách Tí\ncủa không gian. category thêm một mục, hoặc đổi tên mục đã có và đặt các Tí riêng\ncủa nó; uncategory xóa mục và giữ các kênh trong không gian. move đưa một kênh vào\nkhông gian hoặc một mục của nó, out đưa kênh ra ngoài mọi không gian. Kênh chưa có\ntin nhắn thì chỉ bằng --name. Xóa không gian thì các kênh của nó vẫn còn.\nLệnh này không đặt quyền hay thư mục.\n\nTùy chọn:\n  --with <Tí>          Một Tí của không gian; lặp lại cho nhiều Tí\n  --rename <tên>       Tên mới của không gian\n  --category <tên>     Mục cần thêm, hoặc mục nhận kênh\n  --chat <mã>          Mã của kênh, như orglet chats in ra\n  --name <tên kênh>    Tên của kênh, thay cho --chat\n  --confirm <tên>      Tên đầy đủ của không gian cần xóa\n  --json               In JSON cho máy đọc"),
   completion: t("Cách dùng: orglet completion <powershell|bash|zsh>\n\nIn đoạn mã tự hoàn thành cho shell đó: tên lệnh trước, rồi tên tùy chọn. Đoạn mã\nkhông hỏi app và không chứa tên Tí, chat hay không gian nào.\n\n  PowerShell   orglet completion powershell | Out-String | Invoke-Expression\n  bash         eval \"$(orglet completion bash)\"\n  zsh          eval \"$(orglet completion zsh)\"\n\nĐặt dòng đó vào tệp khởi động của shell để dùng mỗi lần mở."),
@@ -231,11 +245,11 @@ Example:
   search: t("Cách dùng: orglet search \"<từ cần tìm>\" [--json]\n\nTìm trong mọi tin nhắn, câu trả lời, tên chat, Tí và kênh, như ô tìm kiếm của app.\nKhông phân biệt hoa thường hay dấu. In mã chat để đọc bằng orglet read --chat.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
   running: t("Cách dùng: orglet running [--json]\n\nMọi lượt đang chạy, đang chờ đến lượt hoặc dừng ở checkpoint, trên mọi chat,\nnhư mục Đang chạy của app, kèm điều mỗi lượt đang chờ.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
   library: t("Cách dùng: orglet library [memory|notes] [--to <tên>] [--query <từ>] [--json]\n\nGhi nhớ (mặc định) hoặc ghi chú trong Thư viện, kể cả mục đang chờ duyệt.\nDuyệt hay bỏ mục đang chờ trong app.\n\nTùy chọn:\n  --to <tên>       Chỉ của Tí hoặc kênh này\n  --query <từ>     Tìm như ô tìm kiếm của Thư viện\n  --json           In JSON cho máy đọc"),
-  memory: t("Cách dùng: orglet memory edit <mã> [--text \"<nội dung>\"] [--pin|--unpin] [--json]\n       orglet memory delete <mã> --yes [--json]\n\nSửa, ghim hoặc xóa một ghi nhớ đã duyệt, như tab Ghi nhớ của Tí. Sửa tạo bản\nmới; xóa là vĩnh viễn. Ghi nhớ đang chờ duyệt chỉ duyệt được trong app.\n\nTùy chọn:\n  --text <nội dung>  Nội dung mới, tối đa {0} ký tự\n  --pin, --unpin     Ghim hoặc bỏ ghim\n  --yes              Xác nhận xóa\n  --json             In JSON cho máy đọc", MEMORY_TEXT_LIMIT),
+  memory: t("Cách dùng: orglet memory edit <mã> [--text \"<nội dung>\"] [--pin|--unpin] [--json]\n       orglet memory delete <mã> --confirm \"<mã hoặc nội dung>\" [--json]\n\nSửa, ghim hoặc xóa một ghi nhớ đã duyệt, như tab Ghi nhớ của Tí. Sửa tạo bản\nmới; xóa là vĩnh viễn. Ghi nhớ đang chờ duyệt chỉ duyệt được trong app.\n\nTùy chọn:\n  --text <nội dung>  Nội dung mới, tối đa {0} ký tự\n  --pin, --unpin     Ghim hoặc bỏ ghim\n  --confirm <chữ>    Xác nhận xóa: gõ mã của ghi nhớ hoặc đúng nội dung của nó\n  --yes              Tên cũ của việc xác nhận xóa, khi không gõ gì\n  --json             In JSON cho máy đọc", MEMORY_TEXT_LIMIT),
   usage: t("Cách dùng: orglet usage [--refresh] [--json]\n\nMức dùng gói của các tài khoản CLI đã đăng nhập (Claude Code, Codex, Cursor\nAgent, Gemini CLI), như Cài đặt. Email chỉ hiện một phần.\n\nTùy chọn:\n  --refresh    Đọc lại ngay thay vì dùng số vừa đọc\n  --json       In JSON cho máy đọc"),
   models: t("Cách dùng: orglet models <provider> | --to <tên Tí> [--refresh] [--json]\n\nCác model một kết nối cung cấp, như danh sách model khi sửa Tí.\n\nTùy chọn:\n  --to <tên>     Dùng kết nối của Tí này\n  --refresh      Tải lại danh sách\n  --json         In JSON cho máy đọc"),
   preferences: t("Cách dùng: orglet preferences [--language vi|en|en-GB] [--theme system|light|dark] [--json]\n\nHiện hoặc đổi ngôn ngữ và giao diện của app. Các cài đặt khác ở trong app.\n\nTùy chọn:\n  --language <mã>    Ngôn ngữ của app\n  --theme <kiểu>     Giao diện sáng, tối hoặc theo hệ thống\n  --json             In JSON cho máy đọc"),
-  template: t("Cách dùng: orglet template <{0}> --provider <demo|openai> [--json]\n\nTạo một kênh từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: demo cho câu trả lời mẫu, openai cho kết nối OpenAI đã\nthiết lập trong app.\n\nTùy chọn:\n  --provider <tên>   demo hoặc openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
+  template: t("Cách dùng: orglet template <{0}> --provider openai [--json]\n\nTạo một kênh từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: openai là kết nối OpenAI đã thiết lập trong app. Chọn\nmodel cho từng Tí trong app nếu cần.\n\nTùy chọn:\n  --provider <tên>   openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
   open: `Usage: orglet open [--to <name>]
 
 Brings the Orglet window forward. With --to, opens that chat.
@@ -360,7 +374,7 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
   { option: '--yes', given: options => options.yes, commands: ['memory'] },
   { option: '--refresh', given: options => options.refresh, commands: ['usage', 'models', 'market'] },
   ...LIBRARY_OPTIONS.map(([option, key, command]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: [command] })),
-  ...SCHEDULE_OPTIONS.map(([option, key]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: (key === 'rename' ? ['schedule', 'space'] : ['schedule']) as readonly CommandName[] })),
+  ...SCHEDULE_OPTIONS.map(([option, key]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: (key === 'rename' ? ['schedule', 'space', 'rename'] : ['schedule']) as readonly CommandName[] })),
   { option: '--with', given: options => options.members.length > 0, commands: ['channel', 'group', 'members', 'space'] },
   { option: '--name', given: options => options.channelName !== undefined, commands: ['channel', 'group', 'space'] },
   { option: '--topic', given: options => options.topic !== undefined, commands: ['channel', 'group'] },
@@ -469,11 +483,11 @@ function extraPositionals(command: CommandName, options: Options): string[] {
 /** Options that only one command understands, so `orglet list --file x` is a mistake rather than ignored. */
 function rejectForeignOptions(command: CommandName, options: Options): void {
   if (!['create', 'edit'].includes(command) && options.config !== undefined) throw new UsageError('--config belongs to "orglet create" and "orglet edit".');
-  if (command !== 'delete' && command !== 'schedule' && command !== 'space' && options.confirm !== undefined) throw new UsageError('--confirm belongs to "orglet delete" and "orglet schedule delete".');
+  if (!['delete', 'schedule', 'space', 'memory'].includes(command) && options.confirm !== undefined) throw new UsageError('--confirm belongs to the commands that delete: "orglet delete", "orglet schedule delete", "orglet space delete" and "orglet memory delete".');
   const waitOptions = !options.wait || options.timeout !== undefined;
   if (!WAITING_COMMANDS.includes(command) && waitOptions) throw new UsageError('--no-wait and --timeout belong to commands that wait for an answer, such as "orglet send".');
-  const takesFiles = command === 'send' || command === 'run';
-  if (!takesFiles && options.files.length > 0) throw new UsageError('--file belongs to "orglet send" and "orglet run".');
+  const takesFiles = FILE_COMMANDS.includes(command);
+  if (!takesFiles && options.files.length > 0) throw new UsageError(`--file belongs to the commands that send a message: ${FILE_COMMANDS.map(name => `"orglet ${name}"`).join(', ')}.`);
   if (!CHAT_COMMANDS.includes(command) && options.to !== undefined) throw new UsageError(`"orglet ${command}" does not take --to.`);
   for (const owner of CHAT_OPTION_OWNERS) {
     if (owner.given(options) && !owner.commands.includes(command)) throw new UsageError(`"orglet ${command}" does not take ${owner.option}.`);
@@ -601,6 +615,12 @@ function parseRun(options: Options): ParsedCommand {
   return { kind: 'run', schedule, files: options.files, json: options.json };
 }
 
+/** The files of a message that takes them as an option, kept out of the command when there are none. */
+function filesOf(options: Options): { files?: string[] } {
+  if (options.files.length > MAX_FILES) throw new UsageError(`Attach at most ${MAX_FILES} files.`);
+  return options.files.length > 0 ? { files: options.files } : {};
+}
+
 function parseSend(options: Options): ParsedCommand {
   const message = options.positionals[1]?.trim();
   if (!message) throw new UsageError('"orglet send" needs a message, for example: orglet send "Hello" --to Researcher');
@@ -652,7 +672,7 @@ function parseRevise(options: Options): ParsedCommand {
   const text = options.positionals[1]?.trim();
   const message = UserMessageRef.safeParse(options.message);
   if (!text || !message.success) throw new UsageError(t('Gõ orglet revise \"chữ đã sửa\" --to Researcher --message 3. Chỉ sửa được tin nhắn của bạn.'));
-  return { kind: 'revise', text, message: message.data, ...requireTarget('revise', options), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
+  return { kind: 'revise', text, message: message.data, ...requireTarget('revise', options), ...filesOf(options), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
 }
 
 function parseAnswer(options: Options): ParsedCommand {
@@ -668,7 +688,7 @@ function parseControl(action: ChatControl, options: Options): ParsedCommand {
 function parseSide(options: Options): ParsedCommand {
   const message = options.positionals[1]?.trim();
   if (!message) throw new UsageError(t("Gõ tin nhắn cho chat phụ, ví dụ: orglet side \"Thử cách khác\" --to Researcher"));
-  return { kind: 'side', message, ...requireTarget('side', options), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
+  return { kind: 'side', message, ...requireTarget('side', options), ...filesOf(options), wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json };
 }
 
 function parseBring(options: Options): ParsedCommand {
@@ -694,11 +714,12 @@ function parseChannel(command: 'channel' | 'group', options: Options): ParsedCom
   const category = options.category?.trim();
   if (options.space !== undefined && !space) throw new UsageError(t("Gõ tên không gian sau --space."));
   if (options.category !== undefined && !category) throw new UsageError(t("Gõ tên mục sau --category."));
+  if (options.files.length > 0 && !message) throw new UsageError(t("Tệp đi kèm tin nhắn đầu tiên của kênh. Gõ tin nhắn, hoặc bỏ --file."));
   if (category && !space) throw new UsageError(t("--category cần --space <tên không gian>."));
   // In a space a channel with no --with takes every orglet of its place.
   const names = space && !options.members.some(member => member.trim()) ? [] : memberNames(options);
   return {
-    kind: 'channel', names, ...(message ? { message } : {}), ...(name ? { name } : {}), ...(topic ? { topic } : {}),
+    kind: 'channel', names, ...(message ? { message } : {}), ...filesOf(options), ...(name ? { name } : {}), ...(topic ? { topic } : {}),
     ...(space ? { space } : {}), ...(category ? { category } : {}),
     wait: options.wait, timeoutSeconds: parseTimeout(options.timeout), json: options.json,
   };
@@ -708,9 +729,11 @@ function parseMembers(options: Options): ParsedCommand {
   return { kind: 'members', chat: requireChatId('members', options.chat), names: memberNames(options), json: options.json };
 }
 
+/** `--rename` is the one every command that renames takes; `--title` is the older spelling here. */
 function parseRename(options: Options): ParsedCommand {
-  const title = options.title?.trim();
-  if (!title) throw new UsageError(t("Đổi tên cần --title \"<tên mới>\"."));
+  if (options.title !== undefined && options.rename !== undefined) throw new UsageError(t("Chọn --rename hoặc --title, không phải cả hai."));
+  const title = (options.rename ?? options.title)?.trim();
+  if (!title) throw new UsageError(t("Đổi tên cần --rename \"<tên mới>\"."));
   return { kind: 'chat-change', change: 'rename', ...requireTarget('rename', options), title, json: options.json };
 }
 
@@ -738,7 +761,8 @@ function parseArchive(command: 'archive' | 'restore', options: Options): ParsedC
 function parseTemplate(options: Options): ParsedCommand {
   const templateId = TEMPLATE_IDS.find(id => id === options.positionals[1]);
   if (!templateId) throw new UsageError(t("Chọn một mẫu: {0}.", TEMPLATE_IDS.join(', ')));
-  if (options.provider !== 'demo' && options.provider !== 'openai') throw new UsageError(t("Mẫu cần --provider demo hoặc --provider openai."));
+  // `demo` stays accepted for the tests and smokes that run with sample replies; nothing offers it to a person.
+  if (options.provider !== 'demo' && options.provider !== 'openai') throw new UsageError(t("Mẫu cần --provider openai."));
   return { kind: 'template', templateId, provider: options.provider, json: options.json };
 }
 
@@ -890,11 +914,13 @@ function parseMemory(options: Options): ParsedCommand {
   if (!id || !ChatId.safeParse(id).success) throw new UsageError(t("Gõ mã ghi nhớ như orglet library memory in ra."));
   const memoryId = id.replace(/^#/, '');
   if (verb === 'delete') {
-    if (options.text !== undefined || options.pin || options.unpin) throw new UsageError(t("orglet memory delete chỉ nhận mã và --yes."));
-    if (!options.yes) throw new UsageError(t("Xóa ghi nhớ là vĩnh viễn. Thêm --yes để xác nhận."));
-    return { kind: 'memory-delete', id: memoryId, json: options.json };
+    if (options.text !== undefined || options.pin || options.unpin) throw new UsageError(t("orglet memory delete chỉ nhận mã và --confirm."));
+    if (options.yes && options.confirm !== undefined) throw new UsageError(t("Chọn --confirm hoặc --yes, không phải cả hai."));
+    if (!options.yes && !options.confirm?.trim()) throw new UsageError(t("Xóa ghi nhớ là vĩnh viễn. Thêm --confirm \"<mã hoặc nội dung>\" để xác nhận."));
+    return { kind: 'memory-delete', id: memoryId, ...(options.confirm?.trim() ? { confirm: options.confirm.trim() } : {}), json: options.json };
   }
   if (options.yes) throw new UsageError('--yes belongs to "orglet memory delete".');
+  if (options.confirm !== undefined) throw new UsageError('--confirm belongs to "orglet memory delete".');
   if (options.pin && options.unpin) throw new UsageError(t("Chọn --pin hoặc --unpin, không phải cả hai."));
   const text = options.text?.trim() ? { text: options.text.trim() } : {};
   const pinned = options.pin ? { pinned: true } : options.unpin ? { pinned: false } : {};

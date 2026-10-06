@@ -825,6 +825,8 @@ async function start() {
   handle('orglet:update-state', async () => updater.state);
   handle('orglet:check-for-updates', async () => updater.check());
   handle('orglet:install-update', async () => { updater.install(); });
+  // The person's own Exit, from their menu: the same quit as closing the last window, so before-quit runs as usual.
+  handle('orglet:quit', async () => { app.quit(); });
   handle('orglet:pick', async () => {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn nguồn: text 256 KB; CSV, JSONL, Parquet 32 MB; ảnh 20 MB; âm thanh 50 MB; video, PDF 200 MB'), properties: ['openFile', 'multiSelections'], filters: [
       { name: 'Sources, datasets and media', extensions: [...TEXT_SOURCE_EXTENSIONS, ...MEDIA_SOURCE_EXTENSIONS] },

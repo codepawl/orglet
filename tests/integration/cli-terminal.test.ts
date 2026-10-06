@@ -45,6 +45,9 @@ describe('orglet faces', () => {
     const eyeColumns = cells[1].flatMap((cell, column) => (cell.background === LIGHT_EYE_COLOR ? [column] : []));
     expect(eyeColumns).toEqual([4, 6]);
     expect(cells[1][5].background).toBe(BLUE);
+    // Each eye leans to the right, as the logo's do: its upper pixel is one column right of its lower one.
+    expect(cells[1][4]).toEqual({ character: '▀', foreground: BLUE, background: LIGHT_EYE_COLOR });
+    expect(cells[1][5]).toEqual({ character: '▀', foreground: LIGHT_EYE_COLOR, background: BLUE });
     // No mouth: every cell below the eyes is body or empty.
     expect(cells.slice(2).flat().every(cell => cell.background === undefined || cell.background === BLUE)).toBe(true);
     // The bottom left corner is square (the bubble's tail); the bottom right is round.
@@ -82,7 +85,7 @@ describe('orglet faces', () => {
     expect(faceCells('not a colour', 'open')[2][0].background).toBe(NEUTRAL_COLOR);
     expect(renderMiniFace(BLUE, 'truecolor')).toContain('\x1b[38;2;79;127;224m▐');
     expect(renderFace(BLUE, 'open', 'ansi256').join('')).toMatch(/\x1b\[48;5;\d+m/);
-    expect(stripAnsi(renderFace(BLUE, 'open', 'truecolor')[0])).toBe(' ▄      ▄ ');
+    expect(stripAnsi(renderFace(BLUE, 'open', 'truecolor')[0])).toBe(' ▄▄    ▄▄ ');
   });
 });
 
@@ -211,7 +214,7 @@ describe('orglet chat picker', () => {
       ['Researcher', 'demo', [BLUE]],
       ['Writer', 'openai/gpt-5', [PURPLE]],
       ['Kế toán', 'anthropic', [GREEN]],
-      ['Review crew', 'crew · lead Writer', [BLUE, GREEN, PURPLE]],
+      ['Review crew', 'lead Writer  Researcher, Kế toán', [BLUE, GREEN, PURPLE]],
     ]);
     expect(entries[3].color).toBe(PURPLE);
     const older = entriesFromList({ orglets: [{ name: 'Researcher', provider: 'demo' }], crews: [{ name: 'Crew', lead: 'Researcher', members: ['Researcher', 'Ghost'] }] });
@@ -357,7 +360,7 @@ describe('orglet chat session', () => {
     expect(result.sent).toEqual([{ to: 'Writer', message: 'hi' }, { to: 'Review crew', message: 'all good?' }]);
     const transcript = result.transcript;
     expect(transcript).toContain('Open › wri\nWriter  openai/gpt-5\n');
-    expect(transcript).toContain('Review crew  crew · lead Writer');
+    expect(transcript).toContain('Review crew  lead Writer  Researcher, Kế toán');
     // A crew answer prints under each member's name.
     expect(transcript).toContain('Researcher · 0s\n  Two sources.\n\nWriter\n  Crew says: all good?');
     expect(transcript).toContain('› /read\nResearcher\n  Two sources.\n\nWriter\n  Crew says: earlier');
@@ -381,7 +384,7 @@ describe('orglet chat session', () => {
     expect(plain).toContain('Nothing matches "zzz".');
     expect(plain).toContain('▐^^▌ Researcher · 0s');
     // The chat header is the big face with the name beside it.
-    expect(plain).toMatch(/ ▄      ▄ \n.{10} {3}Researcher\n.{10} {3}demo\n/);
+    expect(plain).toMatch(/ ▄▄    ▄▄ \n.{10} {3}Researcher\n.{10} {3}demo\n/);
     expect(result.transcript).toContain('\x1b[1;38;2;79;127;224mResearcher');
   });
 });
@@ -442,7 +445,9 @@ describe('orglet colours from the app', () => {
     const workspace = { workers, teams, tasks: [] } as unknown as Workspace;
     const operations = new CliOperations({ request: async () => workspace, version: () => '1', open: () => undefined, translate: message => message });
     expect(await operations.list()).toEqual({
-      orglets: [{ name: 'Researcher', provider: 'demo', providerId: 'demo', billing: 'sample replies', color: BLUE }, { name: 'Writer', provider: 'openai', providerId: 'openai', billing: 'API billing', model: 'gpt-5', color: '#abcdef' }],
+      orglets: [{ name: 'Researcher', provider: 'demo', providerId: 'demo', billing: 'no model connected', color: BLUE }, { name: 'Writer', provider: 'openai', providerId: 'openai', billing: 'API billing', model: 'gpt-5', color: '#abcdef' }],
+      // A crew the window has not made a channel of yet still shows as the channel it is going to be.
+      channels: [{ name: 'Crew', mode: 'lead', lead: 'Writer', members: ['Researcher'], colors: [BLUE, '#abcdef'] }],
       crews: [{ name: 'Crew', lead: 'Writer', members: ['Researcher'], colors: [BLUE, '#abcdef'] }],
     });
     expect((await operations.status()).colors).toEqual([BLUE, '#abcdef']);

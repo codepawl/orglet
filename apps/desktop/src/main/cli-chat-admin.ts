@@ -1,11 +1,12 @@
 import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
-import { placeNamed, spaceNamed } from './cli-spaces';
+import { adoptLooseChannels, placeNamed, spaceNamed } from './cli-spaces';
+import { inSavedOrder } from './cli-channels';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { ChannelCreatedValue, ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
 import { resolveMessage } from './cli-chat-history';
-import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
+import { importFiles, readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 /**
  * The chats themselves from the terminal (COD-354): listing them, side threads and channels (COD-361), renaming, archiving,
@@ -33,13 +34,18 @@ export class CliChatAdmin {
     return this.dependencies.request('workspace', {}) as Promise<Workspace>;
   }
 
-  /** Open chats newest first, or with `archived` the archived ones, each with the short id `--chat` takes. */
+  /**
+   * Open chats newest first, or with `archived` the archived ones, each with the short id `--chat` takes. With
+   * `space`, only that space's channels, in the order the space shows them (the saved order, a channel never placed
+   * after those that are, newest first).
+   */
   async chats(request: Request<'chats'>): Promise<ChatsValue> {
     const workspace = await this.workspace();
     const space = request.space === undefined ? undefined : spaceNamed(workspace, request.space);
     const shown = workspace.tasks.filter(task => Boolean(task.archivedAt) === request.archived && (!space || task.channel?.spaceId === space.id));
-    const newest = [...shown].sort((first, second) => second.createdAt.localeCompare(first.createdAt)).slice(0, MAX_LISTED_CHATS);
-    return { chats: newest.map(task => chatRow(workspace, task)) };
+    const newest = [...shown].sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+    const ordered = space ? inSavedOrder(newest.map(task => ({ task, channel: task.channel! })), workspace.channelOrder ?? []).map(entry => entry.task) : newest;
+    return { chats: ordered.slice(0, MAX_LISTED_CHATS).map(task => chatRow(workspace, task)) };
   }
 
   /**
@@ -54,7 +60,7 @@ export class CliChatAdmin {
     const sideId = String(await this.dependencies.request('startSideThread', {
       taskId: task.id,
       brief: request.message,
-      sourceIds: [],
+      sourceIds: await importFiles(this.dependencies.request, request.files),
       excludedSources: [],
       consent: true,
       providerScopes: providerScopes(runners),
@@ -82,6 +88,7 @@ export class CliChatAdmin {
    * its orglets. Named by `name`, or by its members' names. The next message goes in with `--chat`.
    */
   async channel(request: Request<'channel'>, signal: AbortSignal): Promise<SendValue | ChannelCreatedValue> {
+    if (request.files?.length && request.message === undefined) throw new CliFailure('invalid', 'Tệp đi kèm tin nhắn đầu tiên của kênh. Gõ tin nhắn, hoặc bỏ --file.');
     const workspace = await this.workspace();
     const place = request.space === undefined ? undefined : placeNamed(workspace, request.space, request.category);
     if (!place && !request.names.length) throw new CliFailure('failed', 'Kênh cần ít nhất một --with <tên Tí>.');
@@ -93,24 +100,24 @@ export class CliChatAdmin {
     const name = request.name ?? channelNameFrom(members.map(member => memberNameOf(workspace, member)));
     const placed = place ? { spaceId: place.spaceId, categoryId: place.categoryId ?? null, access: inherits ? 'inherit' as const : 'listed' as const } : {};
     const channelId = String(await this.dependencies.request('createChannel', { name, topic: request.topic ?? '', members, ...placed }));
+    // Without --space the channel goes to the space kept for channels, before its first message makes it a running chat.
+    const spaceName = place ? (workspace.spaces ?? []).find(space => space.id === place.spaceId)?.name : await adoptLooseChannels(this.dependencies);
     // With no first message the channel waits, empty, as one made with New channel in the app does.
-    if (request.message === undefined) {
-      const spaceName = place ? (workspace.spaces ?? []).find(space => space.id === place.spaceId)?.name : undefined;
-      return { channel: name, ...(spaceName ? { space: spaceName } : {}) };
-    }
+    if (request.message === undefined) return { channel: name, ...(spaceName ? { space: spaceName } : {}) };
     const input: TaskInput = {
       workerId: workers[0].id,
       assignees: workers.map(worker => worker.id),
       channelId,
       brief: request.message,
-      sourceIds: [],
+      sourceIds: await importFiles(this.dependencies.request, request.files),
       excludedSources: [],
       consent: true,
       providerScopes: providerScopes(workers),
       budgetMicros: workers[0].taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS,
     };
     const taskId = String(await this.dependencies.request('createTask', input));
-    return this.settle(taskId, request.wait, request.timeoutSeconds, signal);
+    const sent = await this.settle(taskId, request.wait, request.timeoutSeconds, signal);
+    return spaceName ? { ...sent, space: spaceName } : sent;
   }
 
   /** Changes who is in a channel, from the next message on, as its settings in the app do; its name and topic stay. */
@@ -131,7 +138,7 @@ export class CliChatAdmin {
     const name = chatName(workspace, task);
     const value = { taskId: task.id, name, change: request.change };
     if (request.change === 'rename') {
-      if (!request.title) throw new CliFailure('invalid', 'Đổi tên cần --title "<tên mới>".');
+      if (!request.title) throw new CliFailure('invalid', 'Đổi tên cần --rename "<tên mới>".');
       await this.dependencies.request('renameTask', { id: task.id, title: request.title });
       return { ...value, title: request.title };
     }
@@ -161,12 +168,13 @@ export class CliChatAdmin {
     return { kind: request.kind, id: entity.id, name: entity.name, archived: request.archived };
   }
 
-  /** A crew with its orglets and skill from one of the app's templates, on Demo or the OpenAI connection. */
+  /** A channel with its orglets and skill from one of the app's templates, on the OpenAI connection (`demo` only where tests run with sample replies). */
   async template(request: Request<'template'>): Promise<TemplateValue> {
     const team = await this.dependencies.request('createTemplate', { templateId: request.templateId, provider: request.provider }) as Team;
     const workspace = await this.workspace();
     const roster = [...team.memberIds, team.synthesizerId].map(id => workspace.workers.find(worker => worker.id === id)?.name ?? id);
-    return { id: team.id, name: team.name, members: roster };
+    const space = await adoptLooseChannels(this.dependencies);
+    return { id: team.id, name: team.name, members: roster, ...(space ? { space } : {}) };
   }
 
   private async settle(taskId: string, wait: boolean, timeoutSeconds: number, signal: AbortSignal): Promise<SendValue> {
@@ -204,6 +212,7 @@ function memberNameOf(workspace: Workspace, member: ChannelMember): string {
 function chatRow(workspace: Workspace, task: Task): CliChatRow {
   const runners = taskRunners(workspace, task);
   const lead = runners.at(-1);
+  const spaceName = workspace.spaces?.find(space => space.id === task.channel?.spaceId)?.name;
   return {
     id: task.id,
     short: task.id.slice(0, SHORT_ID_LENGTH),
@@ -214,5 +223,6 @@ function chatRow(workspace: Workspace, task: Task): CliChatRow {
     archived: Boolean(task.archivedAt),
     createdAt: task.createdAt,
     ...(lead ? { color: defaultAvatarColor(lead) } : {}),
+    ...(spaceName ? { space: spaceName } : {}),
   };
 }

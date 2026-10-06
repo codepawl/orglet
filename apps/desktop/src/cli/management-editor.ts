@@ -122,7 +122,7 @@ export class ManagementEditor {
     else if (this.state === 'entity') {
       choices = [
         ...(this.kind !== 'team' ? this.catalog.orglets.map(entity => ({ key: `worker:${entity.id}`, label: this.entityName(entity, this.catalog.orglets), detail: `${entity.config.provider}${entity.config.modelId ? `/${entity.config.modelId}` : ''}` })) : []),
-        ...(this.kind !== 'worker' ? this.catalog.crews.map(entity => ({ key: `team:${entity.id}`, label: this.entityName(entity, this.catalog.crews), detail: `crew · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(orglet => orglet.id === entity.config.synthesizerId)?.config.name ?? '—'}` })) : []),
+        ...(this.kind !== 'worker' ? this.catalog.crews.map(entity => ({ key: `team:${entity.id}`, label: this.entityName(entity, this.catalog.crews), detail: `channel · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(orglet => orglet.id === entity.config.synthesizerId)?.config.name ?? '—'}` })) : []),
         { key: 'cancel', label: t("Hủy") },
       ];
     } else if (this.state === 'fields') choices = [...this.fields().map(field => ({ key: field.key, label: `${field.label}  ${this.valueLabel(field)}` })), { key: 'save', label: t("Lưu") }, { key: 'cancel', label: t("Hủy") }];

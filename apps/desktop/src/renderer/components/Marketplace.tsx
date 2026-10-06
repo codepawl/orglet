@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { Avatar } from './Avatar';
+import { SpaceMark } from './SpaceMark';
 import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, ShieldCheck, UserRoundPlus, X } from 'lucide-react';
 import type { MarketCatalogView, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
 import { orglet } from '../api';
@@ -11,6 +13,21 @@ import { useMarketModeration } from './MarketModeration';
 import { MARKET_SEED_BODIES } from '../../shared/market-seed';
 import { PageTabs } from './PageTabs';
 import { RowMenu } from './RowMenu';
+
+/**
+ * What a listing is, told at a glance by a picture before its name (user, 2026-10-05): an orglet's face, two faces
+ * for a crew, a space's filled tile. A listing carries no picture of its own, so the face is the one the app would
+ * pick for that name and summary, and the tile takes its colours from the listing's id: the same listing looks the
+ * same every time, on every computer. The faces are the flat drawing, which needs no canvas.
+ */
+function ListingFace({ listingId, kind, name, summary }: { listingId: string; kind: 'orglet' | 'crew' | 'space'; name: string; summary: string }) {
+  if (kind === 'space') return <span className="market-listing-face"><SpaceMark seed={listingId} /></span>;
+  if (kind === 'crew') return <span className="market-listing-face market-listing-crew">
+    <Avatar name={name} seed={`${listingId}:lead`} defaultMascot hint={summary} size="sm" />
+    <Avatar name={name} seed={`${listingId}:member`} defaultMascot hint={name} size="sm" />
+  </span>;
+  return <span className="market-listing-face"><Avatar name={name} seed={listingId} defaultMascot hint={summary} size="md" /></span>;
+}
 
 function addedNotice(result: MarketAdded) {
   if (result.fallbackNames.length) toast(t('Đã dùng kết nối mặc định cho {0}; kết nối gợi ý chưa sẵn sàng.', [result.fallbackNames.join(', ')]));
@@ -88,6 +105,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
         const copies = installed.filter(item => item.listingId === listing.listingId);
         const publicListing = 'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] ? listing : undefined;
         return <li key={listing.listingId} className="friend-source marketplace-listing">
+        <ListingFace listingId={listing.listingId} kind={listing.kind} name={listing.name} summary={listing.summary} />
         <div className="friend-source-text">
           <h3 className="friend-name">{listing.name}</h3><p className="market-listing-summary">{listing.summary}</p>
           <div className="market-listing-meta"><span>{listing.kind === 'space' ? t('Không gian') : listing.kind === 'crew' ? t('Nhóm Tí') : t('Tí')}</span><span className="market-listing-author">{typeof listing.author === 'string' ? listing.author : listing.author.displayName}</span><span>{listing.language.toUpperCase()} · v{listing.version}</span><span>{listing.license}</span></div>

@@ -241,7 +241,8 @@ function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose 
     {faces}
     <span className="search-result-text">
       <span className="search-result-head">
-        <span className="search-result-name">{channel && <Hash size={14} className="search-result-hash" aria-label={t('Kênh')} />}<Marked parts={markMatches(name, terms)} /></span>
+        {channel && <Hash size={14} className="search-result-hash" aria-label={t('Kênh')} />}
+        <span className="search-result-name"><Marked parts={markMatches(name, terms)} /></span>
         {detail && <span className="search-result-detail">{detail}</span>}
       </span>
       {snippet}

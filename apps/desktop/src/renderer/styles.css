@@ -106,6 +106,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-resizer::after { content:''; display:block; width:3px; height:100%; margin:0 auto; border-radius:999px; background:transparent; transition:background .12s; }
 .details-resizer:hover::after,.details-resizer:focus-visible::after,.app.resizing .details-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
 .details-resizer:focus-visible { outline:none; }
+/* The member column is dragged by its edge the same way (user, 2026-10-05). */
+.members-resizer { right:calc(var(--shell-gap) + var(--members-width) + var(--shell-gap) / 2); }
 /* Folding gives the sidebar's column to the chat; the area rail stays put. */
 .app.sidebar-hidden { --sidebar-column-width:0px; }
 /* Every panel has its place: the left column, the main card, the right panel. */
@@ -1022,7 +1024,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .search-result-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
 .search-result-head { display:flex; align-items:baseline; gap:8px; min-width:0; }
 .search-result-name { flex:0 1 auto; min-width:0; font-size:15px; line-height:20px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.search-result-hash { flex-shrink:0; margin-right:3px; color:var(--muted); vertical-align:-1px; }
+/* The hash mark is an item of the row's head, beside the name: inside the name it took a line of its own. */
+.search-result-hash { flex-shrink:0; align-self:center; margin-right:-5px; color:var(--muted); }
 .search-result-detail { flex:1 1 0; min-width:0; font-size:13px; line-height:20px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .search-result-snippet { font-size:13px; line-height:18px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .search-mark { background:none; color:var(--text); font-weight:600; }
@@ -1315,7 +1318,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    button is 52px so a face turned toward the pointer, extruded side and all, stays inside it and inside its focus
    ring, and the negative margin gives the row the 44px it had. It is a button, so the keyboard reaches it; the ring
    takes the bubble's own corners. No background on hover: the face answering the pointer is the hover. */
-.about-face { position:relative; flex-shrink:0; width:52px; height:52px; margin:-4px; padding:0; border:0; border-radius:31% 31% 31% 15%; background:transparent; color:var(--text); --mascot-ink:var(--bg); --mascot-lift:-1px; cursor:pointer; }
+.about-face { position:relative; flex-shrink:0; width:52px; height:52px; margin:-4px; padding:0; border:0; border-radius:46% 46% 46% 17%; background:transparent; color:var(--text); --mascot-ink:var(--bg); --mascot-lift:-1px; cursor:pointer; }
 .about-face:focus-visible { outline-offset:3px; }
 :root[data-logo-color=accent] .about-face { color:var(--accent); --mascot-ink:var(--accent-ink); }
 .about-name { display:flex; flex-direction:column; gap:2px; min-width:0; }
@@ -1648,6 +1651,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-workspace .org-switch-field { margin-top:8px; }
 .routine-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:28px 16px; text-align:center; color:var(--muted); }
 .routine-empty p:first-of-type { color:var(--text); font-weight:500; }
+/* Requests to hand to an orglet: the chat starters' rows, left-aligned under the centred empty state. */
+.routine-ask-lead { margin-top:18px; }
+.routine-asks { align-self:stretch; margin-top:4px; padding:0; }
 .routine-editor-title { display:inline-flex; align-items:center; gap:6px; margin-left:-8px; }
 .form .routine-group { display:flex; flex-direction:column; gap:16px; padding:16px; border-radius:14px; background:var(--surface); }
 .routine-group h4 { margin:0; font-size:13px; font-weight:600; color:var(--muted); }
@@ -1748,6 +1754,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Breadcrumb in a dialog title: back arrow, parent link, current page. */
 .breadcrumb { display:inline-flex; align-items:center; gap:6px; min-width:0; margin-left:-10px; }
 .topbar-name > .breadcrumb { margin-left:0; }
+/* A page's lead: its one line of description with its buttons at the end. The page has no header row above it, so
+   the column starts 24px down from the card's top, near the line of the sidebar's title beside it. */
+.panel-page { padding-top:24px; }
+.page-lead { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:36px; }
+.page-lead-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; margin-left:auto; }
 .panel-page-description { margin:0; text-wrap:pretty; }
 .breadcrumb-link { border:0; background:transparent; padding:2px 4px; border-radius:6px; color:var(--muted); font:inherit; font-weight:500; }
 .breadcrumb-link:hover { color:var(--text); }
@@ -3073,10 +3084,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
    takes the sidebar's hover and selected pair; the open area wears the selected tint, never a line. Home first, then the
    areas, then Library and Schedules, then the one + Create. It stops short of the person's face at its bottom. */
 .area-rail, .members-pane, .user-panel { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent); }
-.area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:var(--panel-inset) 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
+.area-rail { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; padding:0 0 calc(52px + var(--shell-gap) * 2); overflow-y:auto; overscroll-behavior:contain; }
 .area-rail::-webkit-scrollbar { width:0; height:0; }
 .area-rail-list { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0; padding:0; list-style:none; }
-/* Back and forward, side by side above the tiles: small and quiet, since they are used far less than the tiles. */
+/* Back and forward, side by side above the tiles: small and quiet, since they are used far less than the tiles. They
+   start level with the top edge of the cards beside the rail (user, 2026-10-05), so the rail has no top padding. */
 .area-trail { display:flex; align-items:center; justify-content:center; gap:2px; flex-shrink:0; margin-bottom:-4px; }
 .area-trail-step { display:grid; place-items:center; width:24px; height:24px; min-height:24px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
 .area-trail-step:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }
@@ -3175,6 +3187,13 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .friend-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:var(--muted); }
 .friends-add-form { display:flex; align-items:center; gap:10px; margin-top:4px; }
 .friends-add-form .org-input { flex:1; min-width:0; }
+/* Add orglet as a dialog: the name form, then the other ways to add one. */
+.add-orglet { display:flex; flex-direction:column; gap:6px; }
+.add-orglet .page-section:last-child { margin-bottom:0; }
+/* In the narrower dialog a description runs onto a second line and is not cut off. */
+.add-orglet .friend-status { white-space:normal; overflow:visible; text-overflow:clip; }
+/* The dialog is as tall as its short form and list, and narrower than an editor's. */
+.org-drawer:has(.add-orglet) { width:min(560px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
 .activity-link { display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:10px; background:var(--surface); }
 .activity-link > span { flex:1; min-width:0; }
 .saved-empty { display:flex; align-items:center; gap:8px; }
@@ -3188,7 +3207,8 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .saved-text { overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* The member column of a channel (COD-366), at the right where Discord keeps it, in the right panel's place. */
-.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; transform-origin:-60px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
+/* A card like the sidebar's (user, 2026-10-05): on the window's bare ground it read as unfinished beside the cards. */
+.members-pane { display:flex; flex-direction:column; min-height:0; border-radius:var(--panel-radius); overflow:hidden; background:var(--bg); box-shadow:var(--panel-shadow); transform-origin:-60px 28px; animation:pane-in var(--motion-base) var(--ease-out); }
 .members-head { display:flex; align-items:center; min-height:32px; padding:var(--panel-inset) 10px 8px 16px; }
 .members-head h2 { font-size:13px; font-weight:500; color:var(--muted); }
 .members-list { display:flex; flex-direction:column; flex:1; gap:2px; min-height:0; margin:0; padding:0 8px 16px; overflow:auto; list-style:none; }
@@ -3220,8 +3240,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .member-row.member-outside { box-sizing:border-box; cursor:default; opacity:.6; }
 .member-row.member-outside:hover { background:transparent; }
 /* The person's own row opens nothing, so it does not answer the pointer. */
-.member-row.member-you { box-sizing:border-box; cursor:default; }
-.member-row.member-you:hover { background:transparent; }
+.member-row.member-you { box-sizing:border-box; }
 .member-text { display:flex; flex-direction:column; min-width:0; gap:1px; }
 .member-name { display:flex; align-items:center; gap:6px; font-weight:500; }
 .member-lead { padding:1px 6px; border-radius:999px; background:var(--row-active); color:var(--muted); font-size:11px; font-weight:500; }
@@ -3234,8 +3253,12 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 /* Curated friends and explicit template updates. */
 .marketplace-source { margin: 0; font-size: 12px; }
 .marketplace-discover { display: grid; gap: 12px; min-width: 0; }
-.marketplace-listing { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
+.marketplace-listing { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
 .marketplace-listing .friend-source-text { gap: 6px; }
+/* The listing's picture: one column wide for every kind, level with the listing's name. */
+.market-listing-face { display: grid; place-items: center; flex-shrink: 0; align-self: flex-start; width: 40px; min-height: 40px; }
+.market-listing-crew { display: flex; justify-content: center; }
+.market-listing-crew > .avatar + .avatar { margin-left: -6px; }
 .marketplace-listing .friend-name, .market-own .friend-name { margin: 0; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: 14px; }
 .market-listing-summary { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .market-listing-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; }
@@ -3300,7 +3323,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-review-reports h3 { margin: 0; font-size: 14px; }
 .market-review-report { border-block-start: 1px solid var(--border); padding-block-start: 12px; min-width: 0; }
 .market-review-report > p { margin-block: 0 6px; }
-@media (max-width: 560px) { .marketplace-listing { grid-template-columns: minmax(0, 1fr); gap: 10px; } .market-listing-actions { justify-content: flex-start; } .market-own-listing { flex-wrap: wrap; } }
+@media (max-width: 560px) { .marketplace-listing { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; } .market-listing-actions { grid-column: 2; justify-content: flex-start; } .market-own-listing { flex-wrap: wrap; } }
 @media (max-width: 560px) { .market-publishing-target { grid-template-columns: minmax(0, 1fr); } }
 
 /* One inherited setting does not need the editor's full-height panel. */

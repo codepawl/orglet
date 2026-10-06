@@ -1,19 +1,23 @@
 import { normalizeRoleText } from '../shared/role-words';
 import { renderMiniFace, MINI_FACE_WIDTH } from './faces';
-import type { ChatKind, ListValue } from './protocol';
+import type { ChatKind, CliListedChannel, ListValue } from './protocol';
+import { t } from './text';
 import { displayWidth, isHexColor, layoutShortcutHint, muted, NEUTRAL_COLOR, padEnd, paint, truncate, type ColorMode } from './terminal';
 
-/** The list `orglet chat` opens on: every orglet and crew, filtered as the person types (COD-236). */
+/** The list `orglet chat` opens on: every orglet and channel, filtered as the person types (COD-236). */
 
 export type ChatEntry = {
+  /** `team` is a channel here: the name is older than channels, and requests still call a channel with a lead a team. */
   kind: ChatKind;
   name: string;
-  /** Provider and model for an orglet, the lead for a crew. */
+  /** Provider and model for an orglet; for a channel, its lead or its members, and its space. */
   detail: string;
-  /** The orglet's colour, or a crew's lead's: the waiting face and the prompt use it. */
+  /** The orglet's colour, or a channel's lead's: the waiting face and the prompt use it. */
   color: string;
-  /** One face per orglet: the orglet itself, or a crew's members then its lead. */
+  /** One face per orglet: the orglet itself, or a channel's members then its lead. */
   colors: string[];
+  /** The space a channel is in. */
+  space?: string;
   provider?: string;
   providerId?: string;
   model?: string;
@@ -47,15 +51,18 @@ export function entriesFromList(list: ListValue): ChatEntry[] {
       description: orglet.description,
     };
   });
-  const crews = list.crews.map(crew => {
-    const roster = [...new Set([...crew.members, crew.lead])];
-    const colors = crew.colors?.length ? crew.colors.map(validColor) : roster.map(name => colorByName.get(name) ?? NEUTRAL_COLOR);
-    const color = colorByName.get(crew.lead) ?? colors[colors.length - 1] ?? NEUTRAL_COLOR;
-    const lead = orglets.find(orglet => orglet.name === crew.lead);
-    return {
+  const channels = (list.channels ?? channelsFromCrews(list.crews)).flatMap(channel => {
+    // A channel that takes turns and has no chat yet cannot be opened by name or by id, so it is not offered.
+    if (channel.mode === 'turns' && !channel.chat) return [];
+    const roster = [...new Set([...channel.members, ...(channel.lead ? [channel.lead] : [])])];
+    const colors = channel.colors?.length ? channel.colors.map(validColor) : roster.map(name => colorByName.get(name) ?? NEUTRAL_COLOR);
+    const leadName = channel.lead ?? channel.members[0];
+    const color = colorByName.get(leadName) ?? colors[colors.length - 1] ?? NEUTRAL_COLOR;
+    const lead = orglets.find(orglet => orglet.name === leadName);
+    return [{
       kind: 'team' as const,
-      name: crew.name,
-      detail: `crew · lead ${crew.lead}`,
+      name: channel.name,
+      detail: channel.lead ? `${t('Tí trưởng {0}', channel.lead)}  ${channel.members.join(', ')}` : channel.members.join(', '),
       color,
       colors,
       provider: lead?.provider,
@@ -63,9 +70,17 @@ export function entriesFromList(list: ListValue): ChatEntry[] {
       model: lead?.model,
       billing: lead?.billing,
       members: roster,
-    };
+      ...(channel.space ? { space: channel.space } : {}),
+      // A channel with a lead is found by its name; one that takes turns is reached by the id of its chat.
+      ...(channel.mode === 'turns' ? { target: `#${channel.chat}` } : {}),
+    }];
   });
-  return [...orglets, ...crews];
+  return [...orglets, ...channels];
+}
+
+/** An app older than the channels listing sends only its crews, which are channels where the lead splits the work. */
+function channelsFromCrews(crews: ListValue['crews']): CliListedChannel[] {
+  return crews.map(crew => ({ name: crew.name, mode: 'lead' as const, lead: crew.lead, members: crew.members, ...(crew.colors ? { colors: crew.colors } : {}) }));
 }
 
 export type ChatMatch = { entry: ChatEntry } | { candidates: ChatEntry[] };

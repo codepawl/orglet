@@ -8,7 +8,7 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatMarket, formatChannelCreated, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
+import { chatOption, formatManagementResult, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatMarket, formatChannelCreated, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
 import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type SpacesValue, type SpaceChangeValue, type ChannelCreatedValue, type MarketListValue, type MarketInstalledValue, type MarketAddValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
@@ -64,6 +64,11 @@ function targetLabel(target: ChatTarget): string {
   return 'chat' in target ? `#${target.chat}` : target.to;
 }
 
+/** The files of a message as absolute paths: the app runs in another folder, so a relative path would point somewhere else there. */
+function filesField(files: readonly string[] | undefined, workingDirectory: string): { files?: string[] } {
+  return files?.length ? { files: files.map(file => resolve(workingDirectory, file)) } : {};
+}
+
 function toRequest(command: RequestCommand, workingDirectory: string): CliRequestBody {
   switch (command.kind) {
     case 'status': return { op: 'status' };
@@ -90,12 +95,12 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
       ...(command.note ? { note: command.note } : {}),
     };
     case 'control': return { op: 'control', ...targetFields(command), action: command.action, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
-    case 'revise': return { op: 'revise', ...targetFields(command), text: command.text, message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'revise': return { op: 'revise', ...targetFields(command), text: command.text, message: command.message, ...filesField(command.files, workingDirectory), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'answer': return { op: 'answer', ...targetFields(command), answer: command.answer, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'chats': return { op: 'chats', archived: command.archived, ...(command.space ? { space: command.space } : {}) };
-    case 'side': return { op: 'side-thread', ...targetFields(command), message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'side': return { op: 'side-thread', ...targetFields(command), message: command.message, ...filesField(command.files, workingDirectory), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'bring': return { op: 'bring', chat: command.chat, ...(command.message ? { message: command.message } : {}) };
-    case 'channel': return { op: 'channel', names: command.names, ...(command.message ? { message: command.message } : {}), ...(command.name ? { name: command.name } : {}), ...(command.topic ? { topic: command.topic } : {}), ...(command.space ? { space: command.space } : {}), ...(command.category ? { category: command.category } : {}), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'channel': return { op: 'channel', names: command.names, ...(command.message ? { message: command.message } : {}), ...filesField(command.files, workingDirectory), ...(command.name ? { name: command.name } : {}), ...(command.topic ? { topic: command.topic } : {}), ...(command.space ? { space: command.space } : {}), ...(command.category ? { category: command.category } : {}), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'members': return { op: 'members', chat: command.chat, names: command.names };
     case 'chat-change': return {
       op: 'chat-change',
@@ -123,7 +128,7 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'running': return { op: 'running', ...(command.space ? { space: command.space } : {}) };
     case 'library': return { op: 'library', kind: command.library, ...(command.query ? { query: command.query } : {}), ...(command.owner ? { owner: command.owner } : {}) };
     case 'memory-edit': return { op: 'memory-edit', id: command.id, ...(command.text ? { text: command.text } : {}), ...(command.pinned !== undefined ? { pinned: command.pinned } : {}) };
-    case 'memory-delete': return { op: 'memory-delete', id: command.id, confirmed: true };
+    case 'memory-delete': return { op: 'memory-delete', id: command.id, ...(command.confirm ? { confirm: command.confirm } : { confirmed: true as const }) };
     case 'usage': return { op: 'usage', refresh: command.refresh };
     case 'models': return { op: 'models', ...(command.provider ? { provider: command.provider } : {}), ...(command.to ? { to: command.to } : {}), refresh: command.refresh };
     case 'preferences': return { op: 'preferences', ...(command.language ? { language: command.language } : {}), ...(command.theme ? { theme: command.theme } : {}) };
@@ -428,7 +433,7 @@ export async function runCli(argumentList: readonly string[], output: Output, en
       const client = appChatClient(resolveUserData(environment), appExecutable(environment)).management!;
       const result = await runManagementCommand(command, client, workingDirectory);
       if (command.json) printJson(output, result);
-      else output.stdout(t(result.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', result.kind === 'worker' ? 'orglet' : 'channel', result.name));
+      else output.stdout(formatManagementResult(result));
       return EXIT_CODES.ok;
     } catch (error) {
       if (error instanceof AppRefusal) return reportFailure({ ok: false, code: error.code, error: error.message }, command.json, output);

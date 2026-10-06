@@ -4,7 +4,7 @@ import { Input } from '@codepawlhq/orglet-ui';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 import { Avatar } from './Avatar';
-import { Button } from './ui';
+import { Button, Drawer } from './ui';
 import { ChatHeader } from './ChatViews';
 import { Marketplace } from './Marketplace';
 import type { MarketAdded } from '../../shared/market';
@@ -12,17 +12,30 @@ import type { MarketAdded } from '../../shared/market';
 /** A ready-made group of orglets with its channel, offered under Add orglet (COD-366). */
 export type FriendTemplate = { id: 'research-review' | 'eris-review'; name: string; description: string; orglets: number };
 
-/** Home's two pages, each with its own row in the sidebar: making an orglet, and the marketplace. */
-export type HomePageView = 'add' | 'market';
+/** The pages Home can show in the main panel. Add orglet used to be one; it is a dialog now. */
+export type HomePageView = 'market';
 
 /**
- * Home's pages (COD-366). Add orglet holds what the sidebar does not: making an orglet from a name, and the other
- * ways to add one (an archived orglet to bring back, a ready-made group, a template file). The marketplace is a
- * page of its own (user, 2026-10-05): it used to sit inside a page called Add friend, where nobody looked for it,
- * and an orglet is not a friend one finds. The orglets themselves are the sidebar's rows, so no page lists them.
+ * Home's own page (COD-366): the marketplace, with a row in the sidebar (user, 2026-10-05). It used to sit inside a
+ * page called Add friend, where nobody looked for it.
  */
-export function FriendsPage({ view, archived, onCreate, onRestore, templates, onTemplate, onImport, onMarketAdded, busy }: {
-  view: HomePageView;
+export function MarketplacePage({ onMarketAdded }: { onMarketAdded: (result: MarketAdded) => void | Promise<void> }) {
+  return <>
+    <ChatHeader contentKey="home:market"
+      lead={<span className="topbar-title"><Store size={16} aria-hidden="true" /><span className="topbar-name">Marketplace</span></span>}
+      views={null} actions={null} />
+    <div className="page-scroll"><div className="page-body friends-add"><Marketplace onAdded={onMarketAdded} /></div></div>
+  </>;
+}
+
+/**
+ * Add orglet, in a dialog over the chat (user, 2026-10-06): it is one small form and a short list, which as a page
+ * left the main panel mostly empty and took the chat away. It makes an orglet from a name, and lists the other ways
+ * to add one: a ready-made group, a template file, an archived orglet to bring back. Each of them closes the dialog.
+ */
+export function AddOrgletDialog({ open, onClose, archived, onCreate, onRestore, templates, onTemplate, onImport, busy }: {
+  open: boolean;
+  onClose: () => void;
   archived: readonly Worker[];
   /** Opens the new-orglet dialog with this name already typed. */
   onCreate: (name: string) => void;
@@ -30,7 +43,6 @@ export function FriendsPage({ view, archived, onCreate, onRestore, templates, on
   templates: readonly FriendTemplate[];
   onTemplate: (id: FriendTemplate['id']) => void;
   onImport: () => void;
-  onMarketAdded: (result: MarketAdded) => void | Promise<void>;
   busy: boolean;
 }) {
   const [name, setName] = useState('');
@@ -41,19 +53,8 @@ export function FriendsPage({ view, archived, onCreate, onRestore, templates, on
     setName('');
     onCreate(typed);
   };
-  if (view === 'market') {
-    return <>
-      <ChatHeader contentKey="home:market"
-        lead={<span className="topbar-title"><Store size={16} aria-hidden="true" /><span className="topbar-name">Marketplace</span></span>}
-        views={null} actions={null} />
-      <div className="page-scroll"><div className="page-body friends-add"><Marketplace onAdded={onMarketAdded} /></div></div>
-    </>;
-  }
-  return <>
-    <ChatHeader contentKey="friends:add"
-      lead={<span className="topbar-title"><UserRoundPlus size={16} aria-hidden="true" /><span className="topbar-name">{t('Thêm Tí')}</span></span>}
-      views={null} actions={null} />
-    <div className="page-scroll"><div className="page-body friends-add">
+  return <Drawer open={open} onClose={onClose} title={t('Thêm Tí')}>
+    <div className="add-orglet">
       <section className="page-section" aria-label={t('Tạo Tí')}>
         <p className="muted">{t('Tạo một Tí mới bằng tên, rồi chọn việc Tí làm và model Tí dùng.')}</p>
         <form className="friends-add-form" onSubmit={create}>
@@ -80,6 +81,6 @@ export function FriendsPage({ view, archived, onCreate, onRestore, templates, on
           </li>)}
         </ul>
       </section>
-    </div></div>
-  </>;
+    </div>
+  </Drawer>;
 }
