@@ -75,6 +75,18 @@ describe('person-driven terminal configuration', () => {
     expect(store.get<Team>('teams', crew.id).synthesizerId).not.toBe(worker.id);
   });
 
+  it('makes a channel of a new crew, in the space kept for channels, and keeps it there when the crew is edited', async () => {
+    const crew = await createCrew(await createOrglet());
+    expect(crew.space).toBe('Kênh');
+    const workspace = store.workspace();
+    const channel = workspace.emptyChannels.find(item => item.crewId === crew.id);
+    expect(channel).toBeDefined();
+    expect(workspace.spaces.find(space => space.id === channel!.spaceId)?.name).toBe('Kênh');
+    const edited = await operations.run({ op: 'save-crew', token, target: { id: crew.id, revision: crew.revision }, config: { name: 'Renamed crew' } }, signal) as ManagementResult;
+    expect(edited).not.toHaveProperty('space');
+    expect(store.workspace().emptyChannels.find(item => item.crewId === crew.id)).toMatchObject({ name: 'Renamed crew', spaceId: channel!.spaceId });
+  });
+
   it('refuses incomplete inputs, demo, duplicate members and permission fields without mutations', async () => {
     const count = store.workspace().workers.length;
     await expect(operations.run({ op: 'save-orglet', token, config: { name: 'Missing fields' } }, signal)).rejects.toThrow('instructions');

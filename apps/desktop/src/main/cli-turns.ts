@@ -1,4 +1,4 @@
-import type { TaskDetail } from '../shared/contracts';
+import type { Source, TaskDetail } from '../shared/contracts';
 import type { Language } from '../shared/i18n';
 import type { CliChat, SendValue } from '../cli/protocol';
 import type { CliActivityFeed, CliObserver } from './cli-activity';
@@ -29,6 +29,13 @@ function delay(milliseconds: number): Promise<void> {
 
 export function readTask(request: CoreRequest, id: string): Promise<TaskDetail> {
   return request('task', { id }) as Promise<TaskDetail>;
+}
+
+/** Imports the files a command names, the way the file picker does, and returns their ids. No files means nothing attached. */
+export async function importFiles(request: CoreRequest, files: readonly string[] | undefined): Promise<string[]> {
+  if (!files?.length) return [];
+  const sources = await request('importSources', files) as Source[];
+  return sources.map(source => source.id);
 }
 
 /** Where a turn stands once the terminal stops waiting for it: its answers, errors and what it waits on. */

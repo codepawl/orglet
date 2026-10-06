@@ -65,6 +65,7 @@ function fakeCore(detail: () => TaskDetail) {
     calls.push({ command, args });
     if (command === 'workspace') return { ...workspace, tasks: [detail().task] };
     if (command === 'task') return detail();
+    if (command === 'importSources') return (args as string[]).map((path, index) => ({ id: `imported-${index}`, name: path }));
     if (command === 'forwardMessage') return { sent: [{ target: { kind: 'worker', id: writerId }, taskId: 'other' }], failed: [] };
     return undefined;
   };
@@ -86,7 +87,9 @@ describe('orglet chat action arguments', () => {
       expect(CliRequest.safeParse({ op: 'revise', token, to: 'Res', text: 'corrected', message, ...wait }).success).toBe(false);
     }
     expect(() => parseArguments(['revise', 'corrected', '--to', 'Res'])).toThrow(UsageError);
-    expect(() => parseArguments(['revise', 'corrected', '--to', 'Res', '--message', '2', '--file', 'extra.txt'])).toThrow(UsageError);
+    // A revision takes files now, which join the ones the message already had; an answer has nowhere to carry one.
+    expect(parseArguments(['revise', 'corrected', '--to', 'Res', '--message', '2', '--file', 'extra.txt'])).toMatchObject({ kind: 'revise', message: '2', files: ['extra.txt'] });
+    expect(() => parseArguments(['answer', '1', '--to', 'Res', '--file', 'extra.txt'])).toThrow(UsageError);
     expect(CliRequest.safeParse({ op: 'revise', token, to: 'Res', text: 'corrected', message: '2', ...wait, providerScopes: ['openai'] }).success).toBe(false);
   });
   it('parses history, replies, reactions, forwards, answers and controls', () => {
@@ -151,6 +154,22 @@ describe('orglet chat actions in the app', () => {
     expect(await core.operations.run({ op: 'revise', token, to: 'res', message: '2', text: 'corrected text', wait: false, timeoutSeconds: 5 }, core.signal)).toMatchObject({ action: 'revise', waited: false });
     expect(core.calls.find(call => call.command === 'reviseTask')?.args).toEqual({ taskId, brief: 'corrected text', sourceIds: ['original'], excludedSources: detail.runs[1].snapshot.input!.excludedSources, replyTo: artifactIds[0], planFirst: true, consent: true, providerScopes: ['openai'], budgetMicros: 500_000, onlyWhenIdle: true });
     expect(detail).toEqual(before);
+  });
+
+  it('attaches the files given to a revision beside the ones the message already had', async () => {
+    const detail = chatDetail();
+    detail.runs[1].snapshot.input = { brief: 'original text', sourceIds: ['original'] } as Run['snapshot']['input'];
+    detail.sources = [{ id: 'original', revoked: false }] as TaskDetail['sources'];
+    const core = fakeCore(() => detail);
+    await core.operations.run({ op: 'revise', token, to: 'res', message: '2', text: 'corrected', files: ['C:/work/extra.txt'], wait: false, timeoutSeconds: 5 }, core.signal);
+    expect(core.calls.find(call => call.command === 'importSources')?.args).toEqual(['C:/work/extra.txt']);
+    expect(core.calls.find(call => call.command === 'reviseTask')?.args).toMatchObject({ sourceIds: ['original', 'imported-0'] });
+  });
+
+  it('imports nothing when a revision names no files', async () => {
+    const core = fakeCore(() => chatDetail());
+    await core.operations.run({ op: 'revise', token, to: 'res', message: '2', text: 'corrected', wait: false, timeoutSeconds: 5 }, core.signal);
+    expect(core.calls.some(call => call.command === 'importSources')).toBe(false);
   });
 
   it('refuses busy turns, missing messages and missing historical input without dispatching work', async () => {

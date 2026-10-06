@@ -75,6 +75,8 @@ export const UserMessageRef = z.string().trim().regex(/^#?[1-9]\d{0,5}$/);
 const Answer = z.string().trim().min(1).max(2000);
 const Message = z.string().trim().min(1).max(16000);
 const WaitFields = { wait: z.boolean(), timeoutSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS) };
+/** Files for a message, as absolute paths the app imports the way the file picker does; `send` and `run` carry theirs as a required list. */
+const FileFields = { files: z.array(z.string().min(1).max(32768)).max(MAX_FILES).optional() };
 /** Controls on a chat's latest turn, the buttons under it in the desktop (COD-354). */
 export const ChatControl = z.enum(['stop', 'pause', 'resume', 'retry', 'continue']);
 export type ChatControl = z.infer<typeof ChatControl>;
@@ -125,12 +127,12 @@ export const CliRequest = z.discriminatedUnion('op', [
   }).strict(),
   z.object({ op: z.literal('control'), token: CliToken, ...ChatTarget, action: ChatControl, ...WaitFields }).strict(),
   z.object({ op: z.literal('answer'), token: CliToken, ...ChatTarget, answer: Answer, ...WaitFields }).strict(),
-  z.object({ op: z.literal('revise'), token: CliToken, ...ChatTarget, message: UserMessageRef, text: Message, ...WaitFields }).strict(),
+  z.object({ op: z.literal('revise'), token: CliToken, ...ChatTarget, message: UserMessageRef, text: Message, ...FileFields, ...WaitFields }).strict(),
   z.object({ op: z.literal('chats'), token: CliToken, archived: z.boolean(), space: ChatName.optional() }).strict(),
-  z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...WaitFields }).strict(),
+  z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...FileFields, ...WaitFields }).strict(),
   z.object({ op: z.literal('bring'), token: CliToken, chat: ChatId, message: MessageRef.optional() }).strict(),
   // With `space` the names may be empty: the channel then takes every orglet of its place.
-  z.object({ op: z.literal('channel'), token: CliToken, names: z.array(ChatName).max(50), message: Message.optional(), name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), space: ChatName.optional(), category: ChatName.optional(), ...WaitFields }).strict(),
+  z.object({ op: z.literal('channel'), token: CliToken, names: z.array(ChatName).max(50), message: Message.optional(), name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), space: ChatName.optional(), category: ChatName.optional(), ...FileFields, ...WaitFields }).strict(),
   z.object({ op: z.literal('members'), token: CliToken, chat: ChatId, names: MemberNames }).strict(),
   z.object({
     op: z.literal('chat-change'),
@@ -178,7 +180,9 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('running'), token: CliToken, space: ChatName.optional() }).strict(),
   z.object({ op: z.literal('library'), token: CliToken, kind: z.enum(['memory', 'note']), query: z.string().trim().min(1).max(200).optional(), owner: ChatName.optional() }).strict(),
   z.object({ op: z.literal('memory-edit'), token: CliToken, id: ChatId, text: z.string().trim().min(1).max(MEMORY_TEXT_LIMIT).optional(), pinned: z.boolean().optional() }).strict(),
-  z.object({ op: z.literal('memory-delete'), token: CliToken, id: ChatId, confirmed: z.literal(true) }).strict(),
+  // Deleting needs one of two things: `confirmed` from `--yes`, or `confirm` typed with `--confirm`, which the app compares with the memory's id or text.
+  z.object({ op: z.literal('memory-delete'), token: CliToken, id: ChatId, confirmed: z.literal(true).optional(), confirm: z.string().trim().min(1).max(MEMORY_TEXT_LIMIT).optional() }).strict()
+    .refine(request => request.confirmed === true || request.confirm !== undefined, 'A delete must be confirmed.'),
   z.object({ op: z.literal('usage'), token: CliToken, refresh: z.boolean() }).strict(),
   z.object({ op: z.literal('models'), token: CliToken, provider: ProviderId.optional(), to: ChatName.optional(), refresh: z.boolean() }).strict(),
   /** Language and theme only; every other setting, consent included, stays in the desktop. */
@@ -255,9 +259,18 @@ export type CliTurn = {
   answers: CliAnswer[];
 };
 
-export type StatusValue = { version: string; orglets: number; crews: number; running: number; colors?: string[] };
+/** `channels` counts every channel, those that take turns too; `crews` is the older count of channels with a lead, kept for one release. */
+export type StatusValue = { version: string; orglets: number; channels?: number; crews: number; running: number; colors?: string[] };
+/**
+ * A channel as `orglet list` names it. `mode` is how it answers: `turns` has each orglet answer in turn, `lead` has the
+ * lead split the work. `chat` is the start of the id of its chat, which a channel nobody has written in yet lacks.
+ */
+export type CliListedChannel = { name: string; mode: 'turns' | 'lead'; lead?: string; members: string[]; space?: string; category?: string; colors?: string[]; chat?: string };
 export type ListValue = {
   orglets: { name: string; provider: string; providerId?: string; model?: string; color?: string; description?: string; billing?: string }[];
+  /** Every channel, grouped by space in the order the app keeps them. An app older than this field sends only `crews`. */
+  channels?: CliListedChannel[];
+  /** The channels where a lead splits the work, as before channels took turns; kept for one release, `channels` covers them. */
   crews: { name: string; lead: string; members: string[]; colors?: string[] }[];
 };
 export type SendValue = {
@@ -276,6 +289,8 @@ export type SendValue = {
   question?: CliQuestion;
   /** The turn stopped for something only the desktop decides: an MCP, browser or desktop approval (COD-354). */
   needsDesktop?: boolean;
+  /** The space a channel `orglet channel` made is in. */
+  space?: string;
 };
 export type ReadValue = {
   chat: CliChat;
@@ -295,13 +310,13 @@ export type ControlValue = SendValue & { action: ChatControl | 'answer' | 'revis
 /** Which kind of chat a row is: an orglet's or crew's main chat, a side thread, a channel or a schedule's run. */
 export type CliChatKind = 'orglet' | 'crew' | 'side' | 'channel' | 'schedule';
 /** One chat as `orglet chats` lists it (COD-354); `short` is the start of its id that `--chat` takes. */
-export type CliChatRow = { id: string; short: string; kind: CliChatKind; name: string; with: string[]; status: string; archived: boolean; createdAt: string; color?: string };
+export type CliChatRow = { id: string; short: string; kind: CliChatKind; name: string; with: string[]; status: string; archived: boolean; createdAt: string; color?: string; space?: string };
 export type ChatsValue = { chats: CliChatRow[] };
 export type BringValue = { mainTaskId: string; chat: CliChat; ref: string };
 export type MembersValue = { taskId: string; names: string[] };
 export type ChatChangeValue = { taskId: string; name: string; change: ChatChange; title?: string };
 export type ArchiveEntityValue = { kind: ChatKind; id: string; name: string; archived: boolean };
-export type TemplateValue = { id: string; name: string; members: string[] };
+export type TemplateValue = { id: string; name: string; members: string[]; space?: string };
 /** One schedule as `orglet schedules` lists it (COD-354); money is integer micros, as the app keeps it. */
 export type CliScheduleRow = {
   id: string;
@@ -326,7 +341,7 @@ export type CliSpaceRow = {
   name: string;
   orglets: string[];
   categories: string[];
-  channels: { name: string; category?: string; access: 'inherit' | 'listed'; orglets: string[] }[];
+  channels: { name: string; mode?: 'turns' | 'lead'; lead?: string; category?: string; access: 'inherit' | 'listed'; orglets: string[] }[];
 };
 export type SpacesValue = { spaces: CliSpaceRow[] };
 /** The marketplace as `orglet market` lists it; `source` says whether the catalog came from the service, a saved copy or the app itself. */

@@ -4,7 +4,7 @@ import { canContinueRun } from '../shared/out-of-steps';
 import type { CliChat, CliRequest, ControlValue, ForwardValue, ReactValue } from '../cli/protocol';
 import { chatsOf, CliFailure, matchChat, targetChat, taskRunners } from './cli-chats';
 import { isTurnRunning, pendingDecision, resolveMessage, savedTurnInput, turnArtifacts, turnRevisionAt } from './cli-chat-history';
-import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
+import { importFiles, readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 /**
  * What a person does to a chat's messages and its latest turn from the terminal (COD-354): react, forward, stop,
@@ -15,6 +15,9 @@ import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-t
 
 type ControlRequest = Extract<CliRequest, { op: 'control' }>;
 type AnswerRequest = Extract<CliRequest, { op: 'answer' }>;
+
+/** The core command behind each button under a turn; `continue` is a new message and has none of its own. */
+const CORE_COMMAND_OF_CONTROL = { stop: 'cancel', pause: 'pause', resume: 'resume', retry: 'retry' } as const;
 
 export class CliChatActions {
   constructor(private readonly dependencies: CliDependencies) {}
@@ -37,7 +40,9 @@ export class CliChatActions {
     if (revision === undefined) throw new CliFailure('not_found', 'Không tìm thấy tin nhắn của bạn để sửa.');
     const input = savedTurnInput(detail, revision);
     if (!input) throw new CliFailure('failed', 'Tin nhắn này thiếu bản lưu đầu vào; không thể khôi phục tệp gốc để sửa.');
-    const sourceIds = input.sourceIds.filter(sourceId => detail.sources.some(source => source.id === sourceId && !source.revoked));
+    const keptSourceIds = input.sourceIds.filter(sourceId => detail.sources.some(source => source.id === sourceId && !source.revoked));
+    // Files given with --file join the ones the message already had.
+    const sourceIds = [...new Set([...keptSourceIds, ...await importFiles(this.dependencies.request, request.files)])];
     const providerScopes = [...new Set(taskRunners(workspace, detail.task).map(worker => worker.provider).filter(provider => provider !== 'demo'))];
     await this.dependencies.request('reviseTask', {
       taskId: task.id,
@@ -84,8 +89,7 @@ export class CliChatActions {
     const { chat, task } = targetChat(workspace, request);
     if (request.action === 'continue') return this.continueTurn(request, workspace, chat, task.id, signal);
     if (request.action === 'stop' && !isTurnRunning(task)) throw new CliFailure('failed', 'Không có lượt nào đang chạy trong chat này.');
-    const command = request.action === 'stop' ? 'cancel' : request.action;
-    await this.dependencies.request(command, { id: task.id });
+    await this.dependencies.request(CORE_COMMAND_OF_CONTROL[request.action], { id: task.id });
     const startsRun = request.action === 'resume' || request.action === 'retry';
     return this.settle(chat, task.id, request.action, startsRun && request.wait, request.timeoutSeconds, signal);
   }
