@@ -18,6 +18,6 @@ Scope: new preflight controls in TeamEditor, coverage/results in SourcePanel, th
 
 No actionable interface findings remain in this scope. The earlier paused-state duplicate explanation was also removed. This does not audit every existing screen.
 
-Verification: packaged E2E creates an Eris template, checks preflight is enabled, edits its ID field/pair setting, runs the team and verifies saved/restored results. Native computer use opens the preflight panel and its result: 3 rows, 2 columns, 1 duplicate ID, with explicit limits and revoked read controls after restore. A later packaged E2E checks the grid correction against actual viewport bounds. Model semantics, malicious-parser isolation and live-provider quality are outside this UI review.
+Verification: packaged E2E creates a Data Check template, checks preflight is enabled, edits its ID field/pair setting, runs the team and verifies saved/restored results. Native computer use opens the preflight panel and its result: 3 rows, 2 columns, 1 duplicate ID, with explicit limits and revoked read controls after restore. A later packaged E2E checks the grid correction against actual viewport bounds. Model semantics, malicious-parser isolation and live-provider quality are outside this UI review.
 
 Verdict: **Approve** within the stated scope.

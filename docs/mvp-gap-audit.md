@@ -32,5 +32,5 @@ This is an implementation gap audit, not a completion certificate. The contract 
 
 1. Key-file path for the authorized OpenAI acceptance task.
 2. A clean Windows machine or VM for installer validation, and whether to sign builds.
-3. An authorized Eris case corpus with labels for §14.
+3. An authorized, labelled corpus of review cases for §14.
 5. Native computer-use checks of the knowledge, line-citation and waiting-input screens, if access to the Orglet window is granted.

@@ -17,7 +17,7 @@ The implementation reuses the existing source drawer and report renderer. Naviga
 
 The structured-review extension also passed packaged checks for insufficient evidence, a not-assessed run-stability check and draft feedback. Native computer use scrolled to these fields and collapsed the check disclosure. Conflicting-member presentation has not yet received a native fixture check.
 
-Required-checklist extension: packaged Eris Demo showed all five required checks as not assessed. Team-edit, template and backup roundtrip retained the policy. Native computer use opened Run stability after restore and observed the missing-assessment explanation. This was the actual Demo pipeline, not a manually inserted report.
+Required-checklist extension: packaged Data Check demo showed all five required checks as not assessed. Team-edit, template and backup roundtrip retained the policy. Native computer use opened Run stability after restore and observed the missing-assessment explanation. This was the actual Demo pipeline, not a manually inserted report.
 
 Feedback copying: E2E captured the main clipboard write and matched persisted feedback, then restored the real function. Native computer use clicked Copy, opened an unsent composer and pasted the exact fixture feedback. No task was submitted.
 

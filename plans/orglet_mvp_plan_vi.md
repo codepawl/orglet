@@ -4,7 +4,7 @@
 **Trạng thái:** Đề xuất triển khai v0.1, chưa phải sản phẩm đã xây hoặc benchmark đã đạt  
 **Nền tảng ưu tiên:** Windows desktop, local-first, một người sử dụng  
 **Hướng giao diện:** Tối giản theo cách tương tác của ChatGPT, dùng thương hiệu Orglet riêng  
-**Luồng kiểm chứng đầu tiên:** Eris Review Team
+**Luồng kiểm chứng đầu tiên:** Data Check Team
 
 > Giao việc cho một worker hoặc một team. Orglet giữ quy trình, kỹ năng, bằng chứng và lịch sử; model là phần có thể thay.
 
@@ -37,13 +37,13 @@ Ba điều MVP phải chứng minh:
 | Budget API, theo dõi quota khả dụng, allocation nội bộ | Payroll thật, tự tuyển/sa thải, ngân hàng, MRR/ROI tự suy diễn |
 | Checkpoint, pause/cancel, approval và run history | Distributed scheduler, cloud worker chạy 24/7 |
 | Routine hằng ngày/tuần đơn giản, chỉ chạy khi app hoạt động | Event bus đa dịch vụ và mọi kiểu webhook |
-| Eris Review template + Blank Team + Research/Review template nhẹ | Tự submit, tự approve challenge trên nền tảng Eris |
+| Data Check template + Blank Team + Research/Review template nhẹ | Tự gửi, tự duyệt hay thay đổi dữ liệu trên nền tảng bên ngoài |
 
-Không làm một engine dành riêng cho Eris. Eris phải được biểu diễn bằng template, skill và output schema; core không có các nhánh `if team.name === 'Eris'`.
+Không làm một engine dành riêng cho một quy trình review nào. Mỗi quy trình phải được biểu diễn bằng template, skill và output schema; core không có các nhánh `if team.name === '...'`.
 
 ### Mốc cắt phạm vi
 
-Bản dogfood đầu tiên cần native API, một worker, task bền vững và artifact. Bản MVP phát hành tiếp theo mới yêu cầu team orchestration, provider thứ hai, budget, Eris và kiểm thử Codex adapter. Company UI không nằm trên đường găng này.
+Bản dogfood đầu tiên cần native API, một worker, task bền vững và artifact. Bản MVP phát hành tiếp theo mới yêu cầu team orchestration, provider thứ hai, budget, template Data Check và kiểm thử Codex adapter. Company UI không nằm trên đường găng này.
 
 ## 3. Trải nghiệm người dùng cốt lõi
 
@@ -59,9 +59,9 @@ Màn kết nối chỉ hiển thị những integration thực sự hoạt độ
 
 ### 3.2 Giao việc
 
-Ví dụ người dùng chọn `Eris Review`, đính kèm một thư mục challenge và nhập:
+Ví dụ người dùng chọn `Data Check`, đính kèm một thư mục có hai bảng dữ liệu và nhật ký kết quả, rồi nhập:
 
-> Review challenge này theo checklist của tôi. Chỉ tạo báo cáo và draft feedback, không sửa hoặc submit gì lên Eris.
+> Kiểm tra hai bảng này theo checklist của tôi. Chỉ tạo báo cáo, không sửa hoặc gửi gì ra ngoài.
 
 Orglet tạo một task bền vững. Cùng một thread có thể có nhiều lần thử; mỗi lần thử có run ID, phiên bản instructions, danh sách nguồn và ledger riêng.
 
@@ -87,7 +87,7 @@ Hiển thị một câu trả lời tổng hợp cùng artifact `Review report`,
 
 Nút chính: `Chấp nhận bản review`. Nút phụ: `Yêu cầu xem lại`, `Sao chép feedback`, `Xuất Markdown`.
 
-**Chấp nhận bản review trong Orglet không đồng nghĩa approve challenge trên Eris.** V0.1 không có quyền gửi hoặc thay đổi dữ liệu bên ngoài.
+**Chấp nhận bản review trong Orglet không đồng nghĩa duyệt bất cứ gì trên nền tảng bên ngoài.** V0.1 không có quyền gửi hoặc thay đổi dữ liệu bên ngoài.
 
 ## 4. UI/UX: giống cách dùng ChatGPT, không giống dashboard quản trị
 
@@ -95,13 +95,13 @@ Nút chính: `Chấp nhận bản review`. Nút phụ: `Yêu cầu xem lại`, `
 
 ```text
 ┌──────────────────┬─────────────────────────────────────────┐
-│ Orglet           │ Eris Review ▾                Chi tiết   │
+│ Orglet           │ Data Check ▾                 Chi tiết   │
 │                  │                                         │
-│ + Công việc mới  │ Bạn: Review challenge này...            │
+│ + Công việc mới  │ Bạn: Kiểm tra hai bảng này...           │
 │ Tìm kiếm         │                                         │
 │                  │ Orglet                                  │
 │ TEAMS            │ Đã xong 2/3 bước. Còn thiếu run logs.    │
-│ Eris Review      │                                         │
+│ Data Check       │                                         │
 │ Research         │ ┌ Báo cáo review ─────────────────────┐ │
 │                  │ │ 2 vấn đề có bằng chứng              │ │
 │ WORKERS          │ │ 1 mục chưa đủ dữ liệu               │ │
@@ -110,7 +110,7 @@ Nút chính: `Chấp nhận bản review`. Nút phụ: `Yêu cầu xem lại`, `
 │ GẦN ĐÂY          │                                         │
 │ Review #...      │ ┌─────────────────────────────────────┐ │
 │ Research ...     │ │ Giao việc hoặc hỏi tiếp...          │ │
-│                  │ │ + Tệp     Eris Review ▾      Gửi ↑  │ │
+│                  │ │ + Tệp     Data Check ▾       Gửi ↑  │ │
 │ Thư viện         │ └─────────────────────────────────────┘ │
 │ Cài đặt          │                                         │
 └──────────────────┴─────────────────────────────────────────┘
@@ -179,7 +179,7 @@ Mục tiêu kiểm thử contrast: ít nhất 4.5:1 cho body text; không tự t
 | State | SQLite, migrations, WAL, một owner ghi | Task, queue, version và ledger ở local |
 | Search | SQLite FTS5 | Bắt đầu bằng tìm kiếm có phạm vi, chưa cần vector database |
 | Providers | Official OpenAI SDK + Anthropic SDK, adapter mỏng | Orglet sở hữu agent loop, không phụ thuộc harness |
-| Data audit | Trusted CSV/JSON validators; DuckDB Node cho Parquet/CSV | Chỉ chạy checker đóng gói sẵn, không chạy code challenge |
+| Data audit | Trusted CSV/JSON validators; DuckDB Node cho Parquet/CSV | Chỉ chạy checker đóng gói sẵn, không chạy code đính kèm |
 | Tests | Vitest + UI tests + desktop smoke/E2E | Tách deterministic tests khỏi eval dùng model thật |
 
 Không thêm Redis, Kubernetes, microservices, server account hay hosted database cho bản đầu. Không cần WSL cho luồng native. Dependency được pin bằng lockfile; kiểm thử packaged build trên Windows sạch.
@@ -231,7 +231,7 @@ orglet/
       tools/               # trusted readers/profilers
       adapters/            # native APIs, optional Codex
   templates/
-    eris-review/
+    data-check/
     research-review/
   tests/
     fixtures/
@@ -340,9 +340,9 @@ Ví dụ trạng thái:
 ```yaml
 schema_version: 1
 review:
-  challenge_id: demo-001
+  case_id: demo-001
   checks:
-    submission_schema:
+    table_alignment:
       status: pass
       evidence_refs: [artifact-schema-01]
     score_stability:
@@ -431,7 +431,7 @@ Codex connection
 Quota tài khoản: theo dữ liệu provider
 
 Phân bổ công việc trong Orglet:
-Eris Review      50%
+Data Check       50%
 Research        30%
 Dự phòng        20%
 ```
@@ -444,49 +444,44 @@ Scheduler dùng weighted fairness trên workload nội bộ, meter được thì
 
 V0.1 không vẽ bảng Claude subscription allocation khi integration đó chưa hỗ trợ.
 
-## 11. Eris Review Team: template kiểm chứng
+## 11. Data Check Team: template kiểm chứng
 
 ### 11.1 Thành viên
 
 | Role | Công việc | Đầu ra |
 |---|---|---|
-| Challenge reviewer | Đọc mục tiêu, logic đánh giá, GPU relevance và các giới hạn | Findings có bằng chứng và checklist coverage |
-| Data & scoring auditor | Schema, ID alignment, split, leakage checks, metric | Báo cáo checker + nhận định giới hạn |
-| Run auditor | Đọc logs, repeatability, failure patterns và rank stability | Stability report hoặc insufficient evidence |
-| Synthesizer | Ghép finding, giữ bất đồng, viết draft feedback | Review report + feedback ngắn |
+| Data reviewer | Đọc từng bảng: cột, kiểu, độ phủ, chỗ trống và trùng lặp | Findings có bằng chứng và checklist coverage |
+| Comparison auditor | Đối chiếu hai bảng: khóa, số dòng, giá trị | Báo cáo checker + nhận định giới hạn |
+| Run auditor | Đọc nhật ký kết quả: lỗi, lần chạy lặp lại, độ ổn định của điểm | Stability report hoặc insufficient evidence |
+| Synthesizer | Ghép finding, giữ bất đồng, viết bản review | Review report ngắn |
 
 Không thêm CEO, HR hoặc manager chỉ để mô phỏng tổ chức. Worker thứ tư là bước tổng hợp sau join, không phải cấp quản lý.
 
 ### 11.2 Luồng
 
 ```text
-Import bundle + source manifest
+Chọn thư mục + source manifest
               ↓
 Trusted deterministic checks
               ↓
-Challenge review / Data interpretation / Run audit
+Đọc từng bảng / Đối chiếu hai bảng / Đọc nhật ký kết quả
               ↓
 Validate findings + resolve shared-state conflicts
               ↓
-Synthesize recommendation + draft feedback
+Synthesize recommendation
               ↓
-An chấp nhận/chỉnh bản review trong Orglet
+Người dùng chấp nhận/chỉnh bản review trong Orglet
 ```
 
-V0.1 đọc code challenge như text, không chạy training hoặc script lạ trên host. Những kiểm tra đòi hỏi execution mà chưa có sandbox sẽ trở thành yêu cầu bổ sung logs hoặc bước thủ công.
+V0.1 đọc code như text, không chạy script lạ trên host. Những kiểm tra đòi hỏi execution mà chưa có sandbox sẽ trở thành yêu cầu bổ sung logs hoặc bước thủ công.
 
-### 11.3 Chính sách Eris cần đưa vào template
+### 11.3 Nguyên tắc của template
 
-- Kiểm tra đúng schema giữa prepared submission/sample submission và answers; kiểm tra cả ID/alignment khi contract yêu cầu.
-- GPU relevance, mục tiêu thực tế, dataset quality và solvability cần bằng chứng; ngưỡng dataset size/split theo từng loại task, không dùng một con số chung làm luật máy móc.
-- Phân biệt khác biệt năng lực giữa solutions với nhiễu khi rerun cùng solution. Không tạo variance giả để challenge trông khó hơn.
-- Mẫu kết quả `0.45/0.45/0.00` cần điều tra failure/rerun, không tự động approve hoặc kết luận cheating.
-- Public #15 → private #1 là tăng 14 bậc, không phải tăng 145 và không tự chứng minh challenge hỏng. Phải kiểm tra distribution, metric, sample size và stability.
-- Creator-side fixes tập trung vào prepared data và scoring trong quyền kiểm soát. Không biến yêu cầu đổi platform runner thành blocker mà creator không thể xử lý.
-- Vấn đề chưa đủ chứng cứ được ghi `insufficient_evidence`; vấn đề thực sự chưa giải quyết thì khuyến nghị revision/rerun, không approve dễ dãi.
-- Feedback ngắn, tự nhiên, dựa trên bằng chứng. Không tự gửi message hoặc submit bất cứ thay đổi nào.
-
-Các policy trên được trích từ yêu cầu An đã nêu trong trao đổi; đây không phải tuyên bố rằng chúng là toàn bộ quy định công khai của Eris. Khi có hướng dẫn challenge cụ thể, intake phải nạp và phát hiện xung đột.
+- Đối chiếu đúng schema và khóa giữa hai bảng khi người dùng yêu cầu.
+- Nhận định về chất lượng dữ liệu cần bằng chứng; không dùng một ngưỡng kích thước chung làm luật máy móc.
+- Phân biệt khác biệt thật giữa các kết quả với nhiễu khi chạy lại cùng một cấu hình.
+- Vấn đề chưa đủ chứng cứ được ghi `insufficient_evidence`; không biến điều chưa biết thành PASS.
+- Bản review ngắn, dựa trên bằng chứng. Không tự gửi message hoặc thay đổi gì bên ngoài.
 
 ### 11.4 Định dạng nguồn vào
 
@@ -511,7 +506,7 @@ Additional requirements:
 - Path validation xử lý traversal, symlink/junction/reparse point; không tin đường dẫn do LLM tự dựng.
 - Không có unrestricted shell, browser automation hoặc arbitrary script execution trong native v0.1.
 - Chỉ gửi dữ liệu/bằng chứng đã được phép sang provider. Local-first không có nghĩa inference cũng local.
-- Private challenge answers và dữ liệu khách hàng không tự động upload. Cho biết file/snippet nào sẽ rời máy, scope consent theo connection/team.
+- Đáp án riêng tư và dữ liệu khách hàng không tự động upload. Cho biết file/snippet nào sẽ rời máy, scope consent theo connection/team.
 - Built-in profilers không được cài extension, truy cập mạng hoặc ghi file theo lệnh tùy ý từ dữ liệu đầu vào.
 - Native parser/helper cần được đánh giá isolation riêng; utility process không được quảng cáo là sandbox an toàn cho input độc hại.
 - Audit log local hữu ích để truy vết, nhưng không gọi là bất biến chống owner sửa hoặc đạt compliance enterprise.
@@ -534,9 +529,9 @@ Native OpenAI connection, context compiler tối thiểu, trusted file reader, t
 
 **Xong khi:** chọn file → worker tạo báo cáo thật có references → xem artifact → restart không mất lịch sử → cancel không tạo thêm request mới.
 
-### M2: Team, shared state và Eris
+### M2: Team, shared state và template review
 
-Worker CRUD, team membership, instruction/skill revisions; tuần tự và parallel-join; structured findings; Eris template; partial failure, retry và approval UI.
+Worker CRUD, team membership, instruction/skill revisions; tuần tự và parallel-join; structured findings; template Data Check; partial failure, retry và approval UI.
 
 **Xong khi:** các role không overwrite finding của nhau; thiếu logs không thành PASS; một role lỗi vẫn giữ kết quả của role khác; một kết luận chung có đường dẫn ngược về bằng chứng.
 
@@ -556,7 +551,7 @@ Checkpoint/resume, stale-lease recovery, simple routines, missed-run policy, imp
 
 ### M5: Benchmark và release candidate
 
-Chạy corpus Eris đã được phép dùng, baseline một agent/manual và team; test generic Research/Review template; Windows installer, dependency checks, migration rollback, source/privacy review.
+Chạy bộ case review đã được phép dùng, baseline một agent/manual và team; test generic Research/Review template; Windows installer, dependency checks, migration rollback, source/privacy review.
 
 **Xong khi:** có báo cáo kết quả thật, có giới hạn đã biết, những đường dẫn chưa hỗ trợ bị ẩn/disabled đúng; không ship screen đẹp nhưng action chính là mock.
 
@@ -574,7 +569,7 @@ So sánh:
 
 **B:** một worker trong Orglet với cùng model, tools và mức ngân sách.
 
-**C:** Eris Team trong Orglet với cùng model khả dụng và cùng trần ngân sách tổng.
+**C:** Data Check Team trong Orglet với cùng model khả dụng và cùng trần ngân sách tổng.
 
 B so với C kiểm tra multi-agent có đáng dùng không. Swap provider là một test riêng, không trộn với phép đo cải thiện do orchestration. Ghi model/config/date vì hành vi có thể thay đổi.
 
@@ -599,7 +594,7 @@ Không lấy số token, số bot hoặc số task làm đại diện trực ti�
 - Mọi finding được chấp nhận có evidence reference resolve được; nhận định vượt coverage bị phát hiện.
 - Mục tiêu giảm ít nhất 30% median human active time so với baseline mà không giảm quality gate. Nếu không đạt, giữ workflow đơn giản hoặc giảm số worker.
 - Resume không duplicate artifact commit và không tự replay action chưa xác định kết quả.
-- Tạo được một team không liên quan Eris bằng UI/template mà không sửa core.
+- Tạo được một team không liên quan Data Check bằng UI/template mà không sửa core.
 
 Chỉ phát biểu đã nhanh hơn/rẻ hơn sau khi có measurements. Case holdout không dùng để sửa prompt rồi tiếp tục gọi là holdout cũ.
 
@@ -607,14 +602,14 @@ Chỉ phát biểu đã nhanh hơn/rẻ hơn sau khi có measurements. Case hold
 
 Một demo end-to-end nên cho thấy:
 
-1. Tạo `Eris Review` từ template, chỉnh một instruction và thấy version mới.
-2. Chọn challenge bundle, chạy review thật, xem progress gọn.
+1. Tạo `Data Check` từ template, chỉnh một instruction và thấy version mới.
+2. Chọn thư mục dữ liệu, chạy review thật, xem progress gọn.
 3. Mở một finding và đi đến đúng nguồn/checker output.
 4. Thiếu run logs thì hệ thống hỏi bổ sung, không tự pass.
 5. Pause/restart/resume, kết quả đã có không mất.
 6. Đổi provider cho worker, chạy lại với cùng skills/state snapshot và đánh giá output mới.
 7. Chạm budget hoặc quota, công việc chờ thay vì âm thầm tiêu nguồn khác.
-8. Chấp nhận bản review và xuất Markdown, không thay đổi nền tảng Eris.
+8. Chấp nhận bản review và xuất Markdown, không thay đổi gì bên ngoài.
 
 Sau đó tạo một Research/Review Team nhỏ để chứng minh Orglet là sản phẩm tổng quát.
 
@@ -632,7 +627,7 @@ Monetization chỉ kiểm chứng sau dogfood: trước hết đo willingness-to
 
 MVP đạt khi một người dùng mới có thể kết nối provider được hỗ trợ, tạo worker hoặc team, giao việc với file, nhận artifact có nguồn, kiểm soát chi phí/quyền, sửa instructions và dùng lại vào task sau mà không mở terminal để sửa config.
 
-Native engine phải hoạt động khi không cài Codex/Claude Code/OpenClaw. Company không bắt buộc. Eris không hard-code vào engine. Dữ liệu và secret không xuất ngoài scope. Những giới hạn còn lại được phản ánh bằng trạng thái thật trong UI.
+Native engine phải hoạt động khi không cài Codex/Claude Code/OpenClaw. Company không bắt buộc. Không quy trình review nào hard-code vào engine. Dữ liệu và secret không xuất ngoài scope. Những giới hạn còn lại được phản ánh bằng trạng thái thật trong UI.
 
 **Ưu tiên cuối cùng:** một task thật chạy tốt từ đầu đến cuối có giá trị hơn mười màn dashboard chưa nối với runtime.
 

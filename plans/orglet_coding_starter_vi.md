@@ -17,12 +17,12 @@ Xây một vertical slice thật từ UI → policy/budget gate → native model
 3. Chọn Electron + React + TypeScript + Vite + Tailwind + shadcn/ui; local core trong utility process; SQLite local. Không tự thêm backend cloud, Redis hoặc Kubernetes.
 4. UI theo hướng ChatGPT: sidebar gọn, nội dung một cột, composer phía dưới, panel chi tiết mở khi cần. Không gradient/neon, office 3D, org chart mặc định, logo OpenAI hoặc font độc quyền.
 5. Secrets không vào renderer, logs hoặc template export. Typed IPC allowlist; contextIsolation/sandbox bật; Node integration tắt trong renderer.
-6. Native v0.1 chỉ dùng trusted readers/checkers; không chạy code challenge, imported scripts hoặc unrestricted shell. Prompt không phải sandbox.
+6. Native v0.1 chỉ dùng trusted readers/checkers; không chạy code đính kèm, imported scripts hoặc unrestricted shell. Prompt không phải sandbox.
 7. Budget reservation và permission check có từ request thật đầu tiên. Giao dịch ledger dùng integer money units và atomic reservation.
 8. API budget không bằng provider account spending toàn cục. Subscription allocation là quota/fairness nội bộ, không tự đổi phần trăm thành API credits.
 9. Chỉ tích hợp subscription qua cơ chế được provider hỗ trợ. Native Anthropic dùng API. Không thu thập cookies/OAuth tokens để xây unofficial proxy.
 10. Codex app-server là adapter tùy chọn; chạy dưới capability matrix, không hứa native và harness có cùng quyền/khả năng.
-11. Eris chỉ là template/skill/schema. Không hard-code tên Eris vào orchestration engine.
+11. Mỗi quy trình review chỉ là template/skill/schema. Không hard-code tên template vào orchestration engine.
 12. Không submit, approve, gửi message hoặc sửa dữ liệu bên ngoài thay người dùng trong MVP.
 13. Missing evidence, unknown usage, partial failure phải hiển thị đúng. Không đổi thành success để demo đẹp.
 14. Model/SDK/protocol versions và pricing phải được kiểm tra bằng tài liệu chính thức rồi pin trong lockfile/capability catalog. Không suy diễn từ tên model nhớ sẵn.
@@ -56,7 +56,7 @@ Sau đó thực hiện M0 và vertical slice của M1:
 - Hiển thị tiến độ ở mức hành động, không dump nội bộ multi-agent hoặc yêu cầu hidden reasoning.
 - Resume lịch sử sau restart; run gián đoạn không tự đổi thành completed.
 
-Chỉ sau vertical slice này mới mở M2 (Team/Eris). Không implement cả năm milestone cùng lúc mà bỏ qua nghiệm thu.
+Chỉ sau vertical slice này mới mở M2 (Team/template review). Không implement cả năm milestone cùng lúc mà bỏ qua nghiệm thu.
 
 ## Quy tắc code
 
