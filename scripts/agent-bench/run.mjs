@@ -50,7 +50,7 @@ async function launch(profile, videoDir) {
   if (options.provider === 'demo') env.ORGLET_DEMO_REPLIES = '1';
   const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${profile}`], env, recordVideo: { dir: videoDir, size: { width: 1280, height: 800 } } });
   const page = await app.firstWindow();
-  await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.setSize(1280, 800); window.center(); });
+  await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows()[0]; window.setContentSize(1280, 800); window.center(); });
   return { app, page };
 }
 
