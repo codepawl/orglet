@@ -11,7 +11,7 @@ Contract: after a final report with `not_assessed` checks, the task stays in `wa
 
 [`scripts/revision-smoke.mjs`](../scripts/revision-smoke.mjs) (`pnpm test:revisions`) already exercises:
 
-1. Demo / Eris path that ends in `waiting_input`
+1. Demo / Data Check path that ends in `waiting_input`
 2. `acknowledgeEvidence` leaves status `waiting_input`
 3. Supplement via `reviseTask` (new input revision) while prior artifacts stay intact
 4. History selection of the earlier revision
@@ -24,7 +24,7 @@ Run against a packaged build when access to the Orglet window is granted. Prefer
 
 | Step | Expected | Result |
 |---|---|---|
-| Open a Demo Eris task that finished with missing checks | Status shows waiting for evidence; Accept and supplement actions available; blind Retry hidden | Not run this session |
+| Open a Demo Data Check task that finished with missing checks | Status shows waiting for evidence; Accept and supplement actions available; blind Retry hidden | Not run this session |
 | Click **Ghi nhận giới hạn** | Success toast; status remains waiting; report checks unchanged | Not run this session |
 | Supplement sources / brief and send a revision | New revision completes; old artifacts unchanged; history can show revision 1 | Not run this session |
 | Restart the app with the same user data | Waiting task still waiting; acknowledgment preserved | Not run this session |

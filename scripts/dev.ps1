@@ -4,8 +4,8 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  $nodeDir = if ($env:ORGLET_NODE_DIR) { $env:ORGLET_NODE_DIR } else { Join-Path $HOME 'Documents\Eris\tool\runtime\node-v24.19.0-win-x64' }
-  if (-not (Test-Path (Join-Path $nodeDir 'node.exe'))) { throw "Không tìm thấy node. Cài Node 24 hoặc đặt ORGLET_NODE_DIR." }
+  $nodeDir = $env:ORGLET_NODE_DIR
+  if (-not $nodeDir -or -not (Test-Path (Join-Path $nodeDir 'node.exe'))) { throw "Không tìm thấy node. Cài Node 24 hoặc đặt ORGLET_NODE_DIR." }
   $env:PATH = "$nodeDir;$env:PATH"
 }
 $flagHome = Join-Path $env:TEMP 'orglet-forge-home'

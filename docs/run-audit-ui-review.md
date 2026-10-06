@@ -11,5 +11,5 @@ The packaged E2E attaches two CSV fixtures through the UI, checks disabled state
 
 Native computer use separately clicked the run action in the Windows app, observed a second saved result and opened it. The visible summary correctly showed 60 completed, one failed and one excluded failure score. The original expanded group table made rank information difficult to reach. The tables now use separate disclosure controls, and saved results follow both checker actions. Final E2E covers those controls. Native execution did not call a model API or execute downloaded code.
 
-Status copy describes observations, insufficient evidence or failures needing review. It never calls the challenge stable or approved from these descriptive statistics. Full screen-reader testing, exhaustive contrast checks and installer execution were not part of this review.
+Status copy describes observations, insufficient evidence or failures needing review. It never calls the results stable or approved from these descriptive statistics. Full screen-reader testing, exhaustive contrast checks and installer execution were not part of this review.
 The final layout was also checked with native computer use: opening the rank disclosure showed the table directly, and scrolling it showed s14 with public 15, private 1 and +14.
