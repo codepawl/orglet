@@ -154,6 +154,7 @@ try {
   assert.ok(second.answers.length >= 1 && second.answers[0].text.length > 0);
   const status = JSON.parse(expectOk(orglet(userData, 'status', '--json'), 'orglet status --json'));
   assert.equal(status.orglets >= 1, true);
+  assert.equal(typeof status.channels, 'number', 'status counts every channel');
   assert.equal(`orglet ${status.version}`, version);
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0, 'Status, list, send and read must work without creating a window');
 
@@ -168,6 +169,7 @@ try {
   const crewConfigFile = join(directory, 'crew.json');
   await writeFile(crewConfigFile, JSON.stringify({ name: 'CLI managed crew', instructions: 'Review together.', memberIds: [managedOrglet.id], synthesizerId: configurations.orglets[0].id, workflow: 'parallel', monthlyBudgetMicros: 100_000 }));
   const managedCrew = JSON.parse(expectOk(orglet(userData, 'create', 'crew', '--config', crewConfigFile, '--json'), 'orglet create crew'));
+  assert.equal(typeof managedCrew.space, 'string', 'A channel made with create is put in a space');
   const patchFile = join(directory, 'patch.json');
   await writeFile(patchFile, JSON.stringify({ name: 'CLI renamed orglet', description: 'Edited from the terminal' }));
   const revisedOrglet = JSON.parse(expectOk(orglet(userData, 'edit', 'orglet', managedOrglet.name, '--config', patchFile, '--json'), 'orglet edit orglet'));
@@ -246,6 +248,16 @@ try {
   assert.match(spaces, /Smoke space: Researcher/);
   assert.match(spaces, /#ideas/);
   assert.match(spaces, /#sources/, 'the listing brought its channels');
+  // Every channel is listed under its space, and a channel made without --space is put in one.
+  const plainChannel = expectOk(orglet(userData, 'channel', '--name', 'plain', '--with', 'Researcher'), 'orglet channel without a space');
+  assert.match(plainChannel, /#plain in the space /, 'A channel made without --space goes to a space');
+  const listed = JSON.parse(expectOk(orglet(userData, 'list', '--json'), 'orglet list --json'));
+  assert.ok(listed.channels.some(channel => channel.name === 'ideas' && channel.space === 'Smoke space' && channel.mode === 'turns'), 'list names every channel under its space');
+  assert.ok(listed.channels.some(channel => channel.name === 'plain' && channel.space), 'list names a channel made without --space under a space');
+  assert.ok(Array.isArray(listed.crews), 'list keeps its crews key for one release');
+  assert.match(expectOk(orglet(userData, 'list'), 'orglet list with channels'), /Channels\n {2}\S[\s\S]*#plain/);
+  assert.match(expectOk(orglet(userData, 'rename', '--help'), 'orglet rename --help'), /--rename/);
+  assert.match(expectOk(orglet(userData, 'memory', '--help'), 'orglet memory --help'), /--confirm/);
   assert.match(expectOk(orglet(userData, 'completion', 'bash'), 'orglet completion'), /complete -o default -F _orglet_completion orglet/);
 
   // With the app closed, the command starts it on the same data folder and answers once it is up.
