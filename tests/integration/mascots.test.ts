@@ -92,8 +92,8 @@ it('draws a body, its eyes and nothing worn', () => {
   }
   // No two mascots share both a body and a face, so each reads as its own.
   expect(new Set(mascotIds.map(id => `${mascots[id].body}/${mascots[id].face}`)).size).toBe(mascotIds.length);
-  // The cursor still draws the logo's own outline.
-  expect(bubbleOutline.startsWith('M23.7 13')).toBe(true);
+  // The cursor draws the logo's own outline: the app icon's bowed bubble on the 64 grid.
+  expect(bubbleOutline.startsWith('M32 13C45.24 13 52 19.76 52 33')).toBe(true);
 });
 
 it('lights every mascot from its own gradient, never a shared one', () => {

@@ -3,9 +3,10 @@ import { eyeColorFor, isHexColor, NEUTRAL_COLOR, paint, type ColorMode } from '.
 /**
  * Orglets drawn in a terminal (COD-236): the Orglet logo bubble of the app's small glyphs (`smallGlyphs` in
  * renderer/components/mascots.tsx) redrawn by hand on a pixel grid. Each text row holds two pixel rows through the
- * half blocks ▀ and ▄, so a pixel is about square. The body is a square with round corners and a small, square corner
- * at the bottom left (the speech bubble's tail); two upright capsule eyes sit high and half a pixel right of centre;
- * there is no mouth. Expressions live in the eyes alone, as in the app.
+ * half blocks ▀ and ▄, so a pixel is about square. The body is the logo's ball (redrawn 2026-10-06): rounded three
+ * pixels deep at the top and at the bottom right, with a small, square corner at the bottom left (the bubble's tail).
+ * Two eyes sit high and lean to the right, the upper pixel of each one column right of the lower; there is no
+ * mouth. Expressions live in the eyes alone, as in the app.
  */
 
 /**
@@ -20,11 +21,11 @@ const EYE = 2;
 type Pixel = typeof EMPTY | typeof BODY | typeof EYE;
 
 /**
- * The 10x10 body. Top corners and the bottom right are rounded two pixels deep; the bottom left stays square, which
- * is how the logo's small corner reads at this size.
+ * The 10x10 body. Top corners and the bottom right are rounded three pixels deep; the bottom left stays square,
+ * which is how the logo's small corner reads at this size.
  */
 const BODY_ROWS = [
-  '..######..',
+  '...####...',
   '.########.',
   '##########',
   '##########',
@@ -33,13 +34,13 @@ const BODY_ROWS = [
   '##########',
   '##########',
   '#########.',
-  '########..',
+  '#######...',
 ];
 
 export const FACE_WIDTH = BODY_ROWS[0].length;
 export const FACE_HEIGHT = BODY_ROWS.length / 2;
 
-/** Eye columns for each gaze. Looking ahead they sit at 4 and 6 of 0..9, half a pixel right of the body's middle. */
+/** The column of each eye's lower pixel, for each gaze; its upper pixel is one column to the right, which is the lean. */
 const EYE_COLUMNS: Record<Exclude<FaceFrame, 'blink' | 'happy'>, readonly [number, number]> = {
   open: [4, 6],
   left: [3, 5],
@@ -68,7 +69,8 @@ export function facePixels(frame: FaceFrame): Pixel[][] {
   const pixels = bodyPixels();
   if (CLOSED_EYES[frame]) return pixels;
   for (const column of eyeColumns(frame)) {
-    for (let row = EYE_TOP; row <= EYE_BOTTOM; row += 1) pixels[row][column] = EYE;
+    pixels[EYE_TOP][column + 1] = EYE;
+    pixels[EYE_BOTTOM][column] = EYE;
   }
   return pixels;
 }

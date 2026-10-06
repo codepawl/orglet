@@ -583,6 +583,8 @@ export interface Bridge {
   changelog(refresh?: boolean): Promise<Changelog>;
   updateState(): Promise<UpdateState>;
   checkForUpdates(): Promise<UpdateState>;
+  /** Quits Orglet the way closing its last window does. */
+  quit(): Promise<void>;
   /** Restarts into a downloaded update; refused while none is downloaded. */
   installUpdate(): Promise<void>;
   onChange(callback: () => void): () => void;

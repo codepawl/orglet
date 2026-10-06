@@ -1,12 +1,11 @@
-import { Bell, BookOpen, CalendarClock, Bookmark, BookmarkX } from 'lucide-react';
+import { BookOpen, CalendarClock, Bookmark, BookmarkX } from 'lucide-react';
 import type { Task, Team } from '../../shared/contracts';
 import { waitsForPerson, type RunningItem } from '../../shared/running';
 import { t } from '../i18n';
 import type { ActivityTab } from '../areas';
 import { unsaveMessage, type SavedMessage } from '../saved';
 import { Button } from './ui';
-import { ChatHeader } from './ChatViews';
-import { PageTabs } from './PageTabs';
+import { PanelPage } from './PanelPage';
 import { NoticeList } from './NoticeCentre';
 import { RunningGroups } from './RunningCentre';
 import { clockLabel, dayLabel } from './TimeMark';
@@ -30,9 +29,9 @@ export function activityTabLabel(tab: ActivityTab): string {
  * to review. Running: what works or waits in line. Done: what the app told you after its toast was gone. Saved: the
  * messages saved for later with "Lưu để xem sau".
  */
-export function ActivityPage({ tab, onTab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, onOpenArchive, updateReady, onRestartUpdate }: {
+export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, onOpenArchive, updateReady, onRestartUpdate }: {
+  /** The part of Activity on screen, chosen in the sidebar. */
   tab: ActivityTab;
-  onTab: (tab: ActivityTab) => void;
   running: readonly RunningItem[];
   tasks: readonly Task[];
   teams: readonly Team[];
@@ -48,15 +47,9 @@ export function ActivityPage({ tab, onTab, running, tasks, teams, saved, pending
   updateReady: boolean;
   onRestartUpdate: () => void;
 }) {
-  const counts = activityCounts(running, saved, pendingSchedules + notesToReview);
-  const tabs = (['needs', 'running', 'done', 'saved'] as const).map(id => ({ id, label: activityTabLabel(id), count: id === 'done' ? undefined : counts[id] }));
   const waiting = running.filter(waitsForPerson);
   const working = running.filter(item => !waitsForPerson(item));
-  return <>
-    <ChatHeader contentKey={`activity:${tab}:${counts.needs}:${counts.running}:${counts.saved}`}
-      lead={<span className="topbar-title"><Bell size={16} aria-hidden="true" /><span className="topbar-name">{t('Hoạt động')}</span></span>}
-      views={<PageTabs tabs={tabs} current={tab} onSelect={onTab} label={t('Các phần của Hoạt động')} />} actions={null} />
-    <div className="page-scroll"><div className="page-body activity-page">
+  return <PanelPage className="activity-page">
       {tab === 'needs' && <>
         {pendingSchedules > 0 && <ActivityLink icon={<CalendarClock size={16} />} text={t('{0} lịch cần bạn xem', [pendingSchedules])} action={t('Mở lịch chạy')} onClick={onOpenSchedules} />}
         {notesToReview > 0 && <ActivityLink icon={<BookOpen size={16} />} text={t('{0} ghi chú đang chờ duyệt', [notesToReview])} action={t('Mở thư viện')} onClick={onOpenLibrary} />}
@@ -65,8 +58,7 @@ export function ActivityPage({ tab, onTab, running, tasks, teams, saved, pending
       {tab === 'running' && <RunningGroups items={working} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={t('Không có gì đang chạy.')} />}
       {tab === 'done' && <NoticeList open onOpenChat={onOpenChat} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} />}
       {tab === 'saved' && <SavedList saved={saved} chatExists={chatExists} onOpen={onOpenMessage} />}
-    </div></div>
-  </>;
+  </PanelPage>;
 }
 
 function ActivityLink({ icon, text, action, onClick }: { icon: React.ReactNode; text: string; action: string; onClick: () => void }) {

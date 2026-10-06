@@ -66,6 +66,7 @@ const bridge: Bridge = {
   changelog: (refresh = false) => invoke('orglet:changelog', refresh),
   updateState: () => invoke('orglet:update-state'),
   checkForUpdates: () => invoke('orglet:check-for-updates'),
+  quit: () => invoke('orglet:quit'),
   installUpdate: () => invoke('orglet:install-update'),
   onUpdate: callback => {
     const listener = (_event: Electron.IpcRendererEvent, state: UpdateState) => callback(state);

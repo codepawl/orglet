@@ -21,7 +21,8 @@ try {
 
   // Author a team note through the library UI.
   await page.getByRole('button', { name: /^Thư viện/ }).click();
-  await page.getByRole('tab', { name: 'Knowledge', exact: true }).click();
+  // Skills or Knowledge is chosen in the sidebar; the page has no tabs of its own.
+  await page.locator('.sidebar .sidebar-nav-item', { hasText: 'Knowledge' }).click();
   await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).click();
   await page.getByRole('textbox', { name: 'Tiêu đề', exact: true }).fill('Evidence limits');
   await page.getByRole('textbox', { name: 'Nội dung', exact: true }).fill('State which claims lack a cited source before summarizing.');
@@ -56,7 +57,8 @@ try {
 
   // Keyword search reaches FTS in core.
   await page.getByRole('button', { name: /Thư viện/ }).click();
-  await page.getByRole('tab', { name: 'Knowledge', exact: true }).click();
+  // Skills or Knowledge is chosen in the sidebar; the page has no tabs of its own.
+  await page.locator('.sidebar .sidebar-nav-item', { hasText: 'Knowledge' }).click();
   await page.getByRole('searchbox', { name: 'Tìm knowledge' }).fill('summariz');
   await page.getByRole('region', { name: 'Đã duyệt' }).getByText('Đã duyệt (2)').waitFor();
   await page.getByRole('searchbox', { name: 'Tìm knowledge' }).fill('nothingmatches');
