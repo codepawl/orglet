@@ -2577,7 +2577,14 @@ export function App() {
         description={panel === 'routines' ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.'))}
         actions={panel === 'routines' ? undefined
           : libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}>
-      {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
+      {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView}
+        asker={workspace.workers[0]?.name} onAsk={request => {
+          // The first orglet in the person's own order takes the request; any orglet can propose a schedule.
+          const first = workspace.workers[0];
+          if (!first) return;
+          openWorker(first.id);
+          setBrief(t('Lên lịch giúp tôi: {0}', [request]));
+        }} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {/* A skill and a note are edited in a dialog over the Library (user, 2026-10-05), so the list stays behind them. */}
       {panel === 'skill' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingSkill?.package ? 'Review skill' : t('Chỉnh skill')}>
