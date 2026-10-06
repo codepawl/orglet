@@ -1024,7 +1024,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .search-result-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
 .search-result-head { display:flex; align-items:baseline; gap:8px; min-width:0; }
 .search-result-name { flex:0 1 auto; min-width:0; font-size:15px; line-height:20px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.search-result-hash { flex-shrink:0; margin-right:3px; color:var(--muted); vertical-align:-1px; }
+/* The hash mark is an item of the row's head, beside the name: inside the name it took a line of its own. */
+.search-result-hash { flex-shrink:0; align-self:center; margin-right:-5px; color:var(--muted); }
 .search-result-detail { flex:1 1 0; min-width:0; font-size:13px; line-height:20px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .search-result-snippet { font-size:13px; line-height:18px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .search-mark { background:none; color:var(--text); font-weight:600; }
