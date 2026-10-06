@@ -1,6 +1,6 @@
 {
   "App.tsx": {
-    "rawButton": 12,
+    "rawButton": 10,
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 4,
@@ -203,7 +203,7 @@
     "hexColour": 0
   },
   "components/MemberColumn.tsx": {
-    "rawButton": 2,
+    "rawButton": 1,
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 0,
@@ -266,7 +266,7 @@
     "hexColour": 1
   },
   "components/RoutinesPanel.tsx": {
-    "rawButton": 1,
+    "rawButton": 0,
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 4,

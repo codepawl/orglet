@@ -2495,9 +2495,9 @@ export function App() {
         {(['add', 'market'] as const).map(view => {
           const open = friendsOpen && homePage === view;
           // Add orglet is a dialog over whatever is open; the marketplace is a page of Home.
-          if (view === 'add') return <button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => setAddOrgletOpen(true)}>
+          if (view === 'add') return <Button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => setAddOrgletOpen(true)}>
             <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm Tí')}</span>
-          </button>;
+          </Button>;
           return <button key={view} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => { clearSelection(); setHomePage(view); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
             <Store size={18} aria-hidden="true" /><span className="sidebar-nav-name">Marketplace</span>
           </button>;
@@ -2536,9 +2536,9 @@ export function App() {
       {sidebarFor === 'schedules' && <nav className="sidebar-nav" aria-label={t('Lịch chạy')}>
         {/* Schedules has one thing to make, so making it sits here in the sidebar, above the list (user, 2026-10-06).
             The Library makes two kinds of thing, so its buttons stay in the main panel. */}
-        <button type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => void leaveRoutine(() => openRoutines({ editing: true }))}>
+        <Button type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => void leaveRoutine(() => openRoutines({ editing: true }))}>
           <LucidePlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Tạo lịch')}</span>
-        </button>
+        </Button>
         <button type="button" className={`sidebar-nav-item${routineView.editing ? '' : ' active'}`} aria-current={routineView.editing ? undefined : 'page'} onClick={() => void leaveRoutine(() => openRoutines())}>
           <LucideCalendarClock size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Tất cả lịch')}</span><span className="sidebar-nav-count" aria-hidden="true">{workspace.routines.length}</span>
         </button>

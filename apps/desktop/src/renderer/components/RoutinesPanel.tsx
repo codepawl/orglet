@@ -176,7 +176,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
           {!routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p>
             {asker && onAsk && <>
               <p className="muted routine-ask-lead">{t('Hoặc nhờ {0} lên lịch giúp:', [asker])}</p>
-              <ul className="suggestions routine-asks">{SCHEDULE_ASKS().map(request => <li key={request}><button type="button" onClick={() => onAsk(request)}><CalendarClock size={16} aria-hidden="true" />{request}</button></li>)}</ul>
+              <ul className="suggestions routine-asks">{SCHEDULE_ASKS().map(request => <li key={request}><Button type="button" onClick={() => onAsk(request)}><CalendarClock size={16} aria-hidden="true" />{request}</Button></li>)}</ul>
             </>}
           </div>}
     <div className="routine-list">

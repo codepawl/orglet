@@ -47,12 +47,12 @@ export function MemberColumn({ you, onYou, members, others, working, leadId, onM
     <ul className="members-list">
       <li>
         {/* The person's own row opens their account, the way an orglet's row opens its profile (user, 2026-10-05). */}
-        <button type="button" className="member-row member-you" aria-label={t('Tài khoản và cài đặt')} onClick={onYou}>
+        <Button type="button" className="member-row member-you" aria-label={t('Tài khoản và cài đặt')} onClick={onYou}>
           <Avatar name={you} seed={you} size="sm" />
           <span className="member-text">
             <span className="member-name">{you}{you !== youWord && <span className="member-lead">{youWord}</span>}</span>
           </span>
-        </button>
+        </Button>
       </li>
       {members.map(worker => <li key={worker.id}>
         <MemberRow worker={worker} working={working.has(worker.id)} lead={worker.id === leadId} onMessage={() => onMessage(worker)} onEdit={() => onEdit(worker)}

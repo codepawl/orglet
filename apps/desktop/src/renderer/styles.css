@@ -594,6 +594,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .suggestions button { display:flex; align-items:center; gap:12px; width:100%; min-height:40px; padding:7px 10px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-size:14px; text-align:left; }
 .suggestions button:hover:not(:disabled) { background:var(--surface); color:var(--text); }
 .suggestions button:disabled { opacity:.55; }
+/* A suggestion drawn with the kit's Button reads exactly like the raw ones beside it. */
+.suggestions .org-button { justify-content:normal; gap:12px; min-height:40px; padding:7px 10px; border:0; border-radius:10px; color:var(--muted); font-size:14px; font-weight:inherit; transition:unset; }
+.suggestions .org-button:hover:not(:disabled), .suggestions .org-button:active:not(:disabled) { background:var(--surface); color:var(--text); }
+.suggestions .org-button:focus-visible { box-shadow:none; outline:2px solid var(--focus); outline-offset:-1px; }
 /* Thread: the prompt bar stays pinned under the conversation. */
 /* What is being replied to, above the bar: who said it and enough of it to recognise, with a way out. It is a
    quote, so it is set apart by a soft surface rather than by the quote bar a border would draw. */
@@ -3148,6 +3152,10 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .sidebar-nav-item { display:flex; align-items:center; gap:10px; min-height:36px; padding:0 10px; border:0; border-radius:8px; background:transparent; color:var(--text); font:inherit; font-size:14px; text-align:left; cursor:pointer; }
 .sidebar-nav-item:hover { background:var(--row-hover); }
 .sidebar-nav-item.active { background:var(--row-active); }
+/* A sidebar row drawn with the kit's Button reads exactly like the raw rows beside it. */
+.org-button.sidebar-nav-item { justify-content:normal; gap:10px; min-height:36px; padding:0 10px; border:0; border-radius:8px; color:var(--text); font:inherit; font-size:14px; transition:unset; }
+.org-button.sidebar-nav-item:hover:not(:disabled), .org-button.sidebar-nav-item:active:not(:disabled) { background:var(--row-hover); }
+.org-button.sidebar-nav-item:focus-visible { box-shadow:none; outline:2px solid var(--focus); outline-offset:-1px; }
 .sidebar-nav-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sidebar-nav-count { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .channel-uncategorized { display:flex; flex-direction:column; gap:2px; margin-bottom:6px; }
@@ -3214,6 +3222,10 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .members-list { display:flex; flex-direction:column; flex:1; gap:2px; min-height:0; margin:0; padding:0 8px 16px; overflow:auto; list-style:none; }
 .member-row { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:4px 8px; border:0; border-radius:8px; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
 .member-row:hover, .member-row[aria-expanded="true"] { background:var(--row-hover); }
+/* A member row drawn with the kit's Button reads exactly like the raw rows beside it. */
+.org-button.member-row { justify-content:normal; gap:10px; min-height:44px; padding:4px 8px; border:0; border-radius:8px; color:inherit; font:inherit; transition:unset; }
+.org-button.member-row:hover:not(:disabled), .org-button.member-row:active:not(:disabled) { background:var(--row-hover); }
+.org-button.member-row:focus-visible { box-shadow:none; outline:2px solid var(--focus); outline-offset:-1px; }
 /* The row's menu sits at its end and shows the way a sidebar row's does: on hover, on a visible focus ring, or open. */
 .member-item { position:relative; }
 .member-item > .org-row-menu { position:absolute; top:50%; right:2px; transform:translateY(-50%); }
