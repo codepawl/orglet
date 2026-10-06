@@ -6,7 +6,7 @@ import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { ChannelCreatedValue, ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
 import { resolveMessage } from './cli-chat-history';
-import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
+import { importFiles, readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 /**
  * The chats themselves from the terminal (COD-354): listing them, side threads and channels (COD-361), renaming, archiving,
@@ -60,7 +60,7 @@ export class CliChatAdmin {
     const sideId = String(await this.dependencies.request('startSideThread', {
       taskId: task.id,
       brief: request.message,
-      sourceIds: [],
+      sourceIds: await importFiles(this.dependencies.request, request.files),
       excludedSources: [],
       consent: true,
       providerScopes: providerScopes(runners),
@@ -88,6 +88,7 @@ export class CliChatAdmin {
    * its orglets. Named by `name`, or by its members' names. The next message goes in with `--chat`.
    */
   async channel(request: Request<'channel'>, signal: AbortSignal): Promise<SendValue | ChannelCreatedValue> {
+    if (request.files?.length && request.message === undefined) throw new CliFailure('invalid', 'Tệp đi kèm tin nhắn đầu tiên của kênh. Gõ tin nhắn, hoặc bỏ --file.');
     const workspace = await this.workspace();
     const place = request.space === undefined ? undefined : placeNamed(workspace, request.space, request.category);
     if (!place && !request.names.length) throw new CliFailure('failed', 'Kênh cần ít nhất một --with <tên Tí>.');
@@ -108,7 +109,7 @@ export class CliChatAdmin {
       assignees: workers.map(worker => worker.id),
       channelId,
       brief: request.message,
-      sourceIds: [],
+      sourceIds: await importFiles(this.dependencies.request, request.files),
       excludedSources: [],
       consent: true,
       providerScopes: providerScopes(workers),
@@ -137,7 +138,7 @@ export class CliChatAdmin {
     const name = chatName(workspace, task);
     const value = { taskId: task.id, name, change: request.change };
     if (request.change === 'rename') {
-      if (!request.title) throw new CliFailure('invalid', 'Đổi tên cần --title "<tên mới>".');
+      if (!request.title) throw new CliFailure('invalid', 'Đổi tên cần --rename "<tên mới>".');
       await this.dependencies.request('renameTask', { id: task.id, title: request.title });
       return { ...value, title: request.title };
     }

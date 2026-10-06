@@ -264,7 +264,7 @@ it('runs a schedule through the CLI run operation and refuses a disabled or unkn
 
   await saveRoutine({ kind: 'called' }, { name: 'Paused job', enabled: false });
   await expect(operations.runSchedule({ op: 'run', token: 'a'.repeat(64), schedule: 'Paused job', files: [] })).rejects.toBeInstanceOf(CliFailure);
-  await expect(operations.runSchedule({ op: 'run', token: 'a'.repeat(64), schedule: 'Paused job', files: [] })).rejects.toThrow('đang tắt');
+  await expect(operations.runSchedule({ op: 'run', token: 'a'.repeat(64), schedule: 'Paused job', files: [] })).rejects.toThrow('đang tắt. Bật lịch bằng lệnh orglet schedule on');
   const unknown = operations.runSchedule({ op: 'run', token: 'a'.repeat(64), schedule: 'Nothing like it', files: [] });
   await expect(unknown).rejects.toMatchObject({ code: 'not_found' });
   // Even past the CLI, the core refuses a disabled routine.

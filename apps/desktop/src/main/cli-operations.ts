@@ -1,4 +1,4 @@
-import type { Source, Task, TaskDetail, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
+import type { Task, TaskDetail, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import type { CliChat } from '../cli/protocol';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, SpacesValue, StatusValue } from '../cli/protocol';
@@ -16,7 +16,7 @@ import { CliChatAdmin } from './cli-chat-admin';
 import { channelRows, channelsOfSpace, listedChannelRow, listedChannels } from './cli-channels';
 import { CliSchedules } from './cli-schedules';
 import { CliLibrary } from './cli-library';
-import { readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
+import { importFiles, readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
 
 export { chatsOf, CliFailure, matchChat, matchSchedule, type CoreRequest } from './cli-chats';
 export { answerText, isTurnRunning, latestAnsweredRevision, turnAnswers, turnErrors } from './cli-chat-history';
@@ -174,8 +174,7 @@ export class CliOperations {
     const workspace = await this.workspace();
     const { chat, live, team, worker } = this.sendTarget(workspace, request);
     const replyTo = request.replyTo ? await this.replyTarget(live?.id, request.replyTo) : undefined;
-    const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
-    const sourceIds = sources.map(source => source.id);
+    const sourceIds = await importFiles(this.dependencies.request, request.files);
     const runners = live ? taskRunners(workspace, live) : team ? crewRoster(team, workspace.workers) : worker ? [worker] : [];
     const providerScopes = [...new Set(runners.map(item => item.provider).filter(provider => provider !== 'demo'))] as NonNullable<TaskInput['providerScopes']>;
     const unsubscribe = feed ? this.dependencies.observe?.(observation => feed.observe(observation)) : undefined;
@@ -257,9 +256,9 @@ export class CliOperations {
     const workspace = await this.workspace();
     const found = matchSchedule(request.schedule, workspace.routines);
     const routine = workspace.routines.find(item => item.id === found.id)!;
-    if (!routine.enabled) throw new CliFailure('failed', `"${routine.name}" đang tắt. Bật lịch trong app rồi chạy lại.`);
-    const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
-    const taskId = String(await this.dependencies.request('runRoutine', { id: routine.id, sourceIds: sources.map(source => source.id) }));
+    if (!routine.enabled) throw new CliFailure('failed', `"${routine.name}" đang tắt. Bật lịch bằng lệnh orglet schedule on rồi chạy lại.`);
+    const sourceIds = await importFiles(this.dependencies.request, request.files);
+    const taskId = String(await this.dependencies.request('runRoutine', { id: routine.id, sourceIds }));
     return { schedule: { id: routine.id, name: routine.name }, taskId };
   }
 

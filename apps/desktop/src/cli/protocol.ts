@@ -75,6 +75,8 @@ export const UserMessageRef = z.string().trim().regex(/^#?[1-9]\d{0,5}$/);
 const Answer = z.string().trim().min(1).max(2000);
 const Message = z.string().trim().min(1).max(16000);
 const WaitFields = { wait: z.boolean(), timeoutSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS) };
+/** Files for a message, as absolute paths the app imports the way the file picker does; `send` and `run` carry theirs as a required list. */
+const FileFields = { files: z.array(z.string().min(1).max(32768)).max(MAX_FILES).optional() };
 /** Controls on a chat's latest turn, the buttons under it in the desktop (COD-354). */
 export const ChatControl = z.enum(['stop', 'pause', 'resume', 'retry', 'continue']);
 export type ChatControl = z.infer<typeof ChatControl>;
@@ -125,12 +127,12 @@ export const CliRequest = z.discriminatedUnion('op', [
   }).strict(),
   z.object({ op: z.literal('control'), token: CliToken, ...ChatTarget, action: ChatControl, ...WaitFields }).strict(),
   z.object({ op: z.literal('answer'), token: CliToken, ...ChatTarget, answer: Answer, ...WaitFields }).strict(),
-  z.object({ op: z.literal('revise'), token: CliToken, ...ChatTarget, message: UserMessageRef, text: Message, ...WaitFields }).strict(),
+  z.object({ op: z.literal('revise'), token: CliToken, ...ChatTarget, message: UserMessageRef, text: Message, ...FileFields, ...WaitFields }).strict(),
   z.object({ op: z.literal('chats'), token: CliToken, archived: z.boolean(), space: ChatName.optional() }).strict(),
-  z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...WaitFields }).strict(),
+  z.object({ op: z.literal('side-thread'), token: CliToken, ...ChatTarget, message: Message, ...FileFields, ...WaitFields }).strict(),
   z.object({ op: z.literal('bring'), token: CliToken, chat: ChatId, message: MessageRef.optional() }).strict(),
   // With `space` the names may be empty: the channel then takes every orglet of its place.
-  z.object({ op: z.literal('channel'), token: CliToken, names: z.array(ChatName).max(50), message: Message.optional(), name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), space: ChatName.optional(), category: ChatName.optional(), ...WaitFields }).strict(),
+  z.object({ op: z.literal('channel'), token: CliToken, names: z.array(ChatName).max(50), message: Message.optional(), name: ChannelName.optional(), topic: z.string().trim().max(CHANNEL_TOPIC_LIMIT).optional(), space: ChatName.optional(), category: ChatName.optional(), ...FileFields, ...WaitFields }).strict(),
   z.object({ op: z.literal('members'), token: CliToken, chat: ChatId, names: MemberNames }).strict(),
   z.object({
     op: z.literal('chat-change'),
@@ -178,7 +180,9 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('running'), token: CliToken, space: ChatName.optional() }).strict(),
   z.object({ op: z.literal('library'), token: CliToken, kind: z.enum(['memory', 'note']), query: z.string().trim().min(1).max(200).optional(), owner: ChatName.optional() }).strict(),
   z.object({ op: z.literal('memory-edit'), token: CliToken, id: ChatId, text: z.string().trim().min(1).max(MEMORY_TEXT_LIMIT).optional(), pinned: z.boolean().optional() }).strict(),
-  z.object({ op: z.literal('memory-delete'), token: CliToken, id: ChatId, confirmed: z.literal(true) }).strict(),
+  // Deleting needs one of two things: `confirmed` from `--yes`, or `confirm` typed with `--confirm`, which the app compares with the memory's id or text.
+  z.object({ op: z.literal('memory-delete'), token: CliToken, id: ChatId, confirmed: z.literal(true).optional(), confirm: z.string().trim().min(1).max(MEMORY_TEXT_LIMIT).optional() }).strict()
+    .refine(request => request.confirmed === true || request.confirm !== undefined, 'A delete must be confirmed.'),
   z.object({ op: z.literal('usage'), token: CliToken, refresh: z.boolean() }).strict(),
   z.object({ op: z.literal('models'), token: CliToken, provider: ProviderId.optional(), to: ChatName.optional(), refresh: z.boolean() }).strict(),
   /** Language and theme only; every other setting, consent included, stays in the desktop. */
