@@ -110,13 +110,13 @@ function IslandSentence({ label, named }: { label: string; named?: NamedSentence
 export function KnowledgeIsland({ count, review, dismiss, leaving }: { count: number; review: () => void; dismiss: () => void; leaving?: boolean }) {
   const content = useRef<HTMLSpanElement>(null);
   const width = useMeasuredWidth(content);
-  const label = count === 1 ? t('1 gợi ý knowledge') : t('{0} gợi ý knowledge', [count]);
+  const label = count === 1 ? t('1 gợi ý kiến thức') : t('{0} gợi ý kiến thức', [count]);
   return <div role="status" className={leaving ? 'live-island live-island-knowledge leaving' : 'live-island live-island-knowledge'}>
     <div className="live-island-body" style={{ width }}>
       <span className="live-island-content" ref={content}>
         <Lightbulb size={16} aria-hidden="true" />
         <span className="live-island-label" key={label}>{label}</span>
-        <Button type="button" className="live-island-action" aria-label={t('Xem gợi ý knowledge')} onClick={review}>{t('Xem')}</Button>
+        <Button type="button" className="live-island-action" aria-label={t('Xem gợi ý kiến thức')} onClick={review}>{t('Xem')}</Button>
         <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
       </span>
     </div>
