@@ -14,7 +14,7 @@ import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
 import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
-import { formatChats, formatLibrary, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatSpaces, formatUsage } from './output';
+import { formatChats, formatLibrary, formatManagementResult, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatSpaces, formatUsage } from './output';
 import { ERROR_COLOR, muted, MUTED_COLOR, NEUTRAL_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
 import type { ManagementResult } from './management';
@@ -684,7 +684,7 @@ class Session {
       this.entries = entriesFromList(value);
       this.closeEditor();
       this.restoreManagedChat(saved, editor.originalName, editor.action);
-      this.printMuted(t(saved.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', saved.kind === 'worker' ? 'orglet' : 'channel', saved.name));
+      this.printMuted(formatManagementResult(saved));
     } catch (error) {
       if (saved) {
         this.closeEditor();

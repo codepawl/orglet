@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { entriesFromList } from '../../apps/desktop/src/cli/picker';
-import { chatKindLabel, formatList, formatSpaces, formatStatus } from '../../apps/desktop/src/cli/output';
+import { chatKindLabel, formatList, formatManagementResult, formatSpaces, formatStatus, formatTemplate } from '../../apps/desktop/src/cli/output';
 import type { ChatsValue, CliRequest, ListValue } from '../../apps/desktop/src/cli/protocol';
 import { CliOperations } from '../../apps/desktop/src/main/cli-operations';
 import type { Task, Workspace } from '../../apps/desktop/src/shared/contracts';
@@ -126,5 +126,72 @@ describe('every channel in the listings', () => {
   it('reads a crew chat as a channel to a person and keeps crew in the JSON', () => {
     expect(chatKindLabel('crew')).toBe('channel');
     expect(chatKindLabel('side')).toBe('side');
+  });
+});
+
+describe('a channel made from the terminal lands in a space', () => {
+  const channelsSpaceId = '77777777-7777-4777-8777-777777777777';
+  const newChannelId = 'c2000000-0000-4000-8000-000000000001';
+  const newTaskId = 'dddd0000-0000-4000-8000-000000000001';
+  const signal = new AbortController().signal;
+  const token = 'a'.repeat(64);
+
+  /** A core that makes a space called Channels when asked to adopt, the way the real one does. */
+  function core() {
+    const calls: { command: string; args: unknown }[] = [];
+    const base = workspace();
+    const request = async (command: string, args: unknown) => {
+      calls.push({ command, args });
+      if (command === 'workspace') return { ...base, spaces: [...base.spaces, { id: channelsSpaceId, name: 'Channels', orgletIds: [researcherId], categories: [] }] };
+      if (command === 'createChannel') return newChannelId;
+      if (command === 'adoptLooseChannels') return channelsSpaceId;
+      if (command === 'createTask') return newTaskId;
+      if (command === 'createTemplate') return { id: crewId, name: 'Research Review', memberIds: [researcherId], synthesizerId: writerId };
+      if (command === 'task') return { task: chatRow(newTaskId, '2026-10-02T09:00:00.000Z', { id: newChannelId, name: 'launch', spaceId: channelsSpaceId, members: orglets }), runs: [], artifacts: [], sources: [] };
+      return undefined;
+    };
+    const operations = new CliOperations({ request, version: () => '1', open: () => undefined, translate: message => `translated ${message}`, pollMilliseconds: 1 });
+    const orderOf = (command: string) => calls.findIndex(call => call.command === command);
+    return { calls, operations, orderOf };
+  }
+
+  it('moves a channel made without --space into the space kept for channels, before its first message', async () => {
+    const { calls, operations, orderOf } = core();
+    const value = await operations.run({ op: 'channel', token, names: ['Researcher'], message: 'hi', name: 'launch', wait: false, timeoutSeconds: 5 }, signal) as { space?: string };
+    expect(value.space).toBe('Channels');
+    expect(calls.find(call => call.command === 'adoptLooseChannels')!.args).toEqual({ name: 'translated Kênh' });
+    expect(orderOf('createChannel')).toBeLessThan(orderOf('adoptLooseChannels'));
+    expect(orderOf('adoptLooseChannels')).toBeLessThan(orderOf('createTask'));
+  });
+
+  it('says which space an empty channel went to', async () => {
+    const { operations } = core();
+    expect(await operations.run({ op: 'channel', token, names: ['Researcher'], name: 'ideas', wait: false, timeoutSeconds: 5 }, signal)).toEqual({ channel: 'ideas', space: 'Channels' });
+  });
+
+  it('leaves the place alone when --space names one', async () => {
+    const { calls, operations } = core();
+    const value = await operations.run({ op: 'channel', token, names: [], name: 'ideas', space: 'Launch', wait: false, timeoutSeconds: 5 }, signal);
+    expect(value).toEqual({ channel: 'ideas', space: 'Launch' });
+    expect(calls.some(call => call.command === 'adoptLooseChannels')).toBe(false);
+  });
+
+  it('still makes the channel when the space cannot be adopted into', async () => {
+    const request = async (command: string) => {
+      if (command === 'workspace') return workspace();
+      if (command === 'createChannel') return newChannelId;
+      if (command === 'adoptLooseChannels') throw new Error('busy');
+      return undefined;
+    };
+    const operations = new CliOperations({ request, version: () => '1', open: () => undefined, translate: message => message });
+    expect(await operations.run({ op: 'channel', token, names: ['Researcher'], name: 'ideas', wait: false, timeoutSeconds: 5 }, signal)).toEqual({ channel: 'ideas' });
+  });
+
+  it('puts a channel from a template, and one made with create channel, in that space too', async () => {
+    const { operations } = core();
+    expect(await operations.run({ op: 'template', token, templateId: 'research-review', provider: 'openai' }, signal)).toMatchObject({ name: 'Research Review', space: 'Channels' });
+    expect(formatTemplate({ id: crewId, name: 'Research Review', members: ['Researcher'], space: 'Channels' })).toBe('Created the channel Research Review with Researcher in the space Channels.');
+    expect(formatManagementResult({ kind: 'team', name: 'Review', space: 'Channels' })).toBe('Saved channel Review.\nThe channel is in the space Channels.');
+    expect(formatManagementResult({ kind: 'worker', name: 'Writer' })).toBe('Saved orglet Writer.');
   });
 });

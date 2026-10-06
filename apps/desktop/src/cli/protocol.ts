@@ -285,6 +285,8 @@ export type SendValue = {
   question?: CliQuestion;
   /** The turn stopped for something only the desktop decides: an MCP, browser or desktop approval (COD-354). */
   needsDesktop?: boolean;
+  /** The space a channel `orglet channel` made is in. */
+  space?: string;
 };
 export type ReadValue = {
   chat: CliChat;
@@ -310,7 +312,7 @@ export type BringValue = { mainTaskId: string; chat: CliChat; ref: string };
 export type MembersValue = { taskId: string; names: string[] };
 export type ChatChangeValue = { taskId: string; name: string; change: ChatChange; title?: string };
 export type ArchiveEntityValue = { kind: ChatKind; id: string; name: string; archived: boolean };
-export type TemplateValue = { id: string; name: string; members: string[] };
+export type TemplateValue = { id: string; name: string; members: string[]; space?: string };
 /** One schedule as `orglet schedules` lists it (COD-354); money is integer micros, as the app keeps it. */
 export type CliScheduleRow = {
   id: string;

@@ -43,6 +43,23 @@ export function placeNamed(workspace: Workspace, spaceName: string, categoryName
   return { spaceId: space.id, categoryId: category.id, orgletIds: category.orgletIds ?? space.orgletIds };
 }
 
+/**
+ * Puts the channels outside every space into the space kept for them, the way the window does when it sees one, and
+ * names that space. Home lists direct messages only, so a channel with no space would otherwise be somewhere only the
+ * terminal can see. The space takes the same name the window gives it, in the app's language.
+ */
+export async function adoptLooseChannels(dependencies: CliDependencies): Promise<string | undefined> {
+  try {
+    const spaceId = await dependencies.request('adoptLooseChannels', { name: dependencies.translate('Kênh') });
+    if (!spaceId) return undefined;
+    const workspace = await dependencies.request('workspace', {}) as Workspace;
+    return workspace.spaces?.find(space => space.id === spaceId)?.name;
+  } catch {
+    // The channel exists either way, and the window puts it in the space the next time it sees it outside one.
+    return undefined;
+  }
+}
+
 /** The orglets these names mean, each once. A space holds orglets, so a channel's name here is a mistake. */
 function orgletIdsNamed(workspace: Workspace, names: readonly string[]): string[] {
   const orglets = chatsOf({ workers: workspace.workers, teams: [] });

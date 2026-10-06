@@ -8,7 +8,7 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatMarket, formatChannelCreated, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
+import { chatOption, formatManagementResult, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatMarket, formatChannelCreated, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
 import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type SpacesValue, type SpaceChangeValue, type ChannelCreatedValue, type MarketListValue, type MarketInstalledValue, type MarketAddValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
@@ -428,7 +428,7 @@ export async function runCli(argumentList: readonly string[], output: Output, en
       const client = appChatClient(resolveUserData(environment), appExecutable(environment)).management!;
       const result = await runManagementCommand(command, client, workingDirectory);
       if (command.json) printJson(output, result);
-      else output.stdout(t(result.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', result.kind === 'worker' ? 'orglet' : 'channel', result.name));
+      else output.stdout(formatManagementResult(result));
       return EXIT_CODES.ok;
     } catch (error) {
       if (error instanceof AppRefusal) return reportFailure({ ok: false, code: error.code, error: error.message }, command.json, output);

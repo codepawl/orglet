@@ -1,6 +1,6 @@
 import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
-import { placeNamed, spaceNamed } from './cli-spaces';
+import { adoptLooseChannels, placeNamed, spaceNamed } from './cli-spaces';
 import { inSavedOrder } from './cli-channels';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { ChannelCreatedValue, ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
@@ -99,11 +99,10 @@ export class CliChatAdmin {
     const name = request.name ?? channelNameFrom(members.map(member => memberNameOf(workspace, member)));
     const placed = place ? { spaceId: place.spaceId, categoryId: place.categoryId ?? null, access: inherits ? 'inherit' as const : 'listed' as const } : {};
     const channelId = String(await this.dependencies.request('createChannel', { name, topic: request.topic ?? '', members, ...placed }));
+    // Without --space the channel goes to the space kept for channels, before its first message makes it a running chat.
+    const spaceName = place ? (workspace.spaces ?? []).find(space => space.id === place.spaceId)?.name : await adoptLooseChannels(this.dependencies);
     // With no first message the channel waits, empty, as one made with New channel in the app does.
-    if (request.message === undefined) {
-      const spaceName = place ? (workspace.spaces ?? []).find(space => space.id === place.spaceId)?.name : undefined;
-      return { channel: name, ...(spaceName ? { space: spaceName } : {}) };
-    }
+    if (request.message === undefined) return { channel: name, ...(spaceName ? { space: spaceName } : {}) };
     const input: TaskInput = {
       workerId: workers[0].id,
       assignees: workers.map(worker => worker.id),
@@ -116,7 +115,8 @@ export class CliChatAdmin {
       budgetMicros: workers[0].taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS,
     };
     const taskId = String(await this.dependencies.request('createTask', input));
-    return this.settle(taskId, request.wait, request.timeoutSeconds, signal);
+    const sent = await this.settle(taskId, request.wait, request.timeoutSeconds, signal);
+    return spaceName ? { ...sent, space: spaceName } : sent;
   }
 
   /** Changes who is in a channel, from the next message on, as its settings in the app do; its name and topic stay. */
@@ -172,7 +172,8 @@ export class CliChatAdmin {
     const team = await this.dependencies.request('createTemplate', { templateId: request.templateId, provider: request.provider }) as Team;
     const workspace = await this.workspace();
     const roster = [...team.memberIds, team.synthesizerId].map(id => workspace.workers.find(worker => worker.id === id)?.name ?? id);
-    return { id: team.id, name: team.name, members: roster };
+    const space = await adoptLooseChannels(this.dependencies);
+    return { id: team.id, name: team.name, members: roster, ...(space ? { space } : {}) };
   }
 
   private async settle(taskId: string, wait: boolean, timeoutSeconds: number, signal: AbortSignal): Promise<SendValue> {

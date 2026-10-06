@@ -138,7 +138,7 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   updateSpace: reached('orglet space edit'),
   deleteSpace: reached('orglet space delete'),
   spaceFromCategory: windowOnly('turns a category of loose channels into a space; ' + NOT_BUILT),
-  adoptLooseChannels: windowOnly('the window calls it when it sees a loose channel; ' + NOT_BUILT),
+  adoptLooseChannels: reached('orglet channel'),
   updateTask: windowOnly('settings of one chat; ' + NOT_BUILT),
   reorder: windowOnly('drag and drop in the sidebar; ' + NOT_BUILT),
   saveAvatarColors: windowOnly('a colour picker'),

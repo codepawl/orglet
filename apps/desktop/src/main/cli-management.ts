@@ -2,7 +2,8 @@ import { API_PROVIDER_NAMES, BuiltInProviderId, TeamInput, WorkerInput, type Tea
 import { harnessNames, isHarness } from '../shared/harness';
 import { CrewConfig, ManagementCatalog, OrgletConfig, type ManagementResult } from '../cli/management';
 import type { CliRequest } from '../cli/protocol';
-import type { CoreRequest } from './cli-operations';
+import { adoptLooseChannels } from './cli-spaces';
+import type { CliDependencies } from './cli-turns';
 
 type ManagementRequest = Extract<CliRequest, { op: 'config' | 'save-orglet' | 'save-crew' | 'delete-entity' }>;
 
@@ -15,7 +16,8 @@ function applyPatch(current: Record<string, unknown>, patch: Record<string, unkn
   return merged;
 }
 
-export async function manageCli(request: ManagementRequest, core: CoreRequest): Promise<ManagementCatalog | ManagementResult> {
+export async function manageCli(request: ManagementRequest, dependencies: CliDependencies): Promise<ManagementCatalog | ManagementResult> {
+  const core = dependencies.request;
   const workspace = await core('workspace', {}) as Workspace;
   if (request.op === 'config') {
     const providers = BuiltInProviderId.options.filter(provider => provider !== 'demo').map(provider => ({
@@ -60,5 +62,11 @@ export async function manageCli(request: ManagementRequest, core: CoreRequest): 
     ...input,
     ...(request.target ? { expectedRevision: request.target.revision } : {}),
   }) as Worker | Team;
-  return { kind, id: saved.id, name: saved.name, revision: saved.revision };
+  const result = { kind, id: saved.id, name: saved.name, revision: saved.revision };
+  // A new channel is made outside every space; it goes to the space kept for channels, as the window would put it.
+  const space = request.op === 'save-crew' && !request.target ? await adoptLooseChannels(dependencies) : undefined;
+  if (!space) return result;
+  // Moving a channel with a lead into a space saves its crew record again, so the revision to edit it with is the new one.
+  const moved = (await core('workspace', {}) as Workspace).teams.find(team => team.id === saved.id);
+  return { ...result, revision: moved?.revision ?? result.revision, space };
 }

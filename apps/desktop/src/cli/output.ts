@@ -117,7 +117,15 @@ export function chatKindLabel(kind: CliChatKind): string {
 
 /** Where a new side thread or channel is, so the next message can reach it. */
 export function formatNewChat(value: SendValue): string {
-  return t('Nhắn tiếp trong chat này: orglet send "<tin nhắn>" {0}', chatOption(value.chat));
+  const next = t('Nhắn tiếp trong chat này: orglet send "<tin nhắn>" {0}', chatOption(value.chat));
+  return value.space ? `${t('Kênh nằm trong không gian {0}.', value.space)}\n${next}` : next;
+}
+
+/** What a saved or deleted orglet or channel says, and the space a new channel went to. */
+export function formatManagementResult(result: { kind: 'worker' | 'team'; name: string; deleted?: boolean; space?: string }): string {
+  const kind = result.kind === 'worker' ? 'orglet' : 'channel';
+  const saved = t(result.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', kind, result.name);
+  return result.space ? `${saved}\n${t('Kênh nằm trong không gian {0}.', result.space)}` : saved;
 }
 
 export function formatBring(value: BringValue): string {
@@ -282,7 +290,8 @@ export function formatPreferences(value: PreferencesValue): string {
 }
 
 export function formatTemplate(value: TemplateValue): string {
-  return t('Đã tạo kênh {0} với {1}.', value.name, value.members.join(', '));
+  const members = value.members.join(', ');
+  return value.space ? t('Đã tạo kênh {0} với {1} trong không gian {2}.', value.name, members, value.space) : t('Đã tạo kênh {0} với {1}.', value.name, members);
 }
 
 export function formatReact(value: ReactValue): string {

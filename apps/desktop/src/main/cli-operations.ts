@@ -88,7 +88,7 @@ export class CliOperations {
       case 'config':
       case 'save-orglet':
       case 'save-crew':
-      case 'delete-entity': return manageCli(request, this.dependencies.request);
+      case 'delete-entity': return manageCli(request, this.dependencies);
     }
   }
 
