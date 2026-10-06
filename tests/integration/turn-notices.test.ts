@@ -58,7 +58,7 @@ function positions(html: string, markers: Record<string, string>) {
 }
 
 const answerMarkers = {
-  trace: 'class="turn-trace"',
+  trace: 'class="work-log"',
   bubble: `id="message-${artifactId}"`,
   changes: 'class="activity-summary changed-files"',
   proposals: 'class="app-proposals"',
@@ -78,11 +78,12 @@ it('orders a finished chat turn: the trace, the answer, then changed files, prop
   const reply = html.slice(html.indexOf('class="chat-reply"'));
   expect(reply).toContain('class="turn-before"');
   expect(reply).toContain('class="turn-after"');
-  expect(html).toContain('Used 1 memory · Read 1 file');
+  expect(html).toContain('Used 1 memory');
+  expect(html).toContain('aria-label="What the orglet did"');
   // The line counts are coloured spans inside the line, so the words are read without the markup.
   expect(html.replace(/<[^>]+>/g, '')).toContain('Changed 2 files · +5 −1');
   // Nothing of the turn is drawn twice.
-  expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
+  expect(html.match(/class="work-log"/g)).toHaveLength(1);
   expect(html.match(/class="app-proposals"/g)).toHaveLength(1);
 });
 
@@ -155,11 +156,11 @@ it('shows the memories at the top of the trace above the streaming text as soon 
     update: { taskId, runId, startedAt: Date.now(), progress: { thinking: '', preamble: '', answer: 'Hóa đơn tháng 9', activity: [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }], writing: true } },
     memories: run.snapshot.context!.memories, showWork: true,
   }));
-  const found = positions(html, { trace: 'class="turn-trace"', memory: 'Thích câu trả lời ngắn.', step: 'invoice.xlsx', text: 'live-answer' });
+  const found = positions(html, { trace: 'class="work-log"', memory: 'Thích câu trả lời ngắn.', step: 'invoice.xlsx', text: 'live-answer' });
   expect(found.trace).toBeLessThan(found.memory);
   expect(found.memory).toBeLessThan(found.step);
   expect(found.step).toBeLessThan(found.text);
-  expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
+  expect(html.match(/class="work-log"/g)).toHaveLength(1);
 });
 
 it('takes no space for a slot that is empty', () => {

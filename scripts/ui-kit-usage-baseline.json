@@ -335,13 +335,6 @@
     "titleAttribute": 4,
     "hexColour": 0
   },
-  "components/TurnTrace.tsx": {
-    "rawButton": 1,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 0,
-    "hexColour": 0
-  },
   "components/UserPanel.tsx": {
     "rawButton": 0,
     "rawSelect": 0,

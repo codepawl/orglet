@@ -37,7 +37,7 @@ import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
-import { TurnTrace } from './TurnTrace';
+import { WorkLog } from './WorkLog';
 import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
 import { knowledgeSuggestionKey, showsKnowledgeIsland } from '../../shared/knowledge-island';
@@ -322,6 +322,8 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
   // the worker's name. Each opens the diff viewer.
   const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review, restored }) =>
     <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => diff.open(run)} />);
+  // A step that changed a file opens that file's changes, but only for a run that kept a working copy with changes.
+  const diffRunOf = (run: Run | undefined) => run && changedFilesOf([run], recovery).length > 0 ? { taskId: detail.task.id, runId: run.id } : undefined;
   // One line per command that kept a failed run's changes out of the folder (COD-270); a crew member's line is named.
   const blockedLinesOf = (runs: readonly Run[]) => runs.flatMap(run => run.status === 'failed' && run.errorCode === 'hand_in_blocked'
     ? (run.blockedHandIn?.commands ?? []).map(command => <BlockedCommandLine key={command.processId} command={command}
@@ -346,7 +348,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     const workerId = author?.snapshot.worker.id;
     const canContinue = latest && !busy && !detail.task.pendingStart && author !== undefined && canContinueRun(author);
     const notices = turnNotices({
-      trace: workspace.showWork && trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
+      trace: workspace.showWork && trace.length > 0 ? <WorkLog key="trace" entries={trace} diffRun={diffRunOf(author)} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
       outOfSteps: author?.outOfSteps && author.stage === undefined
         ? <OutOfStepsLine key="out-of-steps" busy={continuing} onContinue={canContinue ? () => continueRun(author) : undefined} />
         : undefined,
@@ -385,7 +387,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     const trace = traceOf({ memories, context: run.snapshot.context, runId: run.id, events: detail.events });
     const workerId = run.snapshot.worker.id;
     const notices = turnNotices({
-      trace: workspace.showWork && trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories ? () => openMemories(workerId) : undefined} /> : undefined,
+      trace: workspace.showWork && trace.length > 0 ? <WorkLog key="trace" entries={trace} diffRun={diffRunOf(run)} onOpenMemories={openMemories ? () => openMemories(workerId) : undefined} /> : undefined,
       handIn: blocked.commands.map(command => <BlockedCommandLine key={command.processId} command={command} onOpen={() => setOutputCommand(command)} />),
       changes: changedFilesLines([run], () => false),
       proposals: proposalCards(proposals),

@@ -11,7 +11,7 @@ import { orglet } from '../api';
 import { t } from '../i18n';
 import { liveTraceOf } from '../turnTrace';
 import { turnNotices } from './turnNotices';
-import { TurnTrace } from './TurnTrace';
+import { WorkLog } from './WorkLog';
 
 /** Live progress for each streaming run of one task, keyed by run ID. */
 export function useRunProgress(taskId: string) {
@@ -79,7 +79,7 @@ function useElapsedSeconds(since: number) {
 /**
  * A worker's run as it happens: what it said it will do, and the answer appearing as it is written. What it is doing
  * now is the island, which sits on the prompt bar rather than here (COD-167, `islandOf` below and `IslandDock`). The
- * step list, the timer and the worker's notes are the receipt, not the headline, so they sit behind the same trace
+ * step list, the timer and the worker's notes are the receipt, not the headline, so they sit in the same work log
  * control the finished answer keeps above its text (COD-220), so nothing appears under an answer that already reads
  * as complete (COD-212). With no rows and no notes there is nothing to open, and the timer is the line. `memories`
  * are the ones frozen with the run's context, the trace's first rows as soon as the run row carries them (COD-217).
@@ -90,10 +90,9 @@ export function LiveRun({ update, memories, showWork }: { update: RunProgressUpd
   const entries = liveTraceOf(memories, progress.activity);
   const hasReceipt = entries.length > 0 || !!progress.thinking;
   const trace = hasReceipt
-    ? <TurnTrace key="trace" entries={entries}>
+    ? <WorkLog key="trace" entries={entries} thinking={progress.thinking || undefined}>
       <ElapsedLine since={update.startedAt} />
-      {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
-    </TurnTrace>
+    </WorkLog>
     : <ElapsedLine key="trace" since={update.startedAt} plain />;
   // With the work hidden (the default), the island and the working line say what is happening; the chat holds only words.
   const notices = turnNotices({ trace: showWork ? trace : undefined });

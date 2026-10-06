@@ -2712,6 +2712,10 @@ export const en: Dictionary = {
   // The trace above an answer (COD-220): the folded line counts each kind of thing that happened, with its own words
   // for one and for several; open, each row is a verb and what it touched, or the core's own sentence.
   'Các bước của Tí': 'What the orglet did',
+  'Ghi nhớ và ghi chú đã nạp': 'Memories and notes loaded',
+  'Xem thêm {0} bước': 'Show {0} more steps',
+  'Không tìm thấy thay đổi nào của tệp này trong bản làm việc.': 'No changes to this file were found in the working copy.',
+  'Không mở được thay đổi.': 'The changes could not be opened.',
   'Mở tab Ghi nhớ': 'Open the Memory tab',
   'Dùng 1 ghi nhớ': 'Used 1 memory',
   '1 ảnh không gửi cho Tí': '1 image not shown to the orglet',

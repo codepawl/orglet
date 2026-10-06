@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
  * entries, bridge callbacks, reactions); the ordering below is the one thing this module owns.
  */
 export type TurnNoticeSlots = {
-  /** The one folded trace above the answer (COD-220, `TurnTrace`): memories used, notes loaded, then the steps. */
+  /** The one folded trace above the answer (COD-220, `WorkLog`): memories used and notes loaded as one folded row, then the steps. */
   trace?: ReactNode;
   /** The answer is what the orglet had when its steps ran out, with Continue on the latest turn (COD-257). */
   outOfSteps?: ReactNode;
