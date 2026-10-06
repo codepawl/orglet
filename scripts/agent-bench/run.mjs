@@ -107,12 +107,18 @@ async function attachFiles(app, page, task, workDir) {
 }
 
 /** Types the message the way a person does, then sends it and answers a consent prompt if one appears. */
-async function send(page, message) {
+async function send(page, message, problems) {
+  // The connection's sign-in is read when the app starts; sending waits until the bar no longer asks to connect.
+  await page.getByText('Cần kết nối trước khi gửi.').waitFor({ state: 'detached', timeout: 90_000 }).catch(() => problems.push('composer still asked to connect after 90 s'));
   const box = page.getByRole('textbox', { name: /Tin nhắn|Nhắn/ }).first();
   await box.click();
-  await box.pressSequentially(message, { delay: 8 });
+  const typingStarted = Date.now();
+  await box.pressSequentially(message, { delay: 8, timeout: 180_000 });
+  const typingMs = Date.now() - typingStarted;
+  if (typingMs > message.length * 40) problems.push(`typing ${message.length} characters took ${typingMs} ms`);
   await page.keyboard.press('Enter');
   await page.waitForTimeout(2000);
+  return typingMs;
 }
 
 async function chatOf(page, target, startedAt) {
@@ -175,7 +181,7 @@ for (const task of selected) {
     await openChat(page, target);
     await attachFiles(app, page, task, taskDir);
     const startedAt = Date.now();
-    await send(page, task.message);
+    await send(page, task.message, problems);
     ({ detail, timedOut } = await waitForAnswer(page, target, startedAt));
     if (timedOut) problems.push(`timed out after ${options.timeoutMinutes} minutes`);
     // Let the answer settle on screen, then scroll to the end so the video ends on it.

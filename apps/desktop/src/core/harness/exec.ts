@@ -151,7 +151,9 @@ const looksLikeAuth = (text: string) => !/temporary network issue/i.test(text) &
  * first, then the longest tail that starts at a `{` and parses. Anything after the object means there is none.
  */
 export function trailingJsonObject(text: string): unknown {
-  const trimmed = text.trim();
+  // An object in a closing ```json fence reads the same as one written bare.
+  const fenced = /```(?:json)?\s*([\s\S]*?)\s*```\s*$/i.exec(text.trim());
+  const trimmed = fenced ? fenced[1].trim() : text.trim();
   try {
     return JSON.parse(trimmed);
   } catch {

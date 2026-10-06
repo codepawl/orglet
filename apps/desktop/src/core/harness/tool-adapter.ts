@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { plainMessage, type ModelAdapter } from '../adapters/openai';
-import type { HarnessExecutor, HarnessRequest, HarnessResult } from './exec';
+import { HarnessError, type HarnessExecutor, type HarnessRequest, type HarnessResult } from './exec';
+import { harnessNames } from '../../shared/harness';
 
 /** Longest note a step keeps; a longer one is cut rather than refused, since the call beside it is what matters. */
 export const STEP_NOTES_CHARACTERS = 2000;
@@ -14,6 +15,25 @@ const ToolResponse = z.object({
 }).strict();
 
 /** The CLI chooses a call; only the core runner can execute it. */
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The step a CLI chose, read the way the CLIs write it: the call itself is checked strictly here and again by the
+ * runner before anything runs, while what only wraps it may vary. Cursor Agent, given only the schema in its prompt,
+ * gives `notes: null`, adds keys of its own, leaves the `call` wrapper out or `arguments` off a tool without any
+ * (2026-10-07). A step still unreadable names what came back, so the next look starts from the evidence.
+ */
+export function toolResponseOf(output: unknown, harness: HarnessRequest['harness']) {
+  const record = isRecord(output) ? output : {};
+  const wrapped = isRecord(record.call) ? record.call : typeof record.name === 'string' ? record : undefined;
+  const parsed = ToolResponse.safeParse({
+    call: wrapped ? { name: wrapped.name, arguments: wrapped.arguments ?? {} } : undefined,
+    ...(typeof record.notes === 'string' ? { notes: record.notes } : {}),
+  });
+  if (parsed.success) return parsed.data;
+  throw new HarnessError(`${harnessNames[harness]} trả về một bước không đúng dạng Orglet cần: ${JSON.stringify(output ?? null).slice(0, 300)}`);
+}
+
 export function harnessToolSchema(tools: ChatCompletionTool[], harness?: HarnessRequest['harness']): object {
   const calls = tools.flatMap(tool => tool.type === 'function' ? [{
     type: 'object', additionalProperties: false, required: ['name', 'arguments'],
@@ -58,7 +78,7 @@ export function harnessToolAdapter(options: {
     });
     options.onResult(result);
     signal.throwIfAborted();
-    const { call, notes } = ToolResponse.parse(result.output);
+    const { call, notes } = toolResponseOf(result.output, options.request.harness);
     const keptNotes = notes?.trim() ? notes.trim().slice(0, STEP_NOTES_CHARACTERS) : undefined;
     // The runner checks every call before anything runs (`toolCallProblem`): a tool this run was not offered, or
     // arguments off its schema, go back to the CLI as the tool's answer, the same as for an API worker (COD-289).

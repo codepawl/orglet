@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { harnessToolAdapter, harnessToolSchema, STEP_NOTES_CHARACTERS } from '../../apps/desktop/src/core/harness/tool-adapter';
+import { harnessToolAdapter, harnessToolSchema, STEP_NOTES_CHARACTERS, toolResponseOf } from '../../apps/desktop/src/core/harness/tool-adapter';
 import { toolCallProblem, toolDefinitions } from '../../apps/desktop/src/core/tools/catalog';
 import type { Run, Task } from '../../apps/desktop/src/shared/contracts';
-import { prepareHarnessToolPolicy } from '../../apps/desktop/src/core/harness/exec';
+import { prepareHarnessToolPolicy, trailingJsonObject } from '../../apps/desktop/src/core/harness/exec';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -124,4 +124,20 @@ it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('lets %s keep not
     onResult: () => {},
   });
   expect((await quiet.request([], tools, new AbortController().signal, () => {})).notes).toBeUndefined();
+});
+
+it('reads a step however a CLI wraps it, and still checks the call itself (2026-10-07)', () => {
+  const call = { name: 'read_source', arguments: { sourceId: 'a' } };
+  expect(toolResponseOf({ call, notes: null }, 'cursor')).toEqual({ call });
+  expect(toolResponseOf({ call, notes: 'kept', reasoning: 'extra key' }, 'cursor')).toEqual({ call, notes: 'kept' });
+  expect(toolResponseOf(call, 'cursor')).toEqual({ call });
+  expect(toolResponseOf({ call: { name: 'list_sources' } }, 'cursor')).toEqual({ call: { name: 'list_sources', arguments: {} } });
+  expect(() => toolResponseOf({ answer: 'no call at all' }, 'cursor')).toThrow(/Cursor Agent .*answer/);
+  expect(() => toolResponseOf({ call: { name: '', arguments: {} } }, 'cursor')).toThrow();
+});
+
+it('takes the JSON object an answer ends with, fenced or after narration', () => {
+  expect(trailingJsonObject('Here it is:\n```json\n{"call":{"name":"reply","arguments":{}}}\n```')).toEqual({ call: { name: 'reply', arguments: {} } });
+  expect(trailingJsonObject('Checking {first}. {"a":{"b":1}}')).toEqual({ a: { b: 1 } });
+  expect(trailingJsonObject('{"a":1} trailing words')).toBeUndefined();
 });

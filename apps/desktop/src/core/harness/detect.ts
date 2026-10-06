@@ -108,9 +108,16 @@ export function commandLine(executable: string, args: string[]): { file: string;
   return { file: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/s', '/c', `"${line}"`], verbatim: true };
 }
 
+/**
+ * Runs a CLI's status or version command. Cursor Agent's `status` alone takes about 3 s on an idle Windows machine
+ * (measured 2026-10-07); with four harnesses probed at app start beside other work it ran past the old 10 s, the probe
+ * read nothing, and a signed-in Cursor showed as needing repair. 30 s is only a ceiling: a quick answer returns at once.
+ */
+export const PROBE_TIMEOUT_MS = 30_000;
+
 export const probe: Probe = (executable, args, overrides) => new Promise(resolve => {
   const command = commandLine(executable, args);
-  execFile(command.file, command.args, { timeout: 10_000, windowsHide: true, windowsVerbatimArguments: command.verbatim, maxBuffer: 256 * 1024, env: { ...cleanEnv(process.env), ...overrides } }, (error, stdout, stderr) => {
+  execFile(command.file, command.args, { timeout: PROBE_TIMEOUT_MS, windowsHide: true, windowsVerbatimArguments: command.verbatim, maxBuffer: 256 * 1024, env: { ...cleanEnv(process.env), ...overrides } }, (error, stdout, stderr) => {
     resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout: String(stdout), stderr: String(stderr) });
   });
 });
