@@ -27,7 +27,9 @@ const languageOf = text => (text.match(new RegExp(vietnameseLetters.source, 'gi'
 function grade(saved) {
   const { task, detail, problems = [] } = saved;
   const expects = task.expects;
-  const answers = (detail?.artifacts ?? []).map(artifact => artifact.report.summary).join('\n\n');
+  // A question the orglet asked back counts as what it said: pushing back by asking is part of the answer.
+  const questions = (detail?.task.decisionRequests ?? []).map(request => `${request.question} ${request.options.join(' ')}`);
+  const answers = [...questions, ...(detail?.artifacts ?? []).map(artifact => artifact.report.summary)].join('\n\n');
   const events = (detail?.events ?? []).map(event => event.message);
   const used = new Set(toolPatterns.filter(([, pattern]) => events.some(message => pattern.test(message))).map(([kind]) => kind));
   const checks = [];

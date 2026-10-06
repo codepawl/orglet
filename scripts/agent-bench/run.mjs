@@ -142,6 +142,7 @@ async function waitForAnswer(page, target, startedAt) {
 function transcriptOf(task, detail, problems) {
   const lines = [`# ${task.id} · ${task.benchmark}`, '', `Status: ${detail?.task.status ?? 'no chat'}`, ''];
   lines.push(`**Person:** ${task.message}`, '');
+  for (const request of detail?.task.decisionRequests ?? []) lines.push(`**Question:** ${request.question} · options: ${request.options.join(" / ")} · answer: ${request.answer ?? "-"}`, "");
   for (const artifact of detail?.artifacts ?? []) {
     const author = detail.runs.find(run => run.id === artifact.runId)?.snapshot.worker.name ?? '?';
     lines.push(`**${author}:** ${artifact.report.summary}`, '');
@@ -183,6 +184,14 @@ for (const task of selected) {
     const startedAt = Date.now();
     await send(page, task.message, problems);
     ({ detail, timedOut } = await waitForAnswer(page, target, startedAt));
+    // A question with choices is answered the way the person would, by clicking the choice, and the run goes on.
+    for (let round = 0; round < 2 && !timedOut && task.answer && detail?.task.status === 'waiting_input'; round++) {
+      const asked = detail.task.decisionRequests?.findLast(request => !request.answer && !request.interruptedAt);
+      const choice = asked?.options.find(option => task.answer.test(option));
+      if (!choice) break;
+      await page.getByRole('button', { name: choice, exact: true }).first().click();
+      ({ detail, timedOut } = await waitForAnswer(page, target, startedAt));
+    }
     if (timedOut) problems.push(`timed out after ${options.timeoutMinutes} minutes`);
     // Let the answer settle on screen, then scroll to the end so the video ends on it.
     await page.locator('.thread-scroll').evaluate(element => { element.scrollTop = element.scrollHeight; }).catch(() => {});
