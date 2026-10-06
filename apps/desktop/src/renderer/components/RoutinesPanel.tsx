@@ -117,7 +117,19 @@ export function lastRunOutcome(task: Pick<Task, 'id' | 'status'>, heldForReview:
 }
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
 export type RoutineView = { editing: false } | { editing: true; routine?: Routine };
-export function RoutinesPanel({ workspace, routines = workspace.routines, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; /** The schedules to list; a chat's Schedules view passes only its orglet's or crew's (COD-355). */ routines?: readonly Routine[]; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
+/**
+ * Requests a person can start from when they would rather ask an orglet than fill the form (user, 2026-10-06). Each
+ * opens that orglet's chat with the request typed; the orglet answers with a schedule to apply (`propose_schedule`).
+ */
+const SCHEDULE_ASKS = () => [
+  t('Mỗi sáng thứ Hai, tóm tắt việc tuần trước và việc cần làm tuần này.'),
+  t('Mỗi ngày lúc 9 giờ, đọc tin mới về chủ đề tôi theo dõi và báo lại ba điều đáng chú ý.'),
+  t('Mỗi chiều thứ Sáu, rà lại việc còn dở trong tuần và nhắc tôi.'),
+];
+
+export function RoutinesPanel({ workspace, routines = workspace.routines, draft, openTask, view, onView, onBack, onDirty, asker, onAsk }: { workspace: Workspace; /** The schedules to list; a chat's Schedules view passes only its orglet's or crew's (COD-355). */ routines?: readonly Routine[]; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void;
+  /** The orglet a request goes to, and what opens its chat with the request typed. Left out, the page offers no requests. */
+  asker?: string; onAsk?: (request: string) => void }) {
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const action = async (fn: () => Promise<unknown>) => { setBusy(true); setError(''); try { await fn(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } };
   // A schedule is made and edited in a dialog over the list (user, 2026-10-05), not in the list's place: the page
@@ -161,7 +173,12 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
     toast(t('Đã xóa lịch'), 'success', item.name);
   };
   return <>{editor}<div className="form">
-          {!routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
+          {!routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p>
+            {asker && onAsk && <>
+              <p className="muted routine-ask-lead">{t('Hoặc nhờ {0} lên lịch giúp:', [asker])}</p>
+              <ul className="suggestions routine-asks">{SCHEDULE_ASKS().map(request => <li key={request}><button type="button" onClick={() => onAsk(request)}><CalendarClock size={16} aria-hidden="true" />{request}</button></li>)}</ul>
+            </>}
+          </div>}
     <div className="routine-list">
       {routines.map(item => {
         const trigger = triggerOf(item);

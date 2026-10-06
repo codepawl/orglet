@@ -173,6 +173,10 @@ Example: a daily 09:00 schedule, machine off for 30 days, app opened again.
 
 Guards that still apply to catch-up: recurring approval fingerprint, a non-terminal prior task, source byte verification, and a revision check. Occurrence advancement and task insert share one database transaction.
 
+## Asking an orglet for one
+
+An empty Schedules page lists three requests under **Or ask <orglet> to set one up** (`SCHEDULE_ASKS` in `RoutinesPanel.tsx`). A click opens the chat of the first orglet in your own order with the request typed in the message box. Nothing is sent until you send it. The orglet answers with a schedule to apply (`propose_schedule`, [agent tools](agent-tools.md)): it never creates the schedule itself. You can ask any orglet the same way in its own chat. An orglet cannot propose deleting a schedule, an hourly schedule, a daily cap or a folder trigger; those stay in the form.
+
 ## What this is not
 
 - No OS wake timer, background agent, or cloud cron.

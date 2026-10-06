@@ -1651,6 +1651,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-workspace .org-switch-field { margin-top:8px; }
 .routine-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:28px 16px; text-align:center; color:var(--muted); }
 .routine-empty p:first-of-type { color:var(--text); font-weight:500; }
+/* Requests to hand to an orglet: the chat starters' rows, left-aligned under the centred empty state. */
+.routine-ask-lead { margin-top:18px; }
+.routine-asks { align-self:stretch; margin-top:4px; padding:0; }
 .routine-editor-title { display:inline-flex; align-items:center; gap:6px; margin-left:-8px; }
 .form .routine-group { display:flex; flex-direction:column; gap:16px; padding:16px; border-radius:14px; background:var(--surface); }
 .routine-group h4 { margin:0; font-size:13px; font-weight:600; color:var(--muted); }
