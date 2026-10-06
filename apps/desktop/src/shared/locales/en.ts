@@ -3231,6 +3231,8 @@ export const en: Dictionary = {
   'Đang chờ bạn': 'Needs you',
   'Báo khi cuộc trò chuyện xong': 'Notify me when a chat finishes',
   'Chỉ khi Orglet chạy nền; không kèm câu trả lời.': 'Only while Orglet is in the background; never the answer.',
+  'Hiện cách Tí làm việc': 'Show how orglets work',
+  'Suy nghĩ, các bước đã làm và thay đổi, ngay trên mỗi câu trả lời.': 'Thinking, steps and changes, right above each answer.',
   'Chat phụ và lịch chạy của {0}': 'Side threads and schedules of {0}',
   'Lịch chạy của {0}': 'Schedules of {0}',
   'Lần chạy của lịch {0}': 'Run of the schedule {0}',

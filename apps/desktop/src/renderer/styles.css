@@ -794,6 +794,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .consent .budget-label { align-items:center; }
 .budget-label input { width:95px; padding:5px 8px; border:1px solid var(--border); background:var(--bg); border-radius:8px; }
 .thread-scroll { flex:1; overflow:auto; min-height:0; scroll-behavior:auto; }
+/* The thread softens into the panel at its top and bottom edges (user, 2026-10-06): a blur that fades out towards the
+   middle over a wash of the panel's colour, so lines going under the header or the prompt bar blur away rather than
+   being cut. The edges stick inside the scroller and take no room; the content's own padding is deeper than they are. */
+.thread-edge { position:sticky; z-index:1; height:24px; pointer-events:none; backdrop-filter:blur(3px); }
+.thread-edge-top { top:0; margin-bottom:-24px; background:linear-gradient(to bottom, var(--bg), transparent); mask-image:linear-gradient(to bottom, black 30%, transparent); }
+.thread-edge-bottom { bottom:0; margin-top:-24px; background:linear-gradient(to top, var(--bg), transparent); mask-image:linear-gradient(to top, black 30%, transparent); }
 /* Wider than it was: 828px left the column feeling cramped against the panel around it (user, 2026-09-20).
    Not the full pane — a line of body text still has to end somewhere the eye can find the next one. */
 .thread-content { max-width:960px; margin:auto; padding:22px var(--page-x) 32px; }

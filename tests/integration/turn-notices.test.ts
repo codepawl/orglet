@@ -41,7 +41,7 @@ function renderTurn(format: 'chat' | 'report') {
     artifacts: [answer(format)], profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [proposal],
     usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } };
   return renderToStaticMarkup(createElement(TaskThread, {
-    detail, recovery, workspace: { workers: [worker], skills: [skill], tasks: [task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    detail, recovery, workspace: { workers: [worker], skills: [skill], tasks: [task], showWork: true }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
     proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
   }));
@@ -100,7 +100,7 @@ it('keeps the read faces under the answer, the toolbar on it, and states a membe
     usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
   };
   const html = renderToStaticMarkup(createElement(TaskThread, {
-    detail, workspace: { workers: [worker, listener], skills: [skill], tasks: [detail.task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    detail, workspace: { workers: [worker, listener], skills: [skill], tasks: [detail.task], showWork: true }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
     proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
   }));
@@ -124,7 +124,7 @@ it('keeps the read faces under the answer, the toolbar on it, and states a membe
   const finished: TaskDetail = { ...detail, task: { ...detail.task, status: 'completed' } };
   expect(unfinishedWork(finished)).toBeUndefined();
   const finishedHtml = renderToStaticMarkup(createElement(TaskThread, {
-    detail: finished, workspace: { workers: [worker, listener], skills: [skill], tasks: [finished.task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    detail: finished, workspace: { workers: [worker, listener], skills: [skill], tasks: [finished.task], showWork: true }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
     proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
   }));
@@ -153,7 +153,7 @@ it('keeps the same order around a report card', () => {
 it('shows the memories at the top of the trace above the streaming text as soon as the run carries them', () => {
   const html = renderToStaticMarkup(createElement(LiveRun, {
     update: { taskId, runId, startedAt: Date.now(), progress: { thinking: '', preamble: '', answer: 'Hóa đơn tháng 9', activity: [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }], writing: true } },
-    memories: run.snapshot.context!.memories,
+    memories: run.snapshot.context!.memories, showWork: true,
   }));
   const found = positions(html, { trace: 'class="turn-trace"', memory: 'Thích câu trả lời ngắn.', step: 'invoice.xlsx', text: 'live-answer' });
   expect(found.trace).toBeLessThan(found.memory);

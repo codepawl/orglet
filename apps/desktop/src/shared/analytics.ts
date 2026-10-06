@@ -51,7 +51,7 @@ const Identifier = z.string().regex(/^[A-Za-z0-9._:/@+-]{1,120}$/);
 /** Settings whose value is sent along with the key: each is an enum or on/off. Other keys go without their value. */
 export const ENUM_SETTING_KEYS = [
   'language', 'theme', 'copyFormat', 'downloadFormat', 'archiveRetentionDays', 'logoColor', 'webSearchProvider',
-  'autoTitles', 'confirmOpenTask', 'autoUpdate', 'backgroundNotifications',
+  'autoTitles', 'confirmOpenTask', 'autoUpdate', 'backgroundNotifications', 'showWork',
 ] as const;
 export const SettingKey = z.enum([
   ...ENUM_SETTING_KEYS, 'accentColor', 'interfaceFont', 'codeFont', 'connectionLimitMicros', 'providerConcurrency', 'providerConsent', 'analytics',

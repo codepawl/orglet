@@ -52,11 +52,11 @@ function answerOf(usedMemories?: { id: string; revision: number; text: string }[
   return { id: artifactId, runId, createdAt: at, hash: 'b'.repeat(64), usedMemories, report: { format: 'chat', title: 'Tóm tắt', summary: 'Hóa đơn tháng 9 là 1.200.000đ.', findings: [], limitations: [] } };
 }
 
-function renderThread(runs: Run[], events: Activity[], artifact: Artifact, openMemories?: (workerId: string) => void) {
+function renderThread(runs: Run[], events: Activity[], artifact: Artifact, openMemories?: (workerId: string) => void, showWork = true) {
   const detail: TaskDetail = { task, runs, events, artifacts: [artifact], profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [],
     usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } };
   return renderToStaticMarkup(createElement(TaskThread, {
-    detail, workspace: { workers: [worker, writer], skills: [skill], tasks: [task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    detail, workspace: { workers: [worker, writer], skills: [skill], tasks: [task], showWork }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {}, openMemories,
     proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
   }));
@@ -94,6 +94,22 @@ it('renders exactly one trace control before the bubble, with the memory, the no
   // A real disclosure with a list a screen reader can read.
   expect(html).toContain('<details class="turn-trace"><summary class="activity-summary">');
   expect(html).toContain('<ol class="trace-list" aria-label="What the orglet did">');
+});
+
+it('keeps the work out of the chat unless the person shows it in Settings (user, 2026-10-06)', () => {
+  const events = [eventOf(runId, 'Đã đọc invoice.xlsx'), eventOf(runId, 'Đã lưu câu trả lời.')];
+  const hidden = renderThread([runOf(runId, worker, undefined, context)], events, answerOf([memory]), () => {}, false);
+  expect(hidden).not.toContain('turn-trace');
+  expect(hidden).not.toContain('class="turn-before"');
+  expect(hidden).toContain(`id="message-${artifactId}"`);
+  const live = renderToStaticMarkup(createElement(LiveRun, {
+    update: { taskId, runId, startedAt: Date.now(), progress: { thinking: 'Đang cân nhắc.', preamble: '', answer: 'Hóa đơn', activity: [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }], writing: false } },
+    memories: context.memories, showWork: false,
+  }));
+  expect(live).not.toContain('turn-trace');
+  expect(live).not.toContain('activity-elapsed');
+  expect(live).not.toContain('Đang cân nhắc.');
+  expect(live).toContain('Hóa đơn');
 });
 
 it('renders nothing when the trace is empty', () => {
@@ -255,7 +271,7 @@ it('keeps one trace while the answer streams, the memories first and an open ste
   expect(entries.map(entry => [entry.kind, entry.running ?? false])).toEqual([['memory', false], ['read', false], ['other', true]]);
   const html = renderToStaticMarkup(createElement(LiveRun, {
     update: { taskId, runId, startedAt: Date.now(), progress: { thinking: 'Đang cân nhắc.', preamble: '', answer: 'Hóa đơn', activity: [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }, { id: 's2', kind: 'other', target: 'Bash', done: false }], writing: false } },
-    memories: context.memories,
+    memories: context.memories, showWork: true,
   }));
   expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
   expect(html).toContain('Used 1 memory · Read 1 file · 1 other step');
@@ -269,6 +285,7 @@ it('keeps one trace while the answer streams, the memories first and an open ste
 it('shows the timer alone while a run has streamed nothing to trace', () => {
   const html = renderToStaticMarkup(createElement(LiveRun, {
     update: { taskId, runId, startedAt: Date.now(), progress: { thinking: '', preamble: '', answer: '', activity: [], writing: false } },
+    showWork: true,
   }));
   expect(html).not.toContain('turn-trace');
   expect(html).toContain('activity-elapsed-plain');

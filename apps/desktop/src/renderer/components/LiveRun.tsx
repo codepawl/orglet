@@ -84,7 +84,7 @@ function useElapsedSeconds(since: number) {
  * as complete (COD-212). With no rows and no notes there is nothing to open, and the timer is the line. `memories`
  * are the ones frozen with the run's context, the trace's first rows as soon as the run row carries them (COD-217).
  */
-export function LiveRun({ update, memories }: { update: RunProgressUpdate; memories?: readonly RunMemory[] }) {
+export function LiveRun({ update, memories, showWork }: { update: RunProgressUpdate; memories?: readonly RunMemory[]; showWork: boolean }) {
   const progress = update.progress!;
   const answering = progress.answer.length > 0;
   const entries = liveTraceOf(memories, progress.activity);
@@ -95,7 +95,8 @@ export function LiveRun({ update, memories }: { update: RunProgressUpdate; memor
       {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
     </TurnTrace>
     : <ElapsedLine key="trace" since={update.startedAt} plain />;
-  const notices = turnNotices({ trace });
+  // With the work hidden (the default), the island and the working line say what is happening; the chat holds only words.
+  const notices = turnNotices({ trace: showWork ? trace : undefined });
 
   return <div className="live-run">
     {notices.before}

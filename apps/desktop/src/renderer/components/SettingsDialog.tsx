@@ -85,7 +85,7 @@ const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
   archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi kết nối / tháng', providerConcurrency: 'Yêu cầu cùng lúc mỗi nhà cung cấp', providerConsent: 'Provider được phép',
-  autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
+  autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', showWork: 'Hiện cách Tí làm việc', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
@@ -617,7 +617,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; backgroundNotifications: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; backgroundNotifications: boolean; showWork: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
     return t('Đã lưu');
   }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
@@ -710,6 +710,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               </Row>
               <Row id="background-notifications-label" title={t('Báo khi cuộc trò chuyện xong')} description={t('Chỉ khi Orglet chạy nền; không kèm câu trả lời.')}>
                 <Switch checked={workspace.backgroundNotifications} disabled={busy} labelledBy="background-notifications-label" onChange={value => void save({ backgroundNotifications: value })} />
+              </Row>
+              {/* Off by default, so a chat reads as a plain conversation; on, each answer shows its thinking, steps and changes (user, 2026-10-06). */}
+              <Row id="show-work-label" title={t('Hiện cách Tí làm việc')} description={t('Suy nghĩ, các bước đã làm và thay đổi, ngay trên mỗi câu trả lời.')}>
+                <Switch checked={workspace.showWork} disabled={busy} labelledBy="show-work-label" onChange={value => void save({ showWork: value })} />
               </Row>
               {/* What makes a quiet hourly run announce itself (COD-303), beside the other rule for notices. */}
               <TacetSetup />
