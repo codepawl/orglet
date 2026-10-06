@@ -3,6 +3,7 @@ import { checkedChoiceValue, modelChoices, modelVendor, modelVersion } from '../
 import type { ModelEntry } from '../../apps/desktop/src/shared/models';
 import { claudeCodeEntries, claudeStartArgs, sameClaudeModel, startLineModel } from '../../apps/desktop/src/core/models/claudeCode';
 import { harnessArgs } from '../../apps/desktop/src/core/harness/exec';
+import { parseAnthropicModels } from '../../apps/desktop/src/core/models/fetch';
 
 const claudeList: ModelEntry[] = [
   { provider: 'claude-code', id: 'sonnet', displayName: 'Sonnet 5', aliases: ['sonnet'], resolvedId: 'claude-sonnet-5', source: 'alias' },
@@ -124,5 +125,18 @@ describe('Claude Code start line (COD-332)', () => {
     });
     expect(entries.filter(entry => entry.isDefault)).toEqual([{ provider: 'claude-code', id: 'claude-opus-4-8', displayName: 'Opus 4.8', isDefault: true, source: 'native' }]);
     expect(entries.filter(entry => entry.id === 'claude-opus-4-8')).toHaveLength(1);
+  });
+
+  it('gives each row the context window the Models API names, so the size shows before any run reports one', () => {
+    const parsed = parseAnthropicModels({ data: [
+      { id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5', max_input_tokens: 1_000_000 },
+      { id: 'claude-haiku-4-5-20251001', display_name: 'Claude Haiku 4.5', max_input_tokens: 200_000 },
+      { id: 'claude-sonnet-5-5', display_name: 'Claude Sonnet 5.5', max_input_tokens: 'lots' },
+    ], has_more: false });
+    expect(parsed.models.map(entry => [entry.id, entry.contextTokens])).toEqual([['claude-opus-5-5', 1_000_000], ['claude-haiku-4-5-20251001', 200_000], ['claude-sonnet-5-5', undefined]]);
+    const entries = claudeCodeEntries({ defaultModel: 'claude-opus-5-5[1m]', aliases: { opus: 'claude-opus-5-5[1m]', haiku: 'claude-haiku-4-5' }, named: parsed.models });
+    expect(entries.find(entry => entry.id === 'opus')?.contextTokens).toBe(1_000_000);
+    expect(entries.find(entry => entry.id === 'haiku')?.contextTokens).toBe(200_000);
+    expect(entries.find(entry => entry.id === 'sonnet')?.contextTokens).toBeUndefined();
   });
 });

@@ -129,13 +129,15 @@ export function KnowledgeIsland({ count, review, dismiss, leaving }: { count: nu
  * again, or, when no other account has any, when the one in use resets. The parent picks the account and does the
  * switching; this only shows it.
  */
-export function AccountIsland({ harnessName, target, resetsAt, switchAccount, dismiss, leaving }: {
+export function AccountIsland({ harnessName, target, resetsAt, switchAccount, dismiss, retries = true, leaving }: {
   harnessName: string;
   /** The account to switch to and how much of its tightest allowance is used; absent when none has room. */
   target?: { label: string; usedPercent: number };
   resetsAt?: string;
   switchAccount: () => void;
   dismiss: () => void;
+  /** Switching also runs the stopped turn again; the plan running out before anything was sent only switches. */
+  retries?: boolean;
   leaving?: boolean;
 }) {
   const content = useRef<HTMLSpanElement>(null);
@@ -148,7 +150,7 @@ export function AccountIsland({ harnessName, target, resetsAt, switchAccount, di
         <span className="live-island-label">{label}</span>
         {target
           ? <Button type="button" className="live-island-action" onClick={switchAccount}
-            aria-label={t('Chuyển sang {0} rồi chạy lại', [target.label])}>{t('Dùng {0} · còn {1}%', [target.label, 100 - Math.round(target.usedPercent)])}</Button>
+            aria-label={retries ? t('Chuyển sang {0} rồi chạy lại', [target.label]) : t('Chuyển sang {0}', [target.label])}>{t('Dùng {0} · còn {1}%', [target.label, 100 - Math.round(target.usedPercent)])}</Button>
           : resetsAt && <span className="live-island-meta">{usageResetLabel(resetsAt)}</span>}
         <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
       </span>

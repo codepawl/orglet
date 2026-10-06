@@ -14,7 +14,8 @@ import { AccountIsland, KnowledgeIsland, LiveIsland, type IslandView } from './L
 export type DockedIsland =
   | ({ kind: 'run' } & IslandView)
   | { kind: 'knowledge'; /** The set of suggestions, so a new set is a new view. */ key: string; count: number; review: () => void; dismiss: () => void }
-  | { kind: 'account'; /** The run that ran out, so a later one is a new view. */ key: string; harnessName: string; target?: { label: string; usedPercent: number }; resetsAt?: string; switchAccount: () => void; dismiss: () => void };
+  | { kind: 'account'; /** The run that ran out, so a later one is a new view. */ key: string; harnessName: string; target?: { label: string; usedPercent: number }; resetsAt?: string; switchAccount: () => void; dismiss: () => void;
+    /** Switching also runs the stopped turn again; false for the plan running out before anything was sent. */ retries?: boolean };
 
 /**
  * Which prompt bar a view belongs to. The main chat's bar is `MAIN_DOCK`; a side thread open in the right panel
@@ -68,8 +69,12 @@ const EXIT_MS = 240;
  * changing its contents in place. Under `prefers-reduced-motion` the exit is a cut: the island is removed before
  * the next paint, so nothing waits on an animation the stylesheet has switched off.
  */
-export function IslandDock({ dock = MAIN_DOCK }: { dock?: string }) {
-  const view = useDockedIsland(dock);
+export function IslandDock({ dock = MAIN_DOCK, fallback }: {
+  dock?: string;
+  /** Shown while the thread docks nothing: the plan that ran out before any run stopped on it (user, 2026-10-06). */
+  fallback?: DockedIsland;
+}) {
+  const view = useDockedIsland(dock) ?? fallback;
   const lastView = useRef<DockedIsland>(undefined);
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   const handingOver = view !== undefined && lastView.current !== undefined && lastView.current.kind !== view.kind;
@@ -94,7 +99,7 @@ export function IslandDock({ dock = MAIN_DOCK }: { dock?: string }) {
   const shown = lastView.current;
   if (!shown) return null;
   if (shown.kind === 'knowledge') return <KnowledgeIsland count={shown.count} review={shown.review} dismiss={shown.dismiss} leaving={leaving} />;
-  if (shown.kind === 'account') return <AccountIsland harnessName={shown.harnessName} target={shown.target} resetsAt={shown.resetsAt} switchAccount={shown.switchAccount} dismiss={shown.dismiss} leaving={leaving} />;
+  if (shown.kind === 'account') return <AccountIsland harnessName={shown.harnessName} target={shown.target} resetsAt={shown.resetsAt} switchAccount={shown.switchAccount} dismiss={shown.dismiss} retries={shown.retries ?? true} leaving={leaving} />;
   return <LiveIsland state={shown.state} label={shown.label} named={shown.named} receipt={shown.receipt} workers={shown.workers} actions={shown.actions} leaving={leaving} />;
 }
 

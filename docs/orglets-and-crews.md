@@ -100,7 +100,7 @@ Delete a space from its menu. Its channels stay, outside every space.
 
 ### Templates
 
-**Import template** in a new channel's settings creates a channel where the lead splits the work, from a template file, with a separate copy of its orglets and shared skills. A channel where the lead splits the work offers **Export template** on its **General** tab. Templates carry configuration, not keys, sources or chat history. The Research Review and Eris Review templates (the `orglet template` command) start on Demo and can bring a required checklist and a dataset check with them; a channel that has one says so under **How it works** and can drop it there.
+**Import template** in a new channel's settings creates a channel where the lead splits the work, from a template file, with a separate copy of its orglets and shared skills. A channel where the lead splits the work offers **Export template** on its **General** tab. Templates carry configuration, not keys, sources or chat history. The Research Review, Writing Desk and Data Check templates (the `orglet template` command) start on Demo and can bring a required checklist and a dataset check with them; a channel that has one says so under **How it works** and can drop it there.
 
 ### Tag who should answer
 

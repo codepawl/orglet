@@ -28,10 +28,10 @@ try {
     return { id, profile };
   });
   assert.equal(result.profile.datasets[0].rows, 3); assert.equal(result.profile.datasets[0].id.duplicateNonNull, 1);
-  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'data-check', provider: 'demo' }));
   await openChannels(page);
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Eris Review', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
+  await page.getByRole('button', { name: 'Tùy chọn kênh #Data Check', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn kênh #Data Check', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
   await page.getByRole('tab', { name: 'Cách làm việc', exact: true }).click();
   // The team editor no longer edits a checklist or a dataset check (COD-143). A template team keeps both and says so.
   await page.getByText('Câu trả lời của kênh phải trả lời 5 mục kiểm tra.', { exact: true }).waitFor();
@@ -40,7 +40,7 @@ try {
   await page.getByText('Đã lưu kênh', { exact: true }).first().waitFor();
   const keptOnSave = await page.evaluate(async () => {
     const workspace = await window.orglet.call('workspace', {});
-    const team = workspace.teams.find(item => item.name === 'Eris Review');
+    const team = workspace.teams.find(item => item.name === 'Data Check');
     const kept = { checks: team.reviewPolicy?.requiredChecks.length, lastChecker: team.reviewPolicy?.requiredChecks[4]?.checker, preflight: Boolean(team.preflight) };
     // The ID column is set through the command, now that the editor has no field for it.
     await window.orglet.call('saveTeam', { ...team, preflight: { idColumn: 'id', compareTwo: false } });
@@ -48,7 +48,7 @@ try {
   });
   assert.deepEqual(keptOnSave, { checks: 5, lastChecker: 'run_audit', preflight: true }, 'Saving from the editor must keep what it no longer shows');
   const preflightTaskId = await page.evaluate(async sourceId => {
-    const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');
+    const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Data Check');
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Packaged automatic preflight', sourceIds: [sourceId], consent: false, budgetMicros: 1000 });
   }, result.profile.datasets[0].sourceId);
   await openThreadByBrief(page, 'Packaged automatic preflight');
@@ -74,7 +74,7 @@ try {
   const templatePath = join(directory, 'team-template.json');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, templatePath);
   await openChannels(page);
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
+  await page.getByRole('button', { name: 'Tùy chọn kênh #Data Check', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
   await page.getByRole('button', { name: 'Xuất template', exact: true }).click();
   await page.getByText('Đã xuất template', { exact: true }).waitFor();
   const template = JSON.parse(await readFile(templatePath, 'utf8'));
@@ -257,6 +257,11 @@ try {
   app = await launch(directory);
   page = await app.firstWindow();
   await useVietnamese(page);
+  // The members' jobs are part of the work, which a chat shows only with Show how orglets work on (user, 2026-10-06).
+  await page.evaluate(async () => {
+    const workspace = await window.orglet.call('workspace', {});
+    await window.orglet.call('settings', { theme: workspace.theme, connectionLimitMicros: workspace.connectionLimitMicros, showWork: true });
+  });
   await openThreadByBrief(page, 'Packaged native checker fixture');
   // Each unfinished job is a row: the orglet's name and its state on one line, the brief under them (COD-352).
   const reviewerJob = page.locator('.team-progress .team-job').filter({ has: page.getByText('Fixture reviewer', { exact: true }) });

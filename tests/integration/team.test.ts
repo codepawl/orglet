@@ -206,7 +206,7 @@ it('a team cannot change a task snapshot by updating its configuration', async (
 });
 
 it('enforces snapshotted required checks without depending on the team name', async () => {
-  const template = await core.command('createTemplate', { templateId: 'eris-review', provider: 'openai' }) as Team;
+  const template = await core.command('createTemplate', { templateId: 'data-check', provider: 'openai' }) as Team;
   const team = await core.command('saveTeam', { ...template, name: 'Renamed audit' }) as Team;
   const imported = core.templates.import(core.templates.export(team.id));
   expect(imported.reviewPolicy).toEqual(team.reviewPolicy);

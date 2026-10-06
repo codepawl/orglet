@@ -19,8 +19,8 @@ try {
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).waitFor();
-  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
-  await page.getByRole('button', { name: '#Eris Review', exact: true }).waitFor();
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'data-check', provider: 'demo' }));
+  await page.getByRole('button', { name: '#Data Check', exact: true }).waitFor();
   await openHome(page);
 
   // Clicking a worker name opens that worker's chat. There is no task-list disclosure.
@@ -68,7 +68,7 @@ try {
   await openChannels(page);
   const channelRows = page.locator('.channel-row > .worker-row > button.worker');
   assert.equal(await channelRows.count(), 2, 'both template crews are channels');
-  assert.equal(await channelRows.first().getAttribute('aria-label'), '#Eris Review', 'the newest channel is listed first');
+  assert.equal(await channelRows.first().getAttribute('aria-label'), '#Data Check', 'the newest channel is listed first');
   await openHome(page);
 
   // Dragging the handle resizes the sidebar, and the width survives a restart.

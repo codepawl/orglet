@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { composerUsageTone, contextPercent, usageRingFor, type ChatContext, type ComposerUsage, type ContextLine, type HarnessPlan } from '../../shared/composer-usage';
-import { THREAD_VERBATIM_TURNS } from '../../shared/thread-limits';
 import { SYSTEM_ACCOUNT_ID, type HarnessBankedResets, type HarnessInfo, type HarnessUsageWindow } from '../../shared/harness';
 import { currentLocale, t } from '../i18n';
 import { Button } from './ui';
@@ -123,11 +122,6 @@ export function formatTokens(tokens: number) {
   return format(tokens, '');
 }
 
-/** What Orglet sends of the chat: the latest turns word for word, older ones as a summary (`core/context/thread.ts`). */
-function compactionLine(context: ChatContext) {
-  if (context.summarizedTurns > 0) return t('Lần gần nhất gửi nguyên văn {0} lượt; {1} lượt cũ hơn đã gộp thành tóm tắt.', [context.verbatimTurns ?? 0, context.summarizedTurns]);
-  return t('Mỗi tin nhắn gửi nguyên văn tối đa {0} lượt gần nhất; lượt cũ hơn được gộp thành tóm tắt.', [THREAD_VERBATIM_TURNS]);
-}
 
 /**
  * One row of the usage popover: what it is and, beside it, the model it is about; at the right a quiet note (when an
@@ -173,7 +167,6 @@ const modelName = (line: ContextLine) => line.modelLabel ?? t('model mặc đị
 function ContextSection({ context }: { context: ChatContext }) {
   const title = t('Cửa sổ ngữ cảnh');
   const [first] = context.lines;
-  const unknown = context.lines.some(line => !line.windowTokens);
   return <section className="usage-section" aria-label={title}>
     {context.lines.length === 1
       ? <UsageRow label={title} strong detail={modelName(first)} {...contextFigure(first)} />
@@ -181,8 +174,6 @@ function ContextSection({ context }: { context: ChatContext }) {
         <p className="usage-heading"><strong>{title}</strong></p>
         {context.lines.map(line => <UsageRow key={line.workerId} label={line.workerName} detail={modelName(line)} {...contextFigure(line)} />)}
       </>}
-    <p className="usage-muted">{compactionLine(context)}</p>
-    {unknown && <p className="usage-muted">{t('Sức chứa hiện ra khi danh sách model hoặc CLI cho biết.')}</p>}
   </section>;
 }
 

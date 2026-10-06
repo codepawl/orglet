@@ -26,6 +26,7 @@ import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
 import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, planFirstInput, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { IslandDock } from './components/islandDock';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -2243,8 +2244,9 @@ export function App() {
   const userStatus = runningNow > 0 || waitingForYou > 0 ? runningButtonLabel(runningNow, waitingForYou) : account?.status === 'signed_in' ? (account.email ? maskEmail(account.email) : t('Đã đăng nhập')) : t('Dùng trên máy này');
   const activityRailLabel = [t('Hoạt động'), activityCountsNow.needs > 0 ? t('{0} chờ bạn', [activityCountsNow.needs]) : '', unreadNotices > 0 ? t('{0} chưa đọc', [unreadNotices]) : ''].filter(Boolean).join(', ');
   const friendTemplates: FriendTemplate[] = [
-    { id: 'research-review', name: 'Research Review', description: t('Đọc nguồn, kiểm tra bằng chứng và tổng hợp kết luận.'), orglets: 3 },
-    { id: 'eris-review', name: 'Eris Review', description: t('Review challenge, dữ liệu và run logs; chỉ tạo báo cáo.'), orglets: 4 },
+    { id: 'research-review', name: 'Research Review', description: t('Đọc nguồn, kiểm tra bằng chứng và tổng hợp kết luận.'), members: ['Source researcher', 'Evidence reviewer', 'Research worker'] },
+    { id: 'writing-desk', name: 'Writing Desk', description: t('Viết nháp, biên tập rồi chốt một bản gọn gàng.'), members: ['Drafter', 'Editor', 'Writer'] },
+    { id: 'data-check', name: 'Data Check', description: t('So hai bảng dữ liệu và nhật ký kết quả; chỉ tạo báo cáo.'), members: ['Data reviewer', 'Comparison auditor', 'Run auditor', 'Review worker'] },
   ];
   const addTemplate = (templateId: FriendTemplate['id']) => action(async () => {
     setFriendsBusy(true);
@@ -2495,9 +2497,9 @@ export function App() {
         {(['add', 'market'] as const).map(view => {
           const open = friendsOpen && homePage === view;
           // Add orglet is a dialog over whatever is open; the marketplace is a page of Home.
-          if (view === 'add') return <button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => setAddOrgletOpen(true)}>
+          if (view === 'add') return <Button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => setAddOrgletOpen(true)}>
             <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm Tí')}</span>
-          </button>;
+          </Button>;
           return <button key={view} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => { clearSelection(); setHomePage(view); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
             <Store size={18} aria-hidden="true" /><span className="sidebar-nav-name">Marketplace</span>
           </button>;
@@ -2536,9 +2538,9 @@ export function App() {
       {sidebarFor === 'schedules' && <nav className="sidebar-nav" aria-label={t('Lịch chạy')}>
         {/* Schedules has one thing to make, so making it sits here in the sidebar, above the list (user, 2026-10-06).
             The Library makes two kinds of thing, so its buttons stay in the main panel. */}
-        <button type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => void leaveRoutine(() => openRoutines({ editing: true }))}>
+        <Button type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => void leaveRoutine(() => openRoutines({ editing: true }))}>
           <LucidePlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Tạo lịch')}</span>
-        </button>
+        </Button>
         <button type="button" className={`sidebar-nav-item${routineView.editing ? '' : ' active'}`} aria-current={routineView.editing ? undefined : 'page'} onClick={() => void leaveRoutine(() => openRoutines())}>
           <LucideCalendarClock size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Tất cả lịch')}</span><span className="sidebar-nav-count" aria-hidden="true">{workspace.routines.length}</span>
         </button>
@@ -2655,6 +2657,8 @@ export function App() {
             onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />}
         </div>
         <div className="thread-composer">
+          {/* Nothing runs in an empty chat yet, so only a plan that ran out takes the island (user, 2026-10-06). */}
+          <IslandDock dock="new-chat" fallback={emptyChatUsage.island} />
           {composerBar}
           <ComposerFoot>{composerHint}</ComposerFoot>
           <SkippedFiles items={skippedSources} />

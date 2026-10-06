@@ -3,8 +3,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TaskThread } from '../../apps/desktop/src/renderer/components/TaskThread';
 import { LiveRun } from '../../apps/desktop/src/renderer/components/LiveRun';
-import { TurnTrace } from '../../apps/desktop/src/renderer/components/TurnTrace';
-import { liveTraceOf, traceOf, traceSummary } from '../../apps/desktop/src/renderer/turnTrace';
+import { WorkLog } from '../../apps/desktop/src/renderer/components/WorkLog';
+import { diffFileOf, liveTraceOf, traceOf, traceStatusOf, traceSummary } from '../../apps/desktop/src/renderer/turnTrace';
 import type { Activity, Artifact, Run, Skill, Task, TaskDetail, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { RunContext } from '../../apps/desktop/src/shared/knowledge';
 import { translateMessage } from '../../apps/desktop/src/shared/i18n';
@@ -52,11 +52,11 @@ function answerOf(usedMemories?: { id: string; revision: number; text: string }[
   return { id: artifactId, runId, createdAt: at, hash: 'b'.repeat(64), usedMemories, report: { format: 'chat', title: 'Tóm tắt', summary: 'Hóa đơn tháng 9 là 1.200.000đ.', findings: [], limitations: [] } };
 }
 
-function renderThread(runs: Run[], events: Activity[], artifact: Artifact, openMemories?: (workerId: string) => void) {
+function renderThread(runs: Run[], events: Activity[], artifact: Artifact, openMemories?: (workerId: string) => void, showWork = true) {
   const detail: TaskDetail = { task, runs, events, artifacts: [artifact], profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [],
     usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } };
   return renderToStaticMarkup(createElement(TaskThread, {
-    detail, workspace: { workers: [worker, writer], skills: [skill], tasks: [task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    detail, workspace: { workers: [worker, writer], skills: [skill], tasks: [task], showWork }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {}, openMemories,
     proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
   }));
@@ -71,7 +71,7 @@ function orderOf(html: string, markers: string[]) {
   return found;
 }
 
-it('renders exactly one trace control before the bubble, with the memory, the note, the files read and the steps inside it in order', () => {
+it('renders exactly one work log before the bubble: the memory and note folded first, then the steps in the order they happened', () => {
   const events = [
     eventOf(runId, 'Đang gọi model · bước 1/6'),
     eventOf(runId, 'Đã đọc invoice.xlsx'),
@@ -81,24 +81,42 @@ it('renders exactly one trace control before the bubble, with the memory, the no
     eventOf(runId, 'Đã lưu câu trả lời.'),
   ];
   const html = renderThread([runOf(runId, worker, undefined, context)], events, answerOf([memory]), () => {});
-  expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
+  expect(html.match(/class="work-log"/g)).toHaveLength(1);
   expect(html).not.toContain('used-memories');
-  const [trace, memoryRow, noteRow, readRow, webRow, skillRow, rememberedRow, link, bubble] = orderOf(html, [
-    'class="turn-trace"', 'Thích câu trả lời ngắn.', 'Quy ước hóa đơn', 'invoice.xlsx', '>Searched the web<', 'references/invoices.md',
-    'Remembered something for later chats.', 'Open the Memory tab', `id="message-${artifactId}"`,
+  const [trace, memoryRow, noteRow, link, readRow, webRow, skillRow, rememberedRow, bubble] = orderOf(html, [
+    'class="work-log"', 'Thích câu trả lời ngắn.', 'Quy ước hóa đơn', 'Open the Memory tab', 'invoice.xlsx', '>Searched the web<', 'references/invoices.md',
+    'Remembered something for later chats.', `id="message-${artifactId}"`,
   ]);
-  expect([trace, memoryRow, noteRow, readRow, webRow, skillRow, rememberedRow, link, bubble]).toEqual([...[trace, memoryRow, noteRow, readRow, webRow, skillRow, rememberedRow, link, bubble]].sort((a, b) => a - b));
-  // The folded line counts each kind; the runner's own status lines are not actions and count for nothing.
-  expect(html).toContain('Used 1 memory · Loaded 1 note · Read 1 file · Read 1 skill resource · Searched the web once · Remembered 1 thing');
+  expect([trace, memoryRow, noteRow, link, readRow, webRow, skillRow, rememberedRow, bubble]).toEqual([trace, memoryRow, noteRow, link, readRow, webRow, skillRow, rememberedRow, bubble].sort((a, b) => a - b));
+  // What was loaded folds into one row; the runner's own status lines are not actions and are not rows.
+  expect(html).toContain('Used 1 memory · Loaded 1 note');
+  expect(html.match(/<li class="work-row">/g)).toHaveLength(2 + 4);
   expect(html).not.toContain('Đang gọi model');
-  // A real disclosure with a list a screen reader can read.
-  expect(html).toContain('<details class="turn-trace"><summary class="activity-summary">');
-  expect(html).toContain('<ol class="trace-list" aria-label="What the orglet did">');
+  // Real lists a screen reader can read, and a mark that names how each step ended.
+  expect(html).toContain('<ol class="work-list work-steps" aria-label="What the orglet did">');
+  expect(html).toContain('<details class="work-fold work-loaded"><summary class="activity-summary work-summary">');
+  expect(html).toContain('role="img" aria-label="Done"');
+});
+
+it('keeps the work out of the chat unless the person shows it in Settings (user, 2026-10-06)', () => {
+  const events = [eventOf(runId, 'Đã đọc invoice.xlsx'), eventOf(runId, 'Đã lưu câu trả lời.')];
+  const hidden = renderThread([runOf(runId, worker, undefined, context)], events, answerOf([memory]), () => {}, false);
+  expect(hidden).not.toContain('work-log');
+  expect(hidden).not.toContain('class="turn-before"');
+  expect(hidden).toContain(`id="message-${artifactId}"`);
+  const live = renderToStaticMarkup(createElement(LiveRun, {
+    update: { taskId, runId, startedAt: Date.now(), progress: { thinking: 'Đang cân nhắc.', preamble: '', answer: 'Hóa đơn', activity: [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }], writing: false } },
+    memories: context.memories, showWork: false,
+  }));
+  expect(live).not.toContain('work-log');
+  expect(live).not.toContain('activity-elapsed');
+  expect(live).not.toContain('Đang cân nhắc.');
+  expect(live).toContain('Hóa đơn');
 });
 
 it('renders nothing when the trace is empty', () => {
   const html = renderThread([runOf(runId, worker)], [eventOf(runId, 'Đã lưu câu trả lời.')], answerOf());
-  expect(html).not.toContain('turn-trace');
+  expect(html).not.toContain('work-log');
   expect(html).not.toContain('class="turn-before"');
   expect(html).toContain(`id="message-${artifactId}"`);
 });
@@ -107,7 +125,7 @@ it('invents no actions for a connection the core sees nothing of', () => {
   const cursor: Worker = { ...worker, provider: 'cursor' };
   const events = [eventOf(runId, 'Đang chạy Cursor Agent 1.0 trên máy · chỉ đọc bản sao nguồn của task'), eventOf(runId, 'Đã lưu câu trả lời.')];
   const html = renderThread([runOf(runId, cursor)], events, answerOf());
-  expect(html).not.toContain('turn-trace');
+  expect(html).not.toContain('work-log');
   expect(traceOf({ runId, events })).toEqual([]);
 });
 
@@ -116,8 +134,8 @@ it('marks a refusal as a quieter row and counts it as a step that did not go thr
   const entries = traceOf({ runId, events });
   expect(entries.map(entry => entry.kind)).toEqual(['failed', 'failed']);
   expect(traceSummary(entries)).toBe('2 steps did not go through');
-  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
-  expect(html.match(/class="trace-row trace-row-muted"/g)).toHaveLength(2);
+  const html = renderToStaticMarkup(createElement(WorkLog, { entries }));
+  expect(html.match(/class="work-row work-row-failed"/g)).toHaveLength(2);
   expect(html).not.toContain('Open the Memory tab');
 });
 
@@ -167,7 +185,7 @@ it('names each command it ran and how it ended, and still reads the older senten
   const entries = traceOf({ runId, events });
   expect(entries.map(entry => entry.kind)).toEqual(['command', 'command', 'command', 'command', 'command']);
   expect(traceSummary(entries)).toBe('Ran 5 commands');
-  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
+  const html = renderToStaticMarkup(createElement(WorkLog, { entries }));
   expect(html).toContain('Ran npm test · exit code 1');
   expect(html).toContain('node build.js timed out');
   expect(html).toContain('Stopped npm run dev');
@@ -194,8 +212,8 @@ it('reads folders, moves and deletions as their own rows, and a refused one as a
     ['failed', 'Không chuyển được: notes.txt → contract-old.pdf'],
   ]);
   expect(traceSummary(entries)).toBe('Created 1 folder · Moved 2 items · Deleted 1 item · 1 step did not go through');
-  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
-  expect(html).toContain('<span class="trace-verb">Moved</span><span class="trace-target">receipt 3.pdf → receipts/march.pdf</span>');
+  const html = renderToStaticMarkup(createElement(WorkLog, { entries }));
+  expect(html).toContain('<span class="work-verb">Moved</span><span class="work-target">receipt 3.pdf → receipts/march.pdf</span>');
   expect(html).toContain('Could not move: notes.txt → contract-old.pdf');
 });
 
@@ -240,37 +258,39 @@ it('gives a crew answer its handoffs before the synthesis steps, one per member,
   // The same runs without a synthesis author add nothing.
   expect(traceOf({ runId, events }).map(entry => entry.target)).toEqual(['summary.md']);
   const html = renderThread([lead, member, synthesis], events, answerOf());
-  expect(html).toContain('Handed off 2 jobs · Read 1 file');
   expect(html).toContain('Reassigned work to Writer: phần đầu chưa đủ.');
-  expect(html).toContain('Handed off to</span><span class="trace-target trace-person">');
-  const list = html.slice(html.indexOf('class="trace-list"'), html.indexOf('</ol>'));
+  expect(html).toContain('Handed off to</span><span class="work-target work-person">');
+  const list = html.slice(html.indexOf('class="work-list work-steps"'), html.indexOf('</ol>'));
   const verb = list.indexOf('Handed off to');
   const row = list.slice(list.lastIndexOf('<li', verb), list.indexOf('</li>', verb));
   expect(row.indexOf('Handed off to')).toBeLessThan(row.indexOf('class="avatar xxs'));
   expect(row.indexOf('class="avatar xxs')).toBeLessThan(row.indexOf('Writer'));
 });
 
-it('keeps one trace while the answer streams, the memories first and an open step marked', () => {
+it('keeps one work log while the answer streams, the memories first, an open step pulsing and the thinking on top', () => {
   const entries = liveTraceOf(context.memories, [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }, { id: 's2', kind: 'other', target: 'Bash', done: false }]);
   expect(entries.map(entry => [entry.kind, entry.running ?? false])).toEqual([['memory', false], ['read', false], ['other', true]]);
   const html = renderToStaticMarkup(createElement(LiveRun, {
     update: { taskId, runId, startedAt: Date.now(), progress: { thinking: 'Đang cân nhắc.', preamble: '', answer: 'Hóa đơn', activity: [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }, { id: 's2', kind: 'other', target: 'Bash', done: false }], writing: false } },
-    memories: context.memories,
+    memories: context.memories, showWork: true,
   }));
-  expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
-  expect(html).toContain('Used 1 memory · Read 1 file · 1 other step');
-  expect(html).toContain('class="trace-row running"');
+  expect(html.match(/class="work-log"/g)).toHaveLength(1);
+  expect(html).toContain('Used 1 memory');
+  expect(html).toContain('class="work-row running"');
+  expect(html).toContain('aria-label="Running"');
+  expect(html.indexOf('class="work-fold work-thinking"')).toBeLessThan(html.indexOf('class="work-fold work-loaded"'));
   // The tool's name is never shown; the timer and the notes sit after the rows.
   expect(html).not.toContain('Bash');
-  expect(html.indexOf('class="trace-list"')).toBeLessThan(html.indexOf('class="activity-elapsed"'));
+  expect(html.indexOf('class="work-list work-steps"')).toBeLessThan(html.indexOf('class="activity-elapsed"'));
   expect(html).toContain('Đang cân nhắc.');
 });
 
 it('shows the timer alone while a run has streamed nothing to trace', () => {
   const html = renderToStaticMarkup(createElement(LiveRun, {
     update: { taskId, runId, startedAt: Date.now(), progress: { thinking: '', preamble: '', answer: '', activity: [], writing: false } },
+    showWork: true,
   }));
-  expect(html).not.toContain('turn-trace');
+  expect(html).not.toContain('work-log');
   expect(html).toContain('activity-elapsed-plain');
 });
 
@@ -283,7 +303,63 @@ it('says in the chat when an image was not shown to the orglet (COD-292)', () =>
   const entries = traceOf({ runId, events });
   expect(entries.map(entry => entry.kind)).toEqual(['read', 'read', 'withheld']);
   expect(traceSummary(entries)).toBe('Read 2 files · 1 image not shown to the orglet');
-  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
-  expect(html).toContain('trace-row trace-row-muted');
+  const html = renderToStaticMarkup(createElement(WorkLog, { entries }));
+  expect(html).toContain('work-row work-row-failed');
   expect(html).toContain('photo.png');
+});
+
+it('marks each step with a mark of its own shape and name: done, did not go through, running', () => {
+  const entries = traceOf({ runId, events: [eventOf(runId, 'Đã đọc a.md'), eventOf(runId, 'Không ghi nhớ được: hết chỗ.')] });
+  expect(entries.map(traceStatusOf)).toEqual(['done', 'failed']);
+  expect(traceStatusOf({ id: 'x', kind: 'read', target: 'b.md', running: true })).toBe('running');
+  const html = renderToStaticMarkup(createElement(WorkLog, { entries: [...entries, { id: 'x', kind: 'read', target: 'b.md', running: true }] }));
+  expect(html).toContain('work-mark work-mark-done" role="img" aria-label="Done"');
+  expect(html).toContain('work-mark work-mark-failed" role="img" aria-label="Did not go through"');
+  expect(html).toContain('work-mark work-mark-running" role="img" aria-label="Running"');
+  // A tick, a cross and a dot: the shapes differ, so colour is never the only signal.
+  expect(html).toContain('lucide-check');
+  expect(html).toContain('lucide-x');
+  expect(html).toContain('class="work-dot"');
+});
+
+it('reads a command exit from the core sentence: zero is done, any other code, a timeout, a stop or too much output is not', () => {
+  const status = (message: string) => traceStatusOf(traceOf({ runId, events: [eventOf(runId, message)] })[0]);
+  expect(status('Đã chạy lệnh npm test · mã thoát 0')).toBe('done');
+  expect(status('Đã chạy lệnh npm test · mã thoát 1')).toBe('failed');
+  expect(status('Lệnh node build.js đã hết thời gian')).toBe('failed');
+  expect(status('Đã dừng lệnh npm run dev')).toBe('failed');
+  expect(status('Lệnh npm run lint in quá nhiều nên đã bị dừng')).toBe('failed');
+  expect(status('Tiến trình đã dừng: exited, mã thoát 0')).toBe('done');
+  expect(status('Tiến trình đã dừng: killed')).toBe('failed');
+  // A sentence from before commands named their exit claims nothing.
+  expect(status('Đã chạy lệnh npm test')).toBe('done');
+});
+
+it('shows the first 8 steps and a button for the rest', () => {
+  const events = Array.from({ length: 11 }, (_, index) => eventOf(runId, 'Đã đọc file-' + index + '.md'));
+  const html = renderToStaticMarkup(createElement(WorkLog, { entries: traceOf({ runId, events }) }));
+  expect(html.match(/<li class="work-row">/g)).toHaveLength(8);
+  expect(html).toContain('file-7.md');
+  expect(html).not.toContain('file-8.md');
+  expect(html).toContain('Show 3 more steps');
+  const few = renderToStaticMarkup(createElement(WorkLog, { entries: traceOf({ runId, events: events.slice(0, 8) }) }));
+  expect(few).not.toContain('more steps');
+});
+
+it('finds the diff file a step is about, the new place for a move', () => {
+  const files = [{ path: 'src/a.ts' }, { path: 'docs/b.md', previousPath: 'b.md' }];
+  expect(diffFileOf(files, { id: '1', kind: 'edit', target: 'src/a.ts' })).toBe(files[0]);
+  expect(diffFileOf(files, { id: '2', kind: 'move', target: 'b.md → docs/b.md' })).toBe(files[1]);
+  expect(diffFileOf(files, { id: '3', kind: 'edit', target: 'c.ts' })).toBeUndefined();
+  expect(diffFileOf(files, { id: '4', kind: 'edit', target: 'app/src/a.ts' })).toBe(files[0]);
+});
+
+it('opens a changed file from the steps only when the run kept a working copy, and never draws thinking for a saved answer', () => {
+  const entries = traceOf({ runId, events: [eventOf(runId, 'Đã ghi trong bản làm việc: src/a.ts'), eventOf(runId, 'Đã đọc src/a.ts')] });
+  const withCopy = renderToStaticMarkup(createElement(WorkLog, { entries, diffRun: { taskId, runId } }));
+  expect(withCopy.match(/<details class="work-edit"/g)).toHaveLength(1);
+  const without = renderToStaticMarkup(createElement(WorkLog, { entries }));
+  expect(without).not.toContain('work-edit');
+  expect(without).not.toContain('work-thinking');
+  expect(renderThread([runOf(runId, worker)], [eventOf(runId, 'Đã đọc a.md')], answerOf())).not.toContain('work-thinking');
 });

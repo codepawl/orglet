@@ -457,7 +457,7 @@ Archiving takes an orglet or channel off the active list, keeping its chats and 
 orglet template research-review --provider openai
 ```
 
-Creates a channel from one of the app's templates (`research-review` or `eris-review`) with its orglets and evidence skill. `--provider openai` puts the new orglets on the OpenAI connection, which must already be set up in the app. The channel goes to the space named Channels, and the command says so. Choose a model for each orglet in the app if you want one other than the default.
+Creates a channel from one of the app's templates (`research-review`, `writing-desk` or `data-check`) with its orglets and evidence skill. `--provider openai` puts the new orglets on the OpenAI connection, which must already be set up in the app. The channel goes to the space named Channels, and the command says so. Choose a model for each orglet in the app if you want one other than the default.
 
 ### open
 

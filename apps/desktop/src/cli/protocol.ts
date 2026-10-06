@@ -58,7 +58,7 @@ const ChatTarget = { to: ChatName.optional(), chat: ChatId.optional() };
 /** The orglets and crews of a channel, by name (COD-361). */
 const MemberNames = z.array(ChatName).min(1).max(50);
 /** The crew templates the core can create, as `createTemplate` names them. */
-export const TEMPLATE_IDS = ['research-review', 'eris-review'] as const;
+export const TEMPLATE_IDS = ['research-review', 'writing-desk', 'data-check'] as const;
 /** What a chat can be renamed, archived, restored or deleted as. */
 export const ChatChange = z.enum(['rename', 'archive', 'restore', 'delete']);
 export type ChatChange = z.infer<typeof ChatChange>;

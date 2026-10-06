@@ -106,6 +106,12 @@ function shortName(displayName: string | undefined): string | undefined {
   return name ? name : undefined;
 }
 
+/** The context window the Models API gives this model, so the usage popover can show it before any run reports one. */
+function windowOf(reading: ClaudeCodeReading, modelId: string | undefined) {
+  const contextTokens = modelId ? reading.named?.find(entry => sameClaudeModel(entry.id, modelId))?.contextTokens : undefined;
+  return contextTokens ? { contextTokens } : {};
+}
+
 function nameOf(reading: ClaudeCodeReading, modelId: string | undefined): string | undefined {
   if (!modelId) return undefined;
   return shortName(reading.named?.find(entry => sameClaudeModel(entry.id, modelId))?.displayName);
@@ -130,17 +136,18 @@ export function claudeCodeEntries(reading: ClaudeCodeReading): ModelEntry[] {
       source: 'alias',
       ...(resolvedId ? { resolvedId } : {}),
       ...(isDefault ? { isDefault: true as const } : {}),
+      ...windowOf(reading, resolvedId),
     };
     return entry;
   });
   const covered = aliasRows.flatMap(row => row.resolvedId ? [row.resolvedId] : []);
   const defaultRow: ModelEntry[] = reading.defaultModel && !defaultTaken
-    ? [{ provider: 'claude-code', id: reading.defaultModel, source: 'native', isDefault: true, ...optionalName(nameOf(reading, reading.defaultModel)) }]
+    ? [{ provider: 'claude-code', id: reading.defaultModel, source: 'native', isDefault: true, ...optionalName(nameOf(reading, reading.defaultModel)), ...windowOf(reading, reading.defaultModel) }]
     : [];
   if (reading.defaultModel) covered.push(reading.defaultModel);
   const others = (reading.named ?? [])
     .filter(entry => !covered.some(modelId => sameClaudeModel(modelId, entry.id)))
-    .map((entry): ModelEntry => ({ provider: 'claude-code', id: entry.id, source: 'native', ...optionalName(shortName(entry.displayName)) }));
+    .map((entry): ModelEntry => ({ provider: 'claude-code', id: entry.id, source: 'native', ...optionalName(shortName(entry.displayName)), ...(entry.contextTokens ? { contextTokens: entry.contextTokens } : {}) }));
   return [...aliasRows, ...defaultRow, ...others];
 }
 

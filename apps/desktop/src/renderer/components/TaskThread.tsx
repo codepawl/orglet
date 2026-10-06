@@ -37,7 +37,7 @@ import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
-import { TurnTrace } from './TurnTrace';
+import { WorkLog } from './WorkLog';
 import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
 import { knowledgeSuggestionKey, showsKnowledgeIsland } from '../../shared/knowledge-island';
@@ -126,7 +126,7 @@ type Turn = { missingInput: boolean; revision: number; runs: Run[]; sentAt: stri
 
 export function TaskThread({ start, detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward, islandDock = MAIN_DOCK, embedded = false }: {
   /** The prompt bar this chat's island docks on: the main chat's, or a side thread's in the right panel (COD-365). */ islandDock?: string;
-  /** Drawn inside the right panel beside its main chat (COD-365): the panel's own head says what the thread is. */ embedded?: boolean; /** Where the chat begins: who it is with, shown above the first message the way a messenger starts a chat. */ start?: ThreadStartInfo; detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
+  /** Drawn inside the right panel beside its main chat (COD-365): the panel's own head says what the thread is. */ embedded?: boolean; /** Where the chat begins: who it is with, shown above the first message the way a messenger starts a chat. */ start?: ThreadStartInfo; detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'> & Partial<Pick<Workspace, 'showWork'>>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
   /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
@@ -322,6 +322,8 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
   // the worker's name. Each opens the diff viewer.
   const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review, restored }) =>
     <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => diff.open(run)} />);
+  // A step that changed a file opens that file's changes, but only for a run that kept a working copy with changes.
+  const diffRunOf = (run: Run | undefined) => run && changedFilesOf([run], recovery).length > 0 ? { taskId: detail.task.id, runId: run.id } : undefined;
   // One line per command that kept a failed run's changes out of the folder (COD-270); a crew member's line is named.
   const blockedLinesOf = (runs: readonly Run[]) => runs.flatMap(run => run.status === 'failed' && run.errorCode === 'hand_in_blocked'
     ? (run.blockedHandIn?.commands ?? []).map(command => <BlockedCommandLine key={command.processId} command={command}
@@ -346,7 +348,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     const workerId = author?.snapshot.worker.id;
     const canContinue = latest && !busy && !detail.task.pendingStart && author !== undefined && canContinueRun(author);
     const notices = turnNotices({
-      trace: trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
+      trace: workspace.showWork && trace.length > 0 ? <WorkLog key="trace" entries={trace} diffRun={diffRunOf(author)} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
       outOfSteps: author?.outOfSteps && author.stage === undefined
         ? <OutOfStepsLine key="out-of-steps" busy={continuing} onContinue={canContinue ? () => continueRun(author) : undefined} />
         : undefined,
@@ -385,7 +387,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     const trace = traceOf({ memories, context: run.snapshot.context, runId: run.id, events: detail.events });
     const workerId = run.snapshot.worker.id;
     const notices = turnNotices({
-      trace: trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories ? () => openMemories(workerId) : undefined} /> : undefined,
+      trace: workspace.showWork && trace.length > 0 ? <WorkLog key="trace" entries={trace} diffRun={diffRunOf(run)} onOpenMemories={openMemories ? () => openMemories(workerId) : undefined} /> : undefined,
       handIn: blocked.commands.map(command => <BlockedCommandLine key={command.processId} command={command} onOpen={() => setOutputCommand(command)} />),
       changes: changedFilesLines([run], () => false),
       proposals: proposalCards(proposals),
@@ -441,6 +443,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
   };
 
   return <div className="thread-scroll" ref={viewport}>
+    <div className="thread-edge thread-edge-top" aria-hidden="true" />
     <div className="thread-content" ref={threadContent}>
       {start && !embedded && !detail.task.sideOf && <ThreadStart start={start} />}
       {detail.task.sideOf && !embedded && <p className="side-thread-origin">
@@ -597,10 +600,10 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
             </div>}
             {latest && detail.task.status === 'waiting_input' && !pendingDecision && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && detail.task.pendingStart && <p role="status">{t('Đã lưu yêu cầu mới. Đang dừng lượt cũ rồi sẽ bắt đầu.')}</p>}
-            {crewPlan && <CrewPlanFlow diagram={crewPlan} live={latest && busy} statusLabel={statusLabel} />}
-            {latest && detail.task.status !== 'completed' && !crewPlan && <TeamJobs runs={turn.runs} artifacts={detail.artifacts} namedRunId={busy && thinkingRun ? thinkingRun.id : undefined} />}
+            {workspace.showWork && crewPlan && <CrewPlanFlow diagram={crewPlan} live={latest && busy} statusLabel={statusLabel} />}
+            {workspace.showWork && latest && detail.task.status !== 'completed' && !crewPlan && <TeamJobs runs={turn.runs} artifacts={detail.artifacts} namedRunId={busy && thinkingRun ? thinkingRun.id : undefined} />}
             {latest && busy && runStatus && <RunStatusLine line={runStatus} waiting={runStatus === waitingLine} />}
-            {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} />}
+            {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} showWork={workspace.showWork === true} />}
             {latest && detail.task.status === 'paused' && <p role="status">{stoppedAfter
               ? t('Đã tạm dừng sau bước của {0}, chờ bạn tiếp tục. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.', [stoppedAfter.snapshot.worker.name])
               : t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
@@ -647,6 +650,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
           message and outside it, and scrolls with the thread. */}
       {unfinished && <UnfinishedWork limitations={unfinished.limitations} onRetry={() => action(() => orglet.call('retry', { id: detail.task.id }))} />}
     </div>
+    <div className="thread-edge thread-edge-bottom" aria-hidden="true" />
     {diff.dialog}
     {outputCommand && <CommandOutputDialog taskId={detail.task.id} command={outputCommand} onClose={() => setOutputCommand(undefined)} />}
     {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}

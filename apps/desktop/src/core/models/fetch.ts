@@ -196,11 +196,14 @@ export function parseAnthropicModels(payload: unknown): { models: ModelEntry[]; 
   const models: ModelEntry[] = [];
   for (const row of body.data) {
     if (!row || typeof row !== 'object') continue;
-    const rec = row as { id?: unknown; display_name?: unknown };
+    const rec = row as { id?: unknown; display_name?: unknown; max_input_tokens?: unknown };
     const id = pickId(rec.id);
     if (!id) continue;
     const displayName = typeof rec.display_name === 'string' && rec.display_name.trim() ? rec.display_name.trim().slice(0, 200) : undefined;
-    models.push({ provider: 'anthropic', id, source: 'native', ...(displayName ? { displayName } : {}) });
+    // The Models API names each model's context window as `max_input_tokens` (there is no `context_window` field), so a
+    // model shows its size before any run has reported one.
+    const contextTokens = contextTokensOf(rec.max_input_tokens);
+    models.push({ provider: 'anthropic', id, source: 'native', ...(displayName ? { displayName } : {}), ...(contextTokens ? { contextTokens } : {}) });
   }
   const last = typeof body.last_id === 'string' ? body.last_id : undefined;
   return { models, hasMore: body.has_more === true && Boolean(last), after: last };
@@ -248,8 +251,8 @@ function openrouterText(architecture: unknown): boolean {
   return typeof rec.modality !== 'string' || rec.modality.includes('text');
 }
 
-/** OpenRouter's `context_length`: a whole number of tokens, or nothing (COD-326). */
-function openrouterContext(value: unknown): number | undefined {
+/** A context window as a provider gives it (OpenRouter's `context_length`, Anthropic's `max_input_tokens`): a whole number of tokens, or nothing (COD-326). */
+function contextTokensOf(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0 || value > 100_000_000) return undefined;
   return value;
 }
@@ -277,7 +280,7 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
     const pricing = rec.pricing && typeof rec.pricing === 'object' ? rec.pricing as { prompt?: unknown; completion?: unknown } : undefined;
     const inputTenths = pricing ? openrouterTenths(pricing.prompt) : undefined;
     const outputTenths = pricing ? openrouterTenths(pricing.completion) : undefined;
-    const contextTokens = openrouterContext(rec.context_length);
+    const contextTokens = contextTokensOf(rec.context_length);
     models.push({
       provider: 'openrouter',
       id,

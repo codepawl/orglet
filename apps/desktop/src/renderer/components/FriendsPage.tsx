@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ArchiveRestore, FileUp, Store, UserRoundPlus } from 'lucide-react';
-import { Input } from '@codepawlhq/orglet-ui';
+import { Input, Tooltip } from '@codepawlhq/orglet-ui';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 import { Avatar } from './Avatar';
@@ -9,8 +9,8 @@ import { ChatHeader } from './ChatViews';
 import { Marketplace } from './Marketplace';
 import type { MarketAdded } from '../../shared/market';
 
-/** A ready-made group of orglets with its channel, offered under Add orglet (COD-366). */
-export type FriendTemplate = { id: 'research-review' | 'eris-review'; name: string; description: string; orglets: number };
+/** A ready-made group of orglets with its channel, offered under Add orglet (COD-366); `members` names its orglets in `templates/catalog.json`, the lead last. */
+export type FriendTemplate = { id: 'research-review' | 'writing-desk' | 'data-check'; name: string; description: string; members: readonly string[] };
 
 /** The pages Home can show in the main panel. Add orglet used to be one; it is a dialog now. */
 export type HomePageView = 'market';
@@ -66,10 +66,24 @@ export function AddOrgletDialog({ open, onClose, archived, onCreate, onRestore, 
         <h2 id="friends-other-title">{t('Cách khác để thêm Tí')}</h2>
         <p className="muted">{t('Không muốn tự tạo? Đưa về một Tí đã lưu trữ, chọn một nhóm làm sẵn hoặc nhập mẫu từ tệp.')}</p>
         <ul className="friends-sources">
-          {templates.map(template => <li key={template.id} className="friend-source">
-            <span className="friend-source-text"><span className="friend-name">{template.name}</span><span className="friend-status">{template.description}</span></span>
-            <Button variant="outline" disabled={busy} onClick={() => onTemplate(template.id)}><UserRoundPlus size={16} />{t('Thêm {0} Tí', [template.orglets])}</Button>
-          </li>)}
+          {templates.map(template => {
+            // The group's faces sit beside its name and say how many orglets it adds; who they are is on hover (user, 2026-10-06).
+            const who = t('{0} Tí: {1}', [template.members.length, template.members.join(', ')]);
+            return <li key={template.id} className="friend-source">
+              <span className="friend-source-text">
+                <span className="friend-name friend-template-name">
+                  <Tooltip label={who}>
+                    <span className="friend-faces" role="img" aria-label={who} tabIndex={0}>
+                      {template.members.slice(0, 3).map(member => <Avatar key={member} name={member} seed={`${template.id}:${member}`} defaultMascot size="xs" />)}
+                    </span>
+                  </Tooltip>
+                  {template.name}
+                </span>
+                <span className="friend-status">{template.description}</span>
+              </span>
+              <Button variant="outline" disabled={busy} aria-label={t('Thêm {0}', [template.name])} onClick={() => onTemplate(template.id)}><UserRoundPlus size={16} />{t('Thêm')}</Button>
+            </li>;
+          })}
           <li className="friend-source">
             <span className="friend-source-text"><span className="friend-name">{t('Nhập mẫu từ tệp')}</span><span className="friend-status">{t('Một tệp mẫu đã xuất từ Orglet.')}</span></span>
             <Button variant="outline" disabled={busy} onClick={onImport}><FileUp size={16} />{t('Nhập mẫu')}</Button>

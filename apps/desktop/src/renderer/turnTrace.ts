@@ -257,3 +257,53 @@ export function traceSummary(entries: readonly TraceEntry[]): string {
   }
   return summaryOrder.filter(kind => counts.has(kind)).map(kind => countPhrase(kind, counts.get(kind)!)).join(' · ');
 }
+
+/** How a step ended: still going, did not go through, or done. */
+export type TraceStatus = 'running' | 'failed' | 'done';
+
+/** Sentences of a command row that say it did not finish well: a timeout, a stop, too much output. */
+const failedCommandPattern = /đã hết thời gian|in quá nhiều nên đã bị dừng|^Đã dừng lệnh /;
+
+/**
+ * Whether a step went through, read only from what the core wrote. A command carries its exit in the core's own
+ * sentence ("mã thoát 1"): zero is done, any other code, a timeout, a stop or too much output did not go through.
+ * A sentence with no exit at all (an older run, "Đã chạy lệnh x") is not claimed as a failure.
+ */
+export function traceStatusOf(entry: TraceEntry): TraceStatus {
+  if (entry.running) return 'running';
+  if (entry.kind === 'failed' || entry.kind === 'withheld') return 'failed';
+  if (entry.kind === 'command' && entry.note) {
+    if (failedCommandPattern.test(entry.note)) return 'failed';
+    const exit = /mã thoát (-?\d+)/.exec(entry.note);
+    if (exit) return Number(exit[1]) === 0 ? 'done' : 'failed';
+    // A process that stopped without an exit code was ended from outside.
+    if (/^Tiến trình đã dừng: /.test(entry.note)) return 'failed';
+  }
+  return 'done';
+}
+
+/** What was loaded before the run wrote anything (memories, notes) apart from the steps it took. */
+export function splitTrace(entries: readonly TraceEntry[]): { loaded: TraceEntry[]; steps: TraceEntry[] } {
+  const loaded = entries.filter(entry => entry.kind === 'memory' || entry.kind === 'knowledge');
+  const steps = entries.filter(entry => entry.kind !== 'memory' && entry.kind !== 'knowledge');
+  return { loaded, steps };
+}
+
+/** Steps shown before the rest wait behind "Xem thêm". */
+export const visibleStepLimit = 8;
+
+/** The kinds whose step changed a file or folder in the working copy, so a diff can say more about them. */
+export const diffKinds: readonly TraceKind[] = ['edit', 'move', 'delete'];
+
+/**
+ * The file of a run's diff that a step is about: the path itself, or for a move the place it went to. A step names a
+ * path as the worker wrote it, so a copy rooted deeper still matches by its trailing part.
+ */
+export function diffFileOf<File extends { path: string; previousPath?: string }>(files: readonly File[], entry: TraceEntry): File | undefined {
+  const named = entry.target?.split(' → ').pop()?.trim();
+  if (!named) return undefined;
+  const normalized = named.replace(/^\.\//, '');
+  return files.find(file => file.path === normalized)
+    ?? files.find(file => file.previousPath === normalized)
+    ?? files.find(file => file.path.endsWith(`/${normalized}`) || normalized.endsWith(`/${file.path}`));
+}

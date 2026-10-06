@@ -119,7 +119,7 @@ Viewer facts:
 |---|---|---|
 | A run working right now | `LiveIsland` (`state`, `label`, `receipt`, `workers`, `leaving`), docked by `IslandDock` + `dockIsland(view)` | `components/LiveIsland.tsx`, `components/islandDock.tsx` |
 | Live run in the thread | `LiveRun` with `islandOf`, `workingWorkers` mapping progress to a view | `components/LiveRun.tsx` |
-| What a worker did before its answer | `TurnTrace` (`entries`, `onOpenMemories`, children); `traceOf`, `liveTraceOf` in `turnTrace.ts` | `components/TurnTrace.tsx` |
+| What a worker did before its answer | `WorkLog` (`entries`, `thinking`, `diffRun`, `onOpenMemories`, children); `traceOf`, `liveTraceOf` in `turnTrace.ts` | `components/WorkLog.tsx` |
 | How a crew splits and joins a turn | `CrewPlanFlow` from `crewPlanDiagram` (`shared/crew-plan.ts`) | `components/CrewPlanFlow.tsx` |
 | Watch or take over a run's browser | `BrowserLiveSurface` (`runId`, `workerName`, `site`, `controlling`, `onOpenInChrome`), `BrowserLivePanel`, `BrowserLiveViewer` | `components/BrowserLiveView.tsx` |
 | Desktop glow while an orglet controls an app | `DesktopOverlay` (route `#overlay`), `.orglet-glow` | `components/DesktopOverlay.tsx` |
