@@ -112,7 +112,17 @@ function codexImageFlags(images: string[] | undefined) {
   return (images ?? []).map(path => `--image=${path}`);
 }
 
-export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images' | 'effort'>): string[] {
+/**
+ * Cursor Agent's sandbox exists only on macOS and Linux: on Windows `--sandbox enabled` ends every run with "Sandbox
+ * mode is enabled but not available on this system" (measured on the Windows CLI, 2026-10-07). There the run keeps
+ * `--mode=ask`, which refused a shell command (even `curl` and `type`) and a file write in the same measurement, plus
+ * the deny rules `prepareHarnessToolPolicy` writes for every Windows run. Never `--force` or `--yolo`.
+ */
+export function cursorSandbox(platform: NodeJS.Platform = process.platform) {
+  return platform === 'win32' ? 'disabled' : 'enabled';
+}
+
+export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images' | 'effort'>, platform: NodeJS.Platform = process.platform): string[] {
   if (request.harness === 'gemini') return geminiArgs(request.model);
   const model = modelFlag(request.harness, request.model);
   const effort = request.effort?.transport === request.harness ? request.effort.level : undefined;
@@ -120,7 +130,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
     return ['-p', ...model, ...(effort ? ['--effort', effort] : []), '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', ...claudeBudgetArgs(request.maxBudgetUsd)];
   }
   if (request.harness === 'cursor') {
-    return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
+    return ['-p', ...model, '--mode=ask', '--sandbox', cursorSandbox(platform), '--trust', '--workspace', request.cwd, '--output-format', 'json'];
   }
   return ['exec', ...model, ...(effort ? ['-c', 'model_reasoning_effort=' + effort] : []), '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
 }
@@ -330,19 +340,21 @@ export async function killTree(pid: number | undefined): Promise<void> {
   }
 }
 
-export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly' | 'model' | 'effort'>) {
+export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly' | 'model' | 'effort'>, platform: NodeJS.Platform = process.platform) {
   // Gemini CLI gets no tools of its own on any run, so its lockdown is written for one-shot answers too.
   if (request.harness === 'gemini') {
     await writeGeminiLockdown(request.cwd, request.model, request.effort);
     return;
   }
-  if (request.harness !== 'cursor' || !request.coreToolsOnly) return;
+  if (request.harness !== 'cursor') return;
+  // A one-shot answer reads the copied sources itself; without the sandbox (Windows) nothing else is allowed either.
+  const deny = request.coreToolsOnly ? ['Shell(*)', 'Read(**)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)']
+    : cursorSandbox(platform) === 'disabled' ? ['Shell(*)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)'] : undefined;
+  if (!deny) return;
   // This directory is a fresh core-owned call directory, never the user's workspace.
   const configurationDirectory = join(request.cwd, '.cursor');
   await mkdir(configurationDirectory, { recursive: true });
-  await writeFile(join(configurationDirectory, 'cli.json'), JSON.stringify({ permissions: {
-    allow: [], deny: ['Shell(*)', 'Read(**)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)'],
-  } }), { flag: 'wx' });
+  await writeFile(join(configurationDirectory, 'cli.json'), JSON.stringify({ permissions: { allow: [], deny } }), { flag: 'wx' });
 }
 
 export async function stopHarnessProcess(pid: number | undefined, closed: Promise<void>, terminate = killTree, timeoutMs = 15_000): Promise<void> {

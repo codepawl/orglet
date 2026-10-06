@@ -22,6 +22,23 @@ it('writes Cursor native-tool denials in the private call directory and refuses 
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+it('denies Cursor its own shell, writes, web and MCP on every Windows run, where its sandbox does not exist', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orglet-cursor-windows-'));
+  const linuxDirectory = await mkdtemp(join(tmpdir(), 'orglet-cursor-linux-'));
+  try {
+    await prepareHarnessToolPolicy({ harness: 'cursor', cwd: directory, coreToolsOnly: false }, 'win32');
+    expect(JSON.parse(await readFile(join(directory, '.cursor', 'cli.json'), 'utf8'))).toEqual({ permissions: {
+      allow: [], deny: ['Shell(*)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)'],
+    } });
+    // Where the sandbox exists, a one-shot answer keeps relying on it and no file is written.
+    await prepareHarnessToolPolicy({ harness: 'cursor', cwd: linuxDirectory, coreToolsOnly: false }, 'linux');
+    await expect(readFile(join(linuxDirectory, '.cursor', 'cli.json'), 'utf8')).rejects.toThrow();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(linuxDirectory, { recursive: true, force: true });
+  }
+});
+
 it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('translates a %s structured request without executing its requested operation', async harness => {
   const tools = [toolDefinitions.workspace_read.model];
   let notices = 0;

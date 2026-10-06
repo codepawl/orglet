@@ -59,7 +59,10 @@ async function setUp(app, page, task, workDir) {
   const workspace = await callCore(page, 'workspace', {});
   const base = workspace.workers[0];
   if (task.template) {
-    const team = await callCore(page, 'createTemplate', { templateId: task.template, provider: options.provider });
+    // A template starts on Demo, as Add orglet makes it; then each of its orglets moves to the connection under test.
+    const team = await callCore(page, 'createTemplate', { templateId: task.template, provider: 'demo' });
+    const members = (await callCore(page, 'workspace', {})).workers.filter(worker => [...team.memberIds, team.synthesizerId].includes(worker.id));
+    for (const member of members) await callCore(page, 'saveWorker', { ...member, provider: options.provider, expectedRevision: member.revision });
     if (task.capabilities.length) await callCore(page, 'setToolCapabilities', { teamId: team.id, capabilities: task.capabilities });
     return { teamId: team.id, workerId: team.synthesizerId, label: `#${team.name}` };
   }

@@ -217,9 +217,13 @@ describe('command contract', () => {
     const overrides = codex.flatMap((argument, index) => argument === '-c' ? [codex[index + 1]] : []);
     expect(overrides).toEqual(expect.arrayContaining(['web_search="disabled"', 'project_doc_max_bytes=0', 'tools.view_image=false']));
     expect(codex.join(' ')).not.toMatch(/danger|workspace-write|approve-for-me/);
-    const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 });
+    const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 }, 'linux');
     expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'json']));
     expect(cursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
+    // Windows has no Cursor sandbox: ask mode and the deny rules keep the run read-only there (measured 2026-10-07).
+    const windowsCursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 }, 'win32');
+    expect(windowsCursor).toEqual(expect.arrayContaining(['--mode=ask', '--sandbox', 'disabled']));
+    expect(windowsCursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
     expect(harnessArgs({ harness: 'claude-code', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 0.25, model: 'haiku' })).toEqual(expect.arrayContaining(['--model', 'haiku']));
     expect(harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1, model: 'gpt-5' })).toEqual(expect.arrayContaining(['-m', 'gpt-5']));
   });
