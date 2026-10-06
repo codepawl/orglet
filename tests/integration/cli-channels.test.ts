@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { COMMAND_HELP, MAIN_HELP, parseArguments } from '../../apps/desktop/src/cli/arguments';
+import { terminalHeader } from '../../apps/desktop/src/cli/chat-layout';
 import { entriesFromList } from '../../apps/desktop/src/cli/picker';
 import { chatKindLabel, formatList, formatManagementResult, formatSpaces, formatStatus, formatTemplate } from '../../apps/desktop/src/cli/output';
 import type { ChatsValue, CliRequest, ListValue } from '../../apps/desktop/src/cli/protocol';
@@ -126,6 +128,31 @@ describe('every channel in the listings', () => {
   it('reads a crew chat as a channel to a person and keeps crew in the JSON', () => {
     expect(chatKindLabel('crew')).toBe('channel');
     expect(chatKindLabel('side')).toBe('side');
+  });
+});
+
+describe('the words a person reads', () => {
+  it('says channel, lists the older names as accepted input, and offers no Demo', () => {
+    expect(MAIN_HELP).not.toMatch(/demo/i);
+    expect(MAIN_HELP).toContain('crew and team for channel');
+    expect(COMMAND_HELP.template).not.toMatch(/demo/i);
+    for (const topic of ['create', 'edit', 'delete', 'archive', 'restore'] as const) {
+      expect(COMMAND_HELP[topic], topic).toContain('crew and team still work in place of channel');
+      expect(COMMAND_HELP[topic], topic).not.toMatch(/\bcrew\b.*requires|Crew configuration/);
+    }
+    expect(parseArguments(['create', 'crew', '--config', 'a.json'])).toMatchObject({ kind: 'create', entity: 'team' });
+    expect(parseArguments(['archive', 'team', 'Review'])).toMatchObject({ kind: 'archive-entity', entity: 'team' });
+  });
+
+  it('keeps demo accepted for the tests and smokes that run with sample replies, and asks for openai otherwise', () => {
+    expect(parseArguments(['template', 'research-review', '--provider', 'demo'])).toMatchObject({ provider: 'demo' });
+    expect(() => parseArguments(['template', 'research-review', '--provider', 'other'])).toThrow('A template needs --provider openai.');
+  });
+
+  it('tells a person with no model connected, not that the chat uses Demo', () => {
+    const entry = { kind: 'worker' as const, name: 'Researcher', detail: 'demo', color: '#4f7fe0', colors: ['#4f7fe0'], provider: 'demo', providerId: 'demo' };
+    expect(terminalHeader(entry, '1', '/work', 80, 8, 'none').join('\n')).toContain('No model connected');
+    expect(terminalHeader(undefined, '1', '/work', 80, 8, 'none').join('\n')).toContain('Choose an orglet or channel');
   });
 });
 

@@ -757,7 +757,7 @@ describe('terminal composer', () => {
     }
   });
 
-  it.each([false, true])('refuses Demo sends, including a crew with a Demo member (%s)', async crew => {
+  it.each([false, true])('refuses sends to an orglet with no model, including a channel with one such member (%s)', async crew => {
     const list: ListValue = {
       orglets: [{ name: 'Researcher', provider: crew ? 'codex' : 'demo' }, { name: 'Sample', provider: 'demo' }],
       crews: crew ? [{ name: 'Review', lead: 'Researcher', members: ['Sample'] }] : [],
@@ -771,7 +771,7 @@ describe('terminal composer', () => {
       await session.key('real answer please');
       await session.key('\r');
       expect(session.sent).toEqual([]);
-      expect(session.screen.text()).toContain('Nothing was sent: this chat uses Demo.');
+      expect(session.screen.text()).toContain('Nothing was sent: no model is connected for this chat.');
     } finally {
       await session.stop();
     }

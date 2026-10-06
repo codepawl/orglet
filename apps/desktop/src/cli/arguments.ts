@@ -134,6 +134,10 @@ Commands:
 Commands that name a chat with --to also take --chat <id>, the start of a chat's
 id as "orglet chats" prints it, for side threads, channels and older chats.
 
+A channel with a lead who splits the work was once called a crew. The older names
+still work as input: crew and team for channel in create, edit, delete, archive
+and restore, and group for the channel command.
+
 Options:
   -h, --help       Show help. "orglet <command> --help" shows a command's options.
   -v, --version    Show the version of this command
@@ -145,11 +149,16 @@ function channelHelp(command: 'channel' | 'group'): string {
   return t("Cách dùng: orglet {0} \"<tin nhắn>\" --with <tên> [--with <tên>] [tùy chọn]\n\nTạo một kênh với các Tí này và gửi tin nhắn đầu tiên, như tạo kênh\ntrong app. Mỗi Tí trả lời lần lượt. Nhắn\ntiếp bằng orglet send --chat <mã>. orglet group là tên cũ của lệnh này.\nVới --space, kênh nằm trong không gian đó; bỏ --with thì kênh nhận mọi Tí\ncủa không gian hoặc của mục. Bỏ tin nhắn và đặt --name thì chỉ tạo kênh.\n\nTùy chọn:\n  --with <tên>         Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --name <tên>         Tên kênh; mặc định là tên các thành viên\n  --topic <chủ đề>     Chủ đề của kênh\n  --space <tên>        Không gian chứa kênh\n  --category <tên>     Mục của không gian đó chứa kênh\n  --no-wait            Trả về ngay sau khi gửi\n  --timeout <giây>     Thời gian chờ câu trả lời (mặc định {1})\n  --json               In JSON cho máy đọc", command, DEFAULT_WAIT_SECONDS);
 }
 
+/** What `<orglet|channel>` also accepts, said in the help of every command that takes it. */
+function withEntityAliases(help: string): string {
+  return `${help}\n\n${t("crew và team vẫn dùng được thay cho channel (tên cũ).")}`;
+}
+
 export const COMMAND_HELP: Record<CommandName, string> = {
   config: t("Cách dùng: orglet config [--json]\n\nHiện cấu hình có thể sửa, ID, phiên bản, skill và tên kết nối.\nKhông bao gồm khóa hay quyền truy cập."),
-  create: t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nHội cần name, instructions, memberIds, synthesizerId, workflow và monthlyBudgetMicros.\nGiới hạn là số nguyên phần triệu USD."),
-  edit: t("Cách dùng: orglet edit <orglet|channel> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nTrong TUI, /edit mở thiết lập của chat đang chọn."),
-  delete: `${t("Cách dùng: orglet delete <orglet|channel> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nKênh, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`,
+  create: withEntityAliases(t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nKênh cần name, instructions, memberIds, synthesizerId, workflow và monthlyBudgetMicros.\nGiới hạn là số nguyên phần triệu USD.")),
+  edit: withEntityAliases(t("Cách dùng: orglet edit <orglet|channel> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nTrong TUI, /edit mở thiết lập của chat đang chọn.")),
+  delete: withEntityAliases(`${t("Cách dùng: orglet delete <orglet|channel> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nKênh, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`),
   chat: `Usage: orglet chat [--to <name>]
 
 Opens a chat in this terminal. Pick an orglet or channel with the arrow keys or by
@@ -220,8 +229,8 @@ Example:
   group: channelHelp('group'),
   members: t("Cách dùng: orglet members --chat <mã> --with <tên> [--with <tên>] [--json]\n\nĐổi thành viên của một kênh, từ tin nhắn sau. Thay cả danh sách. Thành viên là\nTí hoặc kênh; một kênh trả lời bằng các Tí của nó.\n\nTùy chọn:\n  --chat <mã>      Kênh (bắt buộc)\n  --with <tên>     Một Tí hoặc kênh; lặp lại cho nhiều thành viên\n  --json           In JSON cho máy đọc"),
   rename: t("Cách dùng: orglet rename --to <tên> | --chat <mã> --title \"<tên mới>\" [--json]\n\nĐổi tên hiển thị của một chat. Tên Tí hoặc kênh không đổi.\n\nTùy chọn:\n  --to <tên>         Chat chính của Tí hoặc kênh\n  --chat <mã>        Chat theo mã của orglet chats\n  --title <tên>      Tên mới (bắt buộc)\n  --json             In JSON cho máy đọc"),
-  archive: t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay kênh. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay kênh đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc kênh\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc"),
-  restore: t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay kênh đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc"),
+  archive: withEntityAliases(t("Cách dùng: orglet archive --to <tên> | --chat <mã> [--json]\n       orglet archive <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nLưu trữ một chat, hoặc một Tí hay kênh. Chat đã lưu trữ không nhận tin mới cho\nđến khi khôi phục. Tí hay kênh đang dùng ở nơi khác, hoặc đang chạy, không lưu\ntrữ được; lỗi sẽ nói lý do.\n\nTùy chọn:\n  --to <tên>       Chat chính của Tí hoặc kênh\n  --chat <mã>      Chat theo mã của orglet chats\n  --json           In JSON cho máy đọc")),
+  restore: withEntityAliases(t("Cách dùng: orglet restore --chat <mã> [--json]\n       orglet restore <orglet|channel> \"<tên đầy đủ>\" [--json]\n\nKhôi phục một chat, Tí hay kênh đã lưu trữ. orglet chats --archived liệt kê\nchat đã lưu trữ cùng mã của chúng.\n\nTùy chọn:\n  --chat <mã>      Chat đã lưu trữ\n  --json           In JSON cho máy đọc")),
   spaces: t("Cách dùng: orglet spaces [--json]\n\nLiệt kê không gian: Tí trong đó, rồi từng kênh với nhóm của nó và những Tí ở trong kênh."),
   space: t("Cách dùng: orglet space add \"<tên>\" --with <Tí> [--with <Tí>]\n       orglet space edit \"<tên>\" [--rename <tên mới>] [--with <Tí> ...]\n       orglet space category \"<tên>\" --category <tên mục> [--rename <tên mới>] [--with <Tí> ...]\n       orglet space uncategory \"<tên>\" --category <tên mục>\n       orglet space move \"<tên>\" (--chat <mã> | --name <tên kênh>) [--category <tên mục>]\n       orglet space out (--chat <mã> | --name <tên kênh>)\n       orglet space delete \"<tên>\" --confirm \"<tên đầy đủ>\"\n\nTạo và sửa không gian như trong app. edit với --with thay toàn bộ danh sách Tí\ncủa không gian. category thêm một mục, hoặc đổi tên mục đã có và đặt các Tí riêng\ncủa nó; uncategory xóa mục và giữ các kênh trong không gian. move đưa một kênh vào\nkhông gian hoặc một mục của nó, out đưa kênh ra ngoài mọi không gian. Kênh chưa có\ntin nhắn thì chỉ bằng --name. Xóa không gian thì các kênh của nó vẫn còn.\nLệnh này không đặt quyền hay thư mục.\n\nTùy chọn:\n  --with <Tí>          Một Tí của không gian; lặp lại cho nhiều Tí\n  --rename <tên>       Tên mới của không gian\n  --category <tên>     Mục cần thêm, hoặc mục nhận kênh\n  --chat <mã>          Mã của kênh, như orglet chats in ra\n  --name <tên kênh>    Tên của kênh, thay cho --chat\n  --confirm <tên>      Tên đầy đủ của không gian cần xóa\n  --json               In JSON cho máy đọc"),
   completion: t("Cách dùng: orglet completion <powershell|bash|zsh>\n\nIn đoạn mã tự hoàn thành cho shell đó: tên lệnh trước, rồi tên tùy chọn. Đoạn mã\nkhông hỏi app và không chứa tên Tí, chat hay không gian nào.\n\n  PowerShell   orglet completion powershell | Out-String | Invoke-Expression\n  bash         eval \"$(orglet completion bash)\"\n  zsh          eval \"$(orglet completion zsh)\"\n\nĐặt dòng đó vào tệp khởi động của shell để dùng mỗi lần mở."),
@@ -235,7 +244,7 @@ Example:
   usage: t("Cách dùng: orglet usage [--refresh] [--json]\n\nMức dùng gói của các tài khoản CLI đã đăng nhập (Claude Code, Codex, Cursor\nAgent, Gemini CLI), như Cài đặt. Email chỉ hiện một phần.\n\nTùy chọn:\n  --refresh    Đọc lại ngay thay vì dùng số vừa đọc\n  --json       In JSON cho máy đọc"),
   models: t("Cách dùng: orglet models <provider> | --to <tên Tí> [--refresh] [--json]\n\nCác model một kết nối cung cấp, như danh sách model khi sửa Tí.\n\nTùy chọn:\n  --to <tên>     Dùng kết nối của Tí này\n  --refresh      Tải lại danh sách\n  --json         In JSON cho máy đọc"),
   preferences: t("Cách dùng: orglet preferences [--language vi|en|en-GB] [--theme system|light|dark] [--json]\n\nHiện hoặc đổi ngôn ngữ và giao diện của app. Các cài đặt khác ở trong app.\n\nTùy chọn:\n  --language <mã>    Ngôn ngữ của app\n  --theme <kiểu>     Giao diện sáng, tối hoặc theo hệ thống\n  --json             In JSON cho máy đọc"),
-  template: t("Cách dùng: orglet template <{0}> --provider <demo|openai> [--json]\n\nTạo một kênh từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: demo cho câu trả lời mẫu, openai cho kết nối OpenAI đã\nthiết lập trong app.\n\nTùy chọn:\n  --provider <tên>   demo hoặc openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
+  template: t("Cách dùng: orglet template <{0}> --provider openai [--json]\n\nTạo một kênh từ mẫu của app, kèm các Tí và skill của nó. --provider chọn kết\nnối cho các Tí mới: openai là kết nối OpenAI đã thiết lập trong app. Chọn\nmodel cho từng Tí trong app nếu cần.\n\nTùy chọn:\n  --provider <tên>   openai (bắt buộc)\n  --json             In JSON cho máy đọc", TEMPLATE_IDS.join('|')),
   open: `Usage: orglet open [--to <name>]
 
 Brings the Orglet window forward. With --to, opens that chat.
@@ -738,7 +747,8 @@ function parseArchive(command: 'archive' | 'restore', options: Options): ParsedC
 function parseTemplate(options: Options): ParsedCommand {
   const templateId = TEMPLATE_IDS.find(id => id === options.positionals[1]);
   if (!templateId) throw new UsageError(t("Chọn một mẫu: {0}.", TEMPLATE_IDS.join(', ')));
-  if (options.provider !== 'demo' && options.provider !== 'openai') throw new UsageError(t("Mẫu cần --provider demo hoặc --provider openai."));
+  // `demo` stays accepted for the tests and smokes that run with sample replies; nothing offers it to a person.
+  if (options.provider !== 'demo' && options.provider !== 'openai') throw new UsageError(t("Mẫu cần --provider openai."));
   return { kind: 'template', templateId, provider: options.provider, json: options.json };
 }
 

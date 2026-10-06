@@ -167,7 +167,7 @@ export class CliChatAdmin {
     return { kind: request.kind, id: entity.id, name: entity.name, archived: request.archived };
   }
 
-  /** A crew with its orglets and skill from one of the app's templates, on Demo or the OpenAI connection. */
+  /** A channel with its orglets and skill from one of the app's templates, on the OpenAI connection (`demo` only where tests run with sample replies). */
   async template(request: Request<'template'>): Promise<TemplateValue> {
     const team = await this.dependencies.request('createTemplate', { templateId: request.templateId, provider: request.provider }) as Team;
     const workspace = await this.workspace();

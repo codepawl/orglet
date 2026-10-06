@@ -5,7 +5,7 @@ import { muted, paint, truncate, wrapSegments, type ColorMode } from './terminal
 /** One mascot identifies the product; author names identify the conversation. */
 export function terminalHeader(chat: ChatEntry | undefined, version: string, directory: string, width: number, height: number, mode: ColorMode): string[] {
   const title = `Orglet ${version}${chat ? ` · ${chat.name}` : ''}`;
-  const model = chat ? `${chat.model ?? (chat.providerId === 'demo' ? 'No real model selected' : 'CLI/provider default')} · ${chat.provider ?? 'connection unknown'}` : 'Choose an orglet or crew';
+  const model = chat ? `${chat.model ?? (chat.providerId === 'demo' ? 'No model connected' : 'CLI/provider default')} · ${chat.provider ?? 'connection unknown'}` : 'Choose an orglet or channel';
   if (height < 12 || width < 54) {
     return [paint(truncate(title, width), { bold: true }, mode), muted(truncate(height < 7 ? model : `${model} · ${directory}`, width), mode)];
   }

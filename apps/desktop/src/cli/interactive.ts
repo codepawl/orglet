@@ -14,7 +14,7 @@ import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
 import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
-import { formatChats, formatLibrary, formatManagementResult, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatSpaces, formatUsage } from './output';
+import { chatKindLabel, formatChats, formatLibrary, formatManagementResult, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatSpaces, formatUsage } from './output';
 import { ERROR_COLOR, muted, MUTED_COLOR, NEUTRAL_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
 import type { ManagementResult } from './management';
@@ -63,7 +63,7 @@ function entryKey(entry: ChatEntry): string {
 /** A chat from `orglet chats` as the terminal opens it: named, coloured, and reached by its id. */
 function chatEntry(row: CliChatRow): ChatEntry {
   const color = row.color ?? NEUTRAL_COLOR;
-  return { kind: row.kind === 'crew' ? 'team' : 'worker', name: row.name, detail: `${row.kind} · ${row.with.join(', ')}`, color, colors: [color], target: `#${row.short}` };
+  return { kind: row.kind === 'crew' ? 'team' : 'worker', name: row.name, detail: `${chatKindLabel(row.kind)} · ${row.with.join(', ')}`, color, colors: [color], target: `#${row.short}` };
 }
 
 /** Stop and pause act on the turn this terminal is waiting for, so they cannot wait behind it. */
@@ -431,7 +431,7 @@ class Session {
     if (this.terminal) this.replaceLine(this.drafts.get(key) ?? '');
     if (!this.terminal) this.printLines(chatHeader(entry, this.mode));
     if (!this.terminal && !this.shownHint) this.printMuted(CHAT_HINT);
-    if (this.terminal && this.usesDemo(entry)) this.printMuted('No real model selected. /open lets you connect this orglet in the desktop.');
+    if (this.terminal && this.usesDemo(entry)) this.printMuted('No model is connected for this chat yet. /open brings the app forward so you can connect one.');
     this.shownHint = true;
     this.print();
   }
@@ -882,7 +882,7 @@ class Session {
   private async send(text: string, replyTo?: string): Promise<void> {
     const chat = this.chat!;
     if (this.terminal && this.usesDemo(chat)) {
-      this.printError('Nothing was sent: this chat uses Demo. /open lets you choose a real connection.');
+      this.printError('Nothing was sent: no model is connected for this chat. /open brings the app forward so you can connect one.');
       return;
     }
     if (replyTo) return this.awaitAction(actions => (signal, progress) => actions.reply(targetOf(chat), text, replyTo, signal, progress));

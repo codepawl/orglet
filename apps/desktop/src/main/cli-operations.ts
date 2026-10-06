@@ -281,7 +281,7 @@ function modelField(worker: Worker, workspace: Workspace): { model?: string } {
 }
 
 function billingLabel(worker: Worker, workspace: Workspace): string {
-  if (worker.provider === 'demo') return 'sample replies';
+  if (worker.provider === 'demo') return 'no model connected';
   if (isHarness(worker.provider)) return 'CLI account';
   if (isLocalApi(worker.provider)) return 'local';
   if (isPlanApi(worker.provider)) return 'provider plan';

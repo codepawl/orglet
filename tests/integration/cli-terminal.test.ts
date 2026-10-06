@@ -445,7 +445,7 @@ describe('orglet colours from the app', () => {
     const workspace = { workers, teams, tasks: [] } as unknown as Workspace;
     const operations = new CliOperations({ request: async () => workspace, version: () => '1', open: () => undefined, translate: message => message });
     expect(await operations.list()).toEqual({
-      orglets: [{ name: 'Researcher', provider: 'demo', providerId: 'demo', billing: 'sample replies', color: BLUE }, { name: 'Writer', provider: 'openai', providerId: 'openai', billing: 'API billing', model: 'gpt-5', color: '#abcdef' }],
+      orglets: [{ name: 'Researcher', provider: 'demo', providerId: 'demo', billing: 'no model connected', color: BLUE }, { name: 'Writer', provider: 'openai', providerId: 'openai', billing: 'API billing', model: 'gpt-5', color: '#abcdef' }],
       // A crew the window has not made a channel of yet still shows as the channel it is going to be.
       channels: [{ name: 'Crew', mode: 'lead', lead: 'Writer', members: ['Researcher'], colors: [BLUE, '#abcdef'] }],
       crews: [{ name: 'Crew', lead: 'Writer', members: ['Researcher'], colors: [BLUE, '#abcdef'] }],
