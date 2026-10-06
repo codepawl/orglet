@@ -45,6 +45,9 @@ describe('orglet faces', () => {
     const eyeColumns = cells[1].flatMap((cell, column) => (cell.background === LIGHT_EYE_COLOR ? [column] : []));
     expect(eyeColumns).toEqual([4, 6]);
     expect(cells[1][5].background).toBe(BLUE);
+    // Each eye leans to the right, as the logo's do: its upper pixel is one column right of its lower one.
+    expect(cells[1][4]).toEqual({ character: '▀', foreground: BLUE, background: LIGHT_EYE_COLOR });
+    expect(cells[1][5]).toEqual({ character: '▀', foreground: LIGHT_EYE_COLOR, background: BLUE });
     // No mouth: every cell below the eyes is body or empty.
     expect(cells.slice(2).flat().every(cell => cell.background === undefined || cell.background === BLUE)).toBe(true);
     // The bottom left corner is square (the bubble's tail); the bottom right is round.
@@ -82,7 +85,7 @@ describe('orglet faces', () => {
     expect(faceCells('not a colour', 'open')[2][0].background).toBe(NEUTRAL_COLOR);
     expect(renderMiniFace(BLUE, 'truecolor')).toContain('\x1b[38;2;79;127;224m▐');
     expect(renderFace(BLUE, 'open', 'ansi256').join('')).toMatch(/\x1b\[48;5;\d+m/);
-    expect(stripAnsi(renderFace(BLUE, 'open', 'truecolor')[0])).toBe(' ▄      ▄ ');
+    expect(stripAnsi(renderFace(BLUE, 'open', 'truecolor')[0])).toBe(' ▄▄    ▄▄ ');
   });
 });
 
@@ -381,7 +384,7 @@ describe('orglet chat session', () => {
     expect(plain).toContain('Nothing matches "zzz".');
     expect(plain).toContain('▐^^▌ Researcher · 0s');
     // The chat header is the big face with the name beside it.
-    expect(plain).toMatch(/ ▄      ▄ \n.{10} {3}Researcher\n.{10} {3}demo\n/);
+    expect(plain).toMatch(/ ▄▄    ▄▄ \n.{10} {3}Researcher\n.{10} {3}demo\n/);
     expect(result.transcript).toContain('\x1b[1;38;2;79;127;224mResearcher');
   });
 });

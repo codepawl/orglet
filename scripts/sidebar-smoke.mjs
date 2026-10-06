@@ -104,7 +104,8 @@ try {
   await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
   await waitFor(async () => (await workspace(page)).archivedWorkers.some(worker => worker.id === archiveOrglet.id), 'orglet archive');
   await page.locator('.area-tile[data-name="Hoạt động"]').click();
-  await page.getByRole('tab', { name: 'Xong', exact: true }).click();
+  // Activity's parts are chosen in the sidebar; the page has no tabs of its own.
+  await page.locator('.sidebar .sidebar-nav-item', { hasText: 'Xong' }).click();
   await page.getByRole('button', { name: 'Mở mục lưu trữ', exact: true }).click();
   await page.getByRole('tab', { name: 'Lưu trữ', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Khôi phục Archive smoke', exact: true }).click();

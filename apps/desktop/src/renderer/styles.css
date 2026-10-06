@@ -1318,7 +1318,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    button is 52px so a face turned toward the pointer, extruded side and all, stays inside it and inside its focus
    ring, and the negative margin gives the row the 44px it had. It is a button, so the keyboard reaches it; the ring
    takes the bubble's own corners. No background on hover: the face answering the pointer is the hover. */
-.about-face { position:relative; flex-shrink:0; width:52px; height:52px; margin:-4px; padding:0; border:0; border-radius:31% 31% 31% 15%; background:transparent; color:var(--text); --mascot-ink:var(--bg); --mascot-lift:-1px; cursor:pointer; }
+.about-face { position:relative; flex-shrink:0; width:52px; height:52px; margin:-4px; padding:0; border:0; border-radius:46% 46% 46% 17%; background:transparent; color:var(--text); --mascot-ink:var(--bg); --mascot-lift:-1px; cursor:pointer; }
 .about-face:focus-visible { outline-offset:3px; }
 :root[data-logo-color=accent] .about-face { color:var(--accent); --mascot-ink:var(--accent-ink); }
 .about-name { display:flex; flex-direction:column; gap:2px; min-width:0; }
@@ -1751,6 +1751,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Breadcrumb in a dialog title: back arrow, parent link, current page. */
 .breadcrumb { display:inline-flex; align-items:center; gap:6px; min-width:0; margin-left:-10px; }
 .topbar-name > .breadcrumb { margin-left:0; }
+/* A page's lead: its one line of description with its buttons at the end. The page has no header row above it, so
+   the column starts 24px down from the card's top, near the line of the sidebar's title beside it. */
+.panel-page { padding-top:24px; }
+.page-lead { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:36px; }
+.page-lead-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; margin-left:auto; }
 .panel-page-description { margin:0; text-wrap:pretty; }
 .breadcrumb-link { border:0; background:transparent; padding:2px 4px; border-radius:6px; color:var(--muted); font:inherit; font-weight:500; }
 .breadcrumb-link:hover { color:var(--text); }
@@ -3179,6 +3184,13 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .friend-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:var(--muted); }
 .friends-add-form { display:flex; align-items:center; gap:10px; margin-top:4px; }
 .friends-add-form .org-input { flex:1; min-width:0; }
+/* Add orglet as a dialog: the name form, then the other ways to add one. */
+.add-orglet { display:flex; flex-direction:column; gap:6px; }
+.add-orglet .page-section:last-child { margin-bottom:0; }
+/* In the narrower dialog a description runs onto a second line and is not cut off. */
+.add-orglet .friend-status { white-space:normal; overflow:visible; text-overflow:clip; }
+/* The dialog is as tall as its short form and list, and narrower than an editor's. */
+.org-drawer:has(.add-orglet) { width:min(560px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
 .activity-link { display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:10px; background:var(--surface); }
 .activity-link > span { flex:1; min-width:0; }
 .saved-empty { display:flex; align-items:center; gap:8px; }

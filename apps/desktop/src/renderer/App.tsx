@@ -114,8 +114,8 @@ import type { HomePageView } from './components/FriendsPage';
 import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
-import { CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, Database, Info, LogIn, NotebookText, Plug, Sparkles, Upload } from 'lucide-react';
-import { FriendsPage, type FriendTemplate } from './components/FriendsPage';
+import { CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, LogIn, LogOut, RefreshCw, NotebookText, Sparkles, Upload } from 'lucide-react';
+import { AddOrgletDialog, MarketplacePage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
@@ -355,7 +355,8 @@ export function App() {
   const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
   const [friendsOpen, setFriendsOpen] = useState(false);
   // Which of Home's two pages is open: making an orglet, or the marketplace, which has its own row in the sidebar.
-  const [homePage, setHomePage] = useState<HomePageView>('add');
+  const [homePage, setHomePage] = useState<HomePageView>('market');
+  const [addOrgletOpen, setAddOrgletOpen] = useState(false);
   const [activityTab, setActivityTab] = useState<ActivityTab>('needs');
   const [membersOpen, setMembersOpen] = useState(() => { try { return localStorage.getItem('orglet.members') !== 'hidden'; } catch { return true; } });
   const toggleMembers = () => setMembersOpen(current => { try { localStorage.setItem('orglet.members', current ? 'hidden' : 'shown'); } catch { /* chrome only */ } return !current; });
@@ -1876,9 +1877,10 @@ export function App() {
 
   const workerStatus = (id: string): StatusMarkState => {
     const live = liveWorkerTask(activeTasks, id);
-    return live
-      ? tasksStatusMark([{ status: live.status, seen: taskSeen(live) }])
-      : tasksStatusMark(activeTasks.filter(task => taskWorkers(task, workspace).some(item => item.id === id)).map(task => ({ status: task.status, seen: taskSeen(task) })));
+    // An orglet's row is about its own chat. With no chat yet it has nothing to say: a channel the orglet is in
+    // tells its state on the channel's own row, and showed here as an error on a DM nobody had written in (user,
+    // 2026-10-06).
+    return live ? tasksStatusMark([{ status: live.status, seen: taskSeen(live) }]) : { variant: 'empty', tone: 'muted' };
   };
   const openTaskWorkers = detail ? taskWorkers(detail.task, workspace) : [];
   const openTaskPaid = openTaskWorkers.some(item => isPaidApi(item.provider));
@@ -2236,7 +2238,8 @@ export function App() {
   const headerSpace = workspace.spaces.find(space => space.id === headerChannel?.spaceId);
   const crewLeadId = headerChannel?.crewId ? workspace.teams.find(item => item.id === headerChannel.crewId)?.synthesizerId : undefined;
   const pageShown = area === 'activity' || (area === 'home' && friendsOpen);
-  const membersShown = Boolean(headerChannel) && membersOpen && !sidePaneOpen && !pageShown && windowWidth > 1100;
+  // The member column belongs to a channel's chat: a page over the chat (Library, Schedules) has no members.
+  const membersShown = Boolean(headerChannel) && membersOpen && !sidePaneOpen && !pageShown && !pagePanelOpen && windowWidth > 1100;
   const userStatus = runningNow > 0 || waitingForYou > 0 ? runningButtonLabel(runningNow, waitingForYou) : account?.status === 'signed_in' ? (account.email ? maskEmail(account.email) : t('Đã đăng nhập')) : t('Dùng trên máy này');
   const activityRailLabel = [t('Hoạt động'), activityCountsNow.needs > 0 ? t('{0} chờ bạn', [activityCountsNow.needs]) : '', unreadNotices > 0 ? t('{0} chưa đọc', [unreadNotices]) : ''].filter(Boolean).join(', ');
   const friendTemplates: FriendTemplate[] = [
@@ -2253,14 +2256,12 @@ export function App() {
     }
   });
   const page = area === 'activity'
-    ? <ActivityPage tab={activityTab} onTab={setActivityTab} running={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} saved={savedMessages}
+    ? <ActivityPage tab={activityTab} running={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} saved={savedMessages}
       pendingSchedules={pendingRoutines} notesToReview={knowledgeToReview} onOpenChat={taskId => { setPanel(null); openTask(taskId); }} onOpenMessage={(taskId, messageId) => { setPanel(null); openChatAt(taskId, messageId); }}
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
       onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     : area === 'home' && friendsOpen
-      ? <FriendsPage view={homePage} archived={workspace.archivedWorkers} busy={friendsBusy}
-        onCreate={name => { setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }} onRestore={member => archiveEntity('worker', member.id, false)}
-        onMarketAdded={async result => {
+      ? <MarketplacePage onMarketAdded={async result => {
           await refresh();
           clearSelection();
           if (result.kind === 'space') {
@@ -2269,7 +2270,7 @@ export function App() {
             setArea('channels');
           } else if (result.kind === 'orglet') openWorker(result.entityId);
           else openTeam(result.entityId);
-        }} templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('home'); })} />
+        }} />
       : null;
   const goToActivity = () => {
     if (!leavingPage(goToActivity)) setArea('activity');
@@ -2493,8 +2494,12 @@ export function App() {
       <nav className="sidebar-nav" aria-label={t('Thêm Tí')}>
         {(['add', 'market'] as const).map(view => {
           const open = friendsOpen && homePage === view;
+          // Add orglet is a dialog over whatever is open; the marketplace is a page of Home.
+          if (view === 'add') return <button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => setAddOrgletOpen(true)}>
+            <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm Tí')}</span>
+          </button>;
           return <button key={view} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => { clearSelection(); setHomePage(view); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
-            {view === 'add' ? <UserRoundPlus size={18} aria-hidden="true" /> : <Store size={18} aria-hidden="true" />}<span className="sidebar-nav-name">{view === 'add' ? t('Thêm Tí') : 'Marketplace'}</span>
+            <Store size={18} aria-hidden="true" /><span className="sidebar-nav-name">Marketplace</span>
           </button>;
         })}
       </nav>
@@ -2529,6 +2534,11 @@ export function App() {
         </button>)}
       </nav>}
       {sidebarFor === 'schedules' && <nav className="sidebar-nav" aria-label={t('Lịch chạy')}>
+        {/* Schedules has one thing to make, so making it sits here in the sidebar, above the list (user, 2026-10-06).
+            The Library makes two kinds of thing, so its buttons stay in the main panel. */}
+        <button type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => void leaveRoutine(() => openRoutines({ editing: true }))}>
+          <LucidePlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Tạo lịch')}</span>
+        </button>
         <button type="button" className={`sidebar-nav-item${routineView.editing ? '' : ' active'}`} aria-current={routineView.editing ? undefined : 'page'} onClick={() => void leaveRoutine(() => openRoutines())}>
           <LucideCalendarClock size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Tất cả lịch')}</span><span className="sidebar-nav-count" aria-hidden="true">{workspace.routines.length}</span>
         </button>
@@ -2554,29 +2564,28 @@ export function App() {
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
         { label: t('Cài đặt'), icon: SlidersHorizontal, onSelect: () => openSettings() },
-        { label: t('Kết nối API'), icon: Plug, onSelect: () => openSettings('connections') },
-        { label: t('Chi phí & giới hạn'), icon: Wallet, onSelect: () => openSettings('usage') },
-        { label: t('Dữ liệu'), icon: Database, onSelect: () => openSettings('data') },
-        { label: t('Giới thiệu'), icon: Info, onSelect: () => openSettings('about') },
+        // What people reach for from their own face (user, 2026-10-06): how much they have used, whether there is a
+        // newer Orglet, and the way out. The other settings pages are one step further, inside Settings.
+        { label: t('Mức dùng'), icon: Wallet, onSelect: () => openSettings('usage') },
+        { label: t('Kiểm tra bản cập nhật'), icon: RefreshCw, onSelect: () => { openSettings('about'); void orglet.checkForUpdates().catch(() => undefined); } },
+        { label: t('Thoát Orglet'), icon: LogOut, danger: true, onSelect: () => void orglet.quit() },
       ]}
       onDwell={dwellAbout}
       trailing={updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
     <main className="main-pane" id="main-content" tabIndex={-1}>
-      {pagePanelOpen ? <PanelPage pageKey={`${panel === 'routines' ? 'routines' : 'library'}:${libraryTab}`} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
-        icon={panel === 'routines' ? <CalendarClock size={16} aria-hidden="true" /> : <BookOpen size={16} aria-hidden="true" />}
+      {pagePanelOpen ? <PanelPage onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
         description={panel === 'routines' ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.'))}
-        actions={panel === 'routines' ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined}
-        title={panel === 'routines' ? t('Lịch chạy') : t('Thư viện')}>
+        actions={panel === 'routines' ? undefined
+          : libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {/* A skill and a note are edited in a dialog over the Library (user, 2026-10-05), so the list stays behind them. */}
       {panel === 'skill' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingSkill?.package ? 'Review skill' : t('Chỉnh skill')}>
         <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />
       </Drawer>}
+      {/* Skills or Knowledge is chosen in the sidebar, so the page has no tabs of its own. */}
       {panel !== 'routines' && <div className="form">
-        <div className="tab-row"><div className="tabs" role="tablist" aria-label={t('Thư viện')} onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return; event.preventDefault(); const next = libraryTab === 'skills' ? 'knowledge' : 'skills'; setLibraryTab(next); document.getElementById(`library-tab-${next}`)?.focus(); }}>{(['skills', 'knowledge'] as const).map(tab => <Button key={tab} id={`library-tab-${tab}`} role="tab" aria-selected={libraryTab === tab} aria-controls="library-panel" tabIndex={libraryTab === tab ? 0 : -1} onClick={() => setLibraryTab(tab)}><span className="tab-label">{tab === 'skills' ? 'Skills' : 'Knowledge'}<span className="tab-count" aria-hidden="true">{tab === 'skills' ? workspace.skills.length : workspace.knowledge.filter(item => item.status !== 'archived').length}</span></span></Button>)}</div>
-          <div className="tab-row-actions">{libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}</div></div>
-        <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
+        <div id="library-panel">{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
       </div>}
       {panel === 'knowledge' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingKnowledge ? 'Knowledge' : t('Knowledge mới')}>
         <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />
@@ -2731,6 +2740,11 @@ export function App() {
     {publishingSource && <MarketPublishingDialog key={`${publishingSource.kind}:${publishingSource.entityId}`} source={publishingSource} sourceRevision={publishingSourceRevision(workspace, publishingSource)} requiresSuggestion={publishingRequiresSuggestion(workspace, publishingSource)} onClose={() => setPublishingSource(undefined)} />}
     {spaceDraft && <SpaceDialog key={`space:${spaceDraft.space?.id ?? 'new'}`} open draft={spaceDraft} workspace={workspace} onClose={() => setSpaceDraft(undefined)}
       onCreated={spaceId => { setOpenSpace(spaceId); setArea('channels'); }} />}
+    <AddOrgletDialog open={addOrgletOpen} onClose={() => setAddOrgletOpen(false)} archived={workspace.archivedWorkers} busy={friendsBusy} templates={friendTemplates}
+      onCreate={name => { setAddOrgletOpen(false); setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }}
+      onRestore={member => { setAddOrgletOpen(false); void archiveEntity('worker', member.id, false); }}
+      onTemplate={id => { setAddOrgletOpen(false); addTemplate(id); }}
+      onImport={() => { setAddOrgletOpen(false); void action(async () => { if (await orglet.importTemplate()) setArea('home'); }); }} />
     {categoryDraft && <CategoryDialog key={`category:${categoryDraft.space.id}`} open draft={categoryDraft} workspace={workspace} onClose={() => setCategoryDraft(undefined)} />}
     {channelDraft && <ChannelDialog key={`channel:${channelDraft.id ?? 'new'}`} open draft={channelDraft} workspace={workspace} onClose={() => setChannelDraft(undefined)} onCreated={channelCreated} />}
     {privacyTaskId && workspace.tasks.find(task => task.id === privacyTaskId) && <LocalOnlyDialog key={`privacy:${privacyTaskId}`} task={workspace.tasks.find(task => task.id === privacyTaskId)!} workspace={workspace} onClose={() => setPrivacyTaskId(undefined)} />}
