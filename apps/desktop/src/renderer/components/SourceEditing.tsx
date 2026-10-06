@@ -5,7 +5,7 @@ import { Button } from './ui';
 import { confirmAction } from './confirm';
 import { SourceViewer, type SourceViewerFrame } from './SourceViewer';
 import type { TextEditorHandle } from './TextEditor';
-import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawlhq/orglet-ui';
 import { MarkupCanvas, MarkupToolbar, markupPalette, markupPng, markupTools, strokeWidth, textSize, usePicture } from './ImageMarkup';
 import { commit, isChanged, redo, startHistory, undo, type History, type Markup, type MarkupHistory, type MarkupTool, type StrokeLevel } from '../markup';
 import { PDF_TOOLS, changedPage, emptyPdfMarkup, isPdfChanged, markedPages, noteSize, pageMarks, stepPage, withPageMarks, type PdfMarkup } from '../pdfMarkup';

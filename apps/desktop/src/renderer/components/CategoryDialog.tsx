@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FolderTree, Lock, SlidersHorizontal, UsersRound } from 'lucide-react';
-import { Input } from '@codepawl/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { CHANNEL_CATEGORY_LIMIT } from '../../shared/channels';
 import { MAX_SPACE_CATEGORIES, type Space } from '../../shared/spaces';

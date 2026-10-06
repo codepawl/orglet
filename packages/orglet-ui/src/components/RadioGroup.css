@@ -1,0 +1,98 @@
+.org-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.org-radio-group-label {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+/* The asterisk has empty alternative text, so a screen reader reads the legend without it. */
+.org-radio-group-required::after {
+  content: "*" / "";
+  color: var(--org-error, #c62828);
+  margin-left: 3px;
+  font-weight: 600;
+}
+/* The input stays in the layout, invisible, exactly over the drawn mark, so a click on the mark reaches it. */
+.org-radio {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.org-radio-disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.org-radio-input {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.org-radio-mark {
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1.5px solid color-mix(in srgb, var(--org-text, #1f1f1f) 14%, var(--org-border, #e5e5e5));
+  border-radius: 50%;
+  background: var(--org-bg, #fff);
+  box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d);
+  transition: background-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), border-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-radio-mark::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--org-accent-ink, #fff);
+  opacity: 0;
+  transform: scale(.4);
+  transition: opacity var(--org-motion-quick, 110ms) var(--org-ease-out, ease), transform var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-radio:hover:not(.org-radio-disabled) .org-radio-input:not(:checked) + .org-radio-mark { border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 32%, var(--org-border, #e5e5e5)); }
+.org-radio-input:checked + .org-radio-mark {
+  background: var(--org-accent, #4473d3);
+  border-color: var(--org-accent, #4473d3);
+}
+.org-radio:hover:not(.org-radio-disabled) .org-radio-input:checked + .org-radio-mark { opacity: .88; }
+.org-radio-input:checked + .org-radio-mark::after {
+  opacity: 1;
+  transform: none;
+}
+.org-radio-input:focus-visible + .org-radio-mark,
+.org-radio:active:not(.org-radio-disabled) .org-radio-mark {
+  border-color: var(--org-focus, #576b99);
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
+}
+.org-radio-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 22px;
+}
+.org-radio-description {
+  color: var(--org-muted, #666);
+  font-size: 12px;
+  line-height: 1.45;
+}

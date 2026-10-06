@@ -1,5 +1,5 @@
 import { CircleAlert, CircleCheck, Info } from 'lucide-react';
-import { Toaster as KitToaster, showToast, type ToastAction, type ToastTone } from '@codepawl/orglet-ui';
+import { Toaster as KitToaster, showToast, type ToastAction, type ToastTone } from '@codepawlhq/orglet-ui';
 // Shown text is re-translated on render, so a toast raised just before a language switch follows the new language.
 import { tMessage } from '../i18n';
 import { recordNotice, type NoticeKind } from './notifications';

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@codepawl/orglet-ui';
+import { Button } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 import { loadPdf } from './PdfPreview';
 import type { Size } from '../markup';

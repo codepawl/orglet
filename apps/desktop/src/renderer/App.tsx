@@ -94,7 +94,7 @@ import { CHANNEL_NAME_LIMIT, channelLabel, isChannelChat } from '../shared/chann
 import { ChannelDialog, type ChannelDraft } from './components/ChannelDialog';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
-import { EditableText } from '@codepawl/orglet-ui';
+import { EditableText } from '@codepawlhq/orglet-ui';
 import { APP_KEY, dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails, updateStates } from './caches';
 import { useCached } from './prefetch';
 import { becameReady, updateIndicator } from '../shared/updates';

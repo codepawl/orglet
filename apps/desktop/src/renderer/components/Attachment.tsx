@@ -1,8 +1,8 @@
 import { File, FileArchive, FileAudio, FileCode, FileData, FileDocument, FileImage, FileSpreadsheet, FileText, FileVideo, X, type Icon } from './icons';
 import { currentLocale, t, translated } from '../i18n';
-import { Attachment as KitAttachment, fileKind, formatFileSize, type FileKind } from '@codepawl/orglet-ui';
+import { Attachment as KitAttachment, fileKind, formatFileSize, type FileKind } from '@codepawlhq/orglet-ui';
 
-export { fileKind, type FileKind } from '@codepawl/orglet-ui';
+export { fileKind, type FileKind } from '@codepawlhq/orglet-ui';
 
 const kindIcons: Record<FileKind, Icon> = { image: FileImage, video: FileVideo, audio: FileAudio, document: FileDocument, spreadsheet: FileSpreadsheet, data: FileData, code: FileCode, archive: FileArchive, text: FileText, file: File };
 

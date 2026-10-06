@@ -1,0 +1,70 @@
+# OUI (Orglet UI)
+
+> OUI is @codepawlhq/orglet-ui: a small set of accessible React 19 components and the `--org-` tokens they read.
+> Import `@codepawlhq/orglet-ui/tokens.css` once, then import components by name from `@codepawlhq/orglet-ui`.
+
+Rules that hold for every component: text comes in as props, `className` is applied last, colours come from
+`--org-` tokens, keyboard and screen-reader behaviour is built in. The kit has no spinner (a wait is a
+`Skeleton`), no separator line and no alert with a coloured left border.
+
+## Foundations
+
+- [Icons](docs/components/Icons.md): Pips, the kit's own icons: the basics an application needs, drawn on one grid with one stroke.
+
+## Actions
+
+- [Button](docs/components/Button.md): A button in four looks, or a square holding one icon.
+- [RowMenu](docs/components/RowMenu.md): A menu of a row's actions behind one icon button, with an in-panel question for destructive items.
+- [ToolbarToggleGroup](docs/components/ToolbarToggleGroup.md): One choice out of a few small icon buttons, such as the tool or colour of a drawing bar.
+
+## Forms
+
+- [Checkbox](docs/components/Checkbox.md): A tick for picking items out of a list or confirming something once, with a label and optional description.
+- [ColorPicker](docs/components/ColorPicker.md): A colour panel with an area, a hue slider, a hex field, presets and the person's saved colours.
+- [EditableText](docs/components/EditableText.md): A name that is renamed where it is shown: text at rest, an input when clicked.
+- [Field](docs/components/Field.md): A single-line text input and a multi-line textarea with a shared invalid state and shake.
+- [FieldLabel](docs/components/FieldLabel.md): A field's title with a small leading icon and an optional required asterisk drawn outside its name.
+- [MoneyInput](docs/components/MoneyInput.md): A field for an amount of money, with the currency symbol before it and its code after it.
+- [RadioGroup](docs/components/RadioGroup.md): One choice out of a few labelled options, each with an optional description.
+- [Select](docs/components/Select.md): A single-choice dropdown with groups, details, icons and full keyboard support.
+- [Switch](docs/components/Switch.md): An on/off switch for a setting that applies at once, bare or as a titled settings row.
+
+## Navigation
+
+- [Tabs](docs/components/Tabs.md): Tabs on a page, as quiet text buttons, with a panel for each.
+
+## Overlays
+
+- [AnchoredPopover](docs/components/AnchoredPopover.md): A panel that floats beside its trigger, flips above when there is no room and closes on Escape.
+- [Confirm](docs/components/Confirm.md): Ask one yes-or-no question in a small modal and await the answer, from anywhere in the application.
+- [DialogOverlay](docs/components/DialogOverlay.md): The pieces to make your own Radix dialog behave like the kit's: backdrop, Escape order and focus return.
+- [Drawer](docs/components/Drawer.md): A centred panel for an editor or a list, with a header, actions and a body that scrolls on its own.
+- [InfoTip](docs/components/InfoTip.md): A small button that reveals technical detail such as ids and paths on hover, focus or click.
+- [TabbedDialog](docs/components/TabbedDialog.md): The settings layout: tabs on the left, the open section on the right, with an optional Save footer.
+- [Tooltip](docs/components/Tooltip.md): A short text label for a control, shown on hover and keyboard focus.
+- [Viewer](docs/components/Viewer.md): A large Quick Look style dialog for looking at one document, file or diff.
+
+## Feedback
+
+- [Progress](docs/components/Progress.md): A bar for work whose size is known, such as 3 of 12 files.
+- [Skeleton](docs/components/Skeleton.md): The only shape a wait may take: bars, blocks and circles where content will be.
+- [StatusMark](docs/components/StatusMark.md): A small status glyph for the left of a title, with a different shape for every state.
+- [Toaster](docs/components/Toaster.md): Short messages shown above everything, called from anywhere, with one optional action.
+
+## Display
+
+- [Attachment](docs/components/Attachment.md): A file as a same-width card with its kind's icon, name and size, plus helpers to read a file's kind and size.
+- [Badge](docs/components/Badge.md): A small pill for a count or a short state word.
+- [Card](docs/components/Card.md): A quiet rounded surface that groups content, with an optional header.
+- [CommandBlock](docs/components/CommandBlock.md): A command to paste into a terminal, on a quiet card with a copy button.
+- [PanelHeading](docs/components/PanelHeading.md): A section's title with its description beneath and the section's own actions on the right.
+- [ReactionBar](docs/components/ReactionBar.md): Reactions thrown at one message: a trigger with a floating row of faces, and badges on the bubble's corner.
+
+## Utilities
+
+- [cn](docs/components/cn.md): Joins class names and lets the caller's class win over the kit's.
+
+## Optional
+
+- [Every page in one file](llms-full.txt)
+- [Agent skill](skills/orglet-ui/SKILL.md)

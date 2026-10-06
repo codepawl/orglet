@@ -6,7 +6,7 @@ import { Decoration, EditorView, ViewPlugin, runScopeHandlers, drawSelection, hi
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { SearchQuery, closeSearchPanel, findNext, findPrevious, getSearchQuery, highlightSelectionMatches, replaceAll, replaceNext, search, searchKeymap, searchPanelOpen, setSearchQuery } from '@codemirror/search';
 import { CaseSensitive, ChevronDown, ChevronUp, Regex, WholeWord, X } from 'lucide-react';
-import { Button, Input } from '@codepawl/orglet-ui';
+import { Button, Input } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 import { tokenizeLines, type Language } from './highlight';
 

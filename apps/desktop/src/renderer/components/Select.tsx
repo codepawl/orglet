@@ -1,8 +1,8 @@
 import { useId, useRef, type ComponentProps, type ReactNode } from 'react';
-import { Select as KitSelect } from '@codepawl/orglet-ui';
+import { Select as KitSelect } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 
-export type { SelectOption } from '@codepawl/orglet-ui';
+export type { SelectOption } from '@codepawlhq/orglet-ui';
 
 /**
  * The kit's dropdown (COD-274) with the app's placeholder, and the app's field layout when it has a visible `label`:

@@ -143,7 +143,7 @@ async function checkStory(page, baseUrl, story, theme, options) {
 async function main() {
   const options = readOptions(process.argv.slice(2));
   if (!existsSync(join(staticFolder, 'index.json'))) {
-    console.error('No static build found. Run `pnpm --filter @codepawl/orglet-ui build-storybook` first.');
+    console.error('No static build found. Run `pnpm --filter @codepawlhq/orglet-ui build-storybook` first.');
     process.exit(1);
   }
   if (options.screenshotFolder) mkdirSync(options.screenshotFolder, { recursive: true });

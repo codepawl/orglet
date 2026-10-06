@@ -48,8 +48,11 @@ jobs:
       - run: pnpm --config.verify-deps-before-run=false --dir services/sync test
       - run: pnpm --config.verify-deps-before-run=false --dir services/sync check:deploy
       # The UI kit as someone installing it would get it: publint reads its package.json, attw its types (COD-273).
-      - run: pnpm --filter @codepawl/orglet-ui build
-      - run: pnpm --filter @codepawl/orglet-ui check:package
+      - run: pnpm --filter @codepawlhq/orglet-ui build
+      - run: pnpm --filter @codepawlhq/orglet-ui check:package
+      # Every export has a page, and the README table, llms.txt and the skill are written from those pages.
+      - run: pnpm --filter @codepawlhq/orglet-ui check:docs
+      - run: pnpm --filter @codepawlhq/orglet-ui build-site
   packaged:
     name: packaged
     runs-on: windows-latest

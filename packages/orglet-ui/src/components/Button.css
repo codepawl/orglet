@@ -10,17 +10,34 @@
   font-size: 13px;
   font-weight: 500;
   background: transparent;
-  transition: background var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+  transition: background-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease), border-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
   white-space: normal;
 }
 .org-button:hover:not(:disabled) { background: var(--org-surface, #f4f4f5); }
+.org-button:active:not(:disabled) { background: var(--org-row-active, #e8e8ea); }
+/* One ring for every focusable thing in the kit: two pixels in the focus colour, two pixels off the control. */
+/* Focus is the same ring a field draws: a line of the focus colour with a soft halo, read as one, and no hard dark
+   outline. The transparent outline only shows in forced colours. */
+.org-button:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
+}
+/* A disabled control steps back by half and says so with the cursor. The hover and press rules skip it. */
+.org-button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
 .org-button-primary {
   background: var(--org-accent, #4473d3);
   color: var(--org-accent-ink, #fff);
 }
 .org-button-primary:hover:not(:disabled) {
   background: var(--org-accent, #4473d3);
-  opacity: .85;
+  opacity: .88;
+}
+.org-button-primary:active:not(:disabled) {
+  background: var(--org-accent, #4473d3);
+  opacity: .76;
 }
 /* The confirming button of something that cannot be undone, such as deleting: filled like primary, in the error colour. */
 .org-button-danger {
@@ -29,11 +46,24 @@
 }
 .org-button-danger:hover:not(:disabled) {
   background: var(--org-error, #a82626);
-  opacity: .85;
+  opacity: .88;
 }
-/* A secondary button is a soft filled pill, not a ring: the kit draws no borders. */
-.org-button-outline { background: var(--org-surface, #f4f4f5); }
-.org-button-outline:hover:not(:disabled) { background: color-mix(in srgb, var(--org-text, #111) 10%, var(--org-bg, #fff)); }
+.org-button-danger:active:not(:disabled) {
+  background: var(--org-error, #a82626);
+  opacity: .76;
+}
+/* A secondary button is the page's own colour with a hairline and a barely-there shadow. The hairline is the border the
+   button already has, so the box keeps its size; a hover is a paler wash than the pressed step. */
+.org-button-outline {
+  background: var(--org-bg, #fff);
+  border-color: var(--org-border, #e5e5e5);
+  box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d);
+}
+.org-button-outline:hover:not(:disabled) {
+  background: var(--org-row-hover, #f1f1f2);
+  border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5));
+}
+.org-button-outline:active:not(:disabled) { background: var(--org-row-active, #e8e8ea); }
 .org-button-icon {
   width: var(--org-icon-size, 32px);
   height: var(--org-icon-size, 32px);

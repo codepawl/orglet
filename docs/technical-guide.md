@@ -502,8 +502,8 @@ A planned check is not a passed check. If run logs are missing, say which log is
 ```powershell
 pnpm typecheck
 pnpm test
-pnpm --filter @codepawl/orglet-ui build
-pnpm --filter @codepawl/orglet-ui check:package
+pnpm --filter @codepawlhq/orglet-ui build
+pnpm --filter @codepawlhq/orglet-ui check:package
 pnpm build
 pnpm test:desktop
 pnpm make

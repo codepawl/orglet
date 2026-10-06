@@ -2,10 +2,10 @@
 // translated "No"), so its callers did not change.
 import type { ComponentProps } from 'react';
 import { EllipsisVertical } from 'lucide-react';
-import { RowMenu as KitRowMenu } from '@codepawl/orglet-ui';
+import { RowMenu as KitRowMenu } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 
-export type { RowMenuItem } from '@codepawl/orglet-ui';
+export type { RowMenuItem } from '@codepawlhq/orglet-ui';
 
 type KitProps = ComponentProps<typeof KitRowMenu>;
 

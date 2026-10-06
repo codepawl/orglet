@@ -14,7 +14,7 @@ import { ChevronRight } from './icons';
 import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
 import { tableSizeLabel } from './TablePreview';
 import { columnKindLabel, columnRangeLabel, datasetHasNotesCheck, datasetNotes, formatNumber } from './checkNotes';
-import { Input } from '@codepawl/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 
 export type SourceTarget = { type: 'source' | 'checker'; id: string; lines?: [number, number] };
 

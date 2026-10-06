@@ -8,7 +8,7 @@ import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
-import { Skeleton, SkeletonGroup, SkeletonText, Textarea } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup, SkeletonText, Textarea } from '@codepawlhq/orglet-ui';
 import { skillReviews } from '../caches';
 import { dwellHandlers, useCached } from '../prefetch';
 

@@ -34,7 +34,8 @@ apps/desktop/src/
     context/      knowledge, memory, thread compilation
   shared/         Zod contracts, i18n, types used across processes
   profiler/       DuckDB checker (separate process)
-packages/orglet-ui/  the app's own UI components; use them before raw controls
+packages/orglet-ui/  the UI kit, published as @codepawlhq/orglet-ui; use its components before raw controls
+.agents/skills/orglet-ui/  the skill for UI work in the app: which component, house rules, adding one
 tests/integration/   vitest
 scripts/             packaged / desktop smokes, doc images
 docs/                user guide + how-it-works (update with the feature)
@@ -107,6 +108,8 @@ Process detail is [CONTRIBUTING.md](CONTRIBUTING.md). Fill [.github/pull_request
 ## Coding conventions
 
 **UI text.** Source strings are Vietnamese (`t('...')`). English lives in `apps/desktop/src/shared/locales/en.ts` (US default; UK in the same module). Add both in the same change. Core/main errors are Vietnamese too so `tMessage` can translate them. On screen, workers are **orglets** and teams are **channels** (a channel where a lead splits the work was a **crew**); older docs and code names still say worker, team and crew.
+
+**UI work starts with the skill.** Read [.agents/skills/orglet-ui/SKILL.md](.agents/skills/orglet-ui/SKILL.md) before building, changing or reviewing UI: it routes to the app's components, the house rules, and the kit's own skill and component pages in `packages/orglet-ui`. `tests/integration/ui-kit-usage.test.ts` fails when a change adds a raw `<button>`, `<select>`, checkbox input, `title` attribute or hex colour to the renderer.
 
 **UI feel.** Quiet ChatGPT-like shell: sidebar, one main column, composer at the bottom, details on demand. Use tokens in `apps/desktop/src/renderer/styles.css` and the components in `packages/orglet-ui`. No neon, gradients-as-brand, org charts, or extra marketing chrome. Tight spacing already landed; do not inflate it. No spinners after the first frame: waits show the shape of what is coming ([technical guide → Loading](docs/technical-guide.md#loading)).
 

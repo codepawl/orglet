@@ -5,7 +5,7 @@ import { Sparkles, FileText } from 'lucide-react';
 import { SkillReview } from './SkillReview';
 import { t } from '../i18n';
 import { orglet } from '../api';
-import { Input, Textarea } from '@codepawl/orglet-ui';
+import { Input, Textarea } from '@codepawlhq/orglet-ui';
 
 export function SkillEditor({ skill, done }: { skill?: Skill; done: () => void }) {
   return skill?.package ? <SkillReview skill={skill} done={done} /> : <PlainSkillEditor skill={skill} done={done} />;

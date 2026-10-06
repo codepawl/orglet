@@ -12,7 +12,7 @@ import { modelRunnable, openCodeModelIssue } from './openCodeModel';
 import { checkedChoiceValue, modelChoices, type ModelChoice } from '../../shared/modelChoices';
 import { choiceBadge, choiceLabel, shownChoices } from './modelRows';
 import { isOpenCodePlan } from '../../shared/opencode';
-import { Input, Skeleton } from '@codepawl/orglet-ui';
+import { Input, Skeleton } from '@codepawlhq/orglet-ui';
 import { modelLists } from '../caches';
 import { modelIdRequired, startingModelId } from './workerModel';
 import { useCached } from '../prefetch';

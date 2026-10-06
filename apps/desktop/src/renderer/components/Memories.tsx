@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MessageSquare, Pencil, Pin, PinOff, Trash } from 'lucide-react';
-import { Textarea } from '@codepawl/orglet-ui';
+import { Textarea } from '@codepawlhq/orglet-ui';
 import type { Workspace } from '../../shared/contracts';
 import { MEMORY_TEXT_LIMIT, type Knowledge } from '../../shared/knowledge';
 import { Button } from './ui';

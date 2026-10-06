@@ -1,0 +1,67 @@
+.org-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 0;
+  border-radius: var(--org-radius-menu, 12px);
+  /* The page's own colour, told apart by a hairline and a barely-there shadow. The hairline is an inset shadow, so the
+     card has no border and keeps its size. */
+  background: var(--org-bg, #fff);
+  box-shadow: inset 0 0 0 1px var(--org-border, #e5e5e5), var(--org-shadow-xs, 0 1px 2px #0000000d);
+  color: var(--org-text, #1f1f1f);
+  font: inherit;
+  text-align: left;
+}
+.org-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.org-card-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.org-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.org-card-description {
+  color: var(--org-muted, #666);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.org-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.org-card-body {
+  display: block;
+  min-width: 0;
+  font-size: 14px;
+}
+.org-card-interactive {
+  cursor: pointer;
+  transition: background-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-card-interactive:hover:not(:disabled) {
+  background: var(--org-row-hover, #f1f1f2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5)), var(--org-shadow-xs, 0 1px 2px #0000000d);
+}
+.org-card-interactive:active:not(:disabled) { background: var(--org-row-active, #e8e8ea); }
+.org-card-interactive:disabled {
+  cursor: default;
+  opacity: .5;
+  cursor: not-allowed;
+}
+.org-card-interactive:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--org-focus, #576b99), 0 0 0 4px color-mix(in srgb, var(--org-focus, #576b99) 22%, transparent);
+}

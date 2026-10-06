@@ -1,0 +1,16 @@
+{
+  // The kit's docs site: static files only, no Worker code. Built by `pnpm --filter @codepawlhq/orglet-ui build-site`.
+  "name": "orglet-ui-docs",
+  "compatibility_date": "2026-10-03",
+  "workers_dev": false,
+  // oui.codepawl.com is the address. The first address, ui.orglet.codepawl.com, keeps answering with the same site.
+  "routes": [
+    { "pattern": "oui.codepawl.com", "custom_domain": true },
+    { "pattern": "ui.orglet.codepawl.com", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "../site-dist",
+    // A page path such as /components/Button has no file: the app's index.html answers it and routes in the browser.
+    "not_found_handling": "single-page-application"
+  }
+}

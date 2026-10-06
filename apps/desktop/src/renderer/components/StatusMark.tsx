@@ -1,10 +1,10 @@
 // The mark itself moved into the kit (COD-274); what a task's status looks like stays with the app.
 import type { TaskStatus } from '../../shared/contracts';
 import type { OpenChatState } from '../openChats';
-import type { StatusMarkState } from '@codepawl/orglet-ui';
+import type { StatusMarkState } from '@codepawlhq/orglet-ui';
 
-export { StatusMark } from '@codepawl/orglet-ui';
-export type { StatusMarkState, StatusMarkTone, StatusMarkVariant } from '@codepawl/orglet-ui';
+export { StatusMark } from '@codepawlhq/orglet-ui';
+export type { StatusMarkState, StatusMarkTone, StatusMarkVariant } from '@codepawlhq/orglet-ui';
 
 /** Map a task's run state to the circle. Finished work stays filled until the user opens it (`seen`). */
 export function taskStatusMark(status: TaskStatus, seen: boolean): StatusMarkState {

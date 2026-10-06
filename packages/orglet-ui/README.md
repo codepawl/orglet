@@ -1,18 +1,16 @@
-# @codepawl/orglet-ui
+# @codepawlhq/orglet-ui
 
-The interface Orglet is built from: a small set of React components and the tokens they read.
+OUI (Orglet UI) is the interface Orglet is built from: a small set of React components, the tokens they read, and
+Pips, its own icons.
+Docs with every component running live: https://oui.codepawl.com
 
-It is not published yet. This package exists so components can be moved out of the app one at a time, under a
-contract, instead of being untangled in one go on the day someone wants to use them. The app still imports its own
-`apps/desktop/src/renderer/components`; a component moves here only when it meets the rules below, and the app then
-imports it from here.
+Components move here from the Orglet app one at a time, under a contract: a component arrives only when it meets
+the rules below, and the app then imports it from here like any other application would.
 
 ## Install
 
-Once it is published:
-
 ```sh
-pnpm add @codepawl/orglet-ui
+pnpm add @codepawlhq/orglet-ui
 ```
 
 It needs React 19 (`react` and `react-dom` are peer dependencies). It ships as ES modules with type declarations,
@@ -28,9 +26,9 @@ app needs a build of the kit first.
 Import the tokens once, in the application's entry file, then use the components:
 
 ```tsx
-import '@codepawl/orglet-ui/tokens.css';
+import '@codepawlhq/orglet-ui/tokens.css';
 import { useState } from 'react';
-import { SwitchField } from '@codepawl/orglet-ui';
+import { SwitchField } from '@codepawlhq/orglet-ui';
 
 export function ReportSetting() {
   const [weekly, setWeekly] = useState(true);
@@ -43,109 +41,49 @@ loads the switch's styles.
 
 ## Components
 
-- `Button`: `variant` `ghost` (the default: quiet text, a soft background on hover), `outline` (a soft filled pill for a
-  secondary action), `primary` (the one filled action of a place) or `danger` (filled in `--org-error` with
-  `--org-error-ink` text, for a yes that cannot be undone); `size="icon"` for a square holding one icon,
-  named with `aria-label`, which answers hover with the icon's colour instead of a tile. `type` is left to the caller,
-  so inside a form it submits unless it says `type="button"`.
-- `Input` and `Textarea`: a text field. Name it with a `<label>` around it or `aria-label`. `invalid` marks it as
-  failing validation, and `flash` replays the shake: pass a counter the form increments on every failed submit.
-- `Switch` and `SwitchField`: an on/off setting. `Switch` is the bare control, named by `label` or `labelledBy`;
-  `SwitchField` is the whole row, its title on the left and the switch on the right, with `description` under the
-  title.
-- `Skeleton`, `SkeletonText` and `SkeletonGroup`: the only shape a wait may take. A bar where text will be, a block
-  where a picture will be, a circle where a face will be, sweeping under a second per pass and still under reduced
-  motion. The group is the one status region, and its `label` is what a screen reader hears. The kit has no spinner
-  and will not grow one.
-- `CommandBlock`: a command for someone to paste into a terminal. A label, the command on a quiet card that breaks
-  only after a path separator or a space, and a copy button. A small control that changes the command, such as a
-  terminal picker, goes in its `toolbar`, on the card's top bar. The application does the copying in `onCopy`.
-- `EditableText`: a name renamed where it is shown. A click, Enter or F2 turns it into a field; Enter or leaving the
-  field keeps the change, Escape puts the old value back. `onCommit` does the saving and may be async.
-- `Checkbox`: a tick for picking items out of a list or confirming something once, never for an on/off setting
-  (that is a `Switch`). A real, hidden `<input type="checkbox">` with a drawn box, so forms and keyboards work as
-  usual; every input prop passes through. `description` adds a second line, `required` draws the red asterisk
-  without the browser's own validation bubble.
-- `AnchoredPopover`: a panel attached to a trigger (`anchor` ref). It floats below it, flips above when there is no
-  room, stays inside the window, closes on Escape or a pointer outside and gives focus back to the anchor. Inside an
-  open dialog it portals into that dialog and sets `data-popup-open`, so Escape closes the popover, not the dialog.
-- `StatusMark`: a small status glyph for the left of a title. `variant` (`empty`, `dashed`, `paused`, `filled`, `busy`) and
-  `tone` (`muted`, `success`, `error`, `working`) pick a shape and a colour, and every state has its own shape, so
-  colour is never the only difference. `label` is what a screen reader hears; `decorative` keeps it out of a named
-  control. Which state a thing is in belongs to the application.
-- `ReactionBar`, `ReactionPicker` and `ReactionBadges`: reactions thrown at a message. The bar is a trigger (`label`,
-  `icon`) that opens a floating row of faces (`options` of `{ name, emoji, meaning }`, the `picked` one pressed;
-  picking it again takes it off). The badges sit on a bubble's corner (`align` `start`, `end` or `inline`), one
-  button each with a count above one. Where reactions are stored is the application's.
-- `ColorPicker` and `normalizeHex`: a saturation and brightness area (pointer and arrow keys), a hue slider and a hex
-  field that change the colour live, preset swatches, and saved colours with save and remove. Every string comes in
-  `labels`, including the ones built from a value (`areaValue`, `presetColor`, `removeColor`). It sets
-  `data-popup-open`, so Escape closes it rather than a dialog around it.
-- `PanelHeading`: a section's title (`level` 2 or 3) with its `description` under it on the left and the section's
-  actions (its children) on the right, vertically centred. Actions end flush with the section's right edge, so give
-  each a visible surface: `primary` only for the section's main add or create action, `outline` for a utility action
-  such as a rescan, never a bare `ghost` button with a label (its box is flush but its label is not, so it reads as
-  shifted left and colourless). An icon-only button lines up by its box and may stay `ghost`.
-- `FieldLabel`: a field's title with a small decorative leading `icon` (any icon component that takes `size`, such as
-  one from lucide-react); `required` draws the red asterisk without adding it to the field's name.
-- `InfoTip`: technical detail (ids, paths, hashes) behind a small button: opens on hover and keyboard focus, pins
-  open on click so a row's copy button can be reached, closes on Escape, focus leaving or a pointer outside. `rows` of
-  `{ label, value, mono?, onCopy? }`; `label` names the trigger, `icon` is what it shows, `copyLabel` names each copy
-  button. Portaled, so a scrolling dialog cannot clip it.
-- `RowMenu`: a row's actions behind an icon button (`icon`, named by `label`). Items (`{ label, icon, onSelect,
-  danger?, confirm?, shortcut? }`) close the menu when chosen; one with `confirm` asks inside the panel first, with
-  `cancelLabel` as the way back, and `asksOnOpen` opens a lone asking item straight on its question. Arrow keys move
-  between items, Escape and a pointer outside close it, and `contextMenuOf` opens it at the pointer on a right-click
-  in the matching ancestor.
-- `MoneyInput`: an amount with the currency `symbol` before it and its `code` after it, both hidden from the field's
-  name; the text stays as typed and converting it is the application's. `invalid` and `flash` work as on `Input`.
-- `Attachment`, `fileKind` and `formatFileSize`: a file as a same-width card (`name`, a `meta` line, the kind's
-  `icon`), rendered as a list item. With `onOpen` the whole card opens the file; with `onRemove` (named by
-  `removeLabel`, showing `removeIcon`) a remove button appears on hover or focus without moving anything; `inactive` draws a file that can no longer
-  be used (read access revoked) quieter, with `meta` saying why. `fileKind`
-  reads the kind from the extension; `formatFileSize` gives "1.5 KB" in a locale.
-- `Drawer`: a centred panel with a header (title or breadcrumb, `description`, the panel's `actions`, a close button
-  named by `closeLabel` showing `closeIcon`) and a body that scrolls on its own. Focus goes back to what opened it.
-- `confirmAction` and `Confirmer`: `await confirmAction({ title, description?, confirmLabel?, cancelLabel?, tone? })` asks
-  one yes-or-no question and resolves true only on confirm; `tone: 'danger'` draws the yes as a danger button. Render
-  one `<Confirmer confirmLabel cancelLabel />` for the default labels. Cancel takes focus, and the answer gives focus
-  back to what asked.
-- `useReturnFocus(onOpenAutoFocus?)`: for a Radix dialog opened from state rather than a `Dialog.Trigger`. Spread the
-  result on `Dialog.Content`: it remembers what had focus when the dialog opened and focuses it again when it closes,
-  unless something outside the dialog already took focus (a link in the dialog that closes it and focuses its target).
-  The kit's own dialogs use it.
-- `DialogOverlay`, `keepOpenForPopup` and `OPEN_POPUP_SELECTOR`: the frosted backdrop for any Radix dialog, and the
-  Escape rule that closes an open menu inside a dialog before the dialog.
-- `showToast` and `Toaster`: `showToast(text, tone?, action?)` shows a short message at the top centre, `success`,
-  `error` or `info`, with at most one `{ label, onSelect }` action. A repeated message replaces its older copy, three
-  at most are visible, and a plain success goes after 3 s, anything else after 6 s. Render one
-  `<Toaster icons={{ success, error, info }} renderText? />`; it portals to the page, so an open modal does not hide it.
-- `Select`: a single-choice dropdown (the select-only combobox pattern) named by `labelledBy` or `ariaLabel`, with a
-  `placeholder`. Options (`SelectOption`) take `icon`, `detail`, `note`, `group`, `disabled`, `dimmed`, `badge` and
-  `labelStyle`; `size="sm"`, `inlineDetail`, `menuMinWidth`, `invalid` with `flash`, and `field` (the trigger's
-  `data-field`). The list is portaled into the open dialog or the page, flips up when there is more room above, fits
-  the window and only scrolls when it must. Arrows, Page Up and Down, Home and End, typing to jump, Enter or Space to
-  choose, Escape to close without closing the dialog. Sizes come from `--org-select-height`, `--org-select-radius` and
-  `--org-select-option-height`.
-- `TabbedDialog`, `TabbedFormDialog` and `DialogTabs`: the settings layout, a title and close button on top, the tabs
-  on the left (a row on a narrow window) and the open section headed by its tab's `label`, with `description` and
-  `actions`, scrolling on its own. Every tab shares one frame: the panel keeps its scrollbar gutter whether or not
-  the tab scrolls, so content ends at the same x on every tab, and the heading is as tall as its text with the
-  actions overhanging it, so each tab's title starts at the same height. `TabbedDialog` applies changes at once; with `onSubmit` its body and `footer` form
-  one form. `TabbedFormDialog` pins Cancel and Save at the bottom with the `error` beside them, shows `busyLabel`
-  while saving, and lands on the field named by `focusField`. A tab's `buttonProps` reach its button, such as a
-  handler that prefetches on hover. Tabs follow the WAI-ARIA pattern: the arrows move and open, only the open tab is
-  in the Tab order. Closing gives focus back to what opened it.
-- `Viewer`: a large dialog for looking at one thing, in the style of macOS Quick Look: close on the left (`closeLabel`,
-  `closeIcon`), the `icon` and `title` centred with an optional `meta` line under them, `actions` on the right, and the
-  content on a grey backdrop that scrolls on its own. `className` widens or restyles one kind of viewer. `toolbar` adds
-  a second row of tools under the first, for an editing mode such as marking up a picture; it stays put while the
-  content scrolls. Closing gives focus back to what opened it.
-- `ToolbarToggleGroup`: one choice out of a few small icon buttons, such as the tool, colour or stroke width of a
-  drawing bar. A radio group named by `label`: one Tab stop, the arrow keys, Home and End move the choice and the focus
-  together, and the picked item sits on a pale tint. Each item has a `label`, an `icon` and an optional `shortcut`,
-  shown in its tooltip and announced as `aria-keyshortcuts`; handling that key elsewhere is the caller's job.
-- `cn`: joins class names and lets the caller's win.
+Each component has a page in [docs/components](docs/components): when to use it, when not to, an example, its props
+and its accessibility notes. This table is written from those pages by `pnpm --filter @codepawlhq/orglet-ui docs`.
+
+<!-- components:start -->
+| Need | Use | Page |
+|---|---|---|
+| Pips, the kit's own icons: the basics an application needs, drawn on one grid with one stroke. | `AlertIcon`, `ArrowLeftIcon`, `ArrowRightIcon`, `ArrowUpRightIcon`, `BellIcon`, `BookIcon`, `CalendarIcon`, `CheckIcon`, `ChevronDownIcon`, `ChevronLeftIcon`, `ChevronRightIcon`, `ChevronUpIcon`, `CloseIcon`, `CodeIcon`, `CopyIcon`, `DownloadIcon`, `ErrorIcon`, `EyeIcon`, `FileIcon`, `FileTextIcon`, `GitHubIcon`, `InfoIcon`, `MenuIcon`, `MinusIcon`, `MonitorIcon`, `MoonIcon`, `MoreHorizontalIcon`, `MoreVerticalIcon`, `PackageIcon`, `PencilIcon`, `PlusIcon`, `SearchIcon`, `SettingsIcon`, `SuccessIcon`, `SunIcon`, `TrashIcon`, `UserIcon` | [Icons](docs/components/Icons.md) |
+| A button in four looks, or a square holding one icon. | `Button` | [Button](docs/components/Button.md) |
+| A menu of a row's actions behind one icon button, with an in-panel question for destructive items. | `RowMenu` | [RowMenu](docs/components/RowMenu.md) |
+| One choice out of a few small icon buttons, such as the tool or colour of a drawing bar. | `ToolbarToggleGroup` | [ToolbarToggleGroup](docs/components/ToolbarToggleGroup.md) |
+| A tick for picking items out of a list or confirming something once, with a label and optional description. | `Checkbox` | [Checkbox](docs/components/Checkbox.md) |
+| A colour panel with an area, a hue slider, a hex field, presets and the person's saved colours. | `ColorPicker`, `normalizeHex` | [ColorPicker](docs/components/ColorPicker.md) |
+| A name that is renamed where it is shown: text at rest, an input when clicked. | `EditableText` | [EditableText](docs/components/EditableText.md) |
+| A single-line text input and a multi-line textarea with a shared invalid state and shake. | `Input`, `Textarea` | [Field](docs/components/Field.md) |
+| A field's title with a small leading icon and an optional required asterisk drawn outside its name. | `FieldLabel` | [FieldLabel](docs/components/FieldLabel.md) |
+| A field for an amount of money, with the currency symbol before it and its code after it. | `MoneyInput` | [MoneyInput](docs/components/MoneyInput.md) |
+| One choice out of a few labelled options, each with an optional description. | `RadioGroup` | [RadioGroup](docs/components/RadioGroup.md) |
+| A single-choice dropdown with groups, details, icons and full keyboard support. | `Select` | [Select](docs/components/Select.md) |
+| An on/off switch for a setting that applies at once, bare or as a titled settings row. | `Switch`, `SwitchField` | [Switch](docs/components/Switch.md) |
+| Tabs on a page, as quiet text buttons, with a panel for each. | `Tabs`, `TabPanel` | [Tabs](docs/components/Tabs.md) |
+| A panel that floats beside its trigger, flips above when there is no room and closes on Escape. | `AnchoredPopover` | [AnchoredPopover](docs/components/AnchoredPopover.md) |
+| Ask one yes-or-no question in a small modal and await the answer, from anywhere in the application. | `confirmAction`, `Confirmer` | [Confirm](docs/components/Confirm.md) |
+| The pieces to make your own Radix dialog behave like the kit's: backdrop, Escape order and focus return. | `DialogOverlay`, `keepOpenForPopup`, `OPEN_POPUP_SELECTOR`, `useReturnFocus` | [DialogOverlay](docs/components/DialogOverlay.md) |
+| A centred panel for an editor or a list, with a header, actions and a body that scrolls on its own. | `Drawer` | [Drawer](docs/components/Drawer.md) |
+| A small button that reveals technical detail such as ids and paths on hover, focus or click. | `InfoTip` | [InfoTip](docs/components/InfoTip.md) |
+| The settings layout: tabs on the left, the open section on the right, with an optional Save footer. | `TabbedDialog`, `TabbedFormDialog`, `DialogTabs` | [TabbedDialog](docs/components/TabbedDialog.md) |
+| A short text label for a control, shown on hover and keyboard focus. | `Tooltip` | [Tooltip](docs/components/Tooltip.md) |
+| A large Quick Look style dialog for looking at one document, file or diff. | `Viewer` | [Viewer](docs/components/Viewer.md) |
+| A bar for work whose size is known, such as 3 of 12 files. | `Progress` | [Progress](docs/components/Progress.md) |
+| The only shape a wait may take: bars, blocks and circles where content will be. | `Skeleton`, `SkeletonText`, `SkeletonGroup` | [Skeleton](docs/components/Skeleton.md) |
+| A small status glyph for the left of a title, with a different shape for every state. | `StatusMark` | [StatusMark](docs/components/StatusMark.md) |
+| Short messages shown above everything, called from anywhere, with one optional action. | `showToast`, `Toaster` | [Toaster](docs/components/Toaster.md) |
+| A file as a same-width card with its kind's icon, name and size, plus helpers to read a file's kind and size. | `Attachment`, `fileKind`, `formatFileSize` | [Attachment](docs/components/Attachment.md) |
+| A small pill for a count or a short state word. | `Badge` | [Badge](docs/components/Badge.md) |
+| A quiet rounded surface that groups content, with an optional header. | `Card` | [Card](docs/components/Card.md) |
+| A command to paste into a terminal, on a quiet card with a copy button. | `CommandBlock` | [CommandBlock](docs/components/CommandBlock.md) |
+| A section's title with its description beneath and the section's own actions on the right. | `PanelHeading` | [PanelHeading](docs/components/PanelHeading.md) |
+| Reactions thrown at one message: a trigger with a floating row of faces, and badges on the bubble's corner. | `ReactionBar`, `ReactionPicker`, `ReactionBadges` | [ReactionBar](docs/components/ReactionBar.md) |
+| Joins class names and lets the caller's class win over the kit's. | `cn` | [cn](docs/components/cn.md) |
+<!-- components:end -->
+
+For agents, the same pages ship as [llms.txt](llms.txt), [llms-full.txt](llms-full.txt) and a skill,
+[skills/orglet-ui/SKILL.md](skills/orglet-ui/SKILL.md). See [docs/agents.md](docs/agents.md).
 
 ## Theming
 
@@ -172,9 +110,9 @@ animates through them stops without any code of its own.
 ## Develop
 
 ```sh
-pnpm --filter @codepawl/orglet-ui build           # dist/: one module per component, its stylesheet beside it, types
-pnpm --filter @codepawl/orglet-ui test            # Vitest in jsdom, Testing Library, axe
-pnpm --filter @codepawl/orglet-ui check:package   # publint and Are the Types Wrong, on the built package
+pnpm --filter @codepawlhq/orglet-ui build           # dist/: one module per component, its stylesheet beside it, types
+pnpm --filter @codepawlhq/orglet-ui test            # Vitest in jsdom, Testing Library, axe
+pnpm --filter @codepawlhq/orglet-ui check:package   # publint and Are the Types Wrong, on the built package
 ```
 
 The build is tsdown. It keeps each component in its own file and copies its stylesheet next to it unchanged, so the
@@ -183,14 +121,28 @@ The build is tsdown. It keeps each component in its own file and copies its styl
 The root `pnpm test` runs these tests too, as the `orglet-ui` Vitest project. CI builds the kit and runs
 `check:package` on every pull request.
 
+### The docs site
+
+`site/` is a small Vite app that renders `docs/` and shows each story of `stories/` live in its own frame. It reads
+the kit's source directly, and it serves `llms.txt`, `llms-full.txt`, the pages as Markdown and the skill at the
+same paths they have in the package.
+
+```sh
+pnpm --filter @codepawlhq/orglet-ui site         # http://localhost:6007
+pnpm --filter @codepawlhq/orglet-ui build-site   # site-dist/ (not committed)
+pnpm --filter @codepawlhq/orglet-ui docs         # rewrites the README table, llms.txt and the skill from docs/components
+```
+
+A maintainer deploys it with `wrangler deploy --config packages/orglet-ui/site/wrangler.jsonc` after `build-site`.
+
 ### The gallery
 
 Every component has stories in `stories/`, one per meaningful state, in [Storybook](https://storybook.js.org) 10:
 
 ```sh
-pnpm --filter @codepawl/orglet-ui storybook         # the gallery at http://localhost:6006
-pnpm --filter @codepawl/orglet-ui build-storybook   # a static copy in storybook-static/ (not committed, not deployed)
-pnpm --filter @codepawl/orglet-ui check:stories     # every story of the static copy, light and dark, rendered and axe-checked
+pnpm --filter @codepawlhq/orglet-ui storybook         # the gallery at http://localhost:6006
+pnpm --filter @codepawlhq/orglet-ui build-storybook   # a static copy in storybook-static/ (not committed, not deployed)
+pnpm --filter @codepawlhq/orglet-ui check:stories     # every story of the static copy, light and dark, rendered and axe-checked
 ```
 
 The toolbar's Theme switch sets `data-theme` on the root element, exactly as an application does, and the
@@ -202,7 +154,7 @@ story that needs an exception says so in its `a11y` parameter, with the reason b
 Storybook and everything it pulls in are development dependencies of this package only: the app never imports
 `stories/` or `.storybook/`, and the published package still ships `dist` alone.
 
-A new component comes with a test in `test/`: it renders with its required text, works from the keyboard, applies
+A new component comes with a page in `docs/components/` (the format is the one `Button.md` has) and a test in `test/`: it renders with its required text, works from the keyboard, applies
 `className` last, and passes an axe check. It also gets stories in `stories/`. `test/styles.test.ts` checks every stylesheet for the `org-` prefix and for
 reduced motion.
 
@@ -234,9 +186,8 @@ token like `--sidebar`, it is not general yet, and forcing it here only moves th
 
 ## What is still missing
 
-The kit is deliberately thin today. Before it can be published it needs at least the controls an application cannot
-do without: `Label`, `Card`, `Badge`, and a real `Tooltip`. After those: `Tabs` outside a dialog,
-`RadioGroup`, `Progress`, `Table`.
+The kit is still thin. The one control an application cannot do without that it lacks is a `Table`. (A form label is
+`FieldLabel`, so there is no separate `Label`.)
 
 Two things it will not grow: a `Separator` and the alert with a coloured left border. Orglet separates with spacing,
 grouping and a quiet background instead, and that rule travels with the kit.

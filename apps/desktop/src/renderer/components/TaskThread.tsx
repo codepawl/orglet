@@ -8,7 +8,7 @@ import { taskDraftKey } from '../drafts';
 import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
-import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import { formatMoney } from './money';
 import type { SourceTarget } from './SourcePanel';
 import { ReviewSummary } from './ReviewSummary';

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Input, Textarea, Checkbox } from '@codepawl/orglet-ui';
+import { Input, Textarea, Checkbox } from '@codepawlhq/orglet-ui';
 import { ChevronRight, Cpu, Eye, FileText, Globe, Languages, RefreshCw, Send, Tags, Type, Upload, X } from 'lucide-react';
 import { BuiltInProviderId, type Workspace } from '../../shared/contracts';
 import { isMemory } from '../../shared/knowledge';

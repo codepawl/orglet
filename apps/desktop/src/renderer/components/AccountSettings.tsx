@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChartNoAxesColumn, ExternalLink, LogIn, LogOut, RefreshCw, Smartphone, UserRound, X } from 'lucide-react';
-import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import type { AccountState } from '../../shared/account';
 import type { SyncPauseReason, SyncStatus } from '../../shared/sync-status';
 import type { SyncConflict, SyncConflictVersion } from '../../shared/sync-conflicts';

@@ -1,0 +1,29 @@
+/* Each tone sets `--org-badge-tone`; the fill is that colour thinned out over the page, the text is the colour pulled
+   toward the text colour, so it stays readable on the pale fill in both themes. */
+.org-badge {
+  --org-badge-tone: var(--org-muted, #666);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--org-badge-tone) 14%, var(--org-bg, #fff));
+  /* A hairline in the tone keeps the pill's edge on any background, and takes no room. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--org-badge-tone) 24%, transparent);
+  color: color-mix(in srgb, var(--org-badge-tone) 65%, var(--org-text, #1f1f1f));
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.org-badge-neutral {
+  background: var(--org-surface, #f1f1f1);
+  color: var(--org-text, #1f1f1f);
+}
+.org-badge-accent { --org-badge-tone: var(--org-accent, #4473d3); }
+.org-badge-success { --org-badge-tone: var(--org-success, #2e7a32); }
+.org-badge-warning { --org-badge-tone: var(--org-warning, #9a6700); }
+.org-badge-error { --org-badge-tone: var(--org-error, #a82626); }

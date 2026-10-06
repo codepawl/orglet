@@ -7,7 +7,7 @@ import { Select } from './Select';
 import { Switch } from './Switch';
 import { RowMenu } from './RowMenu';
 import { StatusMark, type StatusMarkState } from './StatusMark';
-import { Input, Textarea } from '@codepawl/orglet-ui';
+import { Input, Textarea } from '@codepawlhq/orglet-ui';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { toast } from './toast';

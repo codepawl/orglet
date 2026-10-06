@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Textarea, Checkbox } from '@codepawl/orglet-ui';
+import { Textarea, Checkbox } from '@codepawlhq/orglet-ui';
 import { ChevronRight, FileText, Flag, RefreshCw, ShieldCheck } from 'lucide-react';
 import { MarketDecisionInput, MarketReportInput, MarketResolveInput, type MarketModerationAction, type MarketModerationResult, type MarketReviewDetail, type MarketModerationWrite } from '../../shared/market-moderation';
 import type { MarketListingV2 } from '../../shared/market';

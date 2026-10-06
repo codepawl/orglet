@@ -5,7 +5,7 @@ import type { RecoveryOutput } from '../../shared/workspace-recovery';
 import { SourceViewer } from './SourceViewer';
 import { CodePreview } from './CodePreview';
 import type { InfoTipRow } from './InfoTip';
-import { SkeletonGroup, SkeletonText } from '@codepawl/orglet-ui';
+import { SkeletonGroup, SkeletonText } from '@codepawlhq/orglet-ui';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 

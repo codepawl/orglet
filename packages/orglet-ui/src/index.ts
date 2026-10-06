@@ -38,3 +38,20 @@ export type { DialogTab } from './components/TabbedDialog';
 export { Viewer } from './components/Viewer';
 export { ToolbarToggleGroup } from './components/ToolbarToggleGroup';
 export type { ToolbarToggleItem } from './components/ToolbarToggleGroup';
+export { Tooltip } from './components/Tooltip';
+export type { TooltipSide } from './components/Tooltip';
+export { Badge } from './components/Badge';
+export type { BadgeTone } from './components/Badge';
+export { Card } from './components/Card';
+export { TabPanel, Tabs } from './components/Tabs';
+export type { TabItem } from './components/Tabs';
+export { RadioGroup } from './components/RadioGroup';
+export type { RadioOption } from './components/RadioGroup';
+export { Progress } from './components/Progress';
+export {
+  AlertIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, BellIcon, BookIcon, CalendarIcon, CheckIcon, ChevronDownIcon,
+  ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, CloseIcon, CodeIcon, CopyIcon, DownloadIcon, ErrorIcon, EyeIcon, FileIcon,
+  FileTextIcon, GitHubIcon, InfoIcon, MenuIcon, MinusIcon, MonitorIcon, MoonIcon, MoreHorizontalIcon, MoreVerticalIcon,
+  PackageIcon, PencilIcon, PlusIcon, SearchIcon, SettingsIcon, SuccessIcon, SunIcon, TrashIcon, UserIcon,
+} from './icons';
+export type { IconProps } from './icons';

@@ -15,7 +15,7 @@ export default defineConfig({
   deps: { neverBundle: [/\.css$/], dts: { neverBundle: [] } },
   copy: [
     { from: 'src/components/*.css', to: 'dist/components' },
-    // Not imported by any component: an application imports it once, as `@codepawl/orglet-ui/tokens.css`.
+    // Not imported by any component: an application imports it once, as `@codepawlhq/orglet-ui/tokens.css`.
     { from: 'src/styles/tokens.css', to: 'dist' },
   ],
 });

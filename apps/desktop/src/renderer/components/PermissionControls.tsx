@@ -9,7 +9,7 @@ import { WEB_SEARCH_PROVIDER_NAMES, type WebSearchProvider } from '../../shared/
 import { Button } from './ui';
 import { Select } from './Select';
 import { SwitchField } from './Switch';
-import { Skeleton } from '@codepawl/orglet-ui';
+import { Skeleton } from '@codepawlhq/orglet-ui';
 import { t, translated } from '../i18n';
 import { browserLevels, type BrowserLevel } from '../../shared/browser';
 import { desktopLevels, type DesktopLevel } from '../../shared/desktop';

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Download, RotateCw, Trash2, X } from 'lucide-react';
-import { Skeleton } from '@codepawl/orglet-ui';
+import { Skeleton } from '@codepawlhq/orglet-ui';
 import type { DecisionModelState } from '../../shared/decisions';
 import { Button } from './ui';
 import { StatusMark } from './StatusMark';

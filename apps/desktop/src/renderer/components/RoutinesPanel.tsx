@@ -18,7 +18,7 @@ import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
 import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
-import { CommandBlock, Input, Textarea } from '@codepawl/orglet-ui';
+import { CommandBlock, Input, Textarea } from '@codepawlhq/orglet-ui';
 import { triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
 import { permissionsForLevel, workspaceLevelOf, workspaceLevels, type WorkspaceLevel } from '../../shared/capability-status';
 import { workspaceLevelNames } from './PermissionControls';

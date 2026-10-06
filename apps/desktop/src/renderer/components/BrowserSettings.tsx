@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppWindow, Ban, Camera, Check, Hourglass, Image, Keyboard, ListChecks, LogIn, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldCheck, TextCursorInput, Trash2, UserRound, X, type LucideIcon } from 'lucide-react';
-import { Input } from '@codepawl/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { CLEAN_BROWSER_PROFILE, defaultBrowserChoice, normalizeBrowserSite, type BrowserAction, type BrowserActionKind, type BrowserChoice, type BrowserSite, type BrowserSiteDecision, type BrowserState } from '../../shared/browser';
 import { Button, Drawer, FieldLabel } from './ui';

@@ -1,0 +1,25 @@
+.org-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.org-progress-track {
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--org-border, #e5e5e5);
+}
+.org-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--org-primary, #171717);
+  transition: width var(--org-motion-base, 170ms) var(--org-ease-out, ease);
+}
+.org-progress-text {
+  flex-shrink: 0;
+  color: var(--org-muted, #666);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

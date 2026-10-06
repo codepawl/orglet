@@ -32,7 +32,7 @@ import { toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { Input, SwitchField, Textarea } from '@codepawl/orglet-ui';
+import { Input, SwitchField, Textarea } from '@codepawlhq/orglet-ui';
 import { taskGrants, modelLists } from '../caches';
 import { Blocks, Zap } from 'lucide-react';
 import { Checkbox } from './Checkbox';
