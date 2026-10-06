@@ -1206,6 +1206,7 @@ export const en: Dictionary = {
   '\nKết quả công cụ workspace chưa có mã bằng chứng để trích dẫn trong báo cáo.': '\nThe workspace tool result has no evidence ID to cite in the report.',
   'Kết quả checker không hợp lệ.': 'Invalid checker result.',
   'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.': 'The result does not match the schema and was not saved as a completed report.',
+  '{0} trả về một bước không đúng dạng Orglet cần: {1}': '{0} returned a step in a shape Orglet cannot use: {1}',
   'Câu trả lời quá dài; chưa được lưu. Hãy yêu cầu chia nội dung thành nhiều phần.': 'The answer is too long and has not been saved. Ask for the content in smaller parts.',
   'Câu trả lời thiếu phần bắt buộc hoặc có phần sai dạng; chưa được lưu.': 'The answer is missing a required part or contains an invalid part and has not been saved.',
   'Kết quả một phần': 'Partial result',

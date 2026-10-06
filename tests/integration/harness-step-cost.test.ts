@@ -136,7 +136,11 @@ describe('web research on the Claude Code tool bridge', () => {
     expect(Math.max(...requestBytes) - requestBytes[0]).toBeLessThan(FULL_WEB_PAGES_KEPT * pageBytes + READS * (excerptBytes + 512));
     const before = previousBytes.reduce((sum, bytes) => sum + bytes, 0);
     const after = requestBytes.reduce((sum, bytes) => sum + bytes, 0);
-    expect(Math.max(...requestBytes)).toBeLessThan(Math.max(...previousBytes) * 0.5);
+    // The old policy grew each step by a page until the request limit cut it, so its peak is the limit, less up to one
+    // page depending on where the cut falls; a few hundred bytes more of platform policy moved that cut a step earlier
+    // (2026-10-07). Half the limit is the bound the old peak always approached, so the new peak is held to it.
+    expect(Math.max(...previousBytes)).toBeGreaterThan(MAX_REQUEST_BYTES - 2 * pageBytes);
+    expect(Math.max(...requestBytes)).toBeLessThan(MAX_REQUEST_BYTES * 0.5);
     expect(after).toBeLessThan(before * 0.75);
     // Claude Code's working directory is part of the fixed prompt it sends, so every step of a run uses the same one.
     expect(new Set(requests.map(request => request.cwd)).size).toBe(1);

@@ -55,6 +55,8 @@ The packaged smokes drive a real Electron window and are CI's job after typechec
 
 Do not run `pnpm test:live` unless you have set `ORGLET_LIVE_KEY_FILE` to your own key; it makes one paid request. Never search a machine for keys to make it run.
 
+`pnpm build` then `node scripts/agent-bench/run.mjs --provider cursor` (or `claude-code`, `codex`; `--only finance,swe`) runs eight live tasks shaped after well-known benchmarks: finance (FinanceBench), paperwork (OfficeBench), web research (GAIA), a failing test (SWE-bench), data analysis (DABench), a colleague's ask (MT-Bench), a short email (WritingBench) and a channel where a lead splits the work. Each plants a wrong premise, so it shows whether an orglet checks it, uses its tools, answers in the person's language, reacts and talks like a colleague. It uses your signed-in CLI and its plan, one fresh profile and one recorded window per task, and saves the chat, every app error and a video with the waits cut out; `node scripts/agent-bench/grade.mjs <folder>` scores what can be measured. Read the chats for tone. `--provider demo` only proves the pipeline.
+
 ## Where things go
 
 - **Docs land with the feature.** A feature or UX change updates the [README](README.md) and the relevant page under `docs/` in the same pull request: how it works, not only that it shipped. User pages follow [docs/writing.md](docs/writing.md); product-spec pages keep their precise language. A new user-facing page gets a row in the [docs map](docs/README.md) and, when you can, a mascot from `pnpm images:orglets` as described there.

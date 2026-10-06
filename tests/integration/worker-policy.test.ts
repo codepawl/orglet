@@ -131,6 +131,6 @@ it('keeps casual chat free of report headings and describes done as delivered an
   expect(requests[0].messages[0].content).toContain('Never claim unperformed checks passed');
   expect(requests[0].messages[0].content).toContain('without adding headings');
   // A wrong figure from the person is corrected first, not built on (benchmark, 2026-10-07: an invoice total was taken on trust).
-  expect(requests[0].messages[0].content).toContain('Going along with a wrong premise to be agreeable is a mistake');
+  expect(requests[0].messages[0].content).toContain('never write a value you showed wrong into a document');
   expect(store.detail(task.id).artifacts[0].report).toMatchObject({ format: 'chat', summary: 'Hello, what would you like to work on?', limitations: [] });
 });
