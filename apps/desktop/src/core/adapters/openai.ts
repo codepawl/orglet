@@ -127,7 +127,12 @@ export class OpenAIAdapter implements ModelAdapter {
     let stopped: ModelStop | undefined;
     for await (const chunk of stream) {
       if (!received) { progress(); received = true; }
-      if (chunk.usage) usage = { input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens };
+      if (chunk.usage) {
+        // The share of the prompt the provider served from its cache (user, 2026-10-07). Without a verified cache price
+        // for the model it still costs the input price, but Details can show how much of a long chat was cached.
+        const cached = chunk.usage.prompt_tokens_details?.cached_tokens;
+        usage = { input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens, ...(cached && cached > 0 && cached <= chunk.usage.prompt_tokens ? { cacheRead: cached } : {}) };
+      }
       stopped = stopOfFinishReason(chunk.choices[0]?.finish_reason) ?? stopped;
       const written = chunk.choices[0]?.delta.content;
       if (written && text.length < 2000) text += written;

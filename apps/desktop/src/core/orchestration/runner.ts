@@ -46,7 +46,7 @@ import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, frozenTacetFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
-import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
+import { applyThreadManifest, compactThread, fitThread, historyBudgetFor, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
 import { ProviderSlots, type SlotWait } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -824,11 +824,14 @@ export class Runner {
    * main chat deleted since leaves the first turn without it.
    */
   private threadExtras(task: Task, run: Run): ThreadExtras {
-    if (!task.sideOf || run.stage || (run.snapshot.inputRevision ?? 0) > 0) return {};
+    const provider = run.snapshot.worker.provider;
+    // How much of the past goes in word for word follows the model's window (user, 2026-10-07).
+    const budget = historyBudgetFor(modelContextTokens(readModelListCache(this.store), provider, run.snapshot.model), isHarness(provider));
+    if (!task.sideOf || run.stage || (run.snapshot.inputRevision ?? 0) > 0) return { budget };
     const row = this.store.db.prepare('SELECT data FROM tasks WHERE id=?').get(task.sideOf.taskId);
-    if (!row || (JSON.parse(String(row.data)) as Task).deletedAt) return {};
+    if (!row || (JSON.parse(String(row.data)) as Task).deletedAt) return { budget };
     const main = this.store.detail(task.sideOf.taskId);
-    return { mainChat: mainChatTurns(main, task.sideOf.throughRevision, run.snapshot.worker.id) };
+    return { budget, mainChat: mainChatTurns(main, task.sideOf.throughRevision, run.snapshot.worker.id) };
   }
   /**
    * What a Continue turn starts from (COD-257): the calls and results of the run it continues, when that run belongs

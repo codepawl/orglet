@@ -190,3 +190,11 @@ kênh, lượt của lịch đi qua PO); 4 độc lập, làm sau cùng vì lớ
 
 Một số con số của Anthropic/OpenAI (hệ số giá cache, tên header beta) được đọc qua công cụ tóm tắt trang; kiểm lại ở
 trang gốc lúc triển khai trước khi đưa vào code.
+
+## Tiến độ
+
+- Giai đoạn 0 (2026-10-07): xong cả bốn việc, PR #564.
+- Giai đoạn 1 (2026-10-07): ngân sách lịch sử theo cửa sổ model (`historyBudgetFor`), lượt cũ lấy lại tăng theo ngân
+  sách, đọc `cached_tokens` của OpenAI vào usage. Chưa làm: TTL cache 1 giờ của Anthropic (cần đo bằng API key thật;
+  AGENTS.md không cho tìm key trên máy), giá đọc cache của OpenAI (chưa kiểm ở trang giá gốc), cắt kết quả công cụ cũ
+  trong harness (nguồn được trích theo dòng; cần đo trên `harness-step-cost` với công cụ thật trước).
