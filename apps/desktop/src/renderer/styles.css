@@ -47,7 +47,7 @@
   color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
-  --bar-line: color-mix(in srgb, var(--muted) 28%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 38%, var(--bg));
+  --bar-line: color-mix(in srgb, var(--muted) 18%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 25%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
