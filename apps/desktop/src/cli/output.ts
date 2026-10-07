@@ -160,6 +160,7 @@ export function formatUsd(micros: number): string {
 export function scheduleTiming(row: CliScheduleRow): string {
   if (row.trigger === 'called') return t('khi được gọi');
   if (row.trigger === 'folder') return t('khi có tệp mới');
+  if (row.trigger === 'app') return t('khi có mục mới trong ứng dụng');
   if (row.frequency === 'hours') return t('mỗi {0}h từ {1}', row.everyHours, row.time);
   if (row.frequency === 'weekly') return t('weekly vào {0} lúc {1}', WEEKDAY_NAMES[row.weekday], row.time);
   return t('{0} lúc {1}', row.frequency, row.time);

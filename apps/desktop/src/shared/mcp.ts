@@ -54,8 +54,11 @@ export const McpStoredTransport = z.discriminatedUnion('kind', [
 ]);
 export type McpStoredTransport = z.infer<typeof McpStoredTransport>;
 
-/** A tool as Settings lists it: the server's name for it and the first line of what it does. */
-export const McpToolSummary = z.object({ name: z.string().min(1).max(128), description: z.string().max(300) }).strict();
+/**
+ * A tool as Settings lists it: the server's name for it and the first line of what it does, and whether the server marks
+ * it read-only, which is what an app trigger may call on its own.
+ */
+export const McpToolSummary = z.object({ name: z.string().min(1).max(128), description: z.string().max(300), readOnly: z.boolean().optional() }).strict();
 export type McpToolSummary = z.infer<typeof McpToolSummary>;
 
 export const McpServer = z.object({

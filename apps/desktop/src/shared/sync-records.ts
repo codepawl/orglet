@@ -34,7 +34,7 @@ export const SyncSetting = z.discriminatedUnion('key', [
 export const SyncSource = z.object({ id: Id, name: z.string().max(2000), bytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   hash: z.string().regex(/^[a-f0-9]{64}$/), format: DataFormat.optional(), media: z.enum(['image', 'video', 'audio', 'pdf']).optional(), editedFrom: Id.optional() }).strict();
 export const SyncRoutine = Routine.pick({ id: true, name: true, schedule: true, enabled: true }).extend({
-  trigger: z.enum(['schedule', 'folder', 'called']),
+  trigger: z.enum(['schedule', 'folder', 'called', 'app']),
   task: TaskInput.pick({ workerId: true, teamId: true, brief: true, sourceIds: true, budgetMicros: true }).strict(),
 }).strict();
 export const SyncRun = z.object({ id: Id, taskId: Id, turnId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(),

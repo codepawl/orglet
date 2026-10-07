@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, Drawer, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, BellRing, Briefcase, ShieldCheck, CalendarRange, Sun, Users, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, Webhook, BellRing, Briefcase, ShieldCheck, CalendarRange, Sun, Users, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
 import { channelLabel } from '../../shared/channels';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
@@ -19,7 +19,7 @@ import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
 import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
 import { CommandBlock, Input, Textarea } from '@codepawlhq/orglet-ui';
-import { triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
+import { APP_TRIGGER_KEYWORD_LIMIT, APP_TRIGGER_MINUTES, triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
 import { permissionsForLevel, workspaceLevelOf, workspaceLevels, type WorkspaceLevel } from '../../shared/capability-status';
 import { workspaceLevelNames } from './PermissionControls';
 import { toast } from './toast';
@@ -43,12 +43,37 @@ export function flaggedWhen(iso: string, timeZone: string, now = new Date()): st
 }
 /** The command that starts a routine from a terminal (COD-245); the name is quoted so spaces survive the shell. */
 export const runCommandOf = (name: string) => `orglet run "${name.replace(/"/g, '\\"')}"`;
-const TRIGGER_ICONS: Record<RoutineTriggerKind, typeof CalendarClock> = { schedule: CalendarClock, folder: FolderInput, called: SquareTerminal };
+const TRIGGER_ICONS: Record<RoutineTriggerKind, typeof CalendarClock> = { schedule: CalendarClock, folder: FolderInput, called: SquareTerminal, app: Webhook };
+type AppTriggerFields = { server: { id: string; name: string } | undefined; tool: string; argumentsText: string; everyText: string; keywordsText?: string };
+
+/** The app trigger the fields describe, or undefined when one of them is missing or not valid. */
+function appTriggerDraft(fields: AppTriggerFields): RoutineTrigger | undefined {
+  if (appTriggerProblem(fields)) return undefined;
+  const keywords = (fields.keywordsText ?? '').split(',').map(word => word.trim()).filter(Boolean).slice(0, APP_TRIGGER_KEYWORD_LIMIT);
+  return { kind: 'app', serverId: fields.server!.id, serverName: fields.server!.name, tool: fields.tool, arguments: JSON.parse(fields.argumentsText.trim() || '{}') as Record<string, unknown>, everyMinutes: Number(fields.everyText), keywords };
+}
+
+/** Why the app trigger's fields cannot be saved yet, in words for the person; empty when they can. */
+function appTriggerProblem(fields: AppTriggerFields): string {
+  if (!fields.server) return t('Chọn ứng dụng để lịch theo dõi.');
+  if (!fields.tool) return t('Chọn công cụ chỉ đọc để lịch gọi.');
+  try {
+    const parsed: unknown = JSON.parse(fields.argumentsText.trim() || '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return t('Tham số cần là một đối tượng JSON, ví dụ {}.');
+  } catch {
+    return t('Tham số cần là một đối tượng JSON, ví dụ {}.');
+  }
+  const every = Number(fields.everyText);
+  if (!Number.isInteger(every) || every < APP_TRIGGER_MINUTES.least || every > APP_TRIGGER_MINUTES.most) return t('Khoảng xem lại từ {0} đến {1} phút.', [APP_TRIGGER_MINUTES.least, APP_TRIGGER_MINUTES.most]);
+  return '';
+}
+
 /** The routine's trigger in a few words, for the one line under its name. */
 function triggerSummary(routine: Routine): string {
   const trigger = triggerOf(routine);
   if (trigger.kind === 'folder') return t('Khi có tệp mới trong {0}', [trigger.folderName]);
   if (trigger.kind === 'called') return t('Chỉ khi được gọi');
+  if (trigger.kind === 'app') return t('Khi có mục mới trong {0}', [trigger.serverName]);
   return cadenceInWords(routine.schedule);
 }
 /**
@@ -305,6 +330,17 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const initialTrigger = routine ? triggerOf(routine) : undefined;
   const [triggerKind, setTriggerKind] = useState<RoutineTriggerKind>(initialTrigger?.kind ?? 'schedule');
   const [folder, setFolder] = useState<{ folderId: string; name: string } | undefined>(initialTrigger?.kind === 'folder' ? { folderId: initialTrigger.folderId, name: initialTrigger.folderName } : undefined);
+  // An app trigger (stage 4): which connected app, which of its read-only tools, with what arguments, how often, and the
+  // words a new item must have. The arguments are edited as JSON text and checked on save.
+  const initialApp = initialTrigger?.kind === 'app' ? initialTrigger : undefined;
+  const appServers = (workspace.mcpServers ?? []).filter(server => server.enabled);
+  const [appServerId, setAppServerId] = useState(initialApp?.serverId ?? appServers[0]?.id ?? '');
+  const [appTool, setAppTool] = useState(initialApp?.tool ?? '');
+  const [appArguments, setAppArguments] = useState(initialApp ? JSON.stringify(initialApp.arguments, null, 2) : '{}');
+  const [appEvery, setAppEvery] = useState(String(initialApp?.everyMinutes ?? 15));
+  const [appKeywords, setAppKeywords] = useState(initialApp?.keywords.join(', ') ?? '');
+  const appServer = appServers.find(server => server.id === appServerId);
+  const readOnlyTools = (appServer?.tools ?? []).filter(tool => tool.readOnly);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   // A schedule may read pages with the profile and site list saved here; saving is what approves them (COD-261).
   // A schedule never acts on pages (COD-261), so reading is the most it can be set to.
@@ -336,7 +372,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : demoReplies() ? t('ở chế độ Demo') : t('khi Tí đã kết nối model');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
-  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web, workFolder?.folderId, workLevel, review, everyHours, windowOn, windowFrom, windowTo, weekdaysOnly, dailyCap]);
+  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, appServerId, appTool, appArguments, appEvery, appKeywords, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web, workFolder?.folderId, workLevel, review, everyHours, windowOn, windowFrom, windowTo, weekdaysOnly, dailyCap]);
   const budgetMicros = toMicros(budget);
   const capMicros = dailyCap.trim() ? toMicros(dailyCap) : undefined;
   // The schedule as it would be saved; the hourly fields go only with an hourly schedule.
@@ -354,6 +390,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const toolCapabilities = scheduleCapabilities(initial?.toolCapabilities, leadProvider, browserLevel === 'read', web);
   const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
     ? folder && { kind: 'folder', folderId: folder.folderId, folderName: folder.name }
+    : triggerKind === 'app' ? appTriggerDraft({ server: appServer, tool: appTool, argumentsText: appArguments, everyText: appEvery, keywordsText: appKeywords })
     : { kind: triggerKind };
   const workingFolder: RoutineWorkspace | null = workFolder && workLevel !== 'none'
     ? { folderId: workFolder.folderId, folderName: workFolder.name, permissions: permissionsForLevel(workLevel), review: team ? false : review }
@@ -396,7 +433,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       event.currentTarget.querySelector<HTMLElement>('[data-field="timeZone"]')?.focus();
       return;
     }
-    if (!trigger) { setError(t('Chọn thư mục để lịch theo dõi.')); return; }
+    if (!trigger) { setError(triggerKind === 'app' ? appTriggerProblem({ server: appServer, tool: appTool, argumentsText: appArguments, everyText: appEvery }) : t('Chọn thư mục để lịch theo dõi.')); return; }
     if (triggerKind === 'schedule' && windowInvalid) { setError(t('Giờ bắt đầu của khung giờ phải trước giờ kết thúc.')); return; }
     if (capInvalid) { setError(t('Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.')); return; }
     setBusy(true);
@@ -439,6 +476,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         { value: 'schedule', label: t('Theo lịch'), icon: <CalendarClock size={16} /> },
         { value: 'folder', label: t('Khi có tệp mới'), icon: <FolderInput size={16} /> },
         { value: 'called', label: t('Chỉ khi được gọi'), icon: <SquareTerminal size={16} /> },
+        { value: 'app', label: t('Khi có mục mới trong ứng dụng'), icon: <Webhook size={16} /> },
       ]} />
       {triggerKind === 'schedule' && <>
         <div className="field-grid">
@@ -481,6 +519,25 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         </PanelHeading>
         {folder ? <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><span title={folder.name}>{folder.name}</span><span className="muted">{t('Chỉ đọc')}</span></p> : <p className="muted">{t('Chưa chọn thư mục.')}</p>}
         <p className="muted">{t('Mỗi tệp mới trong thư mục này bắt đầu một lần chạy, với tệp đó đính kèm; nhiều tệp đến cùng lúc chạy chung một lần. Chỉ theo dõi khi Orglet đang mở. Tệp có sẵn và tệp đến khi app tắt không được chạy.')}</p>
+      </div>}
+      {triggerKind === 'app' && <div className="routine-app">
+        {appServers.length === 0
+          ? <p className="muted">{t('Chưa có ứng dụng nào đang bật. Kết nối một ứng dụng trong Cài đặt → MCP trước.')}</p>
+          : <>
+            <div className="field-grid">
+              <Select label={<FieldLabel icon={Webhook} required>{t('Ứng dụng')}</FieldLabel>} value={appServerId} onChange={value => { setAppServerId(value); setAppTool(''); }}
+                options={appServers.map(server => ({ value: server.id, label: server.name }))} />
+              {readOnlyTools.length > 0 && <Select label={<FieldLabel icon={SquareTerminal} required>{t('Công cụ chỉ đọc')}</FieldLabel>} value={appTool} onChange={setAppTool} menuMinWidth={280}
+                options={readOnlyTools.map(tool => ({ value: tool.name, label: tool.name, detail: tool.description || undefined }))} />}
+            </div>
+            {readOnlyTools.length === 0 && <p className="muted">{t('Ứng dụng này chưa có công cụ chỉ đọc. Bấm Kiểm tra kết nối trong Cài đặt → MCP để tải lại danh sách.')}</p>}
+            <label><FieldLabel icon={FileText}>{t('Tham số (JSON)')}</FieldLabel><Textarea className="mcp-mono" rows={3} value={appArguments} onChange={event => setAppArguments(event.target.value)} spellCheck={false} /></label>
+            <div className="field-grid">
+              <label><FieldLabel icon={Timer} required>{t('Xem lại sau mỗi (phút)')}</FieldLabel><Input type="number" min={APP_TRIGGER_MINUTES.least} max={APP_TRIGGER_MINUTES.most} value={appEvery} onChange={event => setAppEvery(event.target.value)} required /></label>
+              <label><FieldLabel icon={MessageSquare}>{t('Chỉ khi có một trong các từ')}</FieldLabel><Input value={appKeywords} onChange={event => setAppKeywords(event.target.value)} placeholder={t('Ví dụ: urgent, hóa đơn')} /></label>
+            </div>
+          </>}
+        <p className="muted">{t('Orglet tự gọi công cụ này theo khoảng thời gian đã chọn, khi app đang mở. Lần đầu chỉ ghi nhận những gì đang có; mục mới sau đó bắt đầu một lần chạy, đính kèm dưới dạng tệp. Chỉ công cụ mà ứng dụng đánh dấu là chỉ đọc mới được chọn.')}</p>
       </div>}
       {triggerKind === 'called' && <div className="routine-called">
         <CommandBlock command={runCommandOf(name.trim() || t('Tên lịch'))} label={t('Chạy từ terminal')} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={next => void copyCommand(next)} />

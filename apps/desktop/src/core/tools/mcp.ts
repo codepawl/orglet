@@ -422,7 +422,7 @@ export class McpServers {
   private recordTools(server: McpServer, tools: ListedTool[], omitted: number) {
     const current = this.find(server.id);
     if (!current || current.revision !== server.revision) return;
-    const summaries: McpToolSummary[] = tools.map(tool => ({ name: tool.name, description: summaryLine(tool.description) }));
+    const summaries: McpToolSummary[] = tools.map(tool => ({ name: tool.name, description: summaryLine(tool.description), ...(tool.readOnly ? { readOnly: true } : {}) }));
     this.store.put('mcp_servers', { ...current, tools: summaries, omittedTools: omitted, checkedAt: now() });
   }
 

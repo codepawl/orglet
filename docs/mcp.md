@@ -56,7 +56,7 @@ In a side thread the card offers only **Allow once** and **Refuse**: a side thre
 
 A crew or group chat cannot stop mid-turn to ask. There, a tool you have not allowed comes back to the orglet as refused and the trace says so. Allow the server in **Details → Tool permissions** first, then send the message again.
 
-Scheduled runs never get MCP tools, because nobody is there to approve a call. Demo does not call tools.
+Scheduled runs never get MCP tools, because nobody is there to approve a call. Demo does not call tools. A routine can still start when something new shows up in an app: Orglet itself calls one read-only tool you picked when you saved the routine ([routines.md](routines.md#when-something-new-shows-up-in-an-app)).
 
 ## What the orglet gets back
 
