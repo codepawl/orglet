@@ -119,7 +119,7 @@ export function DecisionModelSetup({ connections, customConnections }: { connect
     {active && <div className="setting-row">
       <div className="setting-text">
         <span className="setting-title">{t('Thử model quyết định')}</span>
-        <span className={`setting-description web-search-outcome${outcome ? ` ${outcome.tone}` : ''}`} aria-live="polite">
+        <span className={`setting-description web-search-outcome${outcome ? ` ${outcome.tone}` : ''}`} aria-live="polite" data-align-ignore="family-lead">
           {outcome && !testing && <StatusMark variant="filled" tone={outcome.tone} label={outcome.tone === 'success' ? t('Trả lời được') : t('Lỗi')} decorative />}
           <span>{testing ? t('Đang hỏi…') : outcome ? outcome.text : t('Gửi một câu hỏi mẫu tới kết nối này và hiện câu trả lời.')}</span>
         </span>
