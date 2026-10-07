@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatasetProfile, type ColumnFacts, type DataFormat, type ExactMatchAccuracy, type ProfileInput } from '../shared/profiles';
 import { auditRuns, RunAuditInputError } from './run-audit';
+import { aggregateTable } from './aggregate';
 import { columnFacts, firstColumnLooksLikeRowName, identifier, repeatedRows, wholeRowKey, type Query } from './column-checks';
 
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
@@ -39,6 +40,19 @@ async function checkDataset(query: Query, table: string, format: DataFormat, idC
 }
 
 // Only this bundled code creates SQL. Neither source contents nor model replies supply SQL.
+/** A cell as text: empty for a null, JSON for a list or a struct, and the value's own text otherwise. */
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return text.length > 4000 ? text.slice(0, 4000) : text;
+}
+
+/** The first rows of a table in file order, every cell as text. */
+async function sampleOf(query: Query, table: string, columns: string[], limit: number) {
+  const records = await query(`SELECT * FROM ${table} LIMIT ${Math.trunc(limit)}`);
+  return { columns, rows: records.map(record => columns.map(column => cellText(record[column]))) };
+}
+
 export async function analyze(input: ProfileInput, scratchDirectory?: string): Promise<DatasetProfile> {
   if (input.runAudit && input.files.length !== 1) throw new RunAuditInputError('Chọn đúng một run-log cho mỗi lần audit.');
   if (input.exactMatch && (input.files.length !== 2 || input.runAudit || input.idColumn !== input.exactMatch.idColumn
@@ -71,7 +85,8 @@ export async function analyze(input: ProfileInput, scratchDirectory?: string): P
       await connection.run(`CREATE TABLE data${index} AS SELECT * FROM source${index}`);
       const dataset = await checkDataset(query, `data${index}`, file.format, input.idColumn);
       if (input.idColumn && !dataset.id && !input.exactMatch) throw new Error('Không tìm thấy cột ID đã chọn.');
-      result.datasets.push({ sourceId: file.sourceId, ...dataset });
+      const sample = input.sampleRows ? await sampleOf(query, `data${index}`, dataset.columns.map(column => column.name), input.sampleRows) : undefined;
+      result.datasets.push({ sourceId: file.sourceId, ...dataset, ...(sample ? { sample } : {}) });
     }
     result.checks.push('column_kinds', 'number_ranges', 'invalid_dates', 'duplicate_rows', 'first_column_repeats');
     if (input.idColumn) result.checks.push('id_nulls', 'id_duplicates');
@@ -85,6 +100,12 @@ export async function analyze(input: ProfileInput, scratchDirectory?: string): P
       result.runAudit = auditRuns(await query(`SELECT ${selected.map(identifier).join(',')} FROM data0`), dataset.sourceId, input.runAudit.direction);
       result.checks.push('run_failures', 'within_solution_repeat_summary', 'public_private_rank_change');
       result.limitations.push('Run audit dùng score do tệp log khai báo, không tính lại metric từ predictions/answers.');
+    }
+    if (input.aggregate) {
+      const dataset = result.datasets[0];
+      result.aggregate = await aggregateTable(query, 'data0', dataset.sourceId, dataset.columns.map(column => column.name), input.aggregate);
+      result.checks.push('group_totals');
+      result.limitations.push('Tổng theo nhóm chỉ tính trên tệp đầu tiên; ô không phải số bị bỏ qua, và các dòng không có giá trị nhóm không nằm trong kết quả.');
     }
     if (result.datasets.length === 2) {
       const signature = (index: number) => JSON.stringify(result.datasets[index].columns.map(({ name, type }) => ({ name, type })));

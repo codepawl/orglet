@@ -47,13 +47,19 @@
   color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
-  --bar-line: color-mix(in srgb, var(--muted) 18%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 25%, var(--bg));
+  --bar-line: color-mix(in srgb, var(--muted) 13%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 19%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
 }
 :root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 28%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 38%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 28%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 38%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
+/* Chart series (in-chat charts, 2026-10-07): eight hues in a fixed order, the dataviz reference palette, validated on
+   these surfaces with its script (both modes pass; three light hues sit under 3:1, so a chart always has a legend and a
+   table view). Dark is its own steps of the same hues, not an automatic flip. */
+:root { --chart-1:#2a78d6; --chart-2:#eb6834; --chart-3:#1baf7a; --chart-4:#eda100; --chart-5:#e87ba4; --chart-6:#008300; --chart-7:#4a3aa7; --chart-8:#e34948; }
+:root[data-theme=dark], .theme-dark { --chart-1:#3987e5; --chart-2:#d95926; --chart-3:#199e70; --chart-4:#c98500; --chart-5:#d55181; --chart-6:#008300; --chart-7:#9085e9; --chart-8:#e66767; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { --chart-1:#3987e5; --chart-2:#d95926; --chart-3:#199e70; --chart-4:#c98500; --chart-5:#d55181; --chart-6:#008300; --chart-7:#9085e9; --chart-8:#e66767; } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 /* Dragging over the app's own controls (buttons, rows, panels, labels) selects nothing, the way a desktop app
@@ -448,7 +454,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    the toolbar row (add · model or recipient · usage ring) under it (owner's reference, 2026-09-30). Grown, the box is
    zones stacked: the reply target, the attached files, then the text with send beside its last line. The zones are
    told apart by what they are made of (cards on a surface, bare text, the send button) and by spacing, never by a line. */
-.composer { --composer-radius:16px; --composer-padding:5px; position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"input send"; align-items:end; column-gap:4px; padding:var(--composer-padding); border:1px solid var(--bar-line); border-radius:var(--composer-radius); background:var(--bg); box-shadow:0 1px 2px #0000000d, 0 6px 20px #00000014; }
+.composer { --composer-radius:16px; --composer-padding:5px; position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"input send"; align-items:end; column-gap:4px; padding:var(--composer-padding); border:1px solid var(--bar-line); border-radius:var(--composer-radius); background:var(--bg); box-shadow:0 1px 2px #00000008, 0 3px 10px #0000000a; }
 /* Only the zones that are there get a row, so an empty one adds no gap above the text. */
 .composer.expanded { --composer-padding:7px; row-gap:6px; }
 .composer.expanded.has-attachments { grid-template-areas:"attach attach" "input send"; }
@@ -459,7 +465,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Focus inside the bar darkens its outline and deepens its shadow a little, and that is all (user, 2026-10-05): the
    bar used to ring itself in the focus colour while typing (COD-284), which read as a different control. The line
    keeps its one pixel, so nothing around the bar moves. A button inside the bar keeps its own ring. */
-.composer:focus-within { border-color:var(--bar-line-focus); box-shadow:0 1px 3px #00000014, 0 8px 24px #0000001f; }
+.composer:focus-within { border-color:var(--bar-line-focus); box-shadow:0 1px 2px #0000000a, 0 4px 12px #0000000f; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
@@ -539,10 +545,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* While a run is in progress the send button is the stop button, and a ring turns inside it so the eye lands
    there (user, 2026-09-19). The arc is drawn in the button's own text colour: outside the button it would run
    dark on dark and read as a halo rather than as something moving. */
-.send.stop { position:relative; }
+/* Stop is only its mark and the moving arc, in the text colour, with no fill (owner, 2026-10-07); the accent shows on hover. */
+.send.stop { position:relative; color:var(--text); background:transparent; }
+.send.stop:hover:not(:disabled),.send.stop:focus-visible { color:var(--accent); background:transparent; }
 .send.stop .send-spin {
   position:absolute; inset:2px; border-radius:50%; pointer-events:none;
-  border:2px solid color-mix(in srgb, var(--accent-ink) 28%, transparent); border-top-color:var(--accent-ink);
+  border:2px solid color-mix(in srgb, currentColor 22%, transparent); border-top-color:currentColor;
   animation:send-spin 820ms linear infinite;
 }
 @keyframes send-spin { to { transform:rotate(1turn); } }
@@ -613,7 +621,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes reaction-row-in-end { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
 .message-reply-context { display:flex; align-items:center; gap:6px; max-width:100%; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
 .message-reply-context:hover { color:var(--text); }
-/* Who Tacet picked to answer (RoutedLine, COD-305): the same quiet line, but a statement, not a link. */
+/* Who the decision model picked to answer (RoutedLine, COD-305): the same quiet line, but a statement, not a link. */
 .message-routed { margin:0; cursor:default; }
 .message-routed:hover { color:var(--muted); }
 /* The quoted message under a reaction is one clamped line (COD-221), never the whole message. */
@@ -950,15 +958,20 @@ svg { flex-shrink:0; stroke-width:1.7; }
   80% { transform:translateY(0) scale(1.07, .91); animation-timing-function:ease-out; }
   100% { transform:none; }
 }
-.account-choice .welcome { margin:0 0 28px; text-wrap:balance; }
-.account-choice-options { width:100%; display:flex; flex-direction:column; gap:22px; }
-.account-choice-option { display:flex; flex-direction:column; gap:8px; }
-.account-choice-option .org-button { width:100%; min-height:40px; }
-.account-choice-option p, .account-choice-waiting p { margin:0; color:var(--muted); font-size:13px; line-height:1.45; text-align:center; text-wrap:balance; }
-.account-choice-option p.error { color:var(--error); }
-/* What signing in sends (COD-344): one quieter line under the sign-in sentence, links in the text colour. */
-.account-choice-option p.account-choice-disclosure { font-size:12px; }
-.account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:16px; }
+.account-choice .welcome { margin:0 0 24px; text-wrap:balance; }
+.account-choice-options { width:100%; display:flex; flex-direction:column; gap:10px; }
+/* A choice is one card: an icon tile, a label and one short line, left-aligned so the labels read down a column. */
+.account-choice-card { width:100%; min-height:64px; padding:12px 14px; justify-content:flex-start; gap:12px; text-align:left; }
+.account-choice-icon { flex:none; display:inline-grid; place-items:center; width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, currentColor 12%, transparent); }
+.account-choice-text { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.account-choice-label { font-size:14px; font-weight:500; }
+.account-choice-hint { font-size:12px; font-weight:400; opacity:.78; }
+.account-choice-error { width:100%; margin:0 0 14px; font-size:13px; color:var(--error); }
+/* What signing in sends (COD-344): one quiet line under the cards, its mark leading, links in the text colour. */
+.account-choice-disclosure { display:flex; align-items:flex-start; gap:8px; margin:18px 0 0; color:var(--muted); font-size:12px; line-height:1.5; text-wrap:pretty; }
+.account-choice-disclosure > svg { flex:none; margin-top:2px; }
+.account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:12px; }
+.account-choice-waiting p { display:flex; align-items:center; gap:8px; margin:0; color:var(--muted); font-size:13px; }
 .row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
 .row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
@@ -1183,6 +1196,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 /* The same 26px mark slot and 12px gap as the other Settings lists (Connections, Harness, Browser), so the marks and
    the text of every tab line up; the alignment check compares them (family-lead). */
 .account-benefits li { display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.45; }
+/* The mark that leads an Account row: the same 26px slot as the other Settings lists, so text starts in one column. */
+.account-row-icon { flex:none; display:inline-grid; place-items:center; width:var(--setting-mark); height:20px; color:var(--muted); }
 .account-benefit-icon { flex:none; display:inline-grid; place-items:center; width:26px; height:20px; color:var(--muted); }
 .account-disclosure { margin:16px 0 0; font-size:12px; line-height:1.5; color:var(--muted); }
 .account-disclosure .org-info-tip { vertical-align:middle; margin-left:2px; }
@@ -1306,14 +1321,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    one as a compact outline button on the same centre line. */
 .plan-resets { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:2px 0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .plan-resets .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
-/* Tacet's enable block (COD-303): a settings row whose text column carries the size or the state, and while bytes
-   arrive a slim bar in the plan-usage bar's shape. The error takes the error colour, never a coloured border. */
-.tacet-setup-meta { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-.tacet-setup-error { color:var(--error); line-height:1.45; }
-.tacet-setup .status-pill { align-self:flex-start; }
-.tacet-setup-bar { position:relative; display:block; height:6px; margin-top:4px; overflow:hidden; border-radius:999px; background:color-mix(in srgb, var(--text) 10%, transparent); }
-.tacet-setup-bar>span { position:absolute; inset:0 auto 0 0; border-radius:inherit; background:var(--accent); transition:width .25s var(--ease-out); }
-@media (prefers-reduced-motion: reduce) { .tacet-setup-bar>span { transition:none; } }
+/* The decision model's connection block (COD-303): the model field shares the column width of the selects above it. */
+.setting-control .decision-model-input { width:210px; }
 /* Settings → Giới thiệu (COD-176): the face and the name lead, then the same rows as every other section. The links
    are one row of compact outline chips, each mark left of its name; the changelog is the version, the date and what
    changed, one release at a time. */
@@ -1502,7 +1511,6 @@ button.notice-body { cursor:pointer; }
 .source-restored>p { margin:0; max-width:420px; text-wrap:pretty; }
 .source-restored-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
 /* Joining an account from a computer that holds data (GH-484): both sides' counts, then the choice. */
-.sync-title { display:inline-flex; align-items:center; gap:8px; }
 .outcome-line { display:flex; align-items:flex-start; gap:8px; margin:0; text-wrap:pretty; }
 .outcome-line > .org-status-mark { flex-shrink:0; margin-top:2px; }
 /* Two versions of one thing, side by side, each with its own choice under it (GH-484). */
@@ -2459,7 +2467,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    the run pausing. That is motion a person reads without a legend, it is the vocabulary the app already has, and
    it costs a transform on a 24px drawing. The rules sit after the tab's own, below. */
 .live-island {
-  --island-fillet:12px; --island-line:var(--bar-line); --island-reach:3px; --island-shadow:0 -3px 14px #00000012;
+  --island-fillet:12px; --island-line:var(--bar-line); --island-reach:3px; --island-shadow:0 -2px 8px #0000000a;
   position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center;
   width:fit-content; min-width:150px; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
   /* Tab and bar are one shape with one outline round the outside (COD-228): the tab reaches 3px into the bar, past its
@@ -2476,7 +2484,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 }
 /* One outline for tab and bar: the same darker line the bar's own focus rule sets, and the same deeper shadow, with
    no change of colour (user, 2026-10-05). */
-.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -4px 16px #0000001c; }
+.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -2px 10px #0000000f; }
 /* The corner's box starts a fillet above the bar's top edge and ends under the bar's top border, so its bottom border
    is the bar's. The clip lets the fill reach the tab's bottom and two pixels into the tab, over the soft edge of the
    tab's typing ring, and keeps the ring's shadow off the box's top and outer edges, where it left a faint line; the
@@ -3295,7 +3303,6 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .org-drawer:has(.add-orglet) { width:min(560px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
 .activity-link { display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:10px; background:var(--surface); }
 .activity-link > span { flex:1; min-width:0; }
-.activity-link .activity-link-error { flex-shrink:0; color:var(--error); }
 .saved-empty { display:flex; align-items:center; gap:8px; }
 .saved-row { display:flex; align-items:flex-start; gap:6px; }
 .saved-body { display:flex; flex-direction:column; flex:1; min-width:0; gap:4px; padding:8px 10px; border:0; border-radius:10px; background:transparent; color:inherit; font:inherit; text-align:left; }
@@ -3444,3 +3451,28 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
    resting colour. */
 .org-button.org-button-icon.message-saved, .org-button.org-button-icon.message-saved:hover:not(:disabled) { color:var(--accent); }
 .message-saved svg path:last-child { stroke:var(--accent-ink); fill:none; }
+/* A chart in a reply (shared/charts.ts): title and takeaway, the plot, then its source and actions, on a quiet surface. */
+.chart-block { display:flex; flex-direction:column; gap:8px; margin:10px 0; padding:12px 12px 6px; border-radius:12px; background:var(--surface); max-width:760px; }
+.chart-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.chart-head { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.chart-title { display:flex; align-items:center; gap:6px; font-size:13.5px; font-weight:600; }
+.chart-title svg { flex-shrink:0; color:var(--muted); }
+.chart-takeaway { color:var(--muted); font-size:12.5px; line-height:1.45; }
+.chart-plot { width:100%; min-width:0; }
+.chart-foot { display:flex; flex-wrap:wrap; align-items:center; gap:2px 14px; min-width:0; padding:0 0 4px; color:var(--muted); font-size:12px; }
+.chart-hint { display:inline-flex; align-items:center; gap:5px; }
+.chart-hint svg { flex-shrink:0; }
+.chart-source { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chart-askable { cursor:pointer; }
+.chart-large { max-width:none; margin:0; background:transparent; padding:0; }
+.chart-list .source-meta { overflow:hidden; text-overflow:ellipsis; }
+.chart-actions { display:flex; align-items:center; gap:2px; flex-shrink:0; margin:-4px -4px 0 0; }
+.chart-actions .org-button { width:28px; height:28px; min-height:28px; color:var(--muted); }
+.chart-actions .org-button:hover:not(:disabled) { color:var(--text); }
+.chart-block .table-preview .preview-table-scroll { max-height:280px; }
+.chart-invalid { gap:6px; }
+.chart-problem { display:flex; align-items:flex-start; gap:6px; margin:0; font-size:12.5px; color:var(--text); }
+.chart-problem svg { flex-shrink:0; margin-top:2px; color:var(--warning, var(--error)); }
+.chart-invalid pre { max-height:160px; overflow:auto; margin:0; font-size:11.5px; }
+.chart-shape { display:block; margin:10px 0; max-width:760px; }
+.chart-shape-plot { height:340px; border-radius:12px; }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Laptop, LogIn, X } from 'lucide-react';
+import { ArrowLeft, Laptop, LogIn, ShieldCheck } from 'lucide-react';
 import type { AccountChoice, AccountState } from '../../shared/account';
 import { orglet } from '../api';
 import { t } from '../i18n';
@@ -8,6 +8,7 @@ import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
 import { toast } from './toast';
 import { Button } from './ui';
+import { StatusMark } from './StatusMark';
 import { maskEmail } from '../../shared/pii';
 import { holdForSmile } from '../screenTransition';
 
@@ -72,7 +73,8 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
     }
   };
 
-  const waiting = phase === 'waiting';
+  // A sign-in started elsewhere (Settings) also shows the wait, so the screen never offers a second one.
+  const waiting = phase === 'waiting' || account?.status === 'signing_in';
   return <div className="account-choice-screen">
     <main className="account-choice" id="main-content" tabIndex={-1} aria-labelledby="account-choice-title">
       <div className="account-choice-body">
@@ -82,24 +84,23 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
         </div>
         <h1 id="account-choice-title" className="welcome">{waiting ? t('Tiếp tục trong trình duyệt') : t('Chào mừng đến với Orglet')}</h1>
         {waiting ? <div className="account-choice-waiting">
-          <p role="status">{t('Đăng nhập ở trang vừa mở, rồi quay lại đây.')}</p>
-          <Button variant="outline" onClick={cancel}><X size={16} />{t('Hủy')}</Button>
-        </div> : /* Two full-width choices with centred labels of different lengths: their text is meant to start apart. */
-        <div className="account-choice-options" data-align-ignore="column-start icon-slot">
-          <div className="account-choice-option">
-            <Button variant="primary" disabled={saving} onClick={() => void signIn()}><LogIn size={16} />{phase === 'failed' ? t('Thử lại lần nữa') : t('Đăng nhập')}</Button>
-            {phase === 'failed'
-              ? <p className="error" role="alert">{error}</p>
-              : <>
-                <p>{t('Một tài khoản CodePawl miễn phí; đồng bộ giữa các máy sẽ có sau.')}</p>
-                <p className="account-choice-disclosure"><AnalyticsDisclosure signedIn={false} /></p>
-              </>}
+          <p role="status"><StatusMark variant="busy" tone="working" label={t('Đang chờ')} decorative />{t('Đang chờ bạn đăng nhập…')}</p>
+          <Button variant="ghost" onClick={cancel}><ArrowLeft size={16} />{t('Hủy')}</Button>
+        </div> : <>
+          {phase === 'failed' && <p className="error outcome-line account-choice-error" role="alert"><StatusMark variant="filled" tone="error" label={t('Không thành công')} decorative />{error}</p>}
+          {/* Two full-width choices with labels of different lengths: their text is meant to start apart. */}
+          <div className="account-choice-options" data-align-ignore="column-start icon-slot">
+            <Button variant="primary" className="account-choice-card" disabled={saving} onClick={() => void signIn()}>
+              <span className="account-choice-icon" aria-hidden="true"><LogIn size={18} /></span>
+              <span className="account-choice-text"><span className="account-choice-label">{phase === 'failed' ? t('Thử lại lần nữa') : t('Đăng nhập')}</span><span className="account-choice-hint">{t('Miễn phí, đồng bộ sắp có')}</span></span>
+            </Button>
+            <Button variant="outline" className="account-choice-card" disabled={saving} onClick={() => void useLocally()}>
+              <span className="account-choice-icon" aria-hidden="true"><Laptop size={18} /></span>
+              <span className="account-choice-text"><span className="account-choice-label">{t('Không cần tài khoản')}</span><span className="account-choice-hint">{t('Mọi thứ ở lại trên máy này')}</span></span>
+            </Button>
           </div>
-          <div className="account-choice-option">
-            <Button variant="outline" disabled={saving} onClick={() => void useLocally()}><Laptop size={16} />{t('Dùng không cần tài khoản')}</Button>
-            <p>{t('Mọi thứ ở lại trên máy này; bạn có thể đăng nhập sau trong Cài đặt.')}</p>
-          </div>
-        </div>}
+          <p className="account-choice-disclosure"><ShieldCheck size={14} aria-hidden="true" /><span><AnalyticsDisclosure signedIn={false} /></span></p>
+        </>}
       </div>
     </main>
   </div>;

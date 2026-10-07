@@ -4,7 +4,6 @@ import type { RunProgressUpdate } from '../shared/progress';
 import type { UpdateState } from '../shared/updates';
 import type { OpenChatTarget } from '../shared/cli';
 import type { OverlayBridge, OverlayView } from '../shared/desktop-overlay';
-import type { DecisionModelState } from '../shared/decisions';
 import type { AccountState } from '../shared/account';
 import type { SyncStatus } from '../shared/sync-status';
 
@@ -64,6 +63,7 @@ const bridge: Bridge = {
   reportError: report => invoke('orglet:analytics-error', report),
   openLink: link => invoke('orglet:open-link', link),
   openUrl: url => invoke('orglet:open-url', url),
+  saveChart: (name, kind, data) => invoke('orglet:save-chart', { name, kind, data }),
   changelog: (refresh = false) => invoke('orglet:changelog', refresh),
   updateState: () => invoke('orglet:update-state'),
   checkForUpdates: () => invoke('orglet:check-for-updates'),
@@ -79,11 +79,6 @@ const bridge: Bridge = {
     const listener = (_event: Electron.IpcRendererEvent, update: RunProgressUpdate) => callback(update);
     ipcRenderer.on('orglet:progress', listener);
     return () => ipcRenderer.removeListener('orglet:progress', listener);
-  },
-  onDecisionModel: callback => {
-    const listener = (_event: Electron.IpcRendererEvent, state: DecisionModelState) => callback(state);
-    ipcRenderer.on('orglet:decision-model', listener);
-    return () => ipcRenderer.removeListener('orglet:decision-model', listener);
   },
   onNavigate: callback => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') => callback(direction);

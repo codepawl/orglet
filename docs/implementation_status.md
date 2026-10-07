@@ -83,7 +83,7 @@ The original workspace contained only `plans/orglet_mvp_plan_vi.md` and its codi
 - Hardening tests prove a lowered team budget applies before the next reservation, a partial team without a synthesis artifact cannot be accepted, and resumed preflight clears stale transient error notices. Desktop E2E selects two folders and preserves both exclusion lists across restart.
 - Routines: real-clock packaged E2E creates an approved schedule and observes its automatic demo, then restarts with a 30-day overdue fixture and verifies a reopen notice, one coalesced missed-run explanation, and one explicit catch-up. It also checks missing-approval/invalid-timezone feedback, disabling schedules, team shift/concurrency settings, a generated handoff, outside-shift resume rejection and narrow layout. Native computer use changes daily to weekly, observes approval reset, saves it, disables it and opens/closes the handoff disclosure. The invalid-timezone error initially lacked a repair path; it now names the field and gives examples, with inline error association and focus.
 - Core tests cover timezone/DST gaps and overlaps, overnight shifts, exact occurrence/task commit, first-tick/gap/overdue deferral, long-overdue reopen with one preserved `pending.dueAt`, dismiss-without-moving-next-due, offline coalescing, duplicate catch-up, source/config changes, disable-during-verification races, restored schedules without approval, failed-write rollback, budget refusal, live capacity, step-boundary pauses and deterministic handoff recovery. Model/pricing catalog changes also invalidate recurring approval.
-- Forge produced the portable Windows package, ZIP and Squirrel Setup. Installer execution remains untested. Artifacts are unsigned.
+- Forge produced the portable Windows package, ZIP and Squirrel Setup. Installer execution remains untested. Artifacts were unsigned then; Windows releases are signed with Certum since 0.7.1 ([windows-release-gates.md](windows-release-gates.md#signing)).
 
 ## Foundation validation checklist (historical)
 
@@ -369,7 +369,9 @@ Verified on Windows 11 Home 26200 (2026-09-26):
 
 Not verified: a borrow that runs to its end through the app, and one stopped by a simulated person input through the app. The Codex plan reached its weekly limit (resets 2026-09-30), the Claude Code CLI reported signed out, and no other model was available without an API key. A real click on the pill's Stop (only synthetic page events were used). Stop latency with real input. Multiple displays and scaling other than 100 %. The glow over a window partly covered by others is drawn over what covers it.
 
-## Tacet on this computer (COD-303)
+## Tacet on this computer (COD-303; now the decision model)
+
+**Superseded 2026-10-07 (owner's decision).** The on-device model, its download and its update notices were removed; Tacet now answers through OpenAI's Decisions API or any chat connection ([decisions.md](decisions.md)). Nothing below was re-measured against a hosted model. Checked for the move: unit tests with a fake `fetch` and a fake chat adapter for the mapping both ways, refusals, the 15-second limit and the setting's default; the Settings block in the packaged app (`pnpm test:alignment --only settings-chat,settings-chat-decision-model`). Not checked: a live call to OpenAI's Decisions API or to any other provider (no key was used).
 
 Measured 2026-09-27 on the Windows 11 development machine (Ryzen 5 5600X, 6 cores, shared with other jobs, so p95 figures are noisy), onnxruntime-node 1.30.0, two intra-op threads, CPU provider. How it works: [decisions.md](decisions.md).
 
@@ -388,7 +390,7 @@ Measured 2026-09-27 on the Windows 11 development machine (Ryzen 5 5600X, 6 core
 - Hugging Face: after the upload (commit `bfa4f5df`), the new transport downloaded the tokenizer and the model from the pinned addresses through the CDN redirect; a download stopped at 60 MB resumed with a range request and matched the pinned hash.
 - Not tried: macOS and Linux builds, an ARM64 Windows build, a machine without AVX2.
 
-## Tacet: permission hints and group-chat routing (COD-305)
+## Tacet: permission hints and group-chat routing (COD-305; Tacet is now the decision model)
 
 Measured 2026-09-27 on the same machine with the shipped model file, while other work held the CPU at 100 %, so every latency here is on a loaded machine. How it works: [decisions.md](decisions.md#permission-hints-before-sending).
 
@@ -413,7 +415,7 @@ Measured 2026-09-27 on the Windows 11 development machine (Smart App Control on)
 
 Not proven: an update from a real GitHub Release through update.electronjs.org to a Setup install (the feed was local; the next release is the first chance), a signed build, delta packages (none are made), and the restart question with runs in flight on screen (covered by `tests/integration/update-restart.test.ts`).
 
-## Tacet: notes that fit, and a second opinion on risky steps (COD-306)
+## Tacet: notes that fit, and a second opinion on risky steps (COD-306; Tacet is now the decision model)
 
 Measured 2026-09-27 on the same machine with the shipped ONNX file, while other jobs held the CPU at 85–100 %. Scripts: `scripts/tacet/eval_uses.ts` (every question tried, on `knowledge_cases.json` and `action_cases.json`, each split into a tune half and a held-out half) and `scripts/tacet/bench_uses.ts` (latency through `Decisions` and its worker thread). How it works: [memory.md](memory.md#which-notes-load-and-why), [browser.md](browser.md#a-second-opinion-from-tacet), [desktop.md](desktop.md#when-the-orglet-asks-you).
 

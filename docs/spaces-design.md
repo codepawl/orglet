@@ -47,7 +47,7 @@ Permissions, the working folder and MCP grants stay on the channel's chat. A spa
 
 - **The settings row `spaces`**, beside the one for empty channels. A space holds `id`, `name`, `color`, `orgletIds` and `categories` (`id`, `name`, optional `orgletIds`). A table of its own, with revisions, comes with sync in phase 4.
 - **`Channel` record** ([`shared/channels.ts`](../apps/desktop/src/shared/channels.ts)) gains `spaceId` and `categoryId`, both optional, and `access`: `inherit` or `listed`. With `listed`, `members` is the list, as today. The `category` string stays for channels outside a space.
-- **`assignees` stays the resolved list** on the chat's row. The runner, `@` tags, Tacet's routing, permissions and the Running view read a channel as they do now. Core resolves the list again when a message is sent and when a space, category or channel is edited. An edit is refused while that channel is working, as `updateChannel` is today.
+- **`assignees` stays the resolved list** on the chat's row. The runner, `@` tags, the decision model's routing, permissions and the Running view read a channel as they do now. Core resolves the list again when a message is sent and when a space, category or channel is edited. An edit is refused while that channel is working, as `updateChannel` is today.
 - Every new field is optional JSON on the channel's record. A channel whose space is missing reads as a channel outside every space, with the members it last resolved.
 - Zod contracts at the IPC edge: `createSpace`, `updateSpace`, `deleteSpace` and `spaceFromCategory`. `updateChannel` with a `spaceId` moves a channel in, and `spaceId: null` moves it out.
 

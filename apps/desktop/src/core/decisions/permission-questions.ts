@@ -11,7 +11,7 @@ import type { PermissionNeed } from '../../shared/permission-needs';
  * need" choice, one yes/no per permission, and three-level scores all separated the labelled messages worse.
  */
 
-/** The request is read as a field of a record, the shape Tacet was trained on, rather than as bare text. */
+/** The request is read as a field of a record, the shape the decision model was trained on, rather than as bare text. */
 export function permissionNeedsState(text: string): DecisionState {
   return { request: text };
 }
@@ -53,7 +53,7 @@ export const PERMISSION_NEEDS_MAX_LENGTH = 384;
  * Each need is offered only above its threshold. The web is the average of the tool question's "internet" and the
  * yes/no, which ranked the labelled messages better than either alone. The thresholds sit just above every tuning
  * message that did not need the permission; the web's and the browser's one step higher still, since a held-out
- * message without the need sat within 0.01 of the tuning point. Below them the composer says nothing, as before Tacet.
+ * message without the need sat within 0.01 of the tuning point. Below them the composer says nothing, as before the decision model.
  */
 export const WEB_THRESHOLD = 0.55;
 export const FOLDER_THRESHOLD = 0.2;

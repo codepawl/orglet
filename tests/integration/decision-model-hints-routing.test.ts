@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store, id } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { Decisions, type DecisionRuntime } from '../../apps/desktop/src/core/decisions/service';
-import { TACET_FILES, type DecisionFiles } from '../../apps/desktop/src/core/decisions/manifest';
+import { Decisions } from '../../apps/desktop/src/core/decisions/service';
 import { BROWSER_THRESHOLD, FOLDER_THRESHOLD, needsSecondPass, PERMISSION_NEEDS_MAX_LENGTH, permissionNeedsFrom, TOOL_QUESTION, WEB_AND_FOLDER_QUESTIONS, WEB_THRESHOLD } from '../../apps/desktop/src/core/decisions/permission-questions';
 import { EVERYONE_OPTION, MAX_ROUTED_GROUP, orgletOption, routableGroup, routedOrglet, ROUTING_MAX_LENGTH, ROUTING_THRESHOLD, routingQuestion } from '../../apps/desktop/src/core/decisions/group-routing';
 import { PermissionSuggestions } from '../../apps/desktop/src/core/orchestration/permission-suggestions';
@@ -22,29 +21,35 @@ function choice(probabilities: Record<string, number>): DecisionResponse['answer
   const pick = Object.entries(probabilities).sort((left, right) => right[1] - left[1])[0][0];
   return { type: 'choice', choice: pick, probabilities, confidence: 0.5 };
 }
-const response = (answers: DecisionResponse['answers']): DecisionResponse => ({ model: 'tacet-sonata', answers, usage: { inputTokens: 40 } });
+const response = (answers: DecisionResponse['answers']): DecisionResponse => ({ model: 'decision-sonata', answers, usage: { inputTokens: 40 } });
 
 type Asked = { state: DecisionState; questions: DecisionQuestions; maxLength: number };
 
-/** Stand-in model files of the pinned size, so `isInstalled` is true, and a runtime that answers from `answer`. */
-async function installed(directory: string, answer: (asked: Asked) => Promise<DecisionResponse> | DecisionResponse, asked: Asked[] = []): Promise<Decisions> {
-  const files: DecisionFiles = { model: { ...TACET_FILES.model, bytes: 4 }, tokenizer: { ...TACET_FILES.tokenizer, bytes: 2 } };
-  await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, files.model.name), 'onnx');
-  await writeFile(join(directory, files.tokenizer.name), '{}');
-  const runtime: DecisionRuntime = {
-    decide: async (state, questions, maxLength) => {
-      const request = { state, questions, maxLength };
-      asked.push(request);
-      return answer(request);
-    },
-    close: async () => {},
-  };
-  return new Decisions({ directory, files, runtime: async () => runtime });
+/** Dependencies of a decision model that has a connection; the stubs below answer instead of any provider. */
+const connectedDependencies = {
+  saved: () => ({ connection: 'openai', model: 'gpt-6-luna' }),
+  save: () => {},
+  readKey: async () => 'test-key',
+  adapter: async () => { throw new Error('Not used by these tests.'); },
+};
+
+/** A decision model that records every question and answers from `answer`; a throw is a provider failing. */
+class AnsweringDecisions extends Decisions {
+  constructor(private respond: (asked: Asked) => Promise<DecisionResponse> | DecisionResponse, private log: Asked[]) {
+    super(connectedDependencies);
+  }
+  override async decide(state: DecisionState, questions: DecisionQuestions, maxLength = 1536): Promise<DecisionResponse | undefined> {
+    const request = { state, questions, maxLength };
+    this.log.push(request);
+    return this.respond(request);
+  }
 }
+const answering = (answer: (asked: Asked) => Promise<DecisionResponse> | DecisionResponse, asked: Asked[] = []): Decisions => new AnsweringDecisions(answer, asked);
+/** A decision model the person turned off. */
+const turnedOff = (): Decisions => new Decisions({ ...connectedDependencies, saved: () => 'off' });
 
 let directory: string;
-beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-tacet-305-')); });
+beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-decision-model-305-')); });
 afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
 
 describe('reading the permissions a message needs (COD-305)', () => {
@@ -91,14 +96,14 @@ describe('reading the permissions a message needs (COD-305)', () => {
 });
 
 describe('PermissionSuggestions (COD-305)', () => {
-  it('says nothing, and asks nothing, while Tacet is not on this computer', async () => {
-    const suggestions = new PermissionSuggestions(() => new Decisions({ directory }));
+  it('says nothing, and asks nothing, while the decision model is off', async () => {
+    const suggestions = new PermissionSuggestions(() => turnedOff());
     expect(await suggestions.suggest('What is the weather in Hanoi today?')).toBeNull();
   });
 
   it('reads a message in two passes with the tuned questions and returns what it needs', async () => {
     const asked: Asked[] = [];
-    const decisions = await installed(directory, request => request.questions.tool
+    const decisions = answering(request => request.questions.tool
       ? response({ tool: choice({ none: 0.1, internet: 0.8, computer: 0.05, website: 0.05 }) })
       : response({ web: choice({ yes: 0.9, no: 0.1 }), folder: choice({ read: 0.4, edit: 0.3, run: 0.3 }) }), asked);
     const suggestions = new PermissionSuggestions(() => decisions);
@@ -110,7 +115,7 @@ describe('PermissionSuggestions (COD-305)', () => {
 
   it('does not read a message too short to say anything', async () => {
     const asked: Asked[] = [];
-    const decisions = await installed(directory, () => response({}), asked);
+    const decisions = answering(() => response({}), asked);
     expect(await new PermissionSuggestions(() => decisions).suggest('hi there')).toBeNull();
     expect(asked).toHaveLength(0);
   });
@@ -119,7 +124,7 @@ describe('PermissionSuggestions (COD-305)', () => {
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     const asked: Asked[] = [];
-    const decisions = await installed(directory, async () => {
+    const decisions = answering(async () => {
       await gate;
       return response({ tool: choice({ none: 0.9, internet: 0.05, computer: 0.03, website: 0.02 }) });
     }, asked);
@@ -134,15 +139,14 @@ describe('PermissionSuggestions (COD-305)', () => {
     expect(asked.map(request => (request.state as { request: string }).request)).toEqual(['Find the latest news about the rates', 'Find the latest news about the rate decision today']);
   });
 
-  it('gives up on an answer slower than its limit and lets the model finish loading meanwhile', async () => {
-    const decisions = await installed(directory, () => new Promise(resolve => setTimeout(() => resolve(response({ tool: choice({ none: 0.1, internet: 0.9, computer: 0, website: 0 }) })), 200)));
+  it('gives up on an answer slower than its limit', async () => {
+    const decisions = answering(() => new Promise(resolve => setTimeout(() => resolve(response({ tool: choice({ none: 0.1, internet: 0.9, computer: 0, website: 0 }) })), 200)));
     const suggestions = new PermissionSuggestions(() => decisions, 20);
     expect(await suggestions.suggest('What is the price of gold today?')).toBeNull();
   });
 
-  it('keeps quiet when the model fails', async () => {
-    const decisions = new Decisions({ directory, files: { model: { ...TACET_FILES.model, bytes: 4 }, tokenizer: { ...TACET_FILES.tokenizer, bytes: 2 } }, runtime: async () => { throw new Error('Không mở được Tacet.'); } });
-    await installed(directory, () => response({}));
+  it('keeps quiet when the provider fails', async () => {
+    const decisions = answering(() => { throw new Error('Nhà cung cấp lỗi.'); });
     expect(await new PermissionSuggestions(() => decisions).suggest('What is the price of gold today?')).toBeNull();
   });
 });
@@ -204,7 +208,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
     await core.command('saveWorker', { ...first, provider: 'openai', description: 'Research and web facts' });
     const accountant = await core.command('saveWorker', { name: 'Accountant', description: 'Books, taxes and invoices', instructions: 'Help with accounting.', provider: 'openai', skillId: first.skillId, taskBudgetMicros: 100_000 }) as Worker;
     workers = [store.get<Worker>('workers', first.id), accountant];
-    core.decisions = await installed(join(directory, 'models'), () => response({ route: choice(routeAnswer) }), asked);
+    core.decisions = answering(() => response({ route: choice(routeAnswer) }), asked);
   });
   afterEach(async () => { await core.runner.shutdown(); store.close(); });
 
@@ -214,7 +218,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
     return taskId;
   }
 
-  it('lets the orglet Tacet picks answer alone, and keeps the pick on the chat', async () => {
+  it('lets the orglet the decision model picks answer alone, and keeps the pick on the chat', async () => {
     replies.push(answer('VAT is 10%.'));
     const taskId = await groupChat('How much VAT do we owe this month?');
     expect(answeredBy(taskId, 0)).toEqual(['Accountant']);
@@ -227,7 +231,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
     expect(() => core.backups.preview(core.backups.export())).not.toThrow();
   });
 
-  it('keeps everyone when Tacet is unsure', async () => {
+  it('keeps everyone when the decision model is unsure', async () => {
     routeAnswer = { Researcher: 0.45, Accountant: 0.35, everyone: 0.2 };
     replies.push(answer('Researcher here.'), answer('Accountant here.'));
     const taskId = await groupChat('What do you both think of the plan?');
@@ -250,12 +254,12 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
     expect(asked).toHaveLength(0);
   });
 
-  it('keeps today\'s behaviour when Tacet is not on this computer or fails', async () => {
-    core.decisions = new Decisions({ directory: join(directory, 'absent') });
+  it('keeps today\'s behaviour when the decision model is off or fails', async () => {
+    core.decisions = turnedOff();
     replies.push(answer('1'), answer('2'));
     const absent = await groupChat('How much VAT do we owe?');
     expect(answeredBy(absent, 0)).toEqual(['Researcher', 'Accountant']);
-    core.decisions = new Decisions({ directory: join(directory, 'models'), files: { model: { ...TACET_FILES.model, bytes: 4 }, tokenizer: { ...TACET_FILES.tokenizer, bytes: 2 } }, runtime: async () => { throw new Error('Không mở được Tacet.'); } });
+    core.decisions = answering(() => { throw new Error('Nhà cung cấp lỗi.'); });
     replies.push(answer('3'), answer('4'));
     const failing = await groupChat('How much VAT do we owe now?');
     expect(answeredBy(failing, 0)).toEqual(['Researcher', 'Accountant']);
@@ -274,7 +278,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
   });
 
   it('answers the composer through the core command', async () => {
-    core.decisions = await installed(join(directory, 'hint-models'), request => request.questions.tool
+    core.decisions = answering(request => request.questions.tool
       ? response({ tool: choice({ none: 0.1, internet: 0.05, computer: 0.05, website: 0.8 }) })
       : response({ web: choice({ yes: 0.1, no: 0.9 }), folder: choice({ read: 0.4, edit: 0.3, run: 0.3 }) }));
     expect(await core.command('suggestPermissions', { text: 'Log in to my store and check the new orders' })).toEqual({ needs: ['browser'] });
@@ -282,7 +286,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
   });
 
   it('gives up on a slow answer and starts the turn with everyone', async () => {
-    const slow = await installed(join(directory, 'slow'), () => new Promise(resolve => setTimeout(() => resolve(response({ route: choice(routeAnswer) })), 200)));
+    const slow = answering(() => new Promise(resolve => setTimeout(() => resolve(response({ route: choice(routeAnswer) })), 200)));
     const routing = new TurnRouting(store, () => slow, () => new Date(), 20);
     const task = { id: id(), brief: 'How much VAT?', currentInput: { brief: 'How much VAT?', sourceIds: [] } } as unknown as Task;
     const router = routing.router(task, workers);
@@ -292,14 +296,14 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
 });
 
 describe('a crew message that tags nobody (COD-305)', () => {
-  it('is planned by the crew\'s lead, never routed by Tacet', async () => {
+  it('is planned by the crew\'s lead, never routed by the decision model', async () => {
     const store = new Store(join(directory, 'crew.sqlite'));
     const core = new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
       if (isPlanRequest(tools)) return planReply(messages);
       return { calls: [{ id: id(), name: 'submit_report', arguments: JSON.stringify({ title: 'Fixture report', summary: 'No source evidence provided.', findings: [], limitations: ['No files were supplied.'] }) }], usage: { input: 500, output: 100 } };
     } }));
     const asked: Asked[] = [];
-    core.decisions = await installed(join(directory, 'crew-models'), () => response({ route: choice({ everyone: 1 }) }), asked);
+    core.decisions = answering(() => response({ route: choice({ everyone: 1 }) }), asked);
     try {
       const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
       const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Review only supplied evidence', sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;

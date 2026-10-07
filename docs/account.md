@@ -15,8 +15,10 @@ Part of the [user guide](user-guide.md). The design behind it is [account-sync-d
 
 A new install asks once, before the app opens:
 
-- **Sign in** opens your browser at `accounts.codepawl.com`. The line under it says that signing in sends usage statistics and error reports, which you can turn off, and links to the [privacy policy](https://codepawl.com/privacy) and [terms](https://codepawl.com/terms).
-- **Use without an account** opens Orglet the way it has always worked. You can sign in later from Settings.
+Two cards, each with an icon, a label and one short line. A single line under them says that signing in sends usage statistics and error reports, which you can turn off, with links to the [privacy policy](https://codepawl.com/privacy) and [terms](https://codepawl.com/terms).
+
+- **Sign in** (the filled card) opens your browser at `accounts.codepawl.com`.
+- **No account needed** opens Orglet the way it has always worked. You can sign in later from Settings.
 
 If you already used Orglet before this version, you are not asked. The app opens as it did.
 
@@ -28,11 +30,13 @@ The orglet on the screen reacts as you go. It looks aside while your browser is 
 2. Your browser opens the CodePawl sign-in page. Sign in there, or create an account.
 3. The browser asks to open Orglet. Allow it. Orglet comes forward, signed in.
 
-While the browser is open, Orglet shows **Continue in your browser** with **Cancel**. After 10 minutes without an answer the sign-in stops and you can try again. If the sign-in fails, the reason is shown with **Try again**.
+While the browser is open, Orglet shows **Continue in your browser** with a busy mark and **Cancel**. After 10 minutes without an answer the sign-in stops and you can try again. If the sign-in fails, the reason leads with an error mark and the card turns into **Try again**.
 
 The link back to the app uses the `com.codepawl.orglet:` scheme. Setup registers it for your user, next to [`orglet://` links](integrations.md). A ZIP copy and a development run do not register it, so signing in there cannot finish.
 
 ## Settings → Account
+
+Every row starts with an icon. **Sync** leads with its state: a tick when synced, a turning ring while it works, a dashed or filled mark when it cannot go on.
 
 - **Not signed in**: **Sign in**, what an account gives you (above), and one sentence on what signing in sends, with the privacy and terms links and an **i** that lists what is sent.
 - **Signing in**: while your browser is open, the orglet beside **Signing in** thinks, and **Cancel** stops the sign-in.
@@ -113,7 +117,7 @@ What is sent:
 - **When Orglet starts**: the version, the operating system and processor type, the app language and how Orglet was installed, and the old and new version after an update.
 - **When you send a message**: the kind of chat (one orglet, a channel, a side thread or a schedule), the kind of connection (Demo, API, local harness or a custom connection) and, except for a custom connection, the provider and model id.
 - **When a run ends**: how it ended (done, partly done, failed, stopped, interrupted), roughly how long it took and roughly how many steps it made.
-- **Features you use**, counted once per session: tabs, the rail, side threads, schedules, the browser, desktop apps, MCP, the file viewer, editing a file, forwarding, the `orglet` command, Send to and Tacet.
+- **Features you use**, counted once per session: tabs, the rail, side threads, schedules, the browser, desktop apps, MCP, the file viewer, editing a file, forwarding, the `orglet` command, Send to and the decision model.
 - **Settings you change**: which setting, and its new value only when it is a fixed choice such as the theme or an on/off switch.
 - **Errors**: the kind of error, its message and where in Orglet's code it happened. Before anything is kept, your home folder and user name become `~`, emails and the part of a web address after `?` are removed, and anything that looks like a key or token is masked. A failed run is sent as its error code only.
 - A random install id, so reports from one computer can be told apart.

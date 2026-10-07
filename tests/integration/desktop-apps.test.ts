@@ -654,8 +654,8 @@ describe('borrowing through the core', () => {
   });
 });
 
-describe('Tacet\'s second opinion on desktop steps (COD-306)', () => {
-  it('adds a card for a toggle Tacet reads as risky, never replaces the rules\' ask, and lets a step go when Tacet has no answer', async () => {
+describe('The decision model\'s second opinion on desktop steps (COD-306)', () => {
+  it('adds a card for a toggle the decision model reads as risky, never replaces the rules\' ask, and lets a step go when the decision model has no answer', async () => {
     const seen = { messages: [] as RunMessage[] };
     const judged: ActionToJudge[] = [];
     const script: Script = [
@@ -672,7 +672,6 @@ describe('Tacet\'s second opinion on desktop steps (COD-306)', () => {
         judged.push(action);
         return judged.length === 1 ? { risky: true, score: 0.6 } : undefined;
       },
-      warm: () => {},
     };
     const worker = await core!.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'openai' }) as Worker;
     const taskId = await core!.command('createTask', {
@@ -681,23 +680,23 @@ describe('Tacet\'s second opinion on desktop steps (COD-306)', () => {
     }) as string;
 
     await until(() => core!.desktop.live(taskId).approval !== undefined);
-    const tacetCard = core!.desktop.live(taskId).approval!;
-    expect(tacetCard).toMatchObject({ kind: 'toggle', element: 'Wrap lines', reasons: [desktopRiskReasons.secondOpinion] });
+    const secondOpinionCard = core!.desktop.live(taskId).approval!;
+    expect(secondOpinionCard).toMatchObject({ kind: 'toggle', element: 'Wrap lines', reasons: [desktopRiskReasons.secondOpinion] });
     expect(notes.wrap).toBe(false);
-    await core!.command('answerDesktopApproval', { taskId, requestId: tacetCard.id, answer: 'allow' });
+    await core!.command('answerDesktopApproval', { taskId, requestId: secondOpinionCard.id, answer: 'allow' });
 
-    // Save is the rules' own ask; its card carries their reason and Tacet is not consulted.
-    await until(() => core!.desktop.live(taskId).approval !== undefined && core!.desktop.live(taskId).approval!.id !== tacetCard.id);
+    // Save is the rules' own ask; its card carries their reason and the decision model is not consulted.
+    await until(() => core!.desktop.live(taskId).approval !== undefined && core!.desktop.live(taskId).approval!.id !== secondOpinionCard.id);
     const rulesCard = core!.desktop.live(taskId).approval!;
     expect(rulesCard).toMatchObject({ element: 'Save', reasons: [desktopRiskReasons.wording] });
     await core!.command('answerDesktopApproval', { taskId, requestId: rulesCard.id, answer: 'allow' });
     await until(() => finished(taskId));
 
     expect(notes.saves).toBe(1);
-    // The second toggle ran without a card: Tacet gave no answer, so the rules' "input" stood.
+    // The second toggle ran without a card: the decision model gave no answer, so the rules' "input" stood.
     expect(notes.wrap).toBe(false);
     expect(steps(taskId)).toEqual(['toggle:consequential:done', 'set_value:input:done', 'invoke:consequential:done', 'toggle:input:done']);
-    // Entering text and the rules' own ask are never sent to Tacet.
+    // Entering text and the rules' own ask are never sent to the decision model.
     const wrapToggle: ActionToJudge = { surface: 'desktop', kind: 'toggle', element: 'Wrap lines', controlType: 'check box', program: 'notes.exe', window: 'Notes', inDialog: false };
     expect(judged).toEqual([wrapToggle, wrapToggle]);
   });

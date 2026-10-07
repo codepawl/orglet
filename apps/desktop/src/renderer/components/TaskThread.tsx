@@ -27,7 +27,8 @@ import { orglet } from '../api';
 import { isHarness, type HarnessInfo } from '../../shared/harness';
 import { harnessAccountLabel } from './PlanUsage';
 import { accountSwitchFor, outOfPlanRun, type AccountSwitch } from '../../shared/account-switch';
-import { Markdown } from './Markdown';
+import { ChartAskContext, Markdown } from './Markdown';
+import { replyToChartPoint } from './messageMarks';
 import { Attachment } from './Attachment';
 import { clockLabel, needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges, hasReactions } from './MessageActions';
@@ -42,7 +43,7 @@ import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
 import { knowledgeSuggestionKey, showsKnowledgeIsland } from '../../shared/knowledge-island';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
-import { MentionText } from './mentions';
+import { MentionMarkdown } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
 import { crewPlanDiagram } from '../../shared/crew-plan';
@@ -404,7 +405,8 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     // The reactions sit under the answer, whichever shape it takes (COD-219, COD-365).
     const badges = badgesFor(artifact.id);
     return chat
-      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} receipts={receipts} toolbar={toolbar} limitationsOnBar={limitationsOnBar} />
+      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} receipts={receipts} toolbar={toolbar} limitationsOnBar={limitationsOnBar}
+          onAskChartPoint={quote => replyToChartPoint(detail.task.id, artifact.id, authorName, quote)} />
       : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} toolbar={toolbar} />;
   };
   /**
@@ -583,7 +585,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
                 <RoutedLine route={routeOfTurn(detail.task.routedTurns, turn.revision)} nameOf={workerId => workspace.workers.find(worker => worker.id === workerId)?.name
                   ?? detail.runs.find(run => run.snapshot.worker.id === workerId)?.snapshot.worker.name} />
                 <div className="user-message" id={`message-${personMessageId}`} tabIndex={-1}>
-                  {turn.missingInput ? <p className="muted">{t('Nội dung tin nhắn gốc không còn được lưu.')}</p> : <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>}
+                  {turn.missingInput ? <p className="muted">{t('Nội dung tin nhắn gốc không còn được lưu.')}</p> : <MentionMarkdown text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} />}
                 </div>
               </>}
             {/* The files follow the text in their own sideways row, the way Slack lists a message's attachments. */}
@@ -812,10 +814,12 @@ function MessageFoot({ badges, receipts }: { badges?: ReactNode; receipts?: Reac
  * While the chat still waits on the unfinished parts they end the thread as a card of their own with Retry
  * (`unfinishedWork`), not here: that is the chat's state, and inside the thread it read as part of what the orglet said.
  */
-function ChatReply({ artifact, text, notices, badges, receipts, toolbar, limitationsOnBar }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; limitationsOnBar: boolean }) {
+function ChatReply({ artifact, text, notices, badges, receipts, toolbar, limitationsOnBar, onAskChartPoint }: { onAskChartPoint?: (quote: string) => void; artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; limitationsOnBar: boolean }) {
   return <div className="chat-reply">
     {notices.before}
-    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} /></div>
+    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}>
+      <ChartAskContext.Provider value={onAskChartPoint}><Markdown className="prose" text={text} /></ChartAskContext.Provider>
+    </div>
     {notices.after}
     {artifact.report.limitations.length > 0 && !limitationsOnBar && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
@@ -886,16 +890,16 @@ function forwardedAuthor(forwarded: ForwardedMessage): string {
  * were are this turn's files and follow the message like any attachment.
  */
 /**
- * Who answers a group-chat message that tagged nobody, when Tacet picked one orglet for it (COD-305). It sits where a
+ * Who answers a group-chat message that tagged nobody, when the decision model picked one orglet for it (COD-305). It sits where a
  * reply names the message it answers, so a narrower turn is never silent; the tooltip says why and how to ask everyone.
  */
 export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (workerId: string) => string | undefined }) {
   if (!route) return null;
   const names = route.workerIds.map(workerId => nameOf(workerId)).filter((name): name is string => Boolean(name));
   if (!names.length) return null;
-  const why = t('Tin nhắn không gắn thẻ ai, nên Tacet chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)]);
+  const why = t('Tin nhắn không gắn thẻ ai, nên model quyết định chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)]);
   return <p className="message-reply-context message-routed" title={why}>
-    <Route size={13} aria-hidden="true" />{t('Tacet chọn {0} trả lời', [names.join(', ')])}
+    <Route size={13} aria-hidden="true" />{t('Model quyết định chọn {0} trả lời', [names.join(', ')])}
   </p>;
 }
 
@@ -915,7 +919,7 @@ function ForwardedTurn({ forwarded, elementId, openOrigin, mentionPeople, mentio
       {forwarded.authorKind === 'orglet' ? <Markdown className="prose" text={forwarded.text} /> : <p>{forwarded.text}</p>}
       {unshared.length > 0 && <p className="forwarded-files"><FileX size={13} aria-hidden="true" />{t('Không gửi kèm: {0}', [unshared.join(', ')])}</p>}
     </div>
-    {forwarded.note && <div className="user-message forward-note"><p><MentionText text={forwarded.note} people={mentionPeople ?? []} allNames={mentionAllNames} /></p></div>}
+    {forwarded.note && <div className="user-message forward-note"><MentionMarkdown text={forwarded.note} people={mentionPeople ?? []} allNames={mentionAllNames} /></div>}
   </>;
 }
 

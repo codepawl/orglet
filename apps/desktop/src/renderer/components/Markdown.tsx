@@ -1,7 +1,18 @@
-import { Fragment, type ReactNode } from 'react';
+import { createContext, Fragment, lazy, Suspense, useContext, type ReactNode } from 'react';
 import { Tooltip } from '@codepawlhq/orglet-ui';
 import { linkHost, openableUrl } from '../../shared/links';
 import { orglet } from '../api';
+import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
+import { t } from '../i18n';
+
+// The chart library is large, so it loads the first time a reply has a chart, not with the app.
+const ChartBlock = lazy(() => import('./ChartBlock'));
+
+/**
+ * What a click on a chart point does in the Markdown below it: the answer that holds the chart provides it, and it
+ * quotes the point in the composer. Without a provider (a viewer, a release note) a chart can be read but not asked about.
+ */
+export const ChartAskContext = createContext<((quote: string) => void) | undefined>(undefined);
 
 /**
  * Renders the Markdown that workers write in chat replies: paragraphs, headings, lists, tables, quotes, code and inline
@@ -10,12 +21,21 @@ import { orglet } from '../api';
  * and only web and mail addresses do. The full address shows on hover, and a link whose text says something else names
  * its site beside it, so a link dressed as another cannot pass unnoticed.
  * A thematic break (---) becomes extra space, not a drawn line.
+ * `plainText` draws the text between Markdown marks, so a person's message keeps its @tags inside bold or a list.
  */
-export function Markdown({ text, className }: { text: string; className?: string }) {
+export function Markdown({ text, className, plainText }: { text: string; className?: string; plainText?: (text: string) => ReactNode }) {
   const blocks = parseBlocks(text);
-  return <div className={className ? `markdown ${className}` : 'markdown'}>
+  const body = <div className={className ? `markdown ${className}` : 'markdown'}>
     {blocks.map((block, index) => <BlockView key={index} block={block} />)}
   </div>;
+  return plainText ? <PlainTextContext.Provider value={plainText}>{body}</PlainTextContext.Provider> : body;
+}
+
+const PlainTextContext = createContext<((text: string) => ReactNode) | null>(null);
+
+function PlainText({ text }: { text: string }) {
+  const draw = useContext(PlainTextContext);
+  return <>{draw ? draw(text) : text}</>;
 }
 
 type Block =
@@ -24,7 +44,7 @@ type Block =
   | { kind: 'list'; ordered: boolean; start: number; items: string[][] }
   | { kind: 'table'; headers: string[]; alignments: Array<'left' | 'center' | 'right'>; rows: string[][] }
   | { kind: 'quote'; lines: string[] }
-  | { kind: 'code'; code: string }
+  | { kind: 'code'; code: string; language?: string }
   | { kind: 'break' };
 
 const fencePattern = /^\s*```/;
@@ -85,6 +105,7 @@ function parseBlocks(text: string): Block[] {
     }
 
     if (fencePattern.test(line)) {
+      const language = /^\s*```\s*([\w-]+)/.exec(line)?.[1]?.toLowerCase();
       const codeLines: string[] = [];
       index += 1;
       while (index < lines.length && !fencePattern.test(lines[index])) {
@@ -92,7 +113,7 @@ function parseBlocks(text: string): Block[] {
         index += 1;
       }
       index += 1;
-      blocks.push({ kind: 'code', code: codeLines.join('\n') });
+      blocks.push({ kind: 'code', code: codeLines.join('\n'), ...(language ? { language } : {}) });
       continue;
     }
 
@@ -182,6 +203,7 @@ function startsNewBlock(line: string) {
 }
 
 function BlockView({ block }: { block: Block }) {
+  const askAboutChartPoint = useContext(ChartAskContext);
   switch (block.kind) {
     case 'paragraph':
       return <p><Lines lines={block.lines} /></p>;
@@ -199,6 +221,8 @@ function BlockView({ block }: { block: Block }) {
     case 'quote':
       return <blockquote><Lines lines={block.lines} /></blockquote>;
     case 'code':
+      // A chart fence holds a chart spec (shared/charts.ts): drawn by the app, never run as code.
+      if (block.language === 'chart') return <Suspense fallback={<SkeletonGroup label={t('Đang vẽ biểu đồ…')} className='chart-shape'><Skeleton shape='block' className='chart-shape-plot' /></SkeletonGroup>}><ChartBlock source={block.code} onAskPoint={askAboutChartPoint} /></Suspense>;
       return <pre><code>{block.code}</code></pre>;
     case 'break':
       return <div className="markdown-break" aria-hidden="true" />;
@@ -223,12 +247,12 @@ function renderInline(text: string): ReactNode[] {
 
   for (const match of text.matchAll(inlinePattern)) {
     const matchStart = match.index ?? 0;
-    if (matchStart > position) nodes.push(text.slice(position, matchStart));
+    if (matchStart > position) nodes.push(<PlainText key={nodes.length} text={text.slice(position, matchStart)} />);
     nodes.push(renderToken(match, nodes.length));
     position = matchStart + match[0].length;
   }
 
-  if (position < text.length) nodes.push(text.slice(position));
+  if (position < text.length) nodes.push(<PlainText key={nodes.length} text={text.slice(position)} />);
   return nodes;
 }
 

@@ -37,7 +37,7 @@ Checked by reading `apps/desktop/src`:
 | Gate | Status |
 |---|---|
 | Installer on a clean Windows machine, startup, uninstall | Not run in this review. The optional human checklist is in [windows-release-gates.md](windows-release-gates.md). CI packaged smokes do not run Setup.exe. Installing from a development session on an MSIX-packaged host would also be virtualized |
-| Code signing | Locked for public 0.2.x: unsigned. SmartScreen is expected. Signed builds wait for a certificate; do not add a signing pipeline. See [windows-release-gates.md](windows-release-gates.md) |
+| Code signing | Windows releases are signed with a Certum certificate in CI since 0.7.1; a new certificate may still meet SmartScreen until it has reputation. See [windows-release-gates.md](windows-release-gates.md) |
 | Live OpenAI acceptance ($0.05 cap) | Script ready: set `ORGLET_LIVE_KEY_FILE` (+ optional `ORGLET_LIVE_PROVIDER=openai`) and run `pnpm test:live`. Waiting for the user's key file path |
 | Live xAI (Grok) acceptance ($0.05 cap) | Same script with `ORGLET_LIVE_PROVIDER=xai`. Waiting for the user's key file path |
 | Live Anthropic acceptance | Not authorized |

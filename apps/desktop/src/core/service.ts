@@ -11,7 +11,7 @@ import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDir
 import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView, type WorkspacePermission } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { z } from 'zod';
-import { commands, Id, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
+import { commands, CredentialProvider, Id, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { BudgetLedger } from './budgets/ledger';
 import { Checkpoints } from './storage/checkpoints';
@@ -89,7 +89,8 @@ import { neverDesktopProgram } from '../shared/desktop';
 import type { BrowserHost } from '../shared/browser-host';
 import { runBy } from '../shared/schedule-runs';
 import { Decisions } from './decisions/service';
-import { decisionsDirectory } from './decisions/manifest';
+import { DecisionUsageLedger } from './budgets/decision-usage';
+import { readDecisionModelSetting, saveDecisionModelSetting } from './decisions/stored-setting';
 import { QuietRunReview } from './orchestration/quiet-runs';
 import { ScheduleDelivery } from './orchestration/schedule-delivery';
 import { askKnowledgeFit } from './decisions/knowledge-fit';
@@ -189,17 +190,14 @@ export class CoreService {
   readonly browser: BrowserTools;
   /** The core side of desktop apps: granted programs, the journal and window pictures (COD-261, phase 2a). */
   readonly desktop: DesktopTools;
-  /**
-   * Tacet on this computer (COD-303). The core builds one that can only report and delete what is on disk; the
-   * process entry swaps in one that can download and run the model in its worker thread.
-   */
+  /** The decision model (COD-303): small typed questions answered through the connection chosen in Settings. Tests may replace it. */
   decisions: Decisions;
-  /** Asks Tacet whether a quiet schedule run's answer is news worth announcing (COD-303). */
+  /** Asks the decision model whether a quiet schedule run's answer is news worth announcing (COD-303). */
   readonly quietRuns: QuietRunReview;
   private readonly scheduleDelivery: ScheduleDelivery;
-  /** Asks Tacet which permissions a message being typed needs (COD-305). */
+  /** Asks the decision model which permissions a message being typed needs (COD-305). */
   readonly permissionSuggestions: PermissionSuggestions;
-  /** Asks Tacet who in a group chat answers a message that tags nobody (COD-305). */
+  /** Asks the decision model who in a group chat answers a message that tags nobody (COD-305). */
   readonly turnRouting: TurnRouting;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
@@ -257,12 +255,23 @@ export class CoreService {
     const dataDirectory = store.databasePath && store.databasePath !== ':memory:' ? dirname(resolve(store.databasePath)) : undefined;
     // New items from an app are kept as files next to the database, since a source points at the file it was read from.
     this.appTriggers = new AppTriggers(store, this.mcp, this.routines, this.sources, join(dataDirectory ?? join(tmpdir(), 'orglet'), 'app-items'), clock);
-    this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
+    // The decision model answers through the connection the person chose in Settings, reached the way a chat reaches it (COD-303).
+    const decisionUsage = new DecisionUsageLedger(store);
+    this.decisions = new Decisions({
+      saved: () => readDecisionModelSetting(store),
+      save: setting => saveDecisionModelSetting(store, setting),
+      recordUsage: entry => decisionUsage.record(entry),
+      readKey: async provider => {
+        const credential = CredentialProvider.safeParse(provider);
+        return credential.success ? (await this.modelListRuntime.readKey?.(credential.data)) ?? null : null;
+      },
+      adapter: (provider, model) => adapter(provider, model),
+    });
     this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
     this.scheduleDelivery = new ScheduleDelivery(store, this.notify);
-    // COD-306: Tacet adds notes the keywords missed and asks about browser and desktop steps the rules let through.
-    // Both read the service afresh on every call, since the core replaces it with one that can load the model.
-    this.runner.knowledgeFit = (message, notes) => askKnowledgeFit(this.decisions, message, notes);
+    // COD-306: the decision model adds notes the keywords missed and asks about browser and desktop steps the rules let through.
+    // Both read the service afresh on every call, so a replaced service is used at once.
+    this.runner.knowledgeFit = (message, notes, taskId) => askKnowledgeFit(this.decisions, message, notes, undefined, { taskId });
     const secondOpinion = actionRiskOpinion(() => this.decisions);
     this.browser.secondOpinion = secondOpinion;
     this.desktop.secondOpinion = secondOpinion;
@@ -632,11 +641,13 @@ export class CoreService {
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
       case 'runRoutineNow': return this.routines.runCalled((args as { id: string }).id, []);
       case 'deleteRoutine': return this.deleteRoutine(commands.deleteRoutine.parse(args).id);
-      case 'decisionModel': return this.decisions.state();
-      case 'installDecisionModel': return this.decisions.install();
-      case 'cancelDecisionModel': return this.decisions.cancel();
-      case 'removeDecisionModel': return this.decisions.remove();
-      case 'suggestPermissions': return this.permissionSuggestions.suggest(commands.suggestPermissions.parse(args).text);
+      case 'decisionModelSetting': return this.decisions.view();
+      case 'saveDecisionModelSetting': return this.decisions.save(commands.saveDecisionModelSetting.parse(args));
+      case 'testDecisionModel': return this.decisions.test();
+      case 'suggestPermissions': {
+        const { text, taskId } = commands.suggestPermissions.parse(args);
+        return this.permissionSuggestions.suggest(text, taskId);
+      }
       case 'cancel': {
         const taskId = (args as { id: string }).id;
         this.teams.cancel(taskId); this.runner.cancel(taskId);
@@ -790,6 +801,12 @@ export class CoreService {
         const input = commands.sourceBytes.parse(args);
         const task = this.store.get<Task>('tasks', input.taskId);
         return this.sources.readPreview(input.id, task.sourceIds);
+      }
+      // A Parquet file's first rows for the viewer, read by the checker; the chat's own files only.
+      case 'tablePreview': {
+        const input = commands.tablePreview.parse(args);
+        const task = this.store.get<Task>('tasks', input.taskId);
+        return this.sources.sampleTable(input.id, task.sourceIds);
       }
       case 'saveSourceVersion': {
         const input = commands.saveSourceVersion.parse(args);
@@ -1260,7 +1277,7 @@ export class CoreService {
    */
   /**
    * Account sync's Replace (GH-484): this computer's workspace makes way for the account's. A copy of the database
-   * is saved first and nothing is erased without it. Connections, MCP servers, keys and Tacet's files stay, and
+   * is saved first and nothing is erased without it. Connections, MCP servers, keys and the decision model's files stay, and
    * nothing is deleted from the account. Only main calls this, after the person confirmed.
    */
   replaceWithAccount(): { checkpoint: string } {
@@ -1296,8 +1313,6 @@ export class CoreService {
       // Settings went with the tables, so the model lists cached in memory no longer have a row behind them.
       this.modelListMemory = emptyModelListCache();
       this.modelListLoaded = false;
-      // Tacet's files are Orglet's own download, so a full erase deletes them too (COD-303).
-      await this.decisions.remove();
     }
     this.notify();
     return summary;
@@ -2073,7 +2088,7 @@ export class CoreService {
       const repliedTo = this.repliedOrglet(task, group);
       if (repliedTo) return [repliedTo];
     }
-    // Tacet's pick for this turn (COD-305), so a resumed or retried turn keeps the orglet it picked.
+    // The decision model's pick for this turn (COD-305), so a resumed or retried turn keeps the orglet it picked.
     return this.turnRouting.recorded(task, group) ?? group;
   }
   /**

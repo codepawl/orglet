@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChartNoAxesColumn, ExternalLink, LogIn, LogOut, RefreshCw, Smartphone, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ChartNoAxesColumn, ExternalLink, Gem, Gift, LogIn, LogOut, RefreshCw, Smartphone, UserRound, UserRoundCheck, UserRoundX } from 'lucide-react';
 import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import type { AccountState } from '../../shared/account';
 import type { SyncPauseReason, SyncStatus } from '../../shared/sync-status';
@@ -26,8 +26,9 @@ import { maskEmail } from '../../shared/pii';
 
 type Act = (action: () => Promise<string | void>, about?: string) => Promise<void>;
 
-function Row({ title, description, children, id }: { title: ReactNode; description?: ReactNode; children?: ReactNode; id?: string }) {
+function Row({ title, description, children, id, icon }: { title: ReactNode; description?: ReactNode; children?: ReactNode; id?: string; icon?: ReactNode }) {
   return <div className="setting-row">
+    {icon && <span className="account-row-icon" aria-hidden="true">{icon}</span>}
     <div className="setting-text"><span id={id} className="setting-title">{title}</span>{description && <span className="setting-description">{description}</span>}</div>
     {children && <div className="setting-control">{children}</div>}
   </div>;
@@ -56,8 +57,8 @@ function WhatIsSent() {
 /** The sentence and links shown wherever the person signs in or sees the switch. */
 export function AnalyticsDisclosure({ signedIn }: { signedIn: boolean }) {
   const sentence = signedIn
-    ? t('Gửi thống kê sử dụng và báo lỗi, không kèm nội dung chat hay tệp. Tắt được bất cứ lúc nào.')
-    : t('Khi đăng nhập, Orglet gửi thống kê sử dụng và báo lỗi, không kèm nội dung chat hay tệp. Tắt được bất cứ lúc nào.');
+    ? t('Gửi thống kê và báo lỗi, không kèm chat hay tệp. Tắt được.')
+    : t('Đăng nhập gửi thống kê và báo lỗi, không kèm chat hay tệp. Tắt được.');
   return <>
     {sentence}{' '}
     <span className="account-policy-links"><PolicyLink link="privacy" label={t('Quyền riêng tư')} /> · <PolicyLink link="terms" label={t('Điều khoản')} /></span>
@@ -67,10 +68,9 @@ export function AnalyticsDisclosure({ signedIn }: { signedIn: boolean }) {
 /** What an account gives: free and shared today, sync and a phone later, each said as it stands. */
 function Benefits() {
   const items: { icon: ReactNode; text: string }[] = [
-    { icon: <UserRound size={16} />, text: t('Miễn phí, một tài khoản CodePawl cho mọi sản phẩm CodePawl.') },
-    { icon: <RefreshCw size={16} />, text: t('Sắp có: đồng bộ Tí, kênh, cuộc trò chuyện và cài đặt giữa các máy.') },
-    { icon: <Smartphone size={16} />, text: t('Sau này: dùng Orglet trên điện thoại.') },
-    { icon: <ChartNoAxesColumn size={16} />, text: t('Thống kê sử dụng giúp Orglet tốt hơn cho cách bạn dùng.') },
+    { icon: <Gift size={16} />, text: t('Miễn phí, một tài khoản cho mọi sản phẩm CodePawl') },
+    { icon: <RefreshCw size={16} />, text: t('Sắp có: đồng bộ giữa các máy') },
+    { icon: <Smartphone size={16} />, text: t('Sau này: Orglet trên điện thoại') },
   ];
   return <ul className="account-benefits" aria-label={t('Tài khoản mang lại gì')}>
     {items.map(item => <li key={item.text}><span className="account-benefit-icon" aria-hidden="true">{item.icon}</span><span>{item.text}</span></li>)}
@@ -96,7 +96,7 @@ function AnalyticsRow({ busy }: { busy: boolean }) {
   };
   // The switch is named by the words alone, not by the "i" beside them.
   const title = <span className="account-title-info"><span id="account-analytics-label">{t('Thống kê sử dụng và báo lỗi')}</span><WhatIsSent /></span>;
-  return <Row title={title} description={<AnalyticsDisclosure signedIn />}>
+  return <Row icon={<ChartNoAxesColumn size={16} />} title={title} description={<AnalyticsDisclosure signedIn />}>
     {state ? <Switch checked={state.enabled} disabled={busy} labelledBy="account-analytics-label" onChange={value => void change(value)} />
       : <Skeleton width="36px" height="22px" />}
   </Row>;
@@ -128,12 +128,12 @@ function pauseText(reason: SyncPauseReason | undefined): string {
 }
 
 function syncText(status: SyncStatus): string {
-  if (status.state === 'link_required') return t('Dữ liệu trên máy này đã được xóa, nên đồng bộ đang chờ. Bấm Đồng bộ ngay để lấy lại dữ liệu trong tài khoản.');
+  if (status.state === 'link_required') return t('Dữ liệu trên máy này đã xóa. Bấm Đồng bộ ngay để lấy lại từ tài khoản.');
   if (status.state === 'syncing') return t('Đang đồng bộ…');
-  if (status.state === 'synced') return t('Đã đồng bộ. Mục đặt "Chỉ trên máy này" không rời khỏi máy.');
-  if (status.state === 'offline') return t('Không kết nối được máy chủ đồng bộ. Orglet sẽ tự thử lại.');
+  if (status.state === 'synced') return t('Đã đồng bộ. Mục "Chỉ trên máy này" ở lại máy.');
+  if (status.state === 'offline') return t('Không kết nối được. Orglet sẽ tự thử lại.');
   if (status.state === 'paused') return pauseText(status.reason);
-  return t('Sắp có. Hiện chưa có chat hay tệp nào rời khỏi máy này.');
+  return t('Sắp có. Chưa có gì rời khỏi máy này.');
 }
 
 const conflictKind = (conflict: SyncConflict) => conflict.entity === 'worker' ? t('Tí') : conflict.entity === 'skill' ? t('Kỹ năng') : conflict.entity === 'team' ? t('Kênh') : t('Ghi chú');
@@ -214,7 +214,7 @@ function SyncRow({ busy }: { busy: boolean }) {
     {status.skipped ? <>{' '}{t('{0} thay đổi quá lớn nên chỉ ở trên máy này.', [status.skipped])}</> : null}
   </span>;
   return <>
-    <Row title={<span className="sync-title"><StatusMark {...syncMark(status)} decorative />{t('Đồng bộ')}</span>} description={description}>
+    <Row icon={<StatusMark {...syncMark(status)} decorative />} title={t('Đồng bộ')} description={description}>
       {canSync ? <Button variant="outline" disabled={busy || resting || status.state === 'syncing'} onClick={syncNow}><RefreshCw size={14} />{t('Đồng bộ ngay')}</Button> : null}
     </Row>
     <ConflictsRow busy={busy} />
@@ -248,28 +248,28 @@ export function AccountSettings({ account, busy, act }: { account: AccountState 
     <Avatar name="Orglet" mascot="classic" color="var(--text)" size="sm" />
     <div className="setting-text">
       <span className="setting-title">{t('Đang đăng nhập')}</span>
-      <span className="setting-description" role="status">{t('Đăng nhập ở trang vừa mở trong trình duyệt, rồi quay lại đây.')}</span>
+      <span className="setting-description" role="status">{t('Đăng nhập trong trình duyệt, rồi quay lại.')}</span>
     </div>
-    <div className="setting-control"><Button variant="outline" onClick={cancel}><X size={14} />{t('Hủy')}</Button></div>
+    <div className="setting-control"><Button variant="outline" onClick={cancel}><ArrowLeft size={14} />{t('Hủy')}</Button></div>
   </div>;
 
   if (account.status === 'local') return <>
-    <Row title={t('Chưa đăng nhập tài khoản')}>
+    <Row icon={<UserRound size={16} />} title={t('Chưa đăng nhập')}>
       <Button variant="primary" disabled={busy} onClick={() => void signIn()}><LogIn size={14} />{t('Đăng nhập')}</Button>
     </Row>
     <Benefits />
     <p className="account-disclosure"><AnalyticsDisclosure signedIn={false} /><WhatIsSent /></p>
   </>;
 
-  if (account.status === 'expired') return <Row title={account.email ? maskEmail(account.email) : t('Đã đăng nhập')} description={t('Phiên đăng nhập đã hết. Dữ liệu trên máy này vẫn còn nguyên.')}>
+  if (account.status === 'expired') return <Row icon={<UserRoundX size={16} />} title={account.email ? maskEmail(account.email) : t('Đã đăng nhập')} description={t('Phiên đã hết. Dữ liệu trên máy này còn nguyên.')}>
     <Button variant="primary" disabled={busy} onClick={() => void signIn()}><LogIn size={14} />{t('Đăng nhập lại')}</Button>
   </Row>;
 
   return <>
-    <Row title={account.email ? maskEmail(account.email) : t('Đã đăng nhập')} description={account.name}>
+    <Row icon={<UserRoundCheck size={16} />} title={account.email ? maskEmail(account.email) : t('Đã đăng nhập')} description={account.name}>
       <Button variant="outline" disabled={busy} onClick={signOut}><LogOut size={14} />{t('Đăng xuất')}</Button>
     </Row>
-    <Row title={t('Gói')} description={!account.plan || account.plan === 'free' ? t('Tài khoản miễn phí. Orglet vẫn miễn phí và mã nguồn mở.') : undefined}>
+    <Row icon={<Gem size={16} />} title={t('Gói')}>
       <span className="setting-value">{planName(account.plan)}</span>
     </Row>
     <SyncRow busy={busy} />

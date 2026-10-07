@@ -14,7 +14,7 @@ import { editedSourcesDirectory } from '../tools/sources';
  * `tests/integration/erase.test.ts` fails when a new table is added and not listed here.
  */
 export const ERASE_TABLES = [
-  'ledger_cache', 'ledger', 'reservation_reviews', 'step_attempts', 'reservations',
+  'decision_usage', 'ledger_cache', 'ledger', 'reservation_reviews', 'step_attempts', 'reservations',
   'workspace_read_evidence', 'process_evidence', 'workspace_processes', 'workspace_copies',
   'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'browser_actions', 'browser_screenshots', 'desktop_actions', 'desktop_screenshots', 'runs',
   'profiles', 'preflights', 'workspace_grants', 'chat_messages', 'chat_search', 'tasks',

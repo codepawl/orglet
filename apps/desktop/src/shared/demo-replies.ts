@@ -13,3 +13,20 @@ export const MODEL_NOT_CONNECTED = 'Tí này chưa kết nối model. Kết nố
 export function demoRepliesEnabled(environment: Record<string, string | undefined> = process.env): boolean {
   return environment[DEMO_REPLIES_VARIABLE] === '1';
 }
+
+/**
+ * A sample answer with two charts, for the checks that draw charts in the chat (in-chat charts, 2026-10-07). It is
+ * given only to a message that starts with `/demo-chart`, and only on Demo, which never reaches a person.
+ */
+export const DEMO_CHART_PROMPT = '/demo-chart';
+export const DEMO_CHART_REPLY = [
+  'Revenue grew every month, and the North region led the quarter.',
+  '',
+  '```chart',
+  JSON.stringify({ type: 'line', title: 'Monthly revenue', takeaway: 'Revenue grew every month, from 12.4k to 21.9k.', columns: ['Month', 'Revenue', 'Costs'], rows: [['Jan', 12400, 9100], ['Feb', 13800, 9600], ['Mar', 15100, 10200], ['Apr', 17600, 10900], ['May', 19800, 11800], ['Jun', 21900, 12400]], x: 'Month', y: ['Revenue', 'Costs'], yLabel: 'USD', source: 'sales.csv' }),
+  '```',
+  '',
+  '```chart',
+  JSON.stringify({ type: 'bar', title: 'Revenue by region', takeaway: 'North brought in the most, South the least.', columns: ['Region', 'Revenue'], rows: [['North', 38200], ['East', 29100], ['West', 22400], ['South', 11000]], x: 'Region', y: ['Revenue'], yLabel: 'USD' }),
+  '```',
+].join('\n');

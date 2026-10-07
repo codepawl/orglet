@@ -13,9 +13,9 @@ export type RoutableOrglet = Pick<Worker, 'id' | 'name' | 'description' | 'instr
 export const EVERYONE_OPTION = 'everyone';
 
 /**
- * A single orglet answers alone only when Tacet gives it at least this. At 0.6 and above no labelled message went to
+ * A single orglet answers alone only when the decision model gives it at least this. At 0.6 and above no labelled message went to
  * the wrong orglet or away from a group it was meant for; a message to two general helpers with no description reached
- * 0.59 for one of them, so the line sits a step above it. Below it, everyone answers, as before Tacet.
+ * 0.59 for one of them, so the line sits a step above it. Below it, everyone answers, as before the decision model.
  */
 export const ROUTING_THRESHOLD = 0.65;
 /** The model reads 48 tokens of each option; a group of eight and a message fit well inside this. */
@@ -32,7 +32,7 @@ export function orgletOption(orglet: RoutableOrglet): string {
   return text.length > OPTION_CHARS ? text.slice(0, OPTION_CHARS) : text;
 }
 
-/** Whether Tacet can be asked at all: two to eight orglets, each with its own name, none called "everyone". */
+/** Whether the decision model can be asked at all: two to eight orglets, each with its own name, none called "everyone". */
 export function routableGroup(orglets: readonly RoutableOrglet[]): boolean {
   if (orglets.length < 2 || orglets.length > MAX_ROUTED_GROUP) return false;
   const names = orglets.map(orglet => orglet.name.trim().toLowerCase());
@@ -47,7 +47,7 @@ export function routingQuestion(orglets: readonly RoutableOrglet[]): DecisionQue
   return { route: { type: 'choice', instructions: 'Who in this group chat should answer this message?', criteria } };
 }
 
-/** The one orglet Tacet picked with enough confidence, or undefined to keep everyone. */
+/** The one orglet the decision model picked with enough confidence, or undefined to keep everyone. */
 export function routedOrglet<T extends RoutableOrglet>(response: DecisionResponse | undefined, orglets: readonly T[]): { orglet: T; probability: number } | undefined {
   const answer = response?.answers.route;
   if (!answer || answer.type !== 'choice' || answer.choice === EVERYONE_OPTION) return undefined;

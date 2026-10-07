@@ -30,6 +30,7 @@ export const FLUSH_INTERVAL_MS = 5 * 60 * 1000;
 
 /** Features counted once per app session when first used. */
 export const AnalyticsFeature = z.enum([
+  // 'tacet' is the decision model's setting, kept under its first name on the wire.
   'tabs', 'rail', 'side_thread', 'schedule', 'browser', 'desktop', 'mcp', 'file_viewer', 'file_edit', 'forward', 'cli', 'send_to', 'tacet',
 ]);
 export type AnalyticsFeature = z.infer<typeof AnalyticsFeature>;
@@ -251,7 +252,7 @@ export function featureForCommand(command: string, args: unknown): AnalyticsFeat
   if (command === 'setMcpGrant') return (args as { allowed?: boolean }).allowed ? 'mcp' : undefined;
   if (command === 'saveSourceVersion') return 'file_edit';
   if (command === 'forwardMessage') return 'forward';
-  if (command === 'installDecisionModel') return 'tacet';
+  if (command === 'saveDecisionModelSetting') return args === 'off' ? undefined : 'tacet';
   return undefined;
 }
 

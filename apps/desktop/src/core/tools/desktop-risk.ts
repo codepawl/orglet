@@ -17,7 +17,7 @@ export type DesktopVerdict =
 
 export type DesktopStepToJudge = { kind: DesktopActKind; target: DesktopTargetFacts };
 
-/** Why the core asks, as the card shows it; the window translates each one. `secondOpinion` is Tacet's (COD-306). */
+/** Why the core asks, as the card shows it; the window translates each one. `secondOpinion` is the decision model's (COD-306). */
 export const desktopRiskReasons = {
   secondOpinion: riskReasons.secondOpinion,
   wording: 'Tên của nó giống một việc khó rút lại: gửi, trả tiền, xóa, lưu đè, đóng hoặc đồng ý',

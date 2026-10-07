@@ -35,7 +35,7 @@ const INVALID_ZONE = () => t('Múi giờ không hợp lệ. Chọn một múi gi
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 export const formatRoutineTime = (iso: string, timeZone: string) => keepTimeTogether(new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' }));
 export { formatClockTime };
-/** When Tacet flagged a run (COD-303): the time alone when that was today in the schedule's zone, so the card's line fits. */
+/** When the decision model flagged a run (COD-303): the time alone when that was today in the schedule's zone, so the card's line fits. */
 export function flaggedWhen(iso: string, timeZone: string, now = new Date()): string {
   const at = new Date(iso);
   if (scheduleDay(at, timeZone) !== scheduleDay(now, timeZone)) return formatRoutineTime(iso, timeZone);
@@ -183,7 +183,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
     return workspace.routineToday?.[item.id]?.runs ?? 0;
   };
   const spentToday = (item: Routine) => workspace.routineToday?.[item.id]?.spentMicros ?? 0;
-  /** The newest quiet run Tacet announced (COD-303), so the card says why an hourly schedule spoke up. */
+  /** The newest quiet run the decision model announced (COD-303), so the card says why an hourly schedule spoke up. */
   const lastAnnounced = (item: Routine) => {
     let newest: Task | undefined;
     for (const task of workspace.tasks) {
@@ -242,8 +242,8 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
           {/* The day so far (COD-288): an hourly schedule's quiet runs collect here instead of a toast each, and a
               cap shows what today's runs used of it. */}
           {runsToday(item) > 0 && <li><History size={14} aria-hidden="true" />{runsToday(item) === 1 ? t('1 lần chạy hôm nay') : t('{0} lần chạy hôm nay', [runsToday(item)])}</li>}
-          {/* Why an hourly schedule spoke up (COD-303): when Tacet flagged a run, and its rating behind the line. */}
-          {announced && <li title={t('Lịch hằng giờ thường im lặng khi xong. Tacet chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)])}><BellRing size={14} aria-hidden="true" />{t('Tacet đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li>}
+          {/* Why an hourly schedule spoke up (COD-303): when the decision model flagged a run, and its rating behind the line. */}
+          {announced && <li title={t('Lịch hằng giờ thường im lặng khi xong. Model quyết định chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)])}><BellRing size={14} aria-hidden="true" />{t('Model quyết định đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li>}
           {item.schedule.dailyCapMicros !== undefined && <li><Gauge size={14} aria-hidden="true" />{t('Hôm nay {0} / {1}', [formatMoney(spentToday(item)), formatMoney(item.schedule.dailyCapMicros)])}</li>}
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
           {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}

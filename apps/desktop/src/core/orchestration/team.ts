@@ -244,7 +244,7 @@ export class TeamRunner {
   /**
    * Group chat: every assigned worker answers the latest message in order, each seeing the replies before it. Workers
    * that already answered this message are skipped, so resume and retry only run the rest. `route`, when given, first
-   * narrows who answers (Tacet's pick, COD-305); it runs once the turn counts as running, so Stop and Pause reach it.
+   * narrows who answers (the decision model's pick, COD-305); it runs once the turn counts as running, so Stop and Pause reach it.
    */
   async chat(task: Task, workers: Worker[], resume = false, route?: () => Promise<Worker[]>) {
     if (this.active.has(task.id)) throw new Error('Kênh đang chạy task này.');

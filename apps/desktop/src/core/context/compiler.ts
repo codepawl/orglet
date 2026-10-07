@@ -39,8 +39,8 @@ function sharedKeywords(brief: string, item: NoteText): string[] {
   return [...noteKeywords(item)].filter(word => briefWords.has(word));
 }
 
-/** The notes a frozen context loaded on Tacet's word, so compiling it again loads the same notes (COD-306). */
-export function frozenTacetFits(context: RunContext): Map<string, number> {
+/** The notes a frozen context loaded on the decision model's word, so compiling it again loads the same notes (COD-306). */
+export function frozenDecisionModelFits(context: RunContext): Map<string, number> {
   const fits = new Map<string, number>();
   for (const entry of context.manifest.loaded) {
     if (entry.kind === 'knowledge' && entry.because === 'tacet' && entry.id) fits.set(entry.id, entry.fit ?? 1);
@@ -135,7 +135,7 @@ export function identitySection(input: IdentityInput): string {
  * Builds the provider-neutral prompt in the plan's precedence order and records exactly what was loaded.
  * `candidates` must already be approved and in scope; this function only ranks, deduplicates and bounds them.
  */
-export function compileContext(input: IdentityInput & { brief: string; candidates: RunContext['knowledge']; memories?: MemoryCandidate[]; tacetFits?: ReadonlyMap<string, number> }): CompiledContext {
+export function compileContext(input: IdentityInput & { brief: string; candidates: RunContext['knowledge']; memories?: MemoryCandidate[]; decisionModelFits?: ReadonlyMap<string, number> }): CompiledContext {
   const identity = identitySection(input);
   const loaded: ContextManifest['loaded'] = [
     { kind: 'platform', hash: fingerprint(PLATFORM_POLICY), bytes: bytes(PLATFORM_POLICY) },
@@ -157,12 +157,12 @@ export function compileContext(input: IdentityInput & { brief: string; candidate
     loaded.push({ kind: block.kind, id: block.id, revision: block.revision, hash: fingerprint(block.text), bytes: bytes(block.text) });
   }
 
-  // Pinned notes first, then keyword matches by how much their shared words weigh, then the notes Tacet said fit
-  // (COD-306) by how sure it was. Tacet's picks come last, so they only fill room the other two left and never push one out.
-  const tacetFits = input.tacetFits ?? new Map<string, number>();
+  // Pinned notes first, then keyword matches by how much their shared words weigh, then the notes the decision model said fit
+  // (COD-306) by how sure it was. The decision model's picks come last, so they only fill room the other two left and never push one out.
+  const decisionModelFits = input.decisionModelFits ?? new Map<string, number>();
   const keywordScores = weightedKeywordScores(input.brief, input.candidates);
   const ranked = input.candidates
-    .map(item => ({ item, score: keywordScores.get(item.id) ?? 0, fit: tacetFits.get(item.id) ?? 0 }))
+    .map(item => ({ item, score: keywordScores.get(item.id) ?? 0, fit: decisionModelFits.get(item.id) ?? 0 }))
     .sort((a, b) => Number(b.item.pinned) - Number(a.item.pinned) || b.score - a.score || b.fit - a.fit || a.item.id.localeCompare(b.item.id));
   const knowledge: RunContext['knowledge'] = [];
   let knowledgeBytes = 0;

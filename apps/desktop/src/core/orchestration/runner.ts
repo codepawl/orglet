@@ -43,7 +43,7 @@ import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedAnswerChecks, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
-import { compileContext, frozenTacetFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
+import { compileContext, frozenDecisionModelFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, historyBudgetFor, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
@@ -76,9 +76,10 @@ import { findCustomConnection, type CustomConnection } from '../../shared/custom
 import { readCustomConnections } from '../storage/custom-connections';
 import type { McpCallResult, McpServers } from '../tools/mcp';
 import { approvalArguments, mcpCallGranted, McpApprovalChoice, MCP_CALL_TIMEOUT_MS, type McpRunTool } from '../../shared/mcp';
+import { chartProblemsIn } from '../../shared/charts';
 import type { DecisionRequest } from '../../shared/work-decisions';
 import { isBrowserActTool, isBrowserTool, NOT_ASKED_HERE, trimOlderBrowserSnapshots, type BrowserAsking, type BrowserReadToolName, type BrowserStep, type BrowserTools } from '../tools/browser-tools';
-import { MODEL_NOT_CONNECTED, demoRepliesEnabled } from '../../shared/demo-replies';
+import { DEMO_CHART_PROMPT, DEMO_CHART_REPLY, MODEL_NOT_CONNECTED, demoRepliesEnabled } from '../../shared/demo-replies';
 import { CLEAN_BROWSER_PROFILE } from '../../shared/browser';
 import { DESKTOP_BORROW_NOT_ASKED_HERE, DESKTOP_BORROW_TOOL, DESKTOP_NOT_ASKED_HERE, isDesktopActTool, isDesktopTool, trimOlderDesktopSnapshots, type DesktopAsking, type DesktopReadToolName, type DesktopStep, type DesktopTools } from '../tools/desktop-tools';
 import { withTransientRetry } from './transient';
@@ -590,25 +591,25 @@ export class Runner {
   /** Tool-loop progress has no desktop answer stream; only authenticated CLI waits observe it. */
   onCliProgress: (update: RunProgressUpdate) => void = () => {};
   /**
-   * Asks Tacet which notes fit a message their words do not match (COD-306), or answers undefined when Tacet is not
-   * on this computer, fails or is late. Unset in tests that do not need it.
+   * Asks the decision model which notes fit a message their words do not match (COD-306), or answers undefined when the decision model is off,
+   * fails or is late. Unset in tests that do not need it.
    */
-  knowledgeFit?: (message: string, notes: NoteCandidate[]) => Promise<Map<string, number> | undefined>;
+  knowledgeFit?: (message: string, notes: NoteCandidate[], taskId?: string) => Promise<Map<string, number> | undefined>;
   /** Refresh native effort metadata only before a new run freezes its model and settings. */
   prepareEffort?: (worker: Worker) => Promise<void>;
   constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string, effort?: NativeEffortSetting) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() }), private browser?: BrowserTools, private desktop?: DesktopTools) {
     this.slots.onChange = () => this.notify();
   }
   /**
-   * Tacet's picks among the notes that would not load today: unpinned, and sharing no keyword with the message. Pinned and
-   * matching notes load as before, so Tacet can only add to them (COD-306).
+   * The decision model's picks among the notes that would not load today: unpinned, and sharing no keyword with the message. Pinned and
+   * matching notes load as before, so the decision model can only add to them (COD-306).
    */
-  private async fitUnmatchedKnowledge(brief: string, candidates: readonly { id: string; title: string; content: string; tags: string[]; pinned: boolean }[]): Promise<Map<string, number> | undefined> {
+  private async fitUnmatchedKnowledge(brief: string, candidates: readonly { id: string; title: string; content: string; tags: string[]; pinned: boolean }[], taskId?: string): Promise<Map<string, number> | undefined> {
     if (!this.knowledgeFit) return undefined;
     const unmatched = candidates.filter(item => !item.pinned && keywordScore(brief, item) === 0);
     if (!unmatched.length) return undefined;
     try {
-      return await this.knowledgeFit(brief, unmatched.map(item => ({ id: item.id, title: item.title, tags: item.tags })));
+      return await this.knowledgeFit(brief, unmatched.map(item => ({ id: item.id, title: item.title, tags: item.tags })), taskId);
     } catch {
       return undefined;
     }
@@ -933,8 +934,8 @@ export class Runner {
       let context = run.snapshot.context;
       if (!context) {
         const candidates = knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id);
-        const tacetFits = await this.fitUnmatchedKnowledge(input.brief, candidates);
-        context = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates, memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate), tacetFits }).context;
+        const decisionModelFits = await this.fitUnmatchedKnowledge(input.brief, candidates, task.id);
+        context = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates, memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate), decisionModelFits }).context;
       }
       run = { ...run, snapshot: { ...run.snapshot, context } };
       // Repeated feedback on this worker's earlier work, frozen with the context so a resume sees the same evidence and
@@ -942,7 +943,7 @@ export class Runner {
       if (this.appProposals && run.snapshot.improvement === undefined && !task.routineId && (run.stage === undefined || run.stage === 'group') && run.snapshot.worker.provider !== 'demo') {
         run = { ...run, snapshot: { ...run.snapshot, improvement: this.appProposals.improvementSignals(run) } };
       }
-      const recompiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, tacetFits: frozenTacetFits(context) });
+      const recompiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, decisionModelFits: frozenDecisionModelFits(context) });
       const compiled = keepFrozenOmissions(recompiled, context);
       run = { ...run, status: 'running' };
       this.store.update('runs', run);
@@ -1003,6 +1004,7 @@ export class Runner {
         if (!needsReport(run)) {
           this.event(run.id, 'Demo: đang trả lời mẫu, không gọi model.');
           // Plain words and the name of the button under the message box (COD-293): "harness" meant nothing to a newcomer.
+          if (input.brief.trimStart().startsWith(DEMO_CHART_PROMPT)) { this.commit(task, run, chatReport(DEMO_CHART_REPLY), options.keepTaskOpen); return; }
           this.commit(task, run, chatReport('Mình là Tí demo nên chưa đọc tệp hay gọi model thật. Bấm Kết nối model dưới khung chat để chọn một model thật, rồi mình trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
           return;
         }
@@ -1719,6 +1721,14 @@ export class Runner {
         if (call.name === 'reply') {
           if (needsReport(run)) throw new Error('Kênh có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));
+          // A chart that cannot be drawn goes back to the orglet once with what is wrong, instead of reaching the chat.
+          const chartProblems = chartProblemsIn(message);
+          const chartSentBack = messages.some(item => item.role === 'tool' && typeof item.content === 'string' && item.content.includes('"chartProblems"'));
+          if (chartProblems.length && !chartSentBack && !checkpoint.wrappingUp) {
+            messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ error: 'A chart in your reply cannot be drawn. Fix the chart block and call reply again with the whole reply.', chartProblems }) });
+            checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
+            continue;
+          }
           for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
           const answer: HeldAnswer = { report: { ...chatReport(message), limitations: this.crewLimitations(run, options) },
             knowledgeProposals, title, untrustedInputs: [...untrustedInputs] };
@@ -1738,7 +1748,7 @@ export class Runner {
           const profileId = id();
           const result = await executeReadTool({ signal, timeoutMs: toolDefinitions[call.name].timeoutMs,
             authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'dataset.check'),
-            execute: toolSignal => this.sources.profile(args.sourceIds, task.sourceIds, args.idColumn, toolSignal, { id: profileId, taskId: task.id, runId: run.id }, audit ? { direction: audit.direction } : undefined) });
+            execute: toolSignal => this.sources.profile(args.sourceIds, task.sourceIds, args.idColumn, toolSignal, { id: profileId, taskId: task.id, runId: run.id }, audit ? { direction: audit.direction } : undefined, undefined, 'aggregate' in args ? args.aggregate ?? undefined : undefined) });
           for (const sourceId of args.sourceIds) readIds.add(sourceId);
           this.event(run.id, `Đã kiểm tra ${audit ? 'run-log' : 'dataset'}: ${args.sourceIds.map(sourceId => this.store.get<Source>('sources', sourceId).name).join(', ')} · toàn bộ dữ liệu trong giới hạn checker.`);
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ profileId, result }) });

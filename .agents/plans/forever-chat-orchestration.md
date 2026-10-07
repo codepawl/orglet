@@ -212,3 +212,12 @@ trang gốc lúc triển khai trước khi đưa vào code.
   DCR; core tự refresh), danh mục Linear/Notion/Atlassian (trình duyệt) và GitHub (token). GitHub cần OAuth app do
   CodePawl đăng ký mới đăng nhập bằng trình duyệt được. Chưa thử đăng nhập thật với dịch vụ nào (cần người ở trình
   duyệt). Chưa làm: 4b, hook theo từng app.
+- Benchmark Tí trưởng trên Codex và Cursor (2026-10-07, kênh 2 Tí, bài po-*): Codex đạt cả ba (po-simple 1 lượt 25 s,
+  po-data 9/9, po-writing 6/6). Cursor đạt po-simple và po-writing; po-data 8/9 vì checker sập trong bản build qua
+  junction thiếu DuckDB, Tí trưởng vẫn giao đúng cho Data analyst. Còn chưa kiểm: việc gửi lại trên model thật.
+- Giai đoạn 4b (2026-10-07, PR #567): mỗi app đã kết nối có hook riêng, "Khi có mục mới trong ứng dụng": Orglet tự gọi
+  một công cụ chỉ đọc theo chu kỳ, mục mới (lọc theo từ) bắt đầu một lần chạy có tệp đính kèm. Không làm: webhook cục
+  bộ (app SaaS không gọi tới máy được), email IMAP (chưa có kết nối email), đọc thông báo Windows (cần package identity,
+  Orglet cài bằng Squirrel).
+- Kênh "lần lượt" cũ được gợi ý chọn Tí trưởng một lần. Lịch của kênh có Tí trưởng vốn đã chạy qua Tí trưởng
+  (`teams.run`), không cần sửa.

@@ -1,7 +1,7 @@
 import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, session, shell, utilityProcess } from 'electron';
 import { basename, dirname, join, relative, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { mkdir, open, rm, stat } from 'node:fs/promises';
+import { mkdir, open, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { release as osRelease, userInfo } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -623,10 +623,6 @@ async function start() {
         analytics.recordError(kind, String(message.message ?? ''), typeof message.stack === 'string' ? message.stack : undefined);
         return;
       }
-      if (message.type === 'decisionModel') {
-        if (window && !window.isDestroyed()) window.webContents.send('orglet:decision-model', message.state);
-        return;
-      }
       if (message.type === 'key') {
         const provider = CredentialProvider.safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
@@ -1091,6 +1087,24 @@ async function start() {
       : { defaultPath: 'orglet.md', filters: [{ name: 'Markdown', extensions: ['md'] }] });
     if (result.canceled || !result.filePath) return false;
     await writeAtomicText(result.filePath, text); return true;
+  });
+  // A chart from a chat: the picture as PNG (a data URL the chart library drew) or its table as CSV, saved where the
+  // person picks. The name only seeds the dialog; nothing is written without the dialog.
+  handle('orglet:save-chart', async raw => {
+    const input = z.object({ name: z.string().max(120), kind: z.enum(['png', 'csv']), data: z.string().max(20_000_000) }).strict().parse(raw);
+    const base = input.name.replace(/[^\p{L}\p{N} _-]+/gu, '').trim().slice(0, 80) || 'chart';
+    const result = await dialog.showSaveDialog(window, input.kind === 'png'
+      ? { defaultPath: `${base}.png`, filters: [{ name: 'PNG', extensions: ['png'] }] }
+      : { defaultPath: `${base}.csv`, filters: [{ name: 'CSV', extensions: ['csv'] }] });
+    if (result.canceled || !result.filePath) return false;
+    if (input.kind === 'png') {
+      const encoded = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(input.data)?.[1];
+      if (!encoded) throw new Error('Không lưu được ảnh biểu đồ.');
+      await writeFile(result.filePath, Buffer.from(encoded, 'base64'));
+    } else {
+      await writeAtomicText(result.filePath, input.data);
+    }
+    return true;
   });
   handle('orglet:copy', async raw => { clipboard.writeText((await artifactText(raw)).text); });
   // The renderer says on or off; where the shim goes and what it points at are decided here.

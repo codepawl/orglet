@@ -10,6 +10,8 @@ import { InfoTip, type InfoTipRow } from './InfoTip';
 import { RowMenu, type RowMenuItem } from './RowMenu';
 import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
 import { SourcePreview, previewKindOf } from './SourcePreview';
+import { TablePreview } from './TablePreview';
+import type { TableSample } from '../../shared/profiles';
 import { ImageEditing, PdfEditing, TextEditing } from './SourceEditing';
 import { languageOf } from './highlight';
 import { currentLocale, t, tMessage } from '../i18n';
@@ -243,7 +245,7 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
       {error && <p role="alert" className="error">{error}</p>}
     </div>;
     if (state === 'revoked') return <p className="preview-state">{t('Đã thu hồi quyền đọc')}</p>;
-    if (state === 'parquet') return <p className="preview-state">{t('Parquet chưa xem được; chạy checker local để xem cột và số dòng.')}</p>;
+    if (state === 'parquet') return <ParquetPreview taskId={taskId} sourceId={source.id} />;
     if (state === 'too-large') return <p className="preview-state">{t('Tệp quá lớn để xem trong Orglet.')}</p>;
     if (content.loading) return <SkeletonGroup label={t('Đang mở…')} className="source-shape">{source.media ? <Skeleton shape="block" className="source-shape-media" /> : <SkeletonText lines={8} />}</SkeletonGroup>;
     // A file attached on another computer: sync brings its bytes when the account has them, or the person picks it.
@@ -262,4 +264,25 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     {error && !restoredWithoutFile && source.availability !== 'other-device' && <p role="alert" className="error">{error}</p>}
     {body(source)}
   </SourceViewer>;
+}
+
+/**
+ * A Parquet file as a table: the window cannot read Parquet, so the checker's DuckDB reads its first 200 rows (within
+ * the checker's limits), and they show in the same table as a CSV. Without the checker the file says so.
+ */
+function ParquetPreview({ taskId, sourceId }: { taskId: string; sourceId: string }) {
+  const [sample, setSample] = useState<TableSample>();
+  const [failure, setFailure] = useState('');
+  useEffect(() => {
+    let active = true;
+    setSample(undefined);
+    setFailure('');
+    void orglet.call('tablePreview', { taskId, id: sourceId })
+      .then(result => { if (active) setSample(result); })
+      .catch(error => { if (active) setFailure(error instanceof Error ? error.message : String(error)); });
+    return () => { active = false; };
+  }, [taskId, sourceId]);
+  if (failure) return <p className="preview-state">{tMessage(failure)}</p>;
+  if (!sample) return <SkeletonGroup label={t('Đang đọc bảng…')} className="source-shape"><SkeletonText lines={8} /></SkeletonGroup>;
+  return <TablePreview sample={sample} />;
 }

@@ -1,14 +1,14 @@
 import type { PermissionState, WorkspaceLevel } from './capability-status';
 
 /**
- * What Tacet reads a message as needing before it is sent (COD-305): the web, Orglet's browser, or the working folder at
+ * What the decision model reads a message as needing before it is sent (COD-305): the web, Orglet's browser, or the working folder at
  * a level (read files, edit them, run commands). The core lists what cleared its threshold, strongest first; the
  * composer offers the first one the chat does not have yet.
  */
 export type PermissionNeed = 'web' | 'browser' | Exclude<WorkspaceLevel, 'none'>;
 export type PermissionNeedsAnswer = { needs: PermissionNeed[] };
 
-/** The start of a message is what Tacet reads; a long paste beyond this changes nothing about what it needs. */
+/** The start of a message is what the decision model reads; a long paste beyond this changes nothing about what it needs. */
 export const PERMISSION_NEEDS_MAX_CHARS = 2000;
 /** Shorter than this, a message says too little to read a need from ("hi", "ok thanks"). */
 export const PERMISSION_NEEDS_MIN_CHARS = 12;

@@ -112,7 +112,7 @@ Group chats from before channels became channels when the app updated, with thei
 
 Crews became channels where the lead splits the work, with the same name, orglets, lead, workflow, budget, hours, schedules and chat history. A crew you had archived comes back as a channel when you restore it from **Archived channels**. A channel that had a crew among its members now has that crew's orglets.
 
-If you downloaded Tacet in **Settings → Chat**, a message that tags nobody and replies to no one can go to just the orglet it clearly fits, going by each orglet's name, description and instructions. Your message then says **Tacet picked *name* to answer**. When Tacet is not sure, everyone answers, as without it. Tag `@all` to ask everyone anyway. See [how Tacet decides](decisions.md#who-answers-in-a-group-chat).
+If the decision model is on in **Settings → Chat** (it sends your message and each orglet's name and description to the provider you chose), a message that tags nobody and replies to no one can go to just the orglet it clearly fits, going by each orglet's name, description and instructions. Your message then says **The decision model picked *name* to answer**. When the decision model is not sure, everyone answers, as without it. Tag `@all` to ask everyone anyway. See [how the decision model decides](decisions.md#who-answers-in-a-group-chat).
 
 ## Reply to a message
 

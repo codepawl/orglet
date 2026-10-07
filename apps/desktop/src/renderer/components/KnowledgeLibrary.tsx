@@ -124,7 +124,7 @@ export function ContextManifestView({ run, workspace }: { run: { snapshot: { con
   const because = (entry: ContextManifest['loaded'][number]) => {
     if (entry.because === 'pinned') return ` · ${t('luôn nạp')}`;
     if (entry.because === 'keywords') return ` · ${t('khớp từ khóa')}`;
-    if (entry.because === 'tacet') return ` · ${t('Tacet chọn, độ khớp {0}', [(entry.fit ?? 0).toFixed(2)])}`;
+    if (entry.because === 'tacet') return ` · ${t('Model quyết định chọn, độ khớp {0}', [(entry.fit ?? 0).toFixed(2)])}`;
     return '';
   };
   return <details><summary>{context.manifest.loaded.length === 1 ? t('Context đã nạp · 1 phần') : t('Context đã nạp · {0} phần', [context.manifest.loaded.length])}</summary>
