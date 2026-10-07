@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
+import { candidates, detectHarnesses, harnessAccountEnv, isDesktopAppBuild, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { HarnessAccounts, type HarnessAccountMap } from '../../apps/desktop/src/core/harness/accounts';
 import { cursorAuthFile } from '../../apps/desktop/src/core/harness/usage';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
@@ -31,13 +31,17 @@ describe('detection', () => {
     await touch(join(bin, 'codex.cmd'));
     await touch(join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'));
     await touch(join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.10', 'claude.exe'));
+    // Newer desktop builds sit one folder deeper, under a content hash (2026-10-07).
+    await touch(join(roaming, 'Claude', 'claude-code', '2.1.289', 'e1f0154146bb', 'claude.exe'));
     await touch(join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe'));
     await touch(join(home, '.cursor', 'bin', 'agent.exe'));
     const env = { USERPROFILE: home, LOCALAPPDATA: local, APPDATA: roaming, PATH: bin };
     expect(await candidates('claude-code', env, 'win32')).toEqual([
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.10', 'claude.exe'),
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'),
+      join(roaming, 'Claude', 'claude-code', '2.1.289', 'e1f0154146bb', 'claude.exe'),
     ]);
+    expect(isDesktopAppBuild(join(roaming, 'Claude', 'claude-code', '2.1.289', 'e1f0154146bb', 'claude.exe'))).toBe(true);
     // The app's executable outranks the npm shim on PATH: a shim can only start through cmd.exe (COD-170).
     expect(await candidates('codex', env, 'win32')).toEqual([join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe'), join(bin, 'codex.cmd')]);
     expect(await candidates('cursor', env, 'win32')).toEqual([join(home, '.cursor', 'bin', 'agent.exe')]);
