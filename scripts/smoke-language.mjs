@@ -53,10 +53,18 @@ export async function useFullSidebar(page) {
  */
 export async function expandSidebar(page) {
   if (!await page.locator('.app.sidebar-hidden').count()) return false;
-  const active = page.locator('.area-tile.active');
-  await (await active.count() ? active : page.locator('.area-tile')).first().click();
-  await page.locator('.app:not(.sidebar-hidden)').waitFor();
-  return true;
+  // A chat deleted behind the window's back (a smoke deleting it through the core) is left on the window's next
+  // refresh, and leaving it folds a narrow window's sidebar again; the tile is pressed again when that happens.
+  for (let attempt = 1; ; attempt++) {
+    const active = page.locator('.area-tile.active');
+    await (await active.count() ? active : page.locator('.area-tile')).first().click();
+    try {
+      await page.locator('.app:not(.sidebar-hidden)').waitFor({ timeout: attempt < 3 ? 5_000 : 30_000 });
+      return true;
+    } catch (error) {
+      if (attempt >= 3) throw error;
+    }
+  }
 }
 
 /**
@@ -110,5 +118,6 @@ export async function archiveCurrentChat(page) {
  */
 export async function openSettings(page) {
   await page.locator('.user-panel-who').click();
-  await page.getByRole('menuitem', { name: label('Cài đặt'), exact: true }).click();
+  // The alignment check can also measure the Vietnamese interface (--language vi), so either name opens it.
+  await page.getByRole('menuitem', { name: new RegExp('^(' + label('Cài đặt') + '|Cài đặt)$') }).click();
 }

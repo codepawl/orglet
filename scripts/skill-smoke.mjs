@@ -56,8 +56,8 @@ try {
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, skillPath);
   await page.getByRole('button', { name: label('Thư viện'), exact: true }).click();
   await page.getByRole('button', { name: label('Nhập từ thư mục'), exact: true }).click();
-  // The blocker is the core's own text, which SkillReview.tsx shows as it is, without translating it.
-  await page.getByText('Tool chưa hỗ trợ: Bash', { exact: true }).waitFor();
+  // The blocker is the core's own text, translated like every core message.
+  await page.getByText(label('Tool chưa hỗ trợ: {0}', ['Bash']), { exact: true }).waitFor();
   assert.equal(await page.getByRole('checkbox', { name: label('Tôi đã xem nội dung và đồng ý dùng gói này làm hướng dẫn cho Tí.') }).isEnabled(), false);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: label('Thư viện'), exact: true }).click();
