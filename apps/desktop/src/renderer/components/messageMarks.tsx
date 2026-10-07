@@ -3,7 +3,8 @@ import type { MessageReaction, Reaction } from '../../shared/message-interaction
 import type { Run } from '../../shared/contracts';
 import { t, translated } from '../i18n';
 
-export type ReplyTarget = { taskId: string; messageId: string; author: string; text: string };
+/** `point` is set when the reply is about one point of a chart ("Hỏi về điểm này"); it goes ahead of what the person types. */
+export type ReplyTarget = { taskId: string; messageId: string; author: string; text: string; point?: string };
 export const reactionEmoji: Record<Reaction, string> = { agree: '👍', delighted: '🎉', funny: '😂', unsure: '🤔', watching: '👀', against: '👎' };
 export const reactionMeanings: Record<Reaction, string> = translated({
   agree: 'Mình thấy ổn, giữ hướng này.',
@@ -77,10 +78,21 @@ export function replyToAnswer(taskId: string, messageId: string, author: string,
   emit();
 }
 
+/** Replying to one point of a chart in a message: the composer quotes that value, and the question carries it too. */
+export function replyToChartPoint(taskId: string, messageId: string, author: string, point: string) {
+  target = { taskId, messageId, author, text: point.length > 140 ? `${point.slice(0, 139).trimEnd()}…` : point, point };
+  emit();
+}
+
 export function clearReplyTarget() {
   if (!target) return;
   target = undefined;
   emit();
+}
+
+/** The reply selected right now, for code outside a component (and tests). */
+export function currentReplyTarget(): ReplyTarget | undefined {
+  return target;
 }
 
 export function useReplyTarget() {

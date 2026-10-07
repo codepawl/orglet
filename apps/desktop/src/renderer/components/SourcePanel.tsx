@@ -1,10 +1,11 @@
 import { t } from '../i18n';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { TaskDetail } from '../../shared/contracts';
 import type { ProfileRecord } from '../../shared/profiles';
 import { Button } from './ui';
 import { Select } from './Select';
-import { HelpCircle, TrendingDown, TrendingUp } from 'lucide-react';
+import { ChartNoAxesColumn, HelpCircle, TrendingDown, TrendingUp } from 'lucide-react';
+import { chartsOfChat } from '../chatViews';
 import { RunAuditView } from './RunAuditView';
 import { ExactMatchView } from './ExactMatchView';
 import { currentLocale, tMessage } from '../i18n';
@@ -15,6 +16,21 @@ import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
 import { tableSizeLabel } from './TablePreview';
 import { columnKindLabel, columnRangeLabel, datasetHasNotesCheck, datasetNotes, formatNumber } from './checkNotes';
 import { Input } from '@codepawlhq/orglet-ui';
+
+// The chart library loads the first time a chart is opened large, not with the Files view.
+const ChartViewer = lazy(() => import('./ChartBlock').then(module => ({ default: module.ChartViewer })));
+
+/** One row of the Files list: a file or a chart, with what it is and a chevron; it opens in its own viewer. */
+function FileRow({ icon: KindIcon, name, meta, revoked, onOpen }: { icon: typeof ChartNoAxesColumn; name: string; meta: string; revoked?: boolean; onOpen: () => void }) {
+  return <button type="button" className="source-row" aria-haspopup="dialog" onClick={onOpen}>
+    <KindIcon size={18} className="source-kind" />
+    <span className="source-row-text">
+      <span className="source-name">{name}</span>
+      <span className={revoked ? 'source-meta revoked' : 'source-meta'}>{meta}</span>
+    </span>
+    <ChevronRight size={16} className="source-row-open" />
+  </button>;
+}
 
 export type SourceTarget = { type: 'source' | 'checker'; id: string; lines?: [number, number] };
 
@@ -89,6 +105,7 @@ function CheckResult({ profile, sources }: { profile: ProfileRecord; sources: Ta
 export function SourcePanel({ detail, refresh, target, openSource }: { detail: TaskDetail; refresh: () => void; target?: SourceTarget; openSource: (id: string) => void }) {
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [openChartId, setOpenChartId] = useState<string>();
   const [selected, setSelected] = useState<string[]>([]); const [idColumn, setIdColumn] = useState('');
   const [direction, setDirection] = useState<'' | 'higher' | 'lower'>('');
   const [predictionSourceId, setPredictionSourceId] = useState('');
@@ -135,20 +152,21 @@ export function SourcePanel({ detail, refresh, target, openSource }: { detail: T
   const readableDataSources = dataSources.filter(source => !source.revoked);
   const selectedRevoked = selected.some(id => detail.sources.find(source => source.id === id)?.revoked);
   const newestFirst = [...detail.profiles].reverse();
+  const charts = chartsOfChat(detail.artifacts);
+  const openedChart = charts.find(chart => chart.id === openChartId);
   return <div className="form">
-    {!detail.sources.length && <p>{t('Task này không có tệp đính kèm.')}</p>}
+    {!detail.sources.length && !charts.length && <p>{t('Task này không có tệp đính kèm.')}</p>}
+    {charts.length > 0 && <ul className="source-list chart-list" aria-label={t('Biểu đồ')}>
+      {charts.map(chart => <li key={chart.id}>
+        <FileRow icon={ChartNoAxesColumn} name={chart.spec.title} meta={t('Biểu đồ · {0}', [chart.spec.takeaway])} onOpen={() => setOpenChartId(chart.id)} />
+      </li>)}
+    </ul>}
+    {openedChart && <Suspense fallback={null}><ChartViewer spec={openedChart.spec} onClose={() => setOpenChartId(undefined)} /></Suspense>}
     {detail.sources.length > 0 && <ul className="source-list" aria-label={t('Tệp đính kèm')}>
       {detail.sources.map(source => {
         const KindIcon = fileKindIcon(source.name);
         return <li key={source.id} id={`source-${source.id}`}>
-          <button type="button" className="source-row" aria-haspopup="dialog" onClick={() => openSource(source.id)}>
-            <KindIcon size={18} className="source-kind" />
-            <span className="source-row-text">
-              <span className="source-name">{source.name}</span>
-              <span className={source.revoked ? 'source-meta revoked' : 'source-meta'}>{source.revoked ? t('Đã thu hồi quyền đọc') : `${fileKindLabel(source.name)} · ${fileSize(source.bytes)}`}</span>
-            </span>
-            <ChevronRight size={16} className="source-row-open" />
-          </button>
+          <FileRow icon={KindIcon} name={source.name} meta={source.revoked ? t('Đã thu hồi quyền đọc') : `${fileKindLabel(source.name)} · ${fileSize(source.bytes)}`} revoked={source.revoked} onOpen={() => openSource(source.id)} />
         </li>;
       })}
     </ul>}

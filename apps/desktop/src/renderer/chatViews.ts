@@ -1,4 +1,5 @@
-import type { Routine, Task } from '../shared/contracts';
+import type { Artifact, Routine, Task } from '../shared/contracts';
+import { chartFencesIn, checkChart, type ChartSpec } from '../shared/charts';
 import { isMemory, type Knowledge } from '../shared/knowledge';
 
 /**
@@ -29,6 +30,27 @@ export function chatViewToShow(wanted: ChatViewName | undefined, available: read
   if (wanted && available.some(entry => entry.name === wanted)) return wanted;
   return 'chat';
 }
+
+/** A chart that an answer of the chat carries, for the Files view. */
+export type ChatChart = { id: string; spec: ChartSpec; artifactId: string; sentAt: string };
+
+/**
+ * The charts the chat's answers carry, newest first, found in the answers themselves (the chat keeps no list of
+ * them). A chart that does not pass its check is left out: the answer shows why it could not be drawn.
+ */
+export function chartsOfChat(artifacts: readonly Pick<Artifact, 'id' | 'createdAt' | 'report'>[]): ChatChart[] {
+  if (lastCharts && lastCharts.artifacts === artifacts) return lastCharts.charts;
+  const charts = artifacts.flatMap(artifact => chartFencesIn(artifact.report.summary).flatMap((source, index): ChatChart[] => {
+    const checked = checkChart(source);
+    return checked.ok ? [{ id: `${artifact.id}:${index}`, spec: checked.spec, artifactId: artifact.id, sentAt: artifact.createdAt }] : [];
+  }));
+  charts.sort((first, second) => second.sentAt.localeCompare(first.sentAt));
+  lastCharts = { artifacts, charts };
+  return charts;
+}
+
+/** The app reads this on every render; the same list of answers gives the same charts without parsing them again. */
+let lastCharts: { artifacts: readonly unknown[]; charts: ChatChart[] } | undefined;
 
 /** Whose chat this is: one orglet or one crew. A group chat belongs to nobody in particular. */
 export type ViewOwner = { kind: 'worker' | 'team'; id: string };

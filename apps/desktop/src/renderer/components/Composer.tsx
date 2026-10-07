@@ -518,7 +518,9 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
     }
     // The person's reaction on the previous answer reaches the orglet from the core (`previousAnswerReaction`), not
     // as words added to what they typed.
-    const brief = extra;
+    const brief = reply?.point ? `${reply.point}
+
+${extra}` : extra;
     const sent = added.sources;
     action(async () => {
       try {

@@ -3460,7 +3460,13 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .chart-title svg { flex-shrink:0; color:var(--muted); }
 .chart-takeaway { color:var(--muted); font-size:12.5px; line-height:1.45; }
 .chart-plot { width:100%; min-width:0; }
-.chart-source { min-width:0; padding:0 0 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:12px; }
+.chart-foot { display:flex; flex-wrap:wrap; align-items:center; gap:2px 14px; min-width:0; padding:0 0 4px; color:var(--muted); font-size:12px; }
+.chart-hint { display:inline-flex; align-items:center; gap:5px; }
+.chart-hint svg { flex-shrink:0; }
+.chart-source { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chart-askable { cursor:pointer; }
+.chart-large { max-width:none; margin:0; background:transparent; padding:0; }
+.chart-list .source-meta { overflow:hidden; text-overflow:ellipsis; }
 .chart-actions { display:flex; align-items:center; gap:2px; flex-shrink:0; margin:-4px -4px 0 0; }
 .chart-actions .org-button { width:28px; height:28px; min-height:28px; color:var(--muted); }
 .chart-actions .org-button:hover:not(:disabled) { color:var(--text); }

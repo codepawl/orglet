@@ -125,5 +125,17 @@ vẽ được từ tệp.
   và harness đều vẽ được mà không đổi vòng công cụ. Định dạng chốt không cần thử nghiệm: model không viết cú pháp thư
   viện, nên chọn ECharts 6.1.0 (Apache-2.0, tree-shake, không `eval`) cho phần vẽ. Có line, area, bar, scatter, pie,
   histogram; hover, zoom, bật tắt chuỗi; Bảng, lưu PNG, lưu CSV; bảng màu dataviz đã chạy validator trên nền của app.
-  "Skill" là hướng dẫn gắn vào mô tả công cụ `reply`. Chưa làm: bước 4 (nối checker để gộp, "Hỏi về điểm này") và
-  bước 5 (mở lớn), bài benchmark vẽ biểu đồ trên model thật.
+  "Skill" là hướng dẫn gắn vào mô tả công cụ `reply`. Chưa làm: bài benchmark vẽ biểu đồ trên model thật.
+- 2026-10-07 (cùng ngày, nhánh feat/charts-more): làm nốt bước 4 và 5.
+  - **Hỏi về điểm này**: bấm điểm, cột hoặc miếng bánh thì `ChartBlock` gọi `onAskPoint` với một dòng trích (biểu đồ, chuỗi,
+    vị trí trên trục, giá trị); `ChatReply` đưa dòng đó vào ô nhập qua `replyToChartPoint` (cùng chỗ với "Trả lời tin
+    này") và khi gửi, dòng đi trước câu hỏi để Tí biết điểm nào. Line và area dùng click lên vùng vẽ, đổi ra hạng mục gần
+    nhất và chuỗi gần con trỏ nhất, vì đường không có điểm để bấm giữa các ký hiệu.
+  - **Gộp từ tệp**: `profile_dataset` có thêm `aggregate` (cột nhóm, bucket ngày/tháng/năm, sum/avg/min/max/count, tối đa
+    200 nhóm). SQL do `profiler/aggregate.ts` tự dựng, cột phải có trong tệp, không SQL tự do. Kết quả là
+    `DatasetProfile.aggregate`. Hướng dẫn của `reply` bảo Tí vẽ từ các dòng đó, không đọc hay dán dòng thô. Không thêm công
+    cụ mới.
+  - **Mở lớn**: nút trong đầu biểu đồ mở `ChartViewer` (cùng `SourceViewer` mà tệp dùng). Từ trình xem, bấm điểm cũng hỏi
+    được và đóng trình xem.
+  - **Tab Tệp**: `chartsOfChat` (`chatViews.ts`) lấy biểu đồ từ nội dung các câu trả lời, không thêm bảng; số trên menu Tệp
+    cộng cả biểu đồ.

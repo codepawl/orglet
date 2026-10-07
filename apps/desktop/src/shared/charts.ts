@@ -186,12 +186,42 @@ export function chartCsv(spec: ChartSpec): string {
  */
 export function chartProblemsIn(reply: string): string[] {
   const problems: string[] = [];
-  const fences = reply.matchAll(/^\s*```\s*chart\s*\n([\s\S]*?)^\s*```/gim);
-  let number = 0;
-  for (const fence of fences) {
-    number++;
-    const checked = checkChart(fence[1]);
-    if (!checked.ok) problems.push(...checked.problems.map(problem => `Chart ${number}: ${problem}`));
-  }
+  chartFencesIn(reply).forEach((source, index) => {
+    const checked = checkChart(source);
+    if (!checked.ok) problems.push(...checked.problems.map(problem => `Chart ${index + 1}: ${problem}`));
+  });
   return problems;
+}
+
+/** The text of each ```chart block of a reply, in reply order. */
+export function chartFencesIn(reply: string): string[] {
+  return Array.from(reply.matchAll(/^\s*```\s*chart\s*\n([\s\S]*?)^\s*```/gim), fence => fence[1]);
+}
+
+/** A mark someone clicked on a chart, as ECharts reports it. Only these fields are read. */
+export type ChartClick = { seriesName?: string; name?: string; value?: unknown };
+
+/** What a click on a chart points at: which series, where along the x axis and the value there. */
+export type ChartPoint = { series: string | null; x: string; value: string };
+
+function plainValue(value: unknown): string {
+  return typeof value === 'number' ? String(Number(value.toPrecision(6))) : String(value);
+}
+
+/**
+ * The point a click landed on, from the spec and the click ECharts reports: a bar or a line mark has its category in
+ * `name` and its value alone, a scatter mark carries [x, y], a pie slice its name and value, a histogram bar its range.
+ * Nothing when the click carries no value, such as one on the empty plot.
+ */
+export function chartPointOf(spec: ChartSpec, click: ChartClick): ChartPoint | undefined {
+  const { value } = click;
+  if (value === undefined || value === null) return undefined;
+  const series = click.seriesName && click.seriesName.length > 0 ? click.seriesName : null;
+  if (spec.type === 'scatter') {
+    if (!Array.isArray(value) || value.length < 2) return undefined;
+    return { series, x: plainValue(value[0]), value: plainValue(value[1]) };
+  }
+  if (Array.isArray(value)) return undefined;
+  if (spec.type === 'pie' || spec.type === 'histogram') return { series: null, x: click.name ?? '', value: plainValue(value) };
+  return { series, x: click.name ?? '', value: plainValue(value) };
 }
