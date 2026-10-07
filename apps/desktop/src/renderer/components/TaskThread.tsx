@@ -225,7 +225,9 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     watch: () => openBrowserViewer(detail.task.id), handBack: () => takeOverBrowser(detail.task.id, false),
   });
   // A desktop step waiting on its card waits the same way (COD-261, phase 2a).
-  const dockedIsland = browserIsland && withDesktopApproval(browserIsland, detail.desktop, browserWorkers);
+  const desktopIsland = browserIsland && withDesktopApproval(browserIsland, detail.desktop, browserWorkers);
+  // A run at work carries when it started, so a long wait shows its time; a run waiting on the person does not.
+  const dockedIsland = desktopIsland && dockedRun && desktopIsland.state !== 'waiting' && !pausing ? { ...desktopIsland, since: Date.parse(dockedRun.startedAt) } : desktopIsland;
   const islandWorkerKey = islandWorkers.map(worker => worker.id).join(',');
   // Once no run is on, the island offers this chat's knowledge suggestions instead (COD-208). Dismissing hides the
   // offer for that set only, remembered per chat in localStorage; the notes themselves stay in Thư viện → Knowledge.
@@ -284,7 +286,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     }, islandDock);
     else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() }, islandDock);
     else dockIsland(undefined, islandDock);
-  }, [islandDock, dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.actions?.map(control => control.kind).join(','), islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
+  }, [islandDock, dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.since, dockedIsland?.actions?.map(control => control.kind).join(','), islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
   useEffect(() => () => dockIsland(undefined, islandDock), [islandDock]);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was

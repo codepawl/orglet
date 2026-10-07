@@ -17,7 +17,8 @@ export type IslandState = 'thinking' | 'reading' | 'searching' | 'listing' | 'to
  * workers whose runs are really running, whose faces the island carries (COD-169). `named` is the label cut around
  * the one worker's name, when it names one (COD-250); the label stays the whole sentence.
  */
-export type IslandView = { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; actions?: readonly IslandAction[] };
+export type IslandView = { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; actions?: readonly IslandAction[];
+  /** When the run started (ms), so a long wait shows how long it has been (user, 2026-10-07). */ since?: number };
 
 /**
  * A control the island may carry while a run uses Orglet's browser (COD-261): watch it in the live view, or hand it
@@ -52,7 +53,7 @@ const NAME_FLOOR_EM = 6;
  * `receipt` is left out where the run reports no steps, and passed as an empty string while the first step is still
  * running; the line takes room only once it has something to say.
  */
-export function LiveIsland({ state, label, named, receipt, workers, actions = [], leaving }: { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; actions?: readonly IslandAction[]; leaving?: boolean }) {
+export function LiveIsland({ state, label, named, receipt, workers, actions = [], since, leaving }: { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; since?: number; actions?: readonly IslandAction[]; leaving?: boolean }) {
   const content = useRef<HTMLSpanElement>(null);
   const faces = useRef<HTMLSpanElement>(null);
   const width = useMeasuredWidth(content);
@@ -70,12 +71,37 @@ export function LiveIsland({ state, label, named, receipt, workers, actions = []
           <RosterAvatars workers={workers} size="sm" max={workers.length} />
         </span>
         <IslandSentence key={label} label={label} named={named} />
+        {since !== undefined && <IslandElapsed since={since} />}
         {actions.map(action => <Button key={action.kind} type="button" className="live-island-browser" onClick={action.onSelect}>
           {action.kind === 'watch' ? <Eye size={14} aria-hidden="true" /> : <Undo2 size={14} aria-hidden="true" />}{action.label}
         </Button>)}
       </span>
     </div>
   </div>;
+}
+
+/** How long a run goes before the island says how long it has been: a short answer never needs a clock. */
+export const ELAPSED_AFTER_SECONDS = 15;
+
+/** "42s", then "1:05" past a minute; the same in every language, like the clock it stands for. */
+export function islandElapsedLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/**
+ * The time a run has been going, after the sentence, once the wait is long enough to wonder about (user, 2026-10-07:
+ * a Cursor run sat 1–3 minutes on one sentence). It ticks each second and is quiet text, not a spinner.
+ */
+function IslandElapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  if (seconds < ELAPSED_AFTER_SECONDS) return null;
+  return <span className="live-island-elapsed" aria-hidden="true">{islandElapsedLabel(seconds)}</span>;
 }
 
 /**

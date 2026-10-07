@@ -218,7 +218,7 @@ describe('command contract', () => {
     expect(overrides).toEqual(expect.arrayContaining(['web_search="disabled"', 'project_doc_max_bytes=0', 'tools.view_image=false']));
     expect(codex.join(' ')).not.toMatch(/danger|workspace-write|approve-for-me/);
     const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 }, 'linux');
-    expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'json']));
+    expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'stream-json', '--stream-partial-output']));
     expect(cursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
     // Windows has no Cursor sandbox: ask mode and the deny rules keep the run read-only there (measured 2026-10-07).
     const windowsCursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 }, 'win32');

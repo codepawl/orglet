@@ -2481,6 +2481,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Capped from the bar's width, never from the tab's own: the bar less the corner clearance (72px), the tab's
    padding and outline (21px) and the faces with their gap, so the widest label still fits the straight edge. */
 .live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 101px - var(--island-faces, 24px))); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
+/* How long a long run has been going, after the sentence: quiet, and figures of one width so the tab does not jitter as it ticks. */
+.live-island-elapsed { flex-shrink:0; margin-left:6px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
 @keyframes island-fade-in { from { opacity:0; transform:translateY(2px); } }
 /* A run's sentence is pieces in a row (COD-250): the words before the name, the name, the action. The name shrinks
    first, down to --island-name-floor (a few letters, or the whole name when that is shorter, set by LiveIsland); the

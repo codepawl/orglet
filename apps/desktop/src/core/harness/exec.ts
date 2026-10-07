@@ -9,6 +9,7 @@ import { ClaudeStreamParser } from './claudeStream';
 import { claudeContextUse } from './context-use';
 import type { RunContextUse } from '../../shared/contracts';
 import { CodexStreamParser } from './codexStream';
+import { CursorStreamParser } from './cursorStream';
 import { geminiArgs, geminiPrompt, geminiRunEnvironment, unescapeAtSigns, writeGeminiLockdown } from './gemini';
 import { GeminiStreamParser, geminiTokens, type GeminiStreamOutcome } from './geminiStream';
 import { claudeLimitWarning, claudeRejection, detectUsageLimit, usageLimitMessage, type ClaudeRateLimitInfo, type UsageLimit } from '../usageLimits';
@@ -130,7 +131,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
     return ['-p', ...model, ...(effort ? ['--effort', effort] : []), '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', ...claudeBudgetArgs(request.maxBudgetUsd)];
   }
   if (request.harness === 'cursor') {
-    return ['-p', ...model, '--mode=ask', '--sandbox', cursorSandbox(platform), '--trust', '--workspace', request.cwd, '--output-format', 'json'];
+    return ['-p', ...model, '--mode=ask', '--sandbox', cursorSandbox(platform), '--trust', '--workspace', request.cwd, '--output-format', 'stream-json', '--stream-partial-output'];
   }
   return ['exec', ...model, ...(effort ? ['-c', 'model_reasoning_effort=' + effort] : []), '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
 }
@@ -402,6 +403,7 @@ export const executeHarness: HarnessExecutor = async request => {
   // Both harnesses print events as they work; each parser turns them into live progress for the window.
   const claudeStream = request.harness === 'claude-code' ? new ClaudeStreamParser(request.onProgress) : null;
   const codexStream = request.harness === 'codex' ? new CodexStreamParser(request.onProgress) : null;
+  const cursorStream = request.harness === 'cursor' ? new CursorStreamParser(request.onProgress) : null;
   // Set once the process is running: a tool request from Gemini CLI stops it before the CLI can act on it.
   let stopForNativeTool: (toolName: string) => void = () => {};
   const geminiStream = request.harness === 'gemini' ? new GeminiStreamParser(request.onProgress, toolName => stopForNativeTool(toolName)) : null;
@@ -454,6 +456,7 @@ export const executeHarness: HarnessExecutor = async request => {
       if (claudeStream) claudeStream.push(chunk);
       else if (codexStream) codexStream.push(chunk);
       else if (geminiStream) geminiStream.push(chunk);
+      else if (cursorStream) cursorStream.push(chunk);
       else collected += chunk;
     });
     child.stderr.on('data', chunk => {
@@ -491,6 +494,7 @@ export const executeHarness: HarnessExecutor = async request => {
         resolve('');
         return;
       }
+      if (cursorStream) collected = cursorStream.finish();
       if (code !== 0 && !collected.trim()) {
         if (looksLikeAuth(errorOutput)) reject(new HarnessError(authHint('cursor')));
         else reject(exitError('Cursor Agent', code, errorOutput));
