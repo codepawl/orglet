@@ -65,7 +65,7 @@ A small op-log is not much code, because every write in Orglet already goes thro
 
 ## Signing in from the desktop app
 
-1. **First run.** A new install shows one screen with two choices: **Sign in** as the filled button, and **Use without an account**. There is no "recommended" label. Someone already using Orglet can sign in later from Settings, and their local data is uploaded then (see [Moving between local and account](#moving-between-local-and-account)).
+1. **First run.** A new install shows one screen with two choices: **Sign in** as the filled button, and **No account needed**. There is no "recommended" label. Someone already using Orglet can sign in later from Settings, and their local data is uploaded then (see [Moving between local and account](#moving-between-local-and-account)).
 2. **Sign in in the browser.** Pressing Sign in opens the system browser at `accounts.codepawl.com`, using OAuth 2.1 with PKCE, as RFC 8252 asks of desktop apps. There the person uses email + password (a 6-digit code confirms a new address and any sign-in from a new device), Google or GitHub.
 3. **Back to the app.** The browser returns to the app through a custom link. Better Auth's `oauth-provider` plugin implements this flow; it was measured in phase 0.
    - **The link.** Better Auth rejects `orglet://auth/callback` when a client registers. It requires the RFC 8252 form, a reverse-domain scheme such as `com.codepawl.orglet:/auth/callback`, so Orglet registers that scheme next to the `orglet://` link it already has ([integrations.md](integrations.md)).
