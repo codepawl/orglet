@@ -3,7 +3,28 @@ import { RunAudit, ScoreDirection } from './run-audit';
 
 export const DataFormat = z.enum(['csv', 'jsonl', 'parquet']);
 export type DataFormat = z.infer<typeof DataFormat>;
-export const ProfileArgs = z.object({ sourceIds: z.array(z.string().uuid()).min(1).max(2), idColumn: z.string().min(1).max(256).nullable() }).strict();
+/**
+ * Totals by group, computed by the checker over the whole first file, so a chart is drawn from a few rows and never from
+ * thousands of raw ones. The checker builds the SQL itself; these are only column names and a fixed set of functions.
+ */
+export const AggregateFunction = z.enum(['sum', 'avg', 'min', 'max', 'count']);
+export const AGGREGATE_LIMITS = { measures: 8, groups: 200 } as const;
+export const AggregateRequest = z.object({
+  /** The column whose values form the groups: the x of a bar, line or pie. */
+  groupBy: z.string().min(1).max(256),
+  /** Turns a date column into one group per day, month or year before grouping; null groups by the exact value. */
+  dateBucket: z.enum(['day', 'month', 'year']).nullable(),
+  /** What to compute per group. A column is null only for a count of rows. */
+  measures: z.array(z.object({ column: z.string().min(1).max(256).nullable(), fn: AggregateFunction }).strict()).min(1).max(AGGREGATE_LIMITS.measures),
+  /** group: in order of the group value (time order for dates); largest: biggest first measure first. */
+  sort: z.enum(['group', 'largest']),
+  /** How many groups to return, at most 200. The result says how many there were in all. */
+  limit: z.number().int().min(1).max(AGGREGATE_LIMITS.groups),
+}).strict();
+export type AggregateRequest = z.infer<typeof AggregateRequest>;
+export const ProfileArgs = z.object({ sourceIds: z.array(z.string().uuid()).min(1).max(2), idColumn: z.string().min(1).max(256).nullable(), aggregate: AggregateRequest.nullable().optional() }).strict();
+/** The strict function schema shows the model every field; a call that leaves aggregate out still parses. */
+export const ProfileModelArgs = ProfileArgs.required();
 export const ExactMatchRequest = z.object({
   predictionSourceId: z.string().uuid(), answerSourceId: z.string().uuid(),
   idColumn: z.string().trim().min(1).max(256),
@@ -12,7 +33,8 @@ export const ExactMatchRequest = z.object({
 export type ExactMatchRequest = z.infer<typeof ExactMatchRequest>;
 export const ProfileInput = z.object({ files: z.array(z.object({ sourceId: z.string().uuid(), format: DataFormat, base64: z.string().max(45_000_000) })).min(1).max(2), idColumn: z.string().min(1).max(256).nullable(), runAudit: z.object({ direction: ScoreDirection }).strict().optional(), exactMatch: ExactMatchRequest.optional(),
   // The first rows as text, for the file viewer of a format the window cannot read itself (Parquet).
-  sampleRows: z.number().int().min(1).max(500).optional() });
+  sampleRows: z.number().int().min(1).max(500).optional(),
+  aggregate: AggregateRequest.optional() });
 export type ProfileInput = z.infer<typeof ProfileInput>;
 const Count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const ExactMatchAccuracy = ExactMatchRequest.safeExtend({
@@ -59,6 +81,13 @@ export const DatasetProfile = z.object({
   comparison: z.object({ schemaMatches: z.boolean(), overlappingDistinctIds: Count.nullable(), sameIdOrder: z.boolean().nullable(), columnsMatch: z.boolean().optional(), rowCountsMatch: z.boolean().optional(), onlyInFirst: Count.nullable().optional(), onlyInSecond: Count.nullable().optional() }).nullable(),
   runAudit: RunAudit.optional(),
   exactMatch: ExactMatchAccuracy.optional(),
+  /** Totals by group over the first file, when the call asked for them (see AggregateRequest). */
+  aggregate: z.object({
+    sourceId: z.string().uuid(), columns: z.array(z.string()).max(AGGREGATE_LIMITS.measures + 1),
+    rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))).max(AGGREGATE_LIMITS.groups),
+    /** How many groups the file has in all, and how many rows had no value to group by (left out). */
+    groups: Count, ungrouped: Count,
+  }).optional(),
 }).refine(result => !result.runAudit || (result.datasets.length === 1 && result.runAudit.sourceId === result.datasets[0].sourceId && result.runAudit.rows === result.datasets[0].rows && result.runAudit.completed + result.runAudit.failed + result.runAudit.cancelled === result.runAudit.rows), 'Run audit phải khớp dataset và số dòng đã kiểm tra.')
   .refine(result => !result.exactMatch || (result.datasets.length === 2 && result.exactMatch.predictionSourceId === result.datasets[0].sourceId && result.exactMatch.answerSourceId === result.datasets[1].sourceId && result.datasets.every(dataset => dataset.id?.column === result.exactMatch!.idColumn || result.exactMatch!.reason === 'missing_column') && (result.exactMatch.status !== 'complete' || result.exactMatch.total === result.datasets[0].rows)), 'Kết quả exact-match phải khớp hai nguồn đã kiểm tra.');
 export type DatasetProfile = z.infer<typeof DatasetProfile>;

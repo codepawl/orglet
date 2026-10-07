@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatasetProfile, type ColumnFacts, type DataFormat, type ExactMatchAccuracy, type ProfileInput } from '../shared/profiles';
 import { auditRuns, RunAuditInputError } from './run-audit';
+import { aggregateTable } from './aggregate';
 import { columnFacts, firstColumnLooksLikeRowName, identifier, repeatedRows, wholeRowKey, type Query } from './column-checks';
 
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
@@ -99,6 +100,12 @@ export async function analyze(input: ProfileInput, scratchDirectory?: string): P
       result.runAudit = auditRuns(await query(`SELECT ${selected.map(identifier).join(',')} FROM data0`), dataset.sourceId, input.runAudit.direction);
       result.checks.push('run_failures', 'within_solution_repeat_summary', 'public_private_rank_change');
       result.limitations.push('Run audit dùng score do tệp log khai báo, không tính lại metric từ predictions/answers.');
+    }
+    if (input.aggregate) {
+      const dataset = result.datasets[0];
+      result.aggregate = await aggregateTable(query, 'data0', dataset.sourceId, dataset.columns.map(column => column.name), input.aggregate);
+      result.checks.push('group_totals');
+      result.limitations.push('Tổng theo nhóm chỉ tính trên tệp đầu tiên; ô không phải số bị bỏ qua, và các dòng không có giá trị nhóm không nằm trong kết quả.');
     }
     if (result.datasets.length === 2) {
       const signature = (index: number) => JSON.stringify(result.datasets[index].columns.map(({ name, type }) => ({ name, type })));

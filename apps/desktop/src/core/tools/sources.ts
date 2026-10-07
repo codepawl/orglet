@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { Store, id, now } from '../storage/database';
 import type { Source, FolderIntake, SourceBytes, SourceOrigin } from '../../shared/contracts';
 import { DATASET_SOURCE_LIMIT, INLINE_PREVIEW_LIMIT, MEDIA_SOURCE_EXTENSIONS, MEDIA_SOURCE_LIMITS, TEXT_SOURCE_EXTENSIONS, TEXT_SOURCE_LIMIT, imageSendable, mediaKindOf, mediaMimeType, type ImageWithheld, type MediaKind } from '../../shared/source-kinds';
-import { DataFormat, type ExactMatchRequest, type ProfileExecutor, type DatasetProfile, type ProfileInput, type TableSample } from '../../shared/profiles';
+import { DataFormat, type AggregateRequest, type ExactMatchRequest, type ProfileExecutor, type DatasetProfile, type ProfileInput, type TableSample } from '../../shared/profiles';
 import { ViewableImageMime, type ImageRef } from '../../shared/images';
 import { pdfTextForWorker, type PdfPages, type PdfText, type PdfTextExtractor } from './pdf-text';
 import { extractPdfPagesHere } from './pdf-extract';
@@ -384,13 +384,13 @@ export class Sources {
     if (read.hash !== source.hash) throw new Error('Nguồn đã thay đổi. Chọn lại tệp để tạo manifest mới.');
     return read;
   }
-  async profile(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit'], exactMatch?: ExactMatchRequest): Promise<DatasetProfile> {
+  async profile(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit'], exactMatch?: ExactMatchRequest, aggregate?: AggregateRequest): Promise<DatasetProfile> {
     const controller = new AbortController();
     if (owner) {
       const checks = this.checks.get(owner.taskId) ?? new Set<AbortController>();
       checks.add(controller); this.checks.set(owner.taskId, checks);
     }
-    try { return await this.profileOnce(sourceIds, allowedIds, idColumn, signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, owner, runAudit, exactMatch); }
+    try { return await this.profileOnce(sourceIds, allowedIds, idColumn, signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, owner, runAudit, exactMatch, undefined, aggregate); }
     finally { if (owner) { this.checks.get(owner.taskId)?.delete(controller); if (!this.checks.get(owner.taskId)?.size) this.checks.delete(owner.taskId); } }
   }
   /**
@@ -404,7 +404,7 @@ export class Sources {
   }
   isChecking() { return this.checks.size > 0; }
   cancelChecks(taskId: string) { for (const controller of this.checks.get(taskId) ?? []) controller.abort(); }
-  private async profileOnce(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit'], exactMatch?: ExactMatchRequest, sampleRows?: number): Promise<DatasetProfile> {
+  private async profileOnce(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit'], exactMatch?: ExactMatchRequest, sampleRows?: number, aggregate?: AggregateRequest): Promise<DatasetProfile> {
     if (!this.executor) throw new Error('Checker chưa sẵn sàng.');
     const files = [];
     for (const sourceId of sourceIds) {
@@ -416,7 +416,7 @@ export class Sources {
       files.push({ sourceId, format, base64: read.bytes!.toString('base64') });
     }
     signal?.throwIfAborted();
-    const result = await this.executor({ files, idColumn, ...(runAudit ? { runAudit } : {}), ...(exactMatch ? { exactMatch } : {}), ...(sampleRows ? { sampleRows } : {}) }, signal);
+    const result = await this.executor({ files, idColumn, ...(runAudit ? { runAudit } : {}), ...(exactMatch ? { exactMatch } : {}), ...(sampleRows ? { sampleRows } : {}), ...(aggregate ? { aggregate } : {}) }, signal);
     signal?.throwIfAborted();
     for (const sourceId of sourceIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
     if (owner) this.store.put('profiles', { id: id(), ...owner, createdAt: now(), sourceHashes: Object.fromEntries(sourceIds.map(sourceId => [sourceId, this.store.get<Source>('sources', sourceId).hash])), result }, { column: 'task_id', value: owner.taskId });

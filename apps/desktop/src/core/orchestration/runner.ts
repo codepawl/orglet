@@ -1748,7 +1748,7 @@ export class Runner {
           const profileId = id();
           const result = await executeReadTool({ signal, timeoutMs: toolDefinitions[call.name].timeoutMs,
             authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'dataset.check'),
-            execute: toolSignal => this.sources.profile(args.sourceIds, task.sourceIds, args.idColumn, toolSignal, { id: profileId, taskId: task.id, runId: run.id }, audit ? { direction: audit.direction } : undefined) });
+            execute: toolSignal => this.sources.profile(args.sourceIds, task.sourceIds, args.idColumn, toolSignal, { id: profileId, taskId: task.id, runId: run.id }, audit ? { direction: audit.direction } : undefined, undefined, 'aggregate' in args ? args.aggregate ?? undefined : undefined) });
           for (const sourceId of args.sourceIds) readIds.add(sourceId);
           this.event(run.id, `Đã kiểm tra ${audit ? 'run-log' : 'dataset'}: ${args.sourceIds.map(sourceId => this.store.get<Source>('sources', sourceId).name).join(', ')} · toàn bộ dữ liệu trong giới hạn checker.`);
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ profileId, result }) });
