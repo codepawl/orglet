@@ -474,6 +474,24 @@ const SCREENS = [
   { name: 'settings-search', family: 'settings', open: page => openSettingsTab(page, 'Tìm kiếm web') },
   { name: 'settings-harness', family: 'settings', open: page => openSettingsTab(page, 'Harness trên máy') },
   { name: 'settings-mcp', family: 'settings', open: page => openSettingsTab(page, 'MCP') },
+  // An app that signs in through the browser, saved but not signed in yet: its row asks for the sign-in (stage 4).
+  // Nothing goes over the network: a server with no sign-in is not even tried.
+  { name: 'settings-mcp-sign-in', family: 'settings', open: async page => {
+    await page.evaluate(async () => {
+      const saved = await window.orglet.saveMcpServer({ name: 'Linear', enabled: true, transport: { kind: 'http', url: 'https://mcp.linear.app/mcp', headers: [], oauth: true } });
+      await window.orglet.call('testMcpServer', { id: saved.id });
+    });
+    await openSettingsTab(page, 'MCP');
+    await page.getByText(label('Cần đăng nhập'), { exact: true }).first().waitFor();
+  }, close: page => page.evaluate(async () => {
+    for (const server of (await window.orglet.call('workspace', {})).mcpServers ?? []) await window.orglet.removeMcpServer(server.id);
+  }) },
+  // GitHub takes a token: the form opens filled in, with where to make one.
+  { name: 'mcp-token-form', family: 'settings', open: async page => {
+    await openSettingsTab(page, 'MCP');
+    await page.getByRole('button', { name: label('Thêm token'), exact: true }).click();
+    await page.getByRole('dialog').getByText(label('Tạo token tại {0}', ['https://github.com/settings/personal-access-tokens/new']), { exact: true }).waitFor();
+  } },
   { name: 'settings-browser', family: 'settings', open: page => openSettingsTab(page, 'Trình duyệt') },
   { name: 'settings-costs', family: 'settings', open: page => openSettingsTab(page, 'Chi phí & giới hạn') },
   { name: 'settings-data', family: 'settings', open: page => openSettingsTab(page, 'Dữ liệu') },
