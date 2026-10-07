@@ -22,6 +22,20 @@ export const TeamReassignment = ReassignTeamWork.extend({
   sourceRunId: z.string().uuid(), decisionRunId: z.string().uuid(), callId: z.string().min(1).max(200),
 }).strict();
 export type TeamReassignment = z.infer<typeof TeamReassignment>;
+/**
+ * The principal sends a finished part back to the member who did it, with what to fix (owner, 2026-10-07): the member
+ * works on it again with that feedback and the new result replaces the earlier one.
+ */
+export const SendBackTeamWork = z.object({
+  assignmentWorkerId: z.string().uuid(),
+  feedback: z.string().trim().min(1).max(2000),
+}).strict();
+export const TeamSendBack = SendBackTeamWork.extend({
+  sourceRunId: z.string().uuid(), decisionRunId: z.string().uuid(), callId: z.string().min(1).max(200),
+}).strict();
+export type TeamSendBack = z.infer<typeof TeamSendBack>;
+/** How many times one part can go back to its member in a turn before the principal answers with what is still missing. */
+export const MAX_SEND_BACKS = 2;
 export const TeamMessage = SendTeamMessage.extend({
   body: z.string().min(1).max(4200),
   teamId: z.string().uuid(),

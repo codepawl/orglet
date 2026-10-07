@@ -16,14 +16,16 @@ import { hasVietnamese } from './vietnamese';
 
 let directory: string; let store: Store; let core: CoreService;
 let failReviewer: boolean; let blockedFirstMember: boolean; let memberCalls: number;
+/** Set to have the principal send the first assignment back once before answering (owner, 2026-10-07). */
+let sendBackOnce: boolean; let sentBack: boolean;
 /** What the reviewer's provider throws when failReviewer is set. */
 let reviewerError: Error;
-let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent' | 'leadCombines' | 'leadOwnJob'; let calls: string[]; let planBodies: string[]; let bodies: string[]; let live: number; let peak: number;
+let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent' | 'leadCombines' | 'leadOwnJob' | 'self'; let calls: string[]; let planBodies: string[]; let bodies: string[]; let live: number; let peak: number;
 const COMBINING_BRIEF = 'Combine the others\' results into one short final answer with links';
 const LEAD_OWN_BRIEF = 'Read the attention paper yourself and summarise its method';
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-team-')); store = new Store(join(directory, 'state.sqlite'));
-  failReviewer = false; blockedFirstMember = false; memberCalls = 0;
+  failReviewer = false; blockedFirstMember = false; memberCalls = 0; sendBackOnce = false; sentBack = false;
   reviewerError = new Error('Injected failure');
   planMode = 'all'; calls = []; planBodies = []; bodies = []; live = 0; peak = 0;
   const adapter: ModelAdapter = { async request(messages, tools) {
@@ -43,6 +45,8 @@ beforeEach(async () => {
           leadAssignment,
         ] }) }], usage: { input: 10, output: 10 } };
       }
+      // The principal answers by itself instead of handing anything out (owner, 2026-10-07).
+      if (planMode === 'self') return { calls: [{ id: 'self', name: 'reply', arguments: JSON.stringify({ message: 'Chào bạn, mình trả lời luôn.', title: null, knowledgeProposals: [] }) }], usage: { input: 10, output: 10 } };
       if (planMode === 'invalid') return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [{ workerId: '00000000-0000-4000-8000-000000000000', brief: 'Nope' }] }) }], usage: { input: 10, output: 10 } };
       if (planMode === 'dependent') {
         const [firstWorkerId, secondWorkerId] = memberIdsFromPlanPrompt(messages);
@@ -52,6 +56,11 @@ beforeEach(async () => {
         ] }) }], usage: { input: 10, output: 10 } };
       }
       return planReply(messages, planMode === 'first' ? ids => ids.slice(0, 1) : undefined);
+    }
+    if (sendBackOnce && !sentBack && tools.some(tool => tool.type === 'function' && tool.function.name === 'send_back_team_work')) {
+      sentBack = true;
+      const workerId = /"assignments":\[\{"workerId":"([0-9a-f-]{36})"/.exec(messages.map(message => String(message.content)).join('\n'))![1];
+      return { calls: [{ id: 'send-back', name: 'send_back_team_work', arguments: JSON.stringify({ assignmentWorkerId: workerId, feedback: 'Thiếu nguồn cho con số Q3' }) }], usage: { input: 10, output: 10 } };
     }
     const system = String(messages[0].content); calls.push(system); live++; peak = Math.max(peak, live);
     bodies.push(messages.map(message => String(message.content)).join('\n'));
@@ -96,7 +105,7 @@ it('joins independent artifacts, keeps source scopes local and uses at most two 
   const other = await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' }) as Team;
   expect(other.memberIds.some(id => team.memberIds.includes(id))).toBe(false);
 });
-it('runs a crew of eight: the lead plans for all eight, two work at a time, and one synthesis joins them', async () => {
+it('runs a crew of eight: the lead plans for all eight, as many work at once as the provider allows, and one synthesis joins them', async () => {
   const template = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
   const base = store.get<Worker>('workers', template.memberIds[0]);
   const members: Worker[] = [];
@@ -107,6 +116,8 @@ it('runs a crew of eight: the lead plans for all eight, two work at a time, and 
   const memberIds = members.map(member => member.id);
   await expect(core.command('saveTeam', { ...template, memberIds: [...memberIds, template.synthesizerId] })).rejects.toThrow();
   const team = await core.command('saveTeam', { ...template, memberIds, maxConcurrentTasks: 8 }) as Team;
+  // The crew follows the provider's limit in Settings (owner, 2026-10-07); it used to stop at two whatever the limit.
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, providerConcurrency: 4 });
   const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Everyone reviews one part', sourceIds: [], consent: true, budgetMicros: 5_000_000 }) as string;
   await done(taskId);
   const detail = store.detail(taskId);
@@ -114,7 +125,7 @@ it('runs a crew of eight: the lead plans for all eight, two work at a time, and 
   const plan = detail.runs.find(run => run.stage === 'plan')!;
   expect(plan.snapshot.plan?.assignments.map(assignment => assignment.workerId)).toEqual(memberIds);
   expect(detail.runs.filter(run => run.stage === 'member' && run.status === 'completed')).toHaveLength(8);
-  expect(peak).toBe(2);
+  expect(peak).toBe(4);
   const synthesis = detail.runs.find(run => run.stage === 'synthesis')!;
   expect(synthesis.snapshot.upstreamArtifactIds).toHaveLength(8);
 });
@@ -351,28 +362,51 @@ it('rejects a plan that names a worker outside the team', async () => {
   expect(detail.artifacts).toHaveLength(0);
 });
 
-it('demo team plan assigns only @tagged members', async () => {
+it('sends a message that tags a member straight to that member, with no plan (owner, 2026-10-07)', async () => {
   const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' }) as Team;
   const tagged = store.get<Worker>('workers', team.memberIds[0]);
   const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: `@${tagged.name} hãy đọc nguồn`, sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
   await done(taskId);
   const detail = store.detail(taskId);
-  expect(detail.runs.find(run => run.stage === 'plan')!.snapshot.plan).toEqual({ assignments: [{
-    workerId: tagged.id, brief: `@${tagged.name} hãy đọc nguồn`, expectedOutput: `@${tagged.name} hãy đọc nguồn`,
-    dependsOn: [], writeResources: [],
-  }], note: 'Giao các thành viên được gắn thẻ.' });
-  const members = detail.runs.filter(run => run.stage === 'member');
-  expect(members.filter(run => run.status === 'completed').map(run => run.snapshot.worker.id)).toEqual([tagged.id]);
-  expect(members.find(run => run.status === 'cancelled')!.error).toBe(UNASSIGNED_PLAN_ERROR);
+  expect(detail.task.status).toBe('completed');
+  expect(detail.runs.some(run => run.stage === 'plan')).toBe(false);
+  expect(detail.runs.map(run => [run.stage, run.snapshot.worker.id])).toEqual([['group', tagged.id]]);
 });
 
-it('tells a live planner which members the user tagged', async () => {
+it('keeps a message that tags only the principal on the path of the principal, who may still hand work out', async () => {
   const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
-  const tagged = store.get<Worker>('workers', team.memberIds[0]);
-  const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: `@${tagged.name} hãy đọc nguồn`, sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
+  const principal = store.get<Worker>('workers', team.synthesizerId);
+  const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: `@${principal.name} hãy đọc nguồn`, sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
   await done(taskId);
-  expect(store.detail(taskId).task.status).toBe('completed');
-  expect(planBodies.some(body => body.includes(`"tagged":["${tagged.id}"]`))).toBe(true);
+  expect(store.detail(taskId).runs.some(run => run.stage === 'plan')).toBe(true);
+  expect(planBodies.length).toBe(1);
+});
+
+it('lets the principal send a finished part back with feedback, and answers from the new result (owner, 2026-10-07)', async () => {
+  sendBackOnce = true;
+  const { taskId } = await setup();
+  const detail = store.detail(taskId);
+  expect(detail.task.status).toBe('completed');
+  const resent = detail.runs.filter(run => run.snapshot.sendBack);
+  expect(resent).toHaveLength(1);
+  expect(resent[0].status).toBe('completed');
+  expect(resent[0].snapshot.sendBack!.feedback).toBe('Thiếu nguồn cho con số Q3');
+  // The member worked again with the feedback in its brief.
+  expect(bodies.some(body => body.includes('sent it back: Thiếu nguồn cho con số Q3'))).toBe(true);
+  expect(detail.events.some(event => event.message.startsWith('Đã gửi lại phần việc cho'))).toBe(true);
+});
+
+it('lets the principal answer by itself in one call, and nobody else runs (owner, 2026-10-07)', async () => {
+  planMode = 'self';
+  const { taskId } = await setup();
+  const detail = store.detail(taskId);
+  expect(detail.task.status).toBe('completed');
+  const plan = detail.runs.find(run => run.stage === 'plan')!;
+  expect(detail.artifacts.map(artifact => artifact.runId)).toEqual([plan.id]);
+  expect(detail.artifacts[0].report.summary).toBe('Chào bạn, mình trả lời luôn.');
+  expect(planBodies).toHaveLength(1);
+  expect(calls).toHaveLength(0);
+  for (const run of detail.runs.filter(run => run.stage !== 'plan')) expect([run.status, run.error]).toEqual(['cancelled', UNASSIGNED_PLAN_ERROR]);
 });
 
 it('tells only the crew\'s combined answer which permissions are off, never the plan or the members (COD-257)', async () => {

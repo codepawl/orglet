@@ -59,7 +59,7 @@ it('names the team, the worker\'s part in it and the colleagues', () => {
 
   const synthesizer = identitySection({ worker: worker({ id: 'worker-3', name: 'Linh' }), skill, team, colleagues, stage: 'synthesis' });
   expect(synthesizer).toContain('where you write the team\'s final answer');
-  expect(synthesizer).toContain('This turn you combine your teammates');
+  expect(synthesizer).toContain('This turn you check your teammates');
 });
 
 it('tells a group-chat worker not to repeat what the others already said', () => {

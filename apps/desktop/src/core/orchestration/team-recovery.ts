@@ -1,5 +1,5 @@
 import type { Run, Task } from '../../shared/contracts';
-import { ReassignTeamWork, TeamReassignment } from '../../shared/team-messages';
+import { MAX_SEND_BACKS, ReassignTeamWork, SendBackTeamWork, TeamReassignment, TeamSendBack } from '../../shared/team-messages';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { Store, id, now } from '../storage/database';
 import { assignmentKey } from './assignments';
@@ -63,6 +63,48 @@ export class TeamRecovery {
       };
       this.store.put('runs', run, { column: 'task_id', value: task.id });
       this.store.event(current.id, `Đã giao lại phần việc cho ${run.snapshot.worker.name}: ${input.reason}`);
+      return run;
+    });
+  }
+
+  /**
+   * A finished part the principal sends back with feedback (owner, 2026-10-07): the same member works on it again, with
+   * what the chat allows now, at most `MAX_SEND_BACKS` times per part. The same call id gives back the same attempt.
+   */
+  prepareSendBack(lead: Run, callId: string, raw: unknown): Run {
+    const input = SendBackTeamWork.parse(raw);
+    return this.store.transaction(() => {
+      const current = this.store.get<Run>('runs', lead.id);
+      const task = this.store.get<Task>('tasks', current.taskId);
+      const team = current.snapshot.team;
+      const revision = current.snapshot.inputRevision ?? 0;
+      if (lead.taskId !== task.id || current.stage !== 'synthesis' || current.status !== 'running'
+        || !team || team.synthesizerId !== current.snapshot.worker.id || task.teamId !== team.id
+        || (task.inputRevision ?? 0) !== revision || task.status !== 'running') {
+        throw new Error('Chỉ trưởng nhóm đang điều phối lượt này được gửi lại việc.');
+      }
+      const runs = this.store.detail(task.id).runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.team?.id === team.id);
+      const previous = runs.find(run => run.snapshot.sendBack?.decisionRunId === current.id && run.snapshot.sendBack.callId === callId);
+      if (previous) {
+        const saved = previous.snapshot.sendBack!;
+        if (saved.assignmentWorkerId !== input.assignmentWorkerId || saved.feedback !== input.feedback) throw new Error('Tool call đã lưu có nội dung khác.');
+        return previous;
+      }
+      const plan = runs.findLast(run => run.stage === 'plan' && run.status === 'completed')?.snapshot.plan;
+      const assignment = plan?.assignments.find(item => item.workerId === input.assignmentWorkerId);
+      const source = runs.findLast(run => run.stage === 'member' && assignmentKey(run) === input.assignmentWorkerId);
+      if (!assignment || !source || source.status !== 'completed') throw new Error('Chỉ gửi lại phần việc đã xong của một thành viên trong lượt này.');
+      if (runs.filter(run => run.snapshot.sendBack?.assignmentWorkerId === input.assignmentWorkerId).length >= MAX_SEND_BACKS) {
+        throw new Error('Đã gửi lại phần việc này hai lần. Trả lời người dùng kèm phần còn thiếu.');
+      }
+      // A fresh snapshot of the same member: no frozen context, so it starts with what the chat allows now.
+      const { context: _context, reassignment: _reassignment, sendBack: _sendBack, ...snapshot } = source.snapshot;
+      const run: Run = {
+        id: id(), taskId: task.id, stage: 'member', status: 'queued', startedAt: now(), error: null,
+        snapshot: { ...snapshot, assignment, upstreamArtifactIds: [], sendBack: TeamSendBack.parse({ ...input, sourceRunId: source.id, decisionRunId: current.id, callId }) },
+      };
+      this.store.put('runs', run, { column: 'task_id', value: task.id });
+      this.store.event(current.id, `Đã gửi lại phần việc cho ${run.snapshot.worker.name}: ${input.feedback}`);
       return run;
     });
   }

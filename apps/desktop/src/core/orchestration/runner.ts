@@ -877,7 +877,8 @@ export class Runner {
     }
   }
   async run(task: Task, run: Run, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[]; assignment?: string;
-    signal?: AbortSignal; reassign?: (callId: string, input: unknown, signal: AbortSignal) => Promise<unknown> } = {}) {
+    signal?: AbortSignal; reassign?: (callId: string, input: unknown, signal: AbortSignal) => Promise<unknown>;
+    sendBack?: (callId: string, input: unknown, signal: AbortSignal) => Promise<unknown> } = {}) {
     if (this.active.has(run.id)) throw new Error('Lần chạy đang hoạt động.');
     const controller = new AbortController();
     const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
@@ -1124,6 +1125,7 @@ export class Runner {
               currentWorkerName: latest?.snapshot.worker.name, status: latest?.status,
               error: latest?.error, artifactIds: detail.artifacts.filter(artifact => artifact.runId === latest?.id).map(artifact => artifact.id),
               reassignments: turnRuns.filter(candidate => candidate.snapshot.reassignment?.assignmentWorkerId === assignment.workerId).length,
+              sendBacks: turnRuns.filter(candidate => candidate.snapshot.sendBack?.assignmentWorkerId === assignment.workerId).length,
               attempts: savedAssignmentAttempts(assignment.workerId, turnRuns, detail.artifacts) };
           }) : undefined;
           const instruction = 'Preserve disagreements and unresolved questions. Only assigned participants can exchange messages. Sending does not dispatch a worker. The lead decides reassignment; workers report blockers instead of starting agents. Use only the advertised mailbox and lead tools. Native CLI tools do not carry Orglet authority.';
@@ -1458,8 +1460,9 @@ export class Runner {
           this.notify();
           return;
         }
-        if (call.name === 'reassign_team_work') {
-          if (!options.reassign) throw new Error('Chỉ trưởng nhóm đang điều phối lượt này được giao lại việc.');
+        if (call.name === 'reassign_team_work' || call.name === 'send_back_team_work') {
+          const decide = call.name === 'reassign_team_work' ? options.reassign : options.sendBack;
+          if (!decide) throw new Error('Chỉ trưởng nhóm đang điều phối lượt này được giao lại việc.');
           const recoverySignal = AbortSignal.any([signal, AbortSignal.timeout(toolDefinitions[call.name].timeoutMs)]);
           const result = await new ToolCalls(this.store).execute({
             runId: run.id, callId: call.id, name: call.name, arguments: JSON.parse(call.arguments), replay: 'idempotent',
@@ -1467,7 +1470,7 @@ export class Runner {
               recoverySignal.throwIfAborted();
               assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
             },
-            perform: () => options.reassign!(call.id, JSON.parse(call.arguments), recoverySignal),
+            perform: () => decide(call.id, JSON.parse(call.arguments), recoverySignal),
           });
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };

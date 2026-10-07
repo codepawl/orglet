@@ -77,7 +77,8 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
     setAccess(editing && !draft.spaceId ? 'listed' : 'inherit');
     if (invalid === 'members') clearError();
   };
-  const [mode, setMode] = useState<ChannelMode>(crew ? 'lead' : 'turns');
+  // A new channel has a lead who takes every message nobody was tagged in (owner, 2026-10-07); one that takes turns keeps it.
+  const [mode, setMode] = useState<ChannelMode>(crew || !editing ? 'lead' : 'turns');
   const lead = useLeadSettings(crew, orgletIds);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -171,9 +172,10 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
       <Select label={<FieldLabel icon={Workflow} required>{t('Cách làm việc')}</FieldLabel>} value={mode} onChange={value => setMode(value as ChannelMode)} menuMinWidth={320}
         options={[
           { value: 'turns', label: t('Lần lượt trả lời'), detail: t('Mỗi Tí trả lời rồi đến Tí tiếp theo'), icon: <MessagesSquare size={16} /> },
-          { value: 'lead', label: t('Tí trưởng chia việc'), detail: t('Tí trưởng lên kế hoạch, giao việc rồi gộp kết quả'), icon: <Combine size={16} /> },
+          { value: 'lead', label: t('Tí trưởng chia việc'), detail: t('Tí trưởng nhận việc, giao và kiểm tra'), icon: <Combine size={16} /> },
         ]} />
       {mode === 'turns' && <p className="muted">{t('Mỗi Tí trong kênh trả lời lần lượt và đọc được các câu trả lời trước. Gắn @tên để hỏi riêng một Tí.')}</p>}
+      {mode === 'lead' && <p className="muted">{t('Tin không gắn ai thì Tí trưởng nhận: tự trả lời, hoặc giao cho Tí hợp việc, kiểm tra kết quả rồi gửi lại khi còn lỗi. Gắn @tên để hỏi thẳng một Tí.')}</p>}
       {mode === 'lead' && lead.howFields(workspace.workers.filter(worker => orgletIds.includes(worker.id)), { busy, invalid, flash, clearError })}
     </>}
     {tab === 'limits' && mode === 'lead' && lead.limitFields({ invalid, flash, clearError })}
@@ -192,7 +194,7 @@ function useLeadSettings(crew: Team | undefined, orgletIds: readonly string[]) {
   // A lead the person did not pick follows the members, so unticking it never leaves a lead outside the channel.
   const [leadPicked, setLeadPicked] = useState(Boolean(crew));
   const [workflow, setWorkflow] = useState<Team['workflow']>(crew?.workflow ?? 'parallel');
-  const [instructions, setInstructions] = useState(crew?.instructions ?? t('Gộp phần việc của từng Tí thành một câu trả lời. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.'));
+  const [instructions, setInstructions] = useState(crew?.instructions ?? t('Tự trả lời khi làm được một mình. Giao việc khi cần chuyên môn của Tí khác, kiểm tra kết quả và gửi lại khi còn lỗi. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.'));
   const [reviewPolicy, setReviewPolicy] = useState(crew?.reviewPolicy);
   const [preflight, setPreflight] = useState(crew?.preflight);
   const [limit, setLimit] = useState(toAmount(crew?.monthlyBudgetMicros ?? 5_000_000));
@@ -234,7 +236,7 @@ function useLeadSettings(crew: Team | undefined, orgletIds: readonly string[]) {
       options={members.map(worker => ({ value: worker.id, label: worker.name, icon: orgletFace(worker) }))} />
     <Select label={<FieldLabel icon={ListOrdered} required>{t('Quy trình')}</FieldLabel>} value={workflow} onChange={value => setWorkflow(value as Team['workflow'])}
       options={[{ value: 'parallel', label: t('Song song, rồi tổng hợp'), icon: <Columns2 size={16} /> }, { value: 'sequential', label: t('Tuần tự, rồi tổng hợp'), icon: <ListOrdered size={16} /> }]} />
-    <p className="muted">{t('Tuần tự theo thứ tự chọn thành viên; song song tối đa hai người cùng lúc.')}</p>
+    <p className="muted">{t('Tuần tự theo thứ tự chọn thành viên; song song thì chạy cùng lúc trong giới hạn của mỗi kết nối.')}</p>
     <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn của Tí trưởng')}</FieldLabel>
       <Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
     {(reviewPolicy || preflight) && <div className="review-setup-list">

@@ -62,7 +62,8 @@ describe('tool policy boundary', () => {
     expect(() => assertToolCall(run, task, 'read_source', '{"sourceId":"../file"}')).toThrow();
     expect(() => assertToolCall(run, task, '__proto__', '{}')).toThrow('policy');
     run.stage = 'plan';
-    expect(() => assertToolCall(run, task, 'reply', '{"message":"skip plan"}')).toThrow('policy');
+    // The principal may answer by itself at the plan step (owner, 2026-10-07), but never hand in a report there.
+    expect(() => assertToolCall(run, task, 'submit_report', JSON.stringify({ title: 'x', summary: 'x', findings: [], limitations: [] }))).toThrow('policy');
   });
 
   it('blocks a model calling a denied tool despite its instructions', async () => {
