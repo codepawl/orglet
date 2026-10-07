@@ -20,6 +20,11 @@ overrides:
   # extract-zip has no patched release for GHSA-jmr9-qjv8-65gv / GHSA-7pqw-9j4j-h8q3. Electron's own fork is a
   # drop-in replacement hardened against Zip Slip and symlink escapes; electron itself already uses it (COD-151).
   extract-zip: 'npm:@electron-internal/extract-zip@1.0.5'
+  # GHSA-68fv-2mgg-jv7q: source-map-js before 1.2.2, reached through Tailwind, PostCSS and jsdom (build and tests only).
+  source-map-js: '1.2.2'
+  # GHSA-hp3w-g68c-fv3c: sprintf-js has no patched release. It came only through global-agent 3 (roarr), which
+  # @electron/get loads to honour proxy variables while packaging; global-agent 4 has the same bootstrap() and no roarr.
+  global-agent: '4.1.3'
 minimumReleaseAgeExclude:
   - '@duckdb/node-api@1.5.5-r.5'
   - '@duckdb/node-bindings-darwin-arm64@1.5.5-r.5'
