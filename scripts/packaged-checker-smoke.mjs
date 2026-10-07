@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
-import { label, labelAfter, startsWith, useEnglish, openThreadByBrief, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
+import { label, countPattern, startsWith, useEnglish, openThreadByBrief, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
@@ -281,7 +281,7 @@ try {
   const recoveryPanel = page.locator('.workspace-recovery');
   await recoveryPanel.getByRole('heading', { name: label('File và tiến trình'), exact: true }).waitFor();
   // The attempt's files fold under their count (COD-191); open the group before reaching the private edit.
-  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: labelAfter('{0} thay đổi trong bản làm việc') }).click();
+  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: countPattern('{0} thay đổi trong bản làm việc') }).click();
   await recoveryPanel.getByRole('button', { name: label('Xem bản sửa riêng'), exact: true }).click();
   const privateEdit = recoveryPanel.locator('pre').filter({ hasText: 'Private edit for inspection' });
   const privateEditError = recoveryPanel.getByRole('alert');
@@ -296,7 +296,7 @@ try {
   console.log(JSON.stringify({ privateFilePreview: sandboxUnavailable ? 'sandbox-unavailable' : 'passed' }));
   assert.equal(await readFile(join(taskWorkspace, 'note.txt'), 'utf8'), 'Current user file');
   // Commands fold under their attempt's count (COD-191): open the group, then the unknown process inside it.
-  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: labelAfter('{0} lệnh') }).click();
+  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: countPattern('{0} lệnh') }).click();
   await recoveryPanel.locator('details.recovery-process > summary').filter({ hasText: label('Chưa rõ kết quả') }).click();
   await recoveryPanel.getByRole('button', { name: label('Xem đầu ra'), exact: true }).click();
   await page.waitForFunction(() => [...document.querySelectorAll('.workspace-process-output pre')].some(pre => [...(pre.textContent ?? '')].length === 16000));

@@ -26,6 +26,17 @@ export function startsWith(vietnamese, values = []) {
   return new RegExp(`^${label(vietnamese, values).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
 }
 
+/**
+ * A count label such as "{0} thay đổi" for any count. Vietnamese has one form; English has "1 change" and "3 changes"
+ * as two keys, so the pattern takes either (CI failed on a lone change after the smokes moved to English).
+ */
+export function countPattern(vietnamese) {
+  const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const plural = escape(label(vietnamese, ['\u0000'])).replace('\u0000', '\\d+');
+  const singular = en[vietnamese.replace('{0}', '1')];
+  return new RegExp(singular ? `(${plural}|${escape(singular)})` : plural);
+}
+
 // Orglet starts in English and the smokes run in it. Waits for the empty chat of the fresh workspace and opens the
 // full sidebar. Returns the language the workspace started in, for the smoke that checks it.
 export async function useEnglish(page) {
