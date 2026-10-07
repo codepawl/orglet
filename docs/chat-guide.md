@@ -70,6 +70,8 @@ With nothing but the messages, the menu lists none. Orglet remembers the view ea
 
 Every message starts at the left: a face, the name and the time, then the text. Your own messages look the same, with **You** as the name. When the same person or orglet writes several messages within five minutes, only the first shows the face and name; point at a later one to see its time at the left.
 
+Web addresses in a message are links, in an answer and in your own messages alike. Clicking one opens it in your browser, never inside Orglet. Pointing at it shows the full address. A link whose text says something else shows its site after the text, so a link dressed up as another is easy to spot. Only web and mail addresses open; a file path or any other kind of address stays plain text.
+
 Point at a message, or move to it with Tab, to see its buttons at its top right: copy and download for an answer, then **Reply**, **Forward** and **React**. Reactions show in a row under the message. Small faces at the end of that row show which orglets read up to here but have not answered yet.
 
 ## Attach files
