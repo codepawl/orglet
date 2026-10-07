@@ -40,6 +40,9 @@ function statusLine(state: DecisionModelState) {
   if (state.status === 'ready') {
     return <span className="status-pill logged_in"><StatusMark variant="filled" tone="success" label={t('Đã sẵn sàng')} decorative />{t('Đã sẵn sàng · {0} trên máy', [fileSize(state.totalBytes)])}</span>;
   }
+  if (state.status === 'outdated') {
+    return <span className="status-pill"><StatusMark variant="asking" tone="accent" label={t('Có bản mới')} decorative />{t('Có bản mới · {0}. Tacet tạm nghỉ đến khi cập nhật.', [fileSize(state.totalBytes)])}</span>;
+  }
   if (state.status === 'downloading') return <span className="tacet-setup-meta">{t('Đang tải {0}', [progressLabel(state)])}</span>;
   if (state.status === 'verifying') return <span className="tacet-setup-meta">{t('Đang kiểm tra tệp…')}</span>;
   if (state.status === 'failed') {
@@ -51,8 +54,8 @@ function statusLine(state: DecisionModelState) {
 
 /**
  * Tacet's enable block, with no product logic: the title, one sentence on what it does and that it stays on this
- * computer, the size, then Download, the progress with Cancel, or Remove. Settings shows it today; an onboarding step
- * can render the same block (`TacetSetup`) as it is.
+ * computer, the size, then Download, the progress with Cancel, or Remove, and Update when a newer Tacet is pinned than
+ * the one on disk. Settings shows it today; an onboarding step can render the same block (`TacetSetup`) as it is.
  */
 export function TacetSetupView({ state, busy = false, onDownload, onCancel, onRemove }: { state: DecisionModelState | undefined; busy?: boolean } & Actions) {
   const titleId = 'tacet-setup-title';
@@ -72,6 +75,7 @@ export function TacetSetupView({ state, busy = false, onDownload, onCancel, onRe
         {state && (state.status === 'absent' || state.status === 'failed') && <Button variant="outline" disabled={busy} onClick={onDownload}>
           {state.status === 'failed' ? <RotateCw size={14} /> : <Download size={14} />}{state.status === 'failed' ? t('Thử lại') : t('Tải về')}
         </Button>}
+        {state?.status === 'outdated' && <Button variant="outline" disabled={busy} onClick={onDownload}><Download size={14} />{t('Cập nhật')}</Button>}
         {moving && <Button variant="ghost" disabled={busy} onClick={onCancel}><X size={14} />{t('Hủy')}</Button>}
         {state?.status === 'ready' && <Button variant="outline" className="danger" disabled={busy} onClick={onRemove}><Trash2 size={14} />{t('Gỡ')}</Button>}
       </div>

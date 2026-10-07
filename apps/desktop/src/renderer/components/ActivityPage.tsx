@@ -1,4 +1,4 @@
-import { BookOpen, CalendarClock, Bookmark, BookmarkX } from 'lucide-react';
+import { BookOpen, CalendarClock, Bookmark, BookmarkX, Sparkles } from 'lucide-react';
 import type { Task, Team } from '../../shared/contracts';
 import { waitsForPerson, type RunningItem } from '../../shared/running';
 import { t } from '../i18n';
@@ -29,7 +29,7 @@ export function activityTabLabel(tab: ActivityTab): string {
  * to review. Running: what works or waits in line. Done: what the app told you after its toast was gone. Saved: the
  * messages saved for later with "Lưu để xem sau".
  */
-export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, onOpenArchive, updateReady, onRestartUpdate }: {
+export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, onOpenArchive, updateReady, onRestartUpdate, tacetOutdated, onUpdateTacet }: {
   /** The part of Activity on screen, chosen in the sidebar. */
   tab: ActivityTab;
   running: readonly RunningItem[];
@@ -46,6 +46,9 @@ export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedul
   onOpenArchive: () => void;
   updateReady: boolean;
   onRestartUpdate: () => void;
+  /** A newer Tacet is pinned than the one on disk (2026-10-07): Needs you offers the update until it is done. */
+  tacetOutdated: boolean;
+  onUpdateTacet: () => void;
 }) {
   const waiting = running.filter(waitsForPerson);
   const working = running.filter(item => !waitsForPerson(item));
@@ -53,10 +56,11 @@ export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedul
       {tab === 'needs' && <>
         {pendingSchedules > 0 && <ActivityLink icon={<CalendarClock size={16} />} text={t('{0} lịch cần bạn xem', [pendingSchedules])} action={t('Mở lịch chạy')} onClick={onOpenSchedules} />}
         {notesToReview > 0 && <ActivityLink icon={<BookOpen size={16} />} text={t('{0} ghi chú đang chờ duyệt', [notesToReview])} action={t('Mở thư viện')} onClick={onOpenLibrary} />}
-        <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={pendingSchedules + notesToReview > 0 ? undefined : t('Không có gì đang chờ bạn.')} />
+        {tacetOutdated && <ActivityLink icon={<Sparkles size={16} />} text={t('Có bản Tacet mới. Tacet tạm nghỉ đến khi cập nhật.')} action={t('Cập nhật')} onClick={onUpdateTacet} />}
+        <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={pendingSchedules + notesToReview > 0 || tacetOutdated ? undefined : t('Không có gì đang chờ bạn.')} />
       </>}
       {tab === 'running' && <RunningGroups items={working} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={t('Không có gì đang chạy.')} />}
-      {tab === 'done' && <NoticeList open onOpenChat={onOpenChat} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} />}
+      {tab === 'done' && <NoticeList open onOpenChat={onOpenChat} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} tacetOutdated={tacetOutdated} onUpdateTacet={onUpdateTacet} />}
       {tab === 'saved' && <SavedList saved={saved} chatExists={chatExists} onOpen={onOpenMessage} />}
   </PanelPage>;
 }

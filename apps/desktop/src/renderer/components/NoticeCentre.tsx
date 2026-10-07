@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, ChevronDown, CircleAlert, CircleCheck, Info, RotateCw, Trash } from 'lucide-react';
+import { Archive, ChevronDown, CircleAlert, CircleCheck, Download, Info, RotateCw, Trash } from 'lucide-react';
 import { Button } from './ui';
-import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoticesFirst, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, restartNoticeId, useNotices, type NoticeKind, type NoticeRow } from './notifications';
+import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoticesFirst, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, restartNoticeId, tacetUpdateNoticeId, useNotices, type NoticeKind, type NoticeRow } from './notifications';
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
 
@@ -19,15 +19,18 @@ type NoticeLinks = {
   /** A downloaded update waits for a restart: its notice carries the restart (COD-304). */ updateReady: boolean;
   onRestartUpdate: () => void;
   /** Opens archived items in Settings. */ onOpenArchive: () => void;
+  /** A newer Tacet is pinned than the one on disk: its notice carries Update (2026-10-07). */ tacetOutdated: boolean;
+  onUpdateTacet: () => void;
 };
 
 /**
  * Everything the app has said, after the toast has gone, filtered and grouped by day. The Activity area shows it in its
  * Done view (COD-366); `open` says the list is on screen, which is when it counts as seen.
  */
-export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestartUpdate, onOpenArchive }: { open: boolean } & NoticeLinks) {
+export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestartUpdate, onOpenArchive, tacetOutdated, onUpdateTacet }: { open: boolean } & NoticeLinks) {
   const notices = useNotices();
   const restartId = restartNoticeId(notices, updateReady);
+  const tacetUpdateId = tacetUpdateNoticeId(notices, tacetOutdated);
   const [kind, setKind] = useState<NoticeKind | 'all'>('all');
   // What was unread when the centre opened stays marked as new until it closes, even though opening marks it seen.
   const [newSince, setNewSince] = useState<number | null>(null);
@@ -70,7 +73,8 @@ export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestar
           return <li key={row.notice.id} className={`notice notice-${row.notice.kind}${isNew ? ' is-new' : ''}`}>
             {startsGroup && <p className="notice-day">{label}</p>}
             <NoticeItem row={row} isNew={isNew} onOpenChat={row.notice.taskId && chatExists(row.notice.taskId) ? onOpenChat : undefined}
-              onRestart={row.notice.id === restartId ? onRestartUpdate : undefined} onOpenArchive={row.notice.archive ? onOpenArchive : undefined} />
+              onRestart={row.notice.id === restartId ? onRestartUpdate : undefined} onOpenArchive={row.notice.archive ? onOpenArchive : undefined}
+              onUpdateTacet={row.notice.id === tacetUpdateId ? onUpdateTacet : undefined} />
           </li>;
         })}
       </ol>}
@@ -83,7 +87,7 @@ export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestar
  * A notice about a chat that still exists opens that chat instead (COD-258): that is what the person came for, and
  * its repeats are the same chat, so the count still reads without the list of times.
  */
-function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string) => void; onRestart?: () => void; onOpenArchive?: () => void }) {
+function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive, onUpdateTacet }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string) => void; onRestart?: () => void; onOpenArchive?: () => void; onUpdateTacet?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.notice.kind];
   const repeated = row.count > 1;
@@ -99,12 +103,13 @@ function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive }: { row:
       {row.notice.about && <span className="notice-about">{tMessage(row.notice.about)}</span>}
       {onRestart && <span className="notice-actions"><Button variant="outline" onClick={onRestart}><RotateCw size={14} />{t('Khởi động lại')}</Button></span>}
       {onOpenArchive && <span className="notice-actions"><Button variant="outline" onClick={onOpenArchive}><Archive size={14} />{t('Mở mục lưu trữ')}</Button></span>}
+      {onUpdateTacet && <span className="notice-actions"><Button variant="outline" onClick={onUpdateTacet}><Download size={14} />{t('Cập nhật')}</Button></span>}
     </span>
     {isNew && <span className="notice-new-dot" aria-hidden="true" />}
     <time dateTime={row.notice.at}>{clockLabel(row.notice.at)}</time>
   </>;
-  // The restart and the archive link are their own buttons, so the row around them stays plain.
-  if (onRestart || onOpenArchive) return <div className="notice-body">{content}</div>;
+  // The restart, the archive link and Update are their own buttons, so the row around them stays plain.
+  if (onRestart || onOpenArchive || onUpdateTacet) return <div className="notice-body">{content}</div>;
   if (onOpenChat && taskId) return <button type="button" className="notice-body" title={t('Mở chat')} onClick={() => onOpenChat(taskId)}>{content}</button>;
   if (!repeated) return <div className="notice-body">{content}</div>;
   return <>

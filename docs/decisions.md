@@ -110,6 +110,15 @@ Routing took p50 168 ms, p95 304 ms per message on the same loaded machine.
 
 For the packaged smoke test only, `ORGLET_TACET_SOURCE` can point the download at a server on `127.0.0.1` or `localhost`. Any other address is ignored, and the pinned sizes and hashes still apply, so it changes where identical bytes come from and nothing else.
 
+## Updates
+
+A new Tacet reaches people with an Orglet release: the release pins the new files' sizes and hashes in `TACET_FILES`, and nothing is read from the network to decide that there is one. A model list fetched at run time could swap the model without a release, so there is none.
+
+- **Which Tacet is on disk.** A verified download writes `installed.json` beside the files: each file's name, size and SHA-256. A folder from before that file is taken at its word while its files have the pinned sizes, and gets the record the first time the worker loads it, since loading checks both hashes.
+- **Seeing an earlier one.** When the record names other files than this Orglet pins, or a folder without a record holds a finished file of another size, the state is **outdated** (`Decisions.isOutdated` in `core/decisions/service.ts`). Tacet then rests: every use does what Orglet does without it, because a model is not paired with decision code written for another.
+- **Telling the person.** Once a launch, a note says *A newer Tacet is available. Tacet is paused until you update.* with **Update**, kept in Notifications, where the newest such row keeps **Update** while the earlier Tacet is still on disk (`tacetUpdateNoticeId`). **Activity → Needs you** offers it too, and the Settings block shows *Update available · 305 MB* with **Update** in place of Remove. Nothing downloads until the person clicks (owner, 2026-10-07).
+- **Updating.** **Update** is the same download as the first one: a file whose record matches is kept, the others are fetched and verified, the record is rewritten, and whatever else the folder holds (an earlier file under another name) is deleted. A cut update says so with **Retry**, as a first download does.
+
 ## How it runs
 
 - **ONNX Runtime in Node.** The model runs through `onnxruntime-node` on the CPU execution provider. ONNX was picked to run inside Electron without Python, not for speed.
