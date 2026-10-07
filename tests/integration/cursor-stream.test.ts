@@ -49,3 +49,23 @@ it('gives a long wait a clock on the island, as the same figures in every langua
   expect(islandElapsedLabel(65)).toBe('1:05');
   expect(islandElapsedLabel(600)).toBe('10:00');
 });
+
+it('tells a tool-loop step choosing a tool apart from the answer being written', async () => {
+  const { structuredOutputShape } = await import('../../apps/desktop/src/shared/progress');
+  const { applyOutputShape } = await import('../../apps/desktop/src/core/harness/claudeStream');
+  const { emptyProgress } = await import('../../apps/desktop/src/shared/progress');
+  expect(structuredOutputShape('{"')).toBeUndefined();
+  expect(structuredOutputShape('{"call":{"name":"read_source","argu')).toEqual({ kind: 'call', name: 'read_source' });
+  expect(structuredOutputShape('{"title":"Report')).toEqual({ kind: 'answer' });
+  const progress = emptyProgress();
+  expect(applyOutputShape(progress, '{"call":{"name":"web_search"')).toBe(true);
+  expect(progress).toMatchObject({ writing: false, choosing: 'web_search' });
+  expect(applyOutputShape(progress, '{"call":{"name":"reply","arguments":{"message":"Hi')).toBe(true);
+  expect(progress.writing).toBe(true);
+  expect(progress.choosing).toBeUndefined();
+  // Cursor narrates first; once its object picks a tool, the island names the tool, not a reply being written.
+  const seen: HarnessProgress[] = [];
+  const parser = new CursorStreamParser(update => seen.push(update));
+  parser.push(`${JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Let me check.{"call":{"name":"read_source","arguments":{"sourceId":"a"}}}' }] }, timestamp_ms: 1 })}\n`);
+  expect(seen.at(-1)).toMatchObject({ writing: false, choosing: 'read_source' });
+});

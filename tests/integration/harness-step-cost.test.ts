@@ -248,3 +248,38 @@ describe('attached sources on a CLI tool loop', () => {
     }
   });
 });
+
+describe('progress notes on a CLI tool loop', () => {
+  it('keeps the heads-up a working step sends and shows it before the answer', async () => {
+    const { ProgressNotes } = await import('../../apps/desktop/src/renderer/components/LiveRun');
+    const { createElement } = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const store = new Store(':memory:');
+    let calls = 0;
+    const core = new CoreService(store, () => {}, async () => { throw new Error('Native adapter must not be used'); }, undefined, undefined, {
+      detect: async () => [{ ...missingHarness('claude-code', 'win32'), executable: 'claude.exe', version: '2.1.289', auth: 'logged_in', status: 'signed_in', authDetail: 'Đăng nhập qua claude.ai' }],
+      execute: async () => {
+        calls++;
+        if (calls === 1) return { output: { call: { name: 'web_search', arguments: { query: 'PEP 701' } }, update: 'Để mình tra nguồn chính thức đã.' }, costUsd: null };
+        return { output: { call: { name: 'reply', arguments: { message: 'PEP 701.' } }, update: 'Xong rồi.' }, costUsd: null };
+      },
+    });
+    vi.spyOn(WebTools.prototype, 'search').mockImplementation(async () => ({ query: 'PEP 701', results: [], trust: 'Untrusted web data.', source: { provider: 'Exa', url: 'https://exa.ai' } }) as never);
+    try {
+      const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'claude-code' }) as Worker;
+      const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Which PEP?', sourceIds: [], consent: true, providerScopes: ['claude-code'], budgetMicros: 1_000_000, toolCapabilities: ['network.web'] }) as string;
+      await idle(store, core);
+      const detail = store.detail(taskId);
+      expect(detail.task.status).toBe('completed');
+      const notes = detail.events.filter(event => event.message.startsWith('Tin nhắn giữa chừng: '));
+      // The step that searched sent one; the answer's own heads-up is not kept beside the answer.
+      expect(notes.map(event => event.message)).toEqual(['Tin nhắn giữa chừng: Để mình tra nguồn chính thức đã.']);
+      const html = renderToStaticMarkup(createElement(ProgressNotes, { events: detail.events, runs: detail.runs }));
+      expect(html).toContain('class="progress-note"');
+      expect(html).toContain('Để mình tra nguồn chính thức đã.');
+    } finally {
+      vi.restoreAllMocks();
+      store.close();
+    }
+  });
+});

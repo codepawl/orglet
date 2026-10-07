@@ -1,5 +1,5 @@
 import { emptyProgress, type ActivityKind, type HarnessProgress } from '../../shared/progress';
-import { partialStringField } from './claudeStream';
+import { applyOutputShape, partialStringField } from './claudeStream';
 
 type CursorToolCall = Record<string, { args?: { path?: string; pattern?: string; query?: string; globPattern?: string } } | undefined>;
 
@@ -118,13 +118,11 @@ export class CursorStreamParser {
     const text = (parsed.message?.content ?? []).map(part => part.type === 'text' ? part.text ?? '' : '').join('');
     if (!text) return;
     this.assistantText = parsed.timestamp_ms === undefined ? text : this.assistantText + text;
-    // The answer is a JSON object (a reply call, or a report); its `message` streams in as the person's text.
+    // The output is a JSON object after any narration: a tool-loop step naming its next tool, or the answer itself,
+    // whose `message` streams in as the person's text.
     const start = this.assistantText.indexOf('{');
     if (start === -1) return;
-    if (!this.progress.writing) {
-      this.progress.writing = true;
-      this.emit();
-    }
+    if (applyOutputShape(this.progress, this.assistantText.slice(start))) this.emit();
     const message = partialStringField(this.assistantText.slice(start), 'message');
     if (message !== null && message !== this.progress.answer) {
       this.progress.answer = message;

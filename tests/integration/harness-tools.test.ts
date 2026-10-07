@@ -106,7 +106,7 @@ it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('lets %s keep not
   const schema = harnessToolSchema(tools, harness) as { required: string[]; properties: { notes: { type: string } } };
   expect(schema.properties.notes).toEqual({ type: 'string' });
   // Codex's strict schema needs every property listed; the others leave notes optional.
-  expect(schema.required).toEqual(harness === 'codex' ? ['call', 'notes'] : ['call']);
+  expect(schema.required).toEqual(harness === 'codex' ? ['call', 'notes', 'update'] : ['call']);
   const longNotes = `Zoho Invoice: free, 500 invoices a year. ${'x'.repeat(STEP_NOTES_CHARACTERS)}`;
   const adapter = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
     execute: async request => {
@@ -140,4 +140,10 @@ it('takes the JSON object an answer ends with, fenced or after narration', () =>
   expect(trailingJsonObject('Here it is:\n```json\n{"call":{"name":"reply","arguments":{}}}\n```')).toEqual({ call: { name: 'reply', arguments: {} } });
   expect(trailingJsonObject('Checking {first}. {"a":{"b":1}}')).toEqual({ a: { b: 1 } });
   expect(trailingJsonObject('{"a":1} trailing words')).toBeUndefined();
+});
+
+it('keeps a step\'s update for the person apart from its notes', () => {
+  const call = { name: 'read_source', arguments: { sourceId: 'a' } };
+  expect(toolResponseOf({ call, notes: 'Q2 42%', update: 'Đọc xong rồi, để mình tính tiếp.' }, 'claude-code')).toEqual({ call, notes: 'Q2 42%', update: 'Đọc xong rồi, để mình tính tiếp.' });
+  expect(JSON.stringify(harnessToolSchema([toolDefinitions.read_source.model], 'codex'))).toContain('"required":["call","notes","update"]');
 });

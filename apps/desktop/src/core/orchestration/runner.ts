@@ -57,7 +57,7 @@ import type { AccountUsageRead } from '../harness/usage';
 import type { HarnessSignInRuntime } from '../harness/sign-in';
 import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor, type HarnessResult } from '../harness/exec';
 import { ProgressSender } from './progress';
-import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
+import { ANSWER_TOOLS, PROGRESS_NOTE_CHARACTERS, PROGRESS_NOTE_PREFIX, type HarnessProgress, type RunProgressUpdate } from '../../shared/progress';
 import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
 import { assertTeamPlan, defaultTeamPlan, foldCombiningAssignment } from './plan';
 import { mentionedPeople } from '../../shared/mentions';
@@ -1374,6 +1374,11 @@ export class Runner {
         }
         signal.throwIfAborted();
         reply = sanitizeReportReply(run, reply);
+        // A heads-up the orglet wrote for the person beside a working step shows in the chat as it works; beside the
+        // answer it would only repeat it.
+        if (reply.update && !reply.calls.some(call => ANSWER_TOOLS.includes(call.name))) {
+          this.event(run.id, `${PROGRESS_NOTE_PREFIX}${reply.update.slice(0, PROGRESS_NOTE_CHARACTERS)}`);
+        }
         if (reply.validationFailure) {
           const diagnostic = reportValidationMessage(reply.validationFailure);
           this.event(run.id, diagnostic);

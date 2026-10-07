@@ -172,7 +172,7 @@ Ask for a report and it arrives as a card, not a wall of text. Open it to read i
 
 ## What the orglet did
 
-While an orglet works, a tab docks onto the message box: the faces of the orglets at work, one sentence for what they are doing now ("Researcher is reading invoice.xlsx…"), and above it the last step that finished. What the tab can say depends on how the orglet runs, because the chat only names what Orglet itself saw:
+While an orglet works, it may send a short line now and then about what it found or is doing next ("Read the file; Q3 looks lower, let me recompute"); these stay in the chat above its answer. A tab docks onto the message box: the faces of the orglets at work, one sentence for what they are doing now ("Researcher is reading invoice.xlsx…"), and above it the last step that finished. What the tab can say depends on how the orglet runs, because the chat only names what Orglet itself saw:
 
 | Connection | What the chat can name |
 |---|---|

@@ -2811,6 +2811,11 @@ button.crew-node:hover { background:var(--row-hover); }
 
 /* The working line under an orglet's name. The letters rest lighter than muted text, so the brighter band
    sweeping across them, left to right, reads as a glow rather than a slight shift of the same grey. */
+/* What the orglet told the person while it worked (user, 2026-10-07): its own words, in the text colour like the answer, a
+   touch smaller and with less room between them, so they read as quick messages before the answer, not as the answer. */
+.progress-notes { display:flex; flex-direction:column; gap:4px; margin:0 0 8px; }
+.progress-note { margin:0; font-size:14px; line-height:1.55; color:var(--text); overflow-wrap:anywhere; }
+.progress-note-author { margin-right:6px; font-weight:600; }
 .run-status-line { margin:0; min-height:28px; line-height:28px; font-size:14px; color:transparent; --status-ink:color-mix(in srgb, var(--muted) 48%, var(--bg)); background:linear-gradient(90deg, var(--status-ink) 0%, var(--status-ink) 44%, var(--text) 50%, var(--status-ink) 56%, var(--status-ink) 100%) 0 0 / 250% 100%; -webkit-background-clip:text; background-clip:text; animation:status-sweep 2.2s linear infinite; }
 @keyframes status-sweep { from { background-position:100% 0; } to { background-position:0% 0; } }
 /* A run waiting on the person is not working: its line holds still (COD-290). It sits under the card it waits on,

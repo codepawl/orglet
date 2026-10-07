@@ -33,7 +33,7 @@ import { clockLabel, needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges, hasReactions } from './MessageActions';
 import { messageGrouping, personAuthorKey, workerAuthorKey } from '../messageGroups';
 import { MAIN_DOCK } from './islandDock';
-import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, runEventMessage, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
+import { LiveRun, ProgressNotes, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, runEventMessage, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
@@ -604,6 +604,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
             {latest && detail.task.pendingStart && <p role="status">{t('Đã lưu yêu cầu mới. Đang dừng lượt cũ rồi sẽ bắt đầu.')}</p>}
             {workspace.showWork && crewPlan && <CrewPlanFlow diagram={crewPlan} live={latest && busy} statusLabel={statusLabel} />}
             {workspace.showWork && latest && detail.task.status !== 'completed' && !crewPlan && <TeamJobs runs={turn.runs} artifacts={detail.artifacts} namedRunId={busy && thinkingRun ? thinkingRun.id : undefined} />}
+            <ProgressNotes events={detail.events} runs={turn.runs} />
             {latest && busy && runStatus && <RunStatusLine line={runStatus} waiting={runStatus === waitingLine} />}
             {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} showWork={workspace.showWork === true} />}
             {latest && detail.task.status === 'paused' && <p role="status">{stoppedAfter

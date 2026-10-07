@@ -3,7 +3,7 @@ import type { Activity, Run, Worker } from '../../shared/contracts';
 import type { BrowserLive } from '../../shared/browser';
 import type { DesktopLive } from '../../shared/desktop';
 import type { RunMemory } from '../../shared/knowledge';
-import type { ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
+import { progressNoteOf, type ActivityStep, type HarnessProgress, type RunProgressUpdate } from '../../shared/progress';
 
 import type { IslandState, IslandView } from './LiveIsland';
 import { Markdown } from './Markdown';
@@ -129,7 +129,28 @@ function doingOf(progress: HarnessProgress, pausing: boolean): Doing {
   if (progress.writing) return writingDoing;
   const current = progress.activity.findLast(step => !step.done);
   if (current) return stepDoing(current);
+  if (progress.choosing) return toolDoing(progress.choosing);
   return thinkingDoing;
+}
+
+/** One Doing per kind of work, worded as what the orglet is about to do. */
+const toolDoings: { match: RegExp; doing: Doing }[] = [
+  { match: /^(read_source|workspace_read|workspace_file|read_skill_resource)$/, doing: { state: 'reading', sentence: name => t('{0} đang mở tệp…', [name]), line: () => t('Đang mở tệp…') } },
+  { match: /^(workspace_search|workspace_list)$/, doing: { state: 'searching', sentence: name => t('{0} đang tìm trong thư mục…', [name]), line: () => t('Đang tìm trong thư mục…') } },
+  { match: /^web_search$/, doing: { state: 'searching', sentence: name => t('{0} đang tìm trên web…', [name]), line: () => t('Đang tìm trên web…') } },
+  { match: /^web_read_url$/, doing: { state: 'reading', sentence: name => t('{0} đang đọc một trang web…', [name]), line: () => t('Đang đọc một trang web…') } },
+  { match: /^(workspace_write|workspace_create_folder|workspace_move|workspace_delete)$/, doing: { state: 'writing', sentence: name => t('{0} đang sửa tệp…', [name]), line: () => t('Đang sửa tệp…') } },
+  { match: /^workspace_(start_process|process_status|process_output|cancel_process|processes)$/, doing: { state: 'tool', sentence: name => t('{0} đang chạy lệnh…', [name]), line: () => t('Đang chạy lệnh…') } },
+  { match: /^(profile_dataset|audit_run_log)$/, doing: { state: 'reading', sentence: name => t('{0} đang kiểm tra dữ liệu…', [name]), line: () => t('Đang kiểm tra dữ liệu…') } },
+  { match: /^browser_/, doing: { state: 'reading', sentence: name => t('{0} đang dùng trình duyệt…', [name]), line: () => t('Đang dùng trình duyệt…') } },
+  { match: /^desktop_/, doing: { state: 'tool', sentence: name => t('{0} đang dùng ứng dụng trên máy…', [name]), line: () => t('Đang dùng ứng dụng trên máy…') } },
+  { match: /^(remember|react_to_message)$/, doing: { state: 'thinking', sentence: name => t('{0} đang ghi nhớ…', [name]), line: () => t('Đang ghi nhớ…') } },
+];
+
+/** What the orglet is about to do, from the Orglet tool its step is choosing; an unlisted tool is just a step. */
+function toolDoing(tool: string): Doing {
+  return toolDoings.find(entry => entry.match.test(tool))?.doing
+    ?? { state: 'tool', sentence: name => t('{0} đang chạy một bước…', [name]), line: () => t('Đang chạy một bước…') };
 }
 
 function stepDoing(step: ActivityStep): Doing {
@@ -300,6 +321,26 @@ export function runStepLine({ progress, stage, message, pausing }: { progress?: 
  */
 export function RunStatusLine({ line, waiting = false }: { line: string; waiting?: boolean }) {
   return <p className={waiting ? 'run-status-line waiting' : 'run-status-line'} aria-hidden="true">{line}</p>;
+}
+
+/**
+ * What an orglet told the person while it worked (user, 2026-10-07), in order, between their message and the answer,
+ * whether or not the work itself is shown. Each is the orglet's own sentence; in a crew each names who said it.
+ */
+export function ProgressNotes({ events, runs }: { events: readonly Activity[]; runs: readonly Run[] }) {
+  const authors = new Map(runs.map(run => [run.id, run.snapshot.worker.name]));
+  const named = new Set(runs.map(run => run.snapshot.worker.id)).size > 1;
+  const notes = events.flatMap(event => {
+    const text = authors.has(event.runId) ? progressNoteOf(event.message) : undefined;
+    return text ? [{ id: event.id, text, author: authors.get(event.runId)! }] : [];
+  });
+  if (!notes.length) return null;
+  return <div className="progress-notes">
+    {notes.map(note => <p key={note.id} className="progress-note">
+      {named && <span className="progress-note-author">{note.author}</span>}
+      {note.text}
+    </p>)}
+  </div>;
 }
 
 /** The live timer; `plain` is the line standing on its own above the text, in the folded control's place and colour. */
