@@ -214,7 +214,7 @@ function notifyInBackground(notice: BackgroundNotice): boolean {
   notification.on('click', () => {
     forget();
     void showWindow();
-    if (window && !window.isDestroyed()) window.webContents.send('orglet:open-task', notice.taskId);
+    if (window && !window.isDestroyed()) window.webContents.send('orglet:open-task', notice.taskId, notice.messageId);
   });
   notification.on('failed', forget);
   shownNotifications = [...shownNotifications, notification].slice(-KEPT_NOTIFICATIONS);

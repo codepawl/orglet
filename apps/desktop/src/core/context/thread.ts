@@ -139,23 +139,26 @@ export function mainChatTurns(main: TaskDetail, throughRevision: number, readerW
 function extractive(turns: ThreadTurn[]): { summary: string | null; omitted: Omitted[] } {
   const omitted: Omitted[] = [];
   if (!turns.length) return { summary: null, omitted };
-  const parts: string[] = [];
+  const kept: string[] = [];
   let used = 0;
-  for (const turn of turns) {
+  // Newest first, so a long chat keeps the turns that just left the window and lets the oldest go, not the other way
+  // round (user, 2026-10-07: the first week's lines stayed while last hour's were cut). The lines read oldest first.
+  for (const turn of [...turns].reverse()) {
     const line = `${turn.from}: ${turn.text.split('\n')[0] ?? ''}`.trim();
     const chunk = `${line}\n`;
     const size = bytes(chunk);
     const revision = Math.max(1, turn.revision);
     if (used + size > SUMMARY_BYTES) {
-      omitted.push({ kind: 'turn', revision, reason: 'truncated' });
+      omitted.unshift({ kind: 'turn', revision, reason: 'truncated' });
       continue;
     }
-    parts.push(line);
+    kept.unshift(line);
     used += size;
-    omitted.push({ kind: 'turn', revision, reason: 'summarized' });
-    if (turn.truncated) omitted.push({ kind: 'turn', revision, reason: 'truncated' });
+    const marks: Omitted[] = [{ kind: 'turn', revision, reason: 'summarized' }];
+    if (turn.truncated) marks.push({ kind: 'turn', revision, reason: 'truncated' });
+    omitted.unshift(...marks);
   }
-  const summary = parts.join('\n').trim();
+  const summary = kept.join('\n').trim();
   return { summary: summary || null, omitted };
 }
 

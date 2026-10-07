@@ -32,6 +32,8 @@ export type Notice = {
   confirmation?: true;
   /** The chat this notice is about, such as a schedule's run that finished (COD-258): its row opens that chat. */
   taskId?: string;
+  /** The message in that chat a click lands on (user, 2026-10-07). */
+  messageId?: string;
   /**
    * One kind of news from one place, such as one orglet's side-thread answers (COD-287). A new notice of the group
    * replaces the group's unread one, so the list and the count grow by one row however many answers land.
@@ -79,7 +81,7 @@ const save = () => {
   try { localStorage.setItem(storageKey, JSON.stringify(notices)); } catch { /* a blocked store costs the note, not the app */ }
 };
 
-export type NoticeDetails = { confirmation?: boolean; taskId?: string; group?: string; groupSize?: number; update?: boolean; archive?: boolean; tacetUpdate?: boolean };
+export type NoticeDetails = { confirmation?: boolean; taskId?: string; messageId?: string; group?: string; groupSize?: number; update?: boolean; archive?: boolean; tacetUpdate?: boolean };
 
 /** Records one message. Called by `toast`, so nothing has to remember to do both. */
 export function recordNotice(text: string, kind: NoticeKind, about?: string, details: NoticeDetails = {}) {
@@ -92,6 +94,7 @@ export function recordNotice(text: string, kind: NoticeKind, about?: string, det
     ...(trimmedAbout ? { about: trimmedAbout } : {}),
     ...(details.confirmation ? { confirmation: true as const } : {}),
     ...(details.taskId ? { taskId: details.taskId } : {}),
+    ...(details.taskId && details.messageId ? { messageId: details.messageId } : {}),
     ...(details.group ? { group: details.group } : {}),
     ...(details.group && details.groupSize && details.groupSize > 1 ? { groupSize: details.groupSize } : {}),
     ...(details.update ? { update: true as const } : {}),

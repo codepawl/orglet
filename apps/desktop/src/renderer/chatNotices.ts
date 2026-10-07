@@ -85,7 +85,13 @@ function scheduleName(task: Task, names: ChatNames): string {
  * A notice inside the window: the toast, which Notifications keeps, and the chat it opens. `group` makes its notice
  * take the place of the group's unread one, counting `size` answers (COD-287).
  */
-export type InAppNotice = { taskId: string; text: string; tone: 'success' | 'error'; about: string; group?: { key: string; size: number } };
+export type InAppNotice = { taskId: string; text: string; tone: 'success' | 'error'; about: string; group?: { key: string; size: number };
+  /** The answer a click lands on, so a long answer opens at its first line (user, 2026-10-07). */ messageId?: string };
+
+/** The message a notice about a chat that finished opens at: its newest answer. A chat that needs the person opens at its end. */
+export function answerToOpen(task: Pick<Task, 'lastArtifactId'>, outcome: FinishedChat['outcome']): { messageId?: string } {
+  return outcome === 'done' && task.lastArtifactId ? { messageId: task.lastArtifactId } : {};
+}
 
 /** The group one orglet's side-thread answers share in Notifications, so they wait there as one row. */
 export function sideThreadAnswersGroup(task: Pick<Task, 'workerId'>): string {
@@ -120,15 +126,15 @@ export function inAppNotice(chat: FinishedChat, names: ChatNames, earlierInGroup
     const text = outcome === 'done' ? heldForReview(task, names) ? t('{0} đã xong, thay đổi đang chờ bạn xem', [schedule]) : t('{0} đã xong', [schedule])
       : outcome === 'needs_you' ? t('{0} đang chờ bạn', [schedule])
       : t('{0} cần xem lại', [schedule]);
-    return { taskId: task.id, text, tone, about: ownerName(task, names) };
+    return { taskId: task.id, text, tone, about: ownerName(task, names), ...answerToOpen(task, outcome) };
   }
   if (task.sideOf) {
     const author = names.workers.find(worker => worker.id === task.workerId)?.name ?? 'Orglet';
     if (outcome !== 'done') return { taskId: task.id, text: t('Chat phụ của {0} cần xem lại', [author]), tone, about: chatName(task) };
     const group = sideThreadAnswersGroup(task);
     const size = earlierInGroup(group) + 1;
-    if (size === 1) return { taskId: task.id, text: t('{0} đã trả lời trong chat phụ', [author]), tone, about: chatName(task), group: { key: group, size } };
-    return { taskId: task.id, text: t('{0} đã trả lời trong {1} chat phụ', [author, size]), tone, about: t('Mới nhất: {0}', [chatName(task)]), group: { key: group, size } };
+    if (size === 1) return { taskId: task.id, text: t('{0} đã trả lời trong chat phụ', [author]), tone, about: chatName(task), group: { key: group, size }, ...answerToOpen(task, outcome) };
+    return { taskId: task.id, text: t('{0} đã trả lời trong {1} chat phụ', [author, size]), tone, about: t('Mới nhất: {0}', [chatName(task)]), group: { key: group, size }, ...answerToOpen(task, outcome) };
   }
   return undefined;
 }
@@ -169,12 +175,12 @@ export function noteworthyRuns(previous: ReadonlySet<string>, tasks: readonly Ta
 
 /** The toast for a quiet run Tacet flagged: the schedule found something, about its orglet or crew. */
 export function noteworthyNotice(task: Task, names: ChatNames): InAppNotice {
-  return { taskId: task.id, text: t('{0} có điều mới', [scheduleName(task, names)]), tone: 'success', about: ownerName(task, names) };
+  return { taskId: task.id, text: t('{0} có điều mới', [scheduleName(task, names)]), tone: 'success', about: ownerName(task, names), ...answerToOpen(task, 'done') };
 }
 
 /** The system notification for it: the schedule's name, and that something is new; never the answer itself. */
 export function noteworthyBackgroundNotice(task: Task, names: ChatNames): BackgroundNotice {
-  return { taskId: task.id, title: clipped(scheduleName(task, names)), body: clipped(t('Có điều mới')) };
+  return { taskId: task.id, title: clipped(scheduleName(task, names)), body: clipped(t('Có điều mới')), ...answerToOpen(task, 'done') };
 }
 
 /**
@@ -230,7 +236,7 @@ export function backgroundNotice(chat: FinishedChat, names: ChatNames): Backgrou
   const title = task.routineId ? scheduleName(task, names) : task.sideOf ? t('{0} · chat phụ', [owner]) : owner;
   const body = outcome === 'done' ? heldForReview(task, names) ? t('Thay đổi đang chờ bạn xem') : t('Đã xong')
     : outcome === 'needs_you' ? t('Đang chờ bạn') : t('Cần xem lại');
-  return { taskId: task.id, title: clipped(title), body: clipped(body) };
+  return { taskId: task.id, title: clipped(title), body: clipped(body), ...answerToOpen(task, outcome) };
 }
 
 /**
@@ -258,7 +264,7 @@ export function blockedScheduleNotice(blocked: BlockedSchedule): { text: string;
  * already open says nothing. Any chat that finished, failed or needs the person is also offered to main as a system
  * notification, unless Settings turned that off; main shows it only while the window is in the background.
  */
-export function useChatNotices(workspace: Workspace | undefined, openChat: string | null, open: (taskId: string) => void, openSchedules: () => void) {
+export function useChatNotices(workspace: Workspace | undefined, openChat: string | null, open: (taskId: string, messageId?: string) => void, openSchedules: () => void) {
   const previous = useRef<{ statuses: Map<string, TaskStatus>; routines: Routine[]; attended: Set<string>; at: number }>(undefined);
   const openRef = useRef(open);
   openRef.current = open;
@@ -281,7 +287,7 @@ export function useChatNotices(workspace: Workspace | undefined, openChat: strin
     for (const task of noteworthyRuns(known.attended, workspace.tasks, lookedAt)) {
       if (task.id !== openTask?.id) {
         const notice = noteworthyNotice(task, workspace);
-        toast(notice.text, notice.tone, notice.about, { action: { label: t('Mở'), onSelect: () => openRef.current(notice.taskId) }, unread: true, chat: notice.taskId });
+        toast(notice.text, notice.tone, notice.about, { action: { label: t('Mở'), onSelect: () => openRef.current(notice.taskId, notice.messageId) }, unread: true, chat: notice.taskId, message: notice.messageId });
       }
       if (workspace.backgroundNotifications) void window.orglet?.notifyInBackground?.(noteworthyBackgroundNotice(task, workspace)).catch(() => undefined);
     }
@@ -292,7 +298,7 @@ export function useChatNotices(workspace: Workspace | undefined, openChat: strin
       const notice = inAppNotice(chat, workspace, pendingGroupSize);
       if (!notice) continue;
       // An answer that landed while the person was elsewhere is news, so it waits in Notifications (COD-255).
-      toast(notice.text, notice.tone, notice.about, { action: { label: t('Mở'), onSelect: () => openRef.current(notice.taskId) }, unread: true, chat: notice.taskId, group: notice.group });
+      toast(notice.text, notice.tone, notice.about, { action: { label: t('Mở'), onSelect: () => openRef.current(notice.taskId, notice.messageId) }, unread: true, chat: notice.taskId, message: notice.messageId, group: notice.group });
     }
     for (const notice of backgroundNotices(finished, workspace, workspace.backgroundNotifications)) {
       // Main drops it while the window is focused, where the sidebar and the toasts above already say it.

@@ -7,11 +7,12 @@ export const BACKGROUND_NOTICE_CHARS = 120;
  * A system notification for a chat that finished, failed or needs the person while Orglet is in the background
  * (COD-258). It names the orglet, crew or schedule and says what happened in a few words; it never carries answer
  * text or file contents, since it shows on the desktop and may be read over the person's shoulder. Clicking it
- * brings the window forward and opens `taskId`.
+ * brings the window forward and opens `taskId`, at `messageId` when it names the answer (user, 2026-10-07).
  */
 export const BackgroundNotice = z.object({
   taskId: z.uuid(),
   title: z.string().trim().min(1).max(BACKGROUND_NOTICE_CHARS),
   body: z.string().trim().min(1).max(BACKGROUND_NOTICE_CHARS),
+  messageId: z.string().min(1).max(200).optional(),
 }).strict();
 export type BackgroundNotice = z.infer<typeof BackgroundNotice>;

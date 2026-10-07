@@ -63,6 +63,22 @@ it('summarizes the 11th older turn instead of inlining it', () => {
   expect(earlier.some(turn => turn.text.includes('ALPHAUNIQUE'))).toBe(false);
 });
 
+it('keeps the turns that just left the window when the older lines no longer fit, not the first ones (2026-10-07)', () => {
+  // 400 turns, each line long enough that the 8 KB of older lines holds only some of them.
+  const briefs = Array.from({ length: 400 }, (_, index) => `TURN${String(index).padStart(3, '0')} ${'detail '.repeat(6)}`);
+  const { task, current } = seedTurns(briefs);
+  const compacted = compactThread(store.detail(task.id), current, 'Scoring follow-up');
+  const lines = compacted.summary!.split('\n');
+  const newestOlder = lines.at(-1)!;
+  // The newest of the older turns is there and the very first is not; the lines still read oldest first.
+  // Turns 390-399 are the ten kept word for word, so 389 is the newest of the older ones.
+  expect(newestOlder).toContain('TURN389');
+  expect(compacted.summary).not.toContain('TURN000');
+  const numbers = lines.flatMap(line => /TURN(\d{3})/.exec(line)?.[1] ?? []).map(Number);
+  expect(numbers).toEqual([...numbers].sort((first, second) => first - second));
+  expect(compacted.omitted.some(item => item.reason === 'truncated' && item.revision === 1)).toBe(true);
+});
+
 it('retrieves older notes from this thread only', () => {
   const briefs = ['SCORINGLEAKAGEWORD in this thread only', ...Array.from({ length: 10 }, (_, index) => `Later turn ${index + 1}`)];
   const { task, current } = seedTurns(briefs, { otherBrief: 'OTHERTHREADSECRET scoring leakage from a different chat' });

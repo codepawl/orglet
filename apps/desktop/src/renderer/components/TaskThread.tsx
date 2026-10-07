@@ -625,7 +625,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
             {latest && detail.task.status === 'partial' && !turn.artifact?.report.limitations.length && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
             {/* A turn that ended without an answer keeps what became of it, also once newer messages follow (COD-290);
                 the latest turn's pause already says so in its own line. */}
-            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
+            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && !answeredByLaterTurn(turn, turns) && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
             {answered
               ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest, Boolean(retryButton) && turn.artifact!.report.format === 'chat' && turn.artifact!.report.limitations.length > 0, turn.artifact!.report.format === 'chat' ? receiptsFor(turn.revision) : undefined)
               : heldRun
@@ -1049,4 +1049,13 @@ function ReportDocument({ artifact, author, detail, open, onClose, busy, action,
     </section>}
     {report.limitations.length > 0 && <section className="limitations"><h2>{t('Giới hạn của báo cáo')}</h2><ul>{report.limitations.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></section>}
   </DocumentViewer>;
+}
+
+/**
+ * A message sent while the turn before it was still stopping has no run of its own: the run of the message after it
+ * read both and answers them together (user, 2026-10-07). It reads as one of two messages in a row, with no "not
+ * answered" line under it.
+ */
+function answeredByLaterTurn(turn: Turn, turns: readonly Turn[]): boolean {
+  return turn.runs.length === 0 && turns.some(later => later.revision > turn.revision && later.runs.length > 0);
 }

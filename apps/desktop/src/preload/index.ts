@@ -103,7 +103,7 @@ const bridge: Bridge = {
   },
   notifyInBackground: notice => invoke('orglet:notify', notice),
   onOpenTask: callback => {
-    const listener = (_event: Electron.IpcRendererEvent, taskId: string) => callback(taskId);
+    const listener = (_event: Electron.IpcRendererEvent, taskId: string, messageId?: string) => callback(taskId, typeof messageId === 'string' ? messageId : undefined);
     ipcRenderer.on('orglet:open-task', listener);
     return () => ipcRenderer.removeListener('orglet:open-task', listener);
   },

@@ -611,7 +611,7 @@ export interface Bridge {
   /** Shows a system notification while the window is not focused; false when it was focused or the system has none (COD-258). */
   notifyInBackground(notice: import('./background-notice').BackgroundNotice): Promise<boolean>;
   /** The person clicked a system notification: the window is in front and should open this chat. */
-  onOpenTask(callback: (taskId: string) => void): () => void;
+  onOpenTask(callback: (taskId: string, messageId?: string) => void): () => void;
   /** Takes what Explorer's Send to menu or `orglet://` links sent since the last call (COD-246). */
   takeIncoming(): Promise<import('./incoming').Incoming[]>;
   /** Something new is waiting for `takeIncoming`. */

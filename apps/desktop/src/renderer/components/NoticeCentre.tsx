@@ -14,7 +14,7 @@ const kindIcons: Record<NoticeKind, typeof Info> = { error: CircleAlert, done: C
  * reading "Saved" and "Command not allowed." and nothing else.
  */
 type NoticeLinks = {
-  /** Opens the chat a notice points at, such as a schedule's run (COD-258). */ onOpenChat: (taskId: string) => void;
+  /** Opens the chat a notice points at, such as a schedule's run (COD-258). */ onOpenChat: (taskId: string, messageId?: string) => void;
   /** A chat deleted since leaves its notice as plain text. */ chatExists: (taskId: string) => boolean;
   /** A downloaded update waits for a restart: its notice carries the restart (COD-304). */ updateReady: boolean;
   onRestartUpdate: () => void;
@@ -87,7 +87,7 @@ export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestar
  * A notice about a chat that still exists opens that chat instead (COD-258): that is what the person came for, and
  * its repeats are the same chat, so the count still reads without the list of times.
  */
-function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive, onUpdateTacet }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string) => void; onRestart?: () => void; onOpenArchive?: () => void; onUpdateTacet?: () => void }) {
+function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive, onUpdateTacet }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string, messageId?: string) => void; onRestart?: () => void; onOpenArchive?: () => void; onUpdateTacet?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.notice.kind];
   const repeated = row.count > 1;
@@ -110,7 +110,7 @@ function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive, onUpdate
   </>;
   // The restart, the archive link and Update are their own buttons, so the row around them stays plain.
   if (onRestart || onOpenArchive || onUpdateTacet) return <div className="notice-body">{content}</div>;
-  if (onOpenChat && taskId) return <button type="button" className="notice-body" title={t('Mở chat')} onClick={() => onOpenChat(taskId)}>{content}</button>;
+  if (onOpenChat && taskId) return <button type="button" className="notice-body" title={t('Mở chat')} onClick={() => onOpenChat(taskId, row.notice.messageId)}>{content}</button>;
   if (!repeated) return <div className="notice-body">{content}</div>;
   return <>
     <button type="button" className="notice-body" aria-expanded={expanded} onClick={() => setExpanded(current => !current)}>{content}</button>

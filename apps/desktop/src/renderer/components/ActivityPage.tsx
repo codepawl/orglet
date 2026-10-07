@@ -64,7 +64,7 @@ export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedul
         <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={pendingSchedules + notesToReview > 0 || tacetOutdated ? undefined : t('Không có gì đang chờ bạn.')} />
       </>}
       {tab === 'running' && <RunningGroups items={working} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={t('Không có gì đang chạy.')} />}
-      {tab === 'done' && <NoticeList open onOpenChat={onOpenChat} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} tacetOutdated={tacetOutdated} onUpdateTacet={onUpdateTacet} />}
+      {tab === 'done' && <NoticeList open onOpenChat={(taskId, messageId) => messageId ? onOpenMessage(taskId, messageId) : onOpenChat(taskId)} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} tacetOutdated={tacetOutdated} onUpdateTacet={onUpdateTacet} />}
       {tab === 'saved' && <SavedList saved={saved} chatExists={chatExists} onOpen={onOpenMessage} />}
   </PanelPage>;
 }
