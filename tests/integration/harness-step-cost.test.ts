@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { Store, now } from '../../apps/desktop/src/core/storage/database';
 import { Checkpoints } from '../../apps/desktop/src/core/storage/checkpoints';
@@ -209,5 +212,39 @@ describe('web research on the Claude Code tool bridge', () => {
     // The first page has been cut by now, and its note points at the notes instead of reading it again.
     const firstPage = final.find(message => message.role === 'tool' && String(message.content).includes('https://example.com/1'));
     expect(JSON.parse(String(firstPage!.content)).trimmedForContext).toContain('Use what your notes kept from it');
+  });
+});
+
+describe('attached sources on a CLI tool loop', () => {
+  it('reads small text sources before the first step, so the first call can already answer', async () => {
+    const store = new Store(':memory:');
+    const requests: HarnessRequest[] = [];
+    const core = new CoreService(store, () => {}, async () => { throw new Error('Native adapter must not be used'); }, undefined, undefined, {
+      detect: async () => [{ ...missingHarness('cursor', 'win32'), executable: 'agent.cmd', version: '2026.10.01', auth: 'logged_in', status: 'signed_in', authDetail: 'Đăng nhập Cursor' }],
+      execute: async request => {
+        requests.push(request);
+        return { output: { call: { name: 'reply', arguments: { message: 'Q3 margin fell to 38%.' } } }, costUsd: null };
+      },
+    });
+    try {
+      const directory = await mkdtemp(join(tmpdir(), 'orglet-preload-'));
+      const file = join(directory, 'income.csv');
+      await writeFile(file, 'quarter,revenue,cogs\nQ2,138,80\nQ3,151,93.6\n');
+      const [source] = await core.sources.import([file]);
+      const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'cursor' }) as Worker;
+      // dataset.check sends a CLI run through the tool loop rather than one opaque step.
+      const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Did Q3 margin rise?', sourceIds: [source.id], consent: true, providerScopes: ['cursor'], budgetMicros: 1_000_000, toolCapabilities: ['source.read', 'dataset.check'] }) as string;
+      await idle(store, core);
+      const detail = store.detail(taskId);
+      expect(detail.task.status).toBe('completed');
+      // One CLI call, not a read step and then an answer (measured 2026-10-07: about 20 s per Cursor call).
+      expect(requests).toHaveLength(1);
+      expect(requests[0].prompt).toContain('Q3,151,93.6');
+      // The read is recorded as a read, so the work log shows it.
+      expect(detail.events.filter(event => event.message === 'Đã đọc income.csv')).toHaveLength(1);
+      await rm(directory, { recursive: true, force: true });
+    } finally {
+      store.close();
+    }
   });
 });
