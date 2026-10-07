@@ -117,3 +117,13 @@ vẽ được từ tệp.
   (không mở được, 403; nội dung theo các trang khác)
 - Anthropic, Claude creates interactive charts (03/2026), theo kết quả tìm kiếm và PC World; trang gốc không mở được.
 - Giấy phép và kích thước gói: `npm view`, 2026-10-07.
+
+## Tiến độ
+
+- 2026-10-07: làm bước 2 và 3 theo cách gọn hơn plan. Không thêm công cụ `show_chart`: Tí viết khối ```chart trong câu
+  trả lời bằng spec riêng của Orglet (`shared/charts.ts`), công cụ `reply` kiểm và gửi lại lỗi một lần, nên mọi provider
+  và harness đều vẽ được mà không đổi vòng công cụ. Định dạng chốt không cần thử nghiệm: model không viết cú pháp thư
+  viện, nên chọn ECharts 6.1.0 (Apache-2.0, tree-shake, không `eval`) cho phần vẽ. Có line, area, bar, scatter, pie,
+  histogram; hover, zoom, bật tắt chuỗi; Bảng, lưu PNG, lưu CSV; bảng màu dataviz đã chạy validator trên nền của app.
+  "Skill" là hướng dẫn gắn vào mô tả công cụ `reply`. Chưa làm: bước 4 (nối checker để gộp, "Hỏi về điểm này") và
+  bước 5 (mở lớn), bài benchmark vẽ biểu đồ trên model thật.

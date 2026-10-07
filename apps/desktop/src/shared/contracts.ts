@@ -582,6 +582,8 @@ export interface Bridge {
   openLink(link: AboutLink): Promise<void>;
   /** Opens a link from a chat in the person's browser; main refuses anything but a web or mail address. */
   openUrl(url: string): Promise<void>;
+  /** Saves a chart from a chat as a PNG picture or its data as CSV, where the person picks in the save dialog. */
+  saveChart(name: string, kind: 'png' | 'csv', data: string): Promise<boolean>;
   /** Release notes from GitHub, or the last list this machine fetched when it is offline. */
   changelog(refresh?: boolean): Promise<Changelog>;
   updateState(): Promise<UpdateState>;

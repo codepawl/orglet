@@ -76,9 +76,10 @@ import { findCustomConnection, type CustomConnection } from '../../shared/custom
 import { readCustomConnections } from '../storage/custom-connections';
 import type { McpCallResult, McpServers } from '../tools/mcp';
 import { approvalArguments, mcpCallGranted, McpApprovalChoice, MCP_CALL_TIMEOUT_MS, type McpRunTool } from '../../shared/mcp';
+import { chartProblemsIn } from '../../shared/charts';
 import type { DecisionRequest } from '../../shared/work-decisions';
 import { isBrowserActTool, isBrowserTool, NOT_ASKED_HERE, trimOlderBrowserSnapshots, type BrowserAsking, type BrowserReadToolName, type BrowserStep, type BrowserTools } from '../tools/browser-tools';
-import { MODEL_NOT_CONNECTED, demoRepliesEnabled } from '../../shared/demo-replies';
+import { DEMO_CHART_PROMPT, DEMO_CHART_REPLY, MODEL_NOT_CONNECTED, demoRepliesEnabled } from '../../shared/demo-replies';
 import { CLEAN_BROWSER_PROFILE } from '../../shared/browser';
 import { DESKTOP_BORROW_NOT_ASKED_HERE, DESKTOP_BORROW_TOOL, DESKTOP_NOT_ASKED_HERE, isDesktopActTool, isDesktopTool, trimOlderDesktopSnapshots, type DesktopAsking, type DesktopReadToolName, type DesktopStep, type DesktopTools } from '../tools/desktop-tools';
 import { withTransientRetry } from './transient';
@@ -1003,6 +1004,7 @@ export class Runner {
         if (!needsReport(run)) {
           this.event(run.id, 'Demo: đang trả lời mẫu, không gọi model.');
           // Plain words and the name of the button under the message box (COD-293): "harness" meant nothing to a newcomer.
+          if (input.brief.trimStart().startsWith(DEMO_CHART_PROMPT)) { this.commit(task, run, chatReport(DEMO_CHART_REPLY), options.keepTaskOpen); return; }
           this.commit(task, run, chatReport('Mình là Tí demo nên chưa đọc tệp hay gọi model thật. Bấm Kết nối model dưới khung chat để chọn một model thật, rồi mình trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
           return;
         }
@@ -1719,6 +1721,14 @@ export class Runner {
         if (call.name === 'reply') {
           if (needsReport(run)) throw new Error('Kênh có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));
+          // A chart that cannot be drawn goes back to the orglet once with what is wrong, instead of reaching the chat.
+          const chartProblems = chartProblemsIn(message);
+          const chartSentBack = messages.some(item => item.role === 'tool' && typeof item.content === 'string' && item.content.includes('"chartProblems"'));
+          if (chartProblems.length && !chartSentBack && !checkpoint.wrappingUp) {
+            messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ error: 'A chart in your reply cannot be drawn. Fix the chart block and call reply again with the whole reply.', chartProblems }) });
+            checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
+            continue;
+          }
           for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
           const answer: HeldAnswer = { report: { ...chatReport(message), limitations: this.crewLimitations(run, options) },
             knowledgeProposals, title, untrustedInputs: [...untrustedInputs] };

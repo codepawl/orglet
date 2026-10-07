@@ -485,6 +485,18 @@ const SCREENS = [
   { name: 'viewer-pdf', open: page => openViewerFile(page, 'report.pdf', '.pdf-page') },
   { name: 'sidebar-row-menu', open: async (page, context) => { await openArea(page, 'Trò chuyện'); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
+  // Charts in a reply (2026-10-07): the sample answer on Demo draws a line chart with two series and a bar chart.
+  { name: 'chat-chart', open: async page => {
+    await openArea(page, 'Trò chuyện');
+    await page.locator('.sidebar').getByRole('button', { name: 'Evidence reviewer', exact: true }).first().click();
+    const box = page.getByRole('textbox', { name: label('Tin nhắn') }).first();
+    if (!await page.locator('.chart-block .chart-plot svg').count()) {
+      await box.fill('/demo-chart How did revenue go this half?');
+      await box.press('Enter');
+    }
+    await page.locator('.chart-block .chart-plot svg').nth(1).waitFor({ timeout: 30_000 });
+    await page.locator('.chart-block').first().scrollIntoViewIfNeeded();
+  } },
   // The app trigger (stage 4): a connected app, its read-only tool, arguments, how often and words. The app here was
   // never reached, so the form says it has no read-only tool yet; nothing goes over the network.
   { name: 'schedule-editor-app', open: async page => {

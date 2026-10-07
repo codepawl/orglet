@@ -61,6 +61,7 @@
     "@radix-ui/react-slot": "1.3.3",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "echarts": "6.1.0",
     "gemoji": "8.1.0",
     "lucide-react": "1.48.0",
     "onnxruntime-node": "1.30.0",

@@ -284,7 +284,7 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
         a glance (owner, 2026-09-30: smaller). While a run works, stop takes the slot; words typed meanwhile bring send
         back beside it, so stopping stays one click away. */}
     <div className="composer-send">
-      {onStop && <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
+      {onStop && <Button type="button" variant="ghost" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
         <span className="send-spin" aria-hidden="true" />
         <Square size={9} fill="currentColor" />
       </Button>}

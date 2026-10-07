@@ -1,7 +1,12 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, type ReactNode } from 'react';
 import { Tooltip } from '@codepawlhq/orglet-ui';
 import { linkHost, openableUrl } from '../../shared/links';
 import { orglet } from '../api';
+import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
+import { t } from '../i18n';
+
+// The chart library is large, so it loads the first time a reply has a chart, not with the app.
+const ChartBlock = lazy(() => import('./ChartBlock'));
 
 /**
  * Renders the Markdown that workers write in chat replies: paragraphs, headings, lists, tables, quotes, code and inline
@@ -24,7 +29,7 @@ type Block =
   | { kind: 'list'; ordered: boolean; start: number; items: string[][] }
   | { kind: 'table'; headers: string[]; alignments: Array<'left' | 'center' | 'right'>; rows: string[][] }
   | { kind: 'quote'; lines: string[] }
-  | { kind: 'code'; code: string }
+  | { kind: 'code'; code: string; language?: string }
   | { kind: 'break' };
 
 const fencePattern = /^\s*```/;
@@ -85,6 +90,7 @@ function parseBlocks(text: string): Block[] {
     }
 
     if (fencePattern.test(line)) {
+      const language = /^\s*```\s*([\w-]+)/.exec(line)?.[1]?.toLowerCase();
       const codeLines: string[] = [];
       index += 1;
       while (index < lines.length && !fencePattern.test(lines[index])) {
@@ -92,7 +98,7 @@ function parseBlocks(text: string): Block[] {
         index += 1;
       }
       index += 1;
-      blocks.push({ kind: 'code', code: codeLines.join('\n') });
+      blocks.push({ kind: 'code', code: codeLines.join('\n'), ...(language ? { language } : {}) });
       continue;
     }
 
@@ -199,6 +205,8 @@ function BlockView({ block }: { block: Block }) {
     case 'quote':
       return <blockquote><Lines lines={block.lines} /></blockquote>;
     case 'code':
+      // A chart fence holds a chart spec (shared/charts.ts): drawn by the app, never run as code.
+      if (block.language === 'chart') return <Suspense fallback={<SkeletonGroup label={t('Đang vẽ biểu đồ…')} className='chart-shape'><Skeleton shape='block' className='chart-shape-plot' /></SkeletonGroup>}><ChartBlock source={block.code} /></Suspense>;
       return <pre><code>{block.code}</code></pre>;
     case 'break':
       return <div className="markdown-break" aria-hidden="true" />;

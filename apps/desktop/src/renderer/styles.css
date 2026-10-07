@@ -47,13 +47,19 @@
   color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
-  --bar-line: color-mix(in srgb, var(--muted) 18%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 25%, var(--bg));
+  --bar-line: color-mix(in srgb, var(--muted) 13%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 19%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
 }
 :root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 28%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 38%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 28%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 38%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
+/* Chart series (in-chat charts, 2026-10-07): eight hues in a fixed order, the dataviz reference palette, validated on
+   these surfaces with its script (both modes pass; three light hues sit under 3:1, so a chart always has a legend and a
+   table view). Dark is its own steps of the same hues, not an automatic flip. */
+:root { --chart-1:#2a78d6; --chart-2:#eb6834; --chart-3:#1baf7a; --chart-4:#eda100; --chart-5:#e87ba4; --chart-6:#008300; --chart-7:#4a3aa7; --chart-8:#e34948; }
+:root[data-theme=dark], .theme-dark { --chart-1:#3987e5; --chart-2:#d95926; --chart-3:#199e70; --chart-4:#c98500; --chart-5:#d55181; --chart-6:#008300; --chart-7:#9085e9; --chart-8:#e66767; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { --chart-1:#3987e5; --chart-2:#d95926; --chart-3:#199e70; --chart-4:#c98500; --chart-5:#d55181; --chart-6:#008300; --chart-7:#9085e9; --chart-8:#e66767; } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 /* Dragging over the app's own controls (buttons, rows, panels, labels) selects nothing, the way a desktop app
@@ -448,7 +454,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    the toolbar row (add · model or recipient · usage ring) under it (owner's reference, 2026-09-30). Grown, the box is
    zones stacked: the reply target, the attached files, then the text with send beside its last line. The zones are
    told apart by what they are made of (cards on a surface, bare text, the send button) and by spacing, never by a line. */
-.composer { --composer-radius:16px; --composer-padding:5px; position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"input send"; align-items:end; column-gap:4px; padding:var(--composer-padding); border:1px solid var(--bar-line); border-radius:var(--composer-radius); background:var(--bg); box-shadow:0 1px 2px #0000000d, 0 6px 20px #00000014; }
+.composer { --composer-radius:16px; --composer-padding:5px; position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"input send"; align-items:end; column-gap:4px; padding:var(--composer-padding); border:1px solid var(--bar-line); border-radius:var(--composer-radius); background:var(--bg); box-shadow:0 1px 2px #00000008, 0 3px 10px #0000000a; }
 /* Only the zones that are there get a row, so an empty one adds no gap above the text. */
 .composer.expanded { --composer-padding:7px; row-gap:6px; }
 .composer.expanded.has-attachments { grid-template-areas:"attach attach" "input send"; }
@@ -459,7 +465,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Focus inside the bar darkens its outline and deepens its shadow a little, and that is all (user, 2026-10-05): the
    bar used to ring itself in the focus colour while typing (COD-284), which read as a different control. The line
    keeps its one pixel, so nothing around the bar moves. A button inside the bar keeps its own ring. */
-.composer:focus-within { border-color:var(--bar-line-focus); box-shadow:0 1px 3px #00000014, 0 8px 24px #0000001f; }
+.composer:focus-within { border-color:var(--bar-line-focus); box-shadow:0 1px 2px #0000000a, 0 4px 12px #0000000f; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
@@ -539,10 +545,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* While a run is in progress the send button is the stop button, and a ring turns inside it so the eye lands
    there (user, 2026-09-19). The arc is drawn in the button's own text colour: outside the button it would run
    dark on dark and read as a halo rather than as something moving. */
-.send.stop { position:relative; }
+/* Stop is only its mark and the moving arc, in the text colour, with no fill (owner, 2026-10-07); the accent shows on hover. */
+.send.stop { position:relative; color:var(--text); background:transparent; }
+.send.stop:hover:not(:disabled),.send.stop:focus-visible { color:var(--accent); background:transparent; }
 .send.stop .send-spin {
   position:absolute; inset:2px; border-radius:50%; pointer-events:none;
-  border:2px solid color-mix(in srgb, var(--accent-ink) 28%, transparent); border-top-color:var(--accent-ink);
+  border:2px solid color-mix(in srgb, currentColor 22%, transparent); border-top-color:currentColor;
   animation:send-spin 820ms linear infinite;
 }
 @keyframes send-spin { to { transform:rotate(1turn); } }
@@ -2459,7 +2467,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    the run pausing. That is motion a person reads without a legend, it is the vocabulary the app already has, and
    it costs a transform on a 24px drawing. The rules sit after the tab's own, below. */
 .live-island {
-  --island-fillet:12px; --island-line:var(--bar-line); --island-reach:3px; --island-shadow:0 -3px 14px #00000012;
+  --island-fillet:12px; --island-line:var(--bar-line); --island-reach:3px; --island-shadow:0 -2px 8px #0000000a;
   position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center;
   width:fit-content; min-width:150px; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
   /* Tab and bar are one shape with one outline round the outside (COD-228): the tab reaches 3px into the bar, past its
@@ -2476,7 +2484,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 }
 /* One outline for tab and bar: the same darker line the bar's own focus rule sets, and the same deeper shadow, with
    no change of colour (user, 2026-10-05). */
-.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -4px 16px #0000001c; }
+.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); --island-shadow:0 -2px 10px #0000000f; }
 /* The corner's box starts a fillet above the bar's top edge and ends under the bar's top border, so its bottom border
    is the bar's. The clip lets the fill reach the tab's bottom and two pixels into the tab, over the soft edge of the
    tab's typing ring, and keeps the ring's shadow off the box's top and outer edges, where it left a faint line; the
@@ -3444,3 +3452,22 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
    resting colour. */
 .org-button.org-button-icon.message-saved, .org-button.org-button-icon.message-saved:hover:not(:disabled) { color:var(--accent); }
 .message-saved svg path:last-child { stroke:var(--accent-ink); fill:none; }
+/* A chart in a reply (shared/charts.ts): title and takeaway, the plot, then its source and actions, on a quiet surface. */
+.chart-block { display:flex; flex-direction:column; gap:8px; margin:10px 0; padding:12px 12px 6px; border-radius:12px; background:var(--surface); max-width:760px; }
+.chart-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.chart-head { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.chart-title { display:flex; align-items:center; gap:6px; font-size:13.5px; font-weight:600; }
+.chart-title svg { flex-shrink:0; color:var(--muted); }
+.chart-takeaway { color:var(--muted); font-size:12.5px; line-height:1.45; }
+.chart-plot { width:100%; min-width:0; }
+.chart-source { min-width:0; padding:0 0 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:12px; }
+.chart-actions { display:flex; align-items:center; gap:2px; flex-shrink:0; margin:-4px -4px 0 0; }
+.chart-actions .org-button { width:28px; height:28px; min-height:28px; color:var(--muted); }
+.chart-actions .org-button:hover:not(:disabled) { color:var(--text); }
+.chart-block .table-preview .preview-table-scroll { max-height:280px; }
+.chart-invalid { gap:6px; }
+.chart-problem { display:flex; align-items:flex-start; gap:6px; margin:0; font-size:12.5px; color:var(--text); }
+.chart-problem svg { flex-shrink:0; margin-top:2px; color:var(--warning, var(--error)); }
+.chart-invalid pre { max-height:160px; overflow:auto; margin:0; font-size:11.5px; }
+.chart-shape { display:block; margin:10px 0; max-width:760px; }
+.chart-shape-plot { height:340px; border-radius:12px; }
