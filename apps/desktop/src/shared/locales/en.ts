@@ -934,6 +934,7 @@ export const en: Dictionary = {
   'Chọn nguồn: text 256 KB; CSV, JSONL, Parquet 32 MB; ảnh 20 MB; âm thanh 50 MB; video, PDF 200 MB': 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet 32 MB; images 20 MB; audio 50 MB; video and PDF 200 MB',
   'Hiện toàn bộ': 'Show all',
   'Không còn tệp nguồn {0} ở chỗ cũ.': '{0} is no longer where it was attached from.',
+  'Không mở được liên kết này.': 'This link could not be opened.',
   'Không mở được PDF này trong Orglet.': 'This PDF could not be opened in Orglet.',
   'Không mở được tệp bằng ứng dụng mặc định.': 'The file could not be opened in the default app.',
   'Kích thước': 'Size',

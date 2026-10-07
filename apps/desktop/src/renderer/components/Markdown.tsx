@@ -1,9 +1,14 @@
 import { Fragment, type ReactNode } from 'react';
+import { Tooltip } from '@codepawlhq/orglet-ui';
+import { linkHost, openableUrl } from '../../shared/links';
+import { orglet } from '../api';
 
 /**
  * Renders the Markdown that workers write in chat replies: paragraphs, headings, lists, tables, quotes, code and inline
  * emphasis. It builds React elements rather than HTML, so nothing in a reply can inject markup or scripts.
- * Links show their text and address but do not navigate, because a click would replace the app window.
+ * Links, written as Markdown or as a bare address, open in the person's browser through main, never in the app window,
+ * and only web and mail addresses do. The full address shows on hover, and a link whose text says something else names
+ * its site beside it, so a link dressed as another cannot pass unnoticed.
  * A thematic break (---) becomes extra space, not a drawn line.
  */
 export function Markdown({ text, className }: { text: string; className?: string }) {
@@ -210,7 +215,7 @@ function Lines({ lines }: { lines: string[] }) {
 }
 
 // Order matters: code first so its contents stay literal, then links, then bold before italic. Italic may contain bold.
-const inlinePattern = /(`[^`\n]+`)|(\[[^\]\n]+\]\([^)\s]+\))|(\*\*[^*\n]+?\*\*|__[^_\n]+?__)|(~~[^~\n]+?~~)|((?<![\w*])\*(?:[^*\n]|\*\*[^*\n]+?\*\*)+?\*(?![\w*])|(?<![\w_])_[^_\n]+?_(?![\w_]))/g;
+const inlinePattern = /(`[^`\n]+`)|(\[[^\]\n]+\]\([^)\s]+\))|((?<![\w/@])https?:\/\/[^\s<>()[\]"'`]*[^\s<>()[\]"'`.,;:!?])|(\*\*[^*\n]+?\*\*|__[^_\n]+?__)|(~~[^~\n]+?~~)|((?<![\w*])\*(?:[^*\n]|\*\*[^*\n]+?\*\*)+?\*(?![\w*])|(?<![\w_])_[^_\n]+?_(?![\w_]))/g;
 
 function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -228,16 +233,55 @@ function renderInline(text: string): ReactNode[] {
 }
 
 function renderToken(match: RegExpMatchArray, key: number): ReactNode {
-  const [token, code, link, bold, strike] = match;
+  const [token, code, link, bareAddress, bold, strike] = match;
   if (code) return <code key={key}>{code.slice(1, -1)}</code>;
   if (link) {
     const [, label, address] = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(link)!;
-    return <span key={key} className="markdown-link" title={address}>
-      {renderInline(label)}
-      {label !== address && <span className="markdown-link-address"> ({address})</span>}
-    </span>;
+    return <Link key={key} address={address} showHost={label !== address}>{renderInline(label)}</Link>;
   }
+  if (bareAddress) return <Link key={key} address={bareAddress} showHost={false}>{bareAddress}</Link>;
   if (bold) return <strong key={key}>{renderInline(bold.slice(2, -2))}</strong>;
   if (strike) return <s key={key}>{renderInline(strike.slice(2, -2))}</s>;
   return <em key={key}>{renderInline(token.slice(1, -1))}</em>;
+}
+
+/**
+ * One link. An address the browser may open is a real link; anything else (a `file:` path, a made-up scheme) stays
+ * plain text with its address beside it, as before.
+ */
+function Link({ address, showHost, children }: { address: string; showHost: boolean; children: ReactNode }) {
+  const url = openableUrl(address);
+  if (!url) {
+    return <span className="markdown-link-text">
+      {children}
+      {showHost && <span className="markdown-link-address"> ({address})</span>}
+    </span>;
+  }
+  return <Tooltip label={url}>
+    <a className="markdown-link" href={url} onClick={event => {
+      event.preventDefault();
+      void orglet.openUrl(url);
+    }}>
+      {children}
+      {showHost && <span className="markdown-link-address"> · {linkHost(url)}</span>}
+    </a>
+  </Tooltip>;
+}
+
+// The bare-address group of `inlinePattern`, on its own: a web address up to its last character that is not punctuation.
+const bareAddressPattern = /(?<![\w/@])https?:\/\/[^\s<>()[\]"'`]*[^\s<>()[\]"'`.,;:!?]/g;
+
+/** Plain text the person wrote, with its web addresses as links; nothing else in it is read as Markdown. */
+export function LinkedText({ text }: { text: string }) {
+  const nodes: ReactNode[] = [];
+  let position = 0;
+  for (const match of text.matchAll(bareAddressPattern)) {
+    const start = match.index ?? 0;
+    if (start > position) nodes.push(text.slice(position, start));
+    nodes.push(<Link key={start} address={match[0]} showHost={false}>{match[0]}</Link>);
+    position = start + match[0].length;
+  }
+  if (!nodes.length) return <>{text}</>;
+  if (position < text.length) nodes.push(text.slice(position));
+  return <>{nodes}</>;
 }

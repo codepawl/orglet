@@ -2208,7 +2208,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markdown th:first-child,.markdown tbody tr:nth-child(even) td:first-child { border-radius:7px 0 0 7px; }
 .markdown th:last-child,.markdown tbody tr:nth-child(even) td:last-child { border-radius:0 7px 7px 0; }
 .markdown .markdown-break { height:6px; }
-.markdown-link { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
+.markdown-link { color:var(--accent); text-decoration:none; text-underline-offset:2px; overflow-wrap:anywhere; cursor:pointer; }
+.markdown-link:hover { text-decoration:underline; }
+.markdown-link:focus-visible { outline:2px solid var(--accent); outline-offset:1px; border-radius:3px; }
+.markdown-link-text { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
 .markdown-link-address { color:var(--muted); font-size:.9em; }
 /* A row of message buttons; in the chat it floats as the message's toolbar (see `.person-message .message-actions`). */
 .message-actions { display:flex; align-items:center; gap:2px; width:100%; margin:10px 0 0; color:var(--muted); }

@@ -209,6 +209,7 @@ export const BRIDGE_PARITY: Record<keyof Bridge, Parity> = {
   reportFeature: windowOnly('counts what the window itself did'),
   reportError: windowOnly('reports an error the window caught'),
   openLink: windowOnly('opens a link in the browser'),
+  openUrl: windowOnly('opens a link from a chat in the browser'),
   changelog: windowOnly('the release notes page'),
   updateState: windowOnly('the updater\'s state; ' + NOT_BUILT),
   checkForUpdates: windowOnly('the updater; ' + NOT_BUILT),

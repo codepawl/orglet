@@ -63,6 +63,7 @@ const bridge: Bridge = {
   reportFeature: feature => invoke('orglet:analytics-feature', feature),
   reportError: report => invoke('orglet:analytics-error', report),
   openLink: link => invoke('orglet:open-link', link),
+  openUrl: url => invoke('orglet:open-url', url),
   changelog: (refresh = false) => invoke('orglet:changelog', refresh),
   updateState: () => invoke('orglet:update-state'),
   checkForUpdates: () => invoke('orglet:check-for-updates'),

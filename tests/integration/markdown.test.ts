@@ -42,6 +42,20 @@ it('never passes HTML or link targets through as markup', () => {
   expect(html).toContain('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
 });
 
+it('turns web addresses into links that open in the browser, and names the site of a link dressed as another', () => {
+  const html = render('See [the docs](https://docs.example.com/start) or https://example.org/a_b?x=1. Mail [us](mailto:team@example.com).');
+  expect(html).toContain('<a class="markdown-link" href="https://docs.example.com/start">the docs<span class="markdown-link-address"> · docs.example.com</span></a>');
+  // A bare address keeps its own text, without the sentence's full stop.
+  expect(html).toContain('<a class="markdown-link" href="https://example.org/a_b?x=1">https://example.org/a_b?x=1</a>.');
+  expect(html).toContain('href="mailto:team@example.com"');
+});
+
+it('keeps file paths, scripts and addresses hiding a sign-in as text', () => {
+  const html = render('[open](file:///C:/Windows/system32) [bank](https://bank.example@evil.example/) [run](javascript:alert(1))');
+  expect(html).not.toContain('href=');
+  expect(html).toContain('(file:///C:/Windows/system32)');
+});
+
 it('keeps text inside code blocks literal', () => {
   const html = render('```\n**not bold**\n```');
   expect(html).toContain('<pre><code>**not bold**</code></pre>');

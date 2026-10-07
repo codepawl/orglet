@@ -39,6 +39,7 @@ import { WebSearchKeyProvider } from '../shared/web-tools';
 import type { ProcessIdentity } from '../core/tools/process-identity';
 import { McpOAuthState, McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
 import { McpSignIns } from './mcp-sign-in';
+import { openableUrl } from '../shared/links';
 import type { Incoming, SendToState } from '../shared/incoming';
 import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
 import { DesktopOverlayWindow } from './desktop-overlay';
@@ -838,6 +839,13 @@ async function start() {
   });
   // The renderer names a link; the address comes from the allowlist, so nothing shown in the window can choose one.
   handle('orglet:open-link', async raw => { await shell.openExternal(ABOUT_LINKS[AboutLink.parse(raw)]); });
+  // A link the person clicked in a chat. The window chose it, so main checks it again: web and mail addresses only,
+  // never a file, a script or another app's scheme.
+  handle('orglet:open-url', async raw => {
+    const url = openableUrl(z.string().max(2048).parse(raw));
+    if (!url) throw new Error('Không mở được liên kết này.');
+    await shell.openExternal(url);
+  });
   handle('orglet:changelog', async raw => changelog.read(z.boolean().default(false).parse(raw)));
   handle('orglet:update-state', async () => updater.state);
   handle('orglet:check-for-updates', async () => updater.check());
