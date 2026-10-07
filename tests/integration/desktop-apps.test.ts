@@ -672,7 +672,6 @@ describe('Tacet\'s second opinion on desktop steps (COD-306)', () => {
         judged.push(action);
         return judged.length === 1 ? { risky: true, score: 0.6 } : undefined;
       },
-      warm: () => {},
     };
     const worker = await core!.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'openai' }) as Worker;
     const taskId = await core!.command('createTask', {

@@ -715,8 +715,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row id="show-work-label" title={t('Hiện cách Tí làm việc')} description={t('Suy nghĩ, các bước đã làm và thay đổi, ngay trên mỗi câu trả lời.')}>
                 <Switch checked={workspace.showWork} disabled={busy} labelledBy="show-work-label" onChange={value => void save({ showWork: value })} />
               </Row>
-              {/* What makes a quiet hourly run announce itself (COD-303), beside the other rule for notices. */}
-              <TacetSetup />
+              {/* Which connection answers Tacet's small questions (COD-303), beside the other rule for notices. */}
+              <TacetSetup connections={connections} customConnections={workspace.customConnections ?? []} />
               <Row title={t('Định dạng khi sao chép')} description={t('Bấm là sao chép, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi sao chép')} className="setting-select" value={workspace.copyFormat} disabled={busy} onChange={value => void save({ copyFormat: value as Workspace['copyFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản thuần') }, { value: 'markdown', label: 'Markdown' }]} />
               </Row>

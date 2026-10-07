@@ -329,7 +329,6 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
 
   it('asks about a click the rules let through when Tacet reads it as risky, and never asks Tacet about one they ask about', async () => {
     const judged: ActionToJudge[] = [];
-    let warmed = 0;
     const script: Script = [
       () => call('browser_open', { url: `${base}/shop`, tabId: null }),
       () => call('browser_snapshot', { tabId: 't1', offset: 0 }),
@@ -346,7 +345,6 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
         judged.push(action);
         return { risky: true, score: 0.9 };
       },
-      warm: () => { warmed += 1; },
     };
 
     // The Search click is input to the rules; Tacet's yes adds the card, with its own reason.
@@ -367,7 +365,6 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     expect(orders).toBe(0);
     // Typing without Enter only fills in, so the one step Tacet was asked about is the Search click.
     expect(judged).toEqual([{ surface: 'browser', kind: 'click', element: 'Search', role: 'button', site, page: 'Test shop' }]);
-    expect(warmed).toBeGreaterThan(0);
     expect(actions(chat.taskId)).toEqual([
       'open:read:done', 'snapshot:read:done', 'type:input:done', 'click:consequential:declined',
       'open:read:done', 'snapshot:read:done', 'click:consequential:declined',

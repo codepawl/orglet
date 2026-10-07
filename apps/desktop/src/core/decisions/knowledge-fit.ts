@@ -6,7 +6,8 @@ import { decideWithin, type Decider } from './budget';
  * ticket to a team: the message is the text, and each note is an option named by its title, described by its tags,
  * beside "other". The same options go in twice, in opposite orders, within one request, and each note's two
  * probabilities are averaged: on the measured cases where a note sat in the list moved its probability a lot, and
- * the two orders together steadied it. Measured in `scripts/tacet/eval_uses.ts` on `scripts/tacet/knowledge_cases.json`.
+ * the two orders together steadied it. The numbers below were measured on `scripts/tacet/knowledge_cases.json` with the
+ * on-device model Tacet used before it moved to an API; they have not been re-measured against a hosted model.
  */
 
 /** A note Tacet may fit to a message. */
@@ -30,10 +31,10 @@ const INSTRUCTIONS = 'What is this message about?';
 export const KNOWLEDGE_FIT_LIFT = 4.2;
 const MOST_A_NOTE_NEEDS = 0.75;
 /**
- * How long a run waits for Tacet before its context is frozen without it. A warm model answers twenty notes in well
- * under this; a cold one (loaded after two quiet minutes) usually does not, and the next message gets the answer.
+ * How long a run waits for Tacet before its context is frozen without it. An API answers twenty notes in about a
+ * second; a slower answer is dropped and the run starts with the notes the keywords found.
  */
-export const KNOWLEDGE_FIT_BUDGET_MS = 1_500;
+export const KNOWLEDGE_FIT_BUDGET_MS = 3_000;
 
 /** The bar for one request with `noteCount` notes offered. */
 export function fitThreshold(noteCount: number): number {
@@ -88,7 +89,7 @@ export function fittingNotes(answers: Record<string, DecisionAnswer>, noteOf: Re
 }
 
 /**
- * Asks Tacet which of `notes` fit `message`, within the budget. Undefined when Tacet is not on this computer, fails or
+ * Asks Tacet which of `notes` fit `message`, within the budget. Undefined when Tacet is off, fails or
  * is late: the run then loads what the keywords matched, as it did before COD-306.
  */
 export async function askKnowledgeFit(decider: Decider, message: string, notes: readonly NoteCandidate[], budgetMs = KNOWLEDGE_FIT_BUDGET_MS): Promise<Map<string, number> | undefined> {

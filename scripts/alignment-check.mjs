@@ -564,6 +564,16 @@ const SCREENS = [
   // lead column of their list rows are compared with each other (familyFindings in rules.ts).
   { name: 'settings-general', family: 'settings', open: page => openSettingsTab(page, 'Chung') },
   { name: 'settings-chat', family: 'settings', open: page => openSettingsTab(page, 'Cuộc trò chuyện') },
+  // Tacet pointed at OpenAI (COD-303): its model field and the Test row, after a Test that the missing key answers at
+  // once, so the failure line is measured without any request leaving the machine.
+  { name: 'settings-chat-tacet', family: 'settings', open: async page => {
+    await callCore(page, 'saveTacetSetting', { connection: 'openai', model: 'gpt-6-luna' });
+    await openSettingsTab(page, 'Cuộc trò chuyện');
+    await page.getByRole('button', { name: label('Chạy thử'), exact: true }).click();
+    await page.getByText(label('Chưa kết nối {0}. Mở Cài đặt để nhập API key.', ['OpenAI'])).waitFor();
+    // Clicking Test scrolled the row into view; the screen is measured from the top like its family.
+    await page.evaluate(() => document.querySelector('#settings-panel')?.scrollTo(0, 0));
+  }, close: page => callCore(page, 'saveTacetSetting', 'off') },
   // Archived orglets, channels and chats, with Restore and the auto-delete rule (COD-375).
   { name: 'settings-archive', family: 'settings', open: page => openSettingsTab(page, 'Lưu trữ') },
   { name: 'settings-connections', family: 'settings', open: page => openSettingsTab(page, 'Kết nối API') },

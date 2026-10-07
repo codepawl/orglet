@@ -591,8 +591,8 @@ export class Runner {
   /** Tool-loop progress has no desktop answer stream; only authenticated CLI waits observe it. */
   onCliProgress: (update: RunProgressUpdate) => void = () => {};
   /**
-   * Asks Tacet which notes fit a message their words do not match (COD-306), or answers undefined when Tacet is not
-   * on this computer, fails or is late. Unset in tests that do not need it.
+   * Asks Tacet which notes fit a message their words do not match (COD-306), or answers undefined when Tacet is off,
+   * fails or is late. Unset in tests that do not need it.
    */
   knowledgeFit?: (message: string, notes: NoteCandidate[]) => Promise<Map<string, number> | undefined>;
   /** Refresh native effort metadata only before a new run freezes its model and settings. */

@@ -36,10 +36,6 @@ service-account*.json
 .pnpm-store/
 .worktrees/
 
-# Tacet's measurement scripts, bundled next to their source so they find onnxruntime-node (COD-303).
-scripts/tacet/.*.mjs
-scripts/tacet/.*.cjs
-
 # The kit gallery's static build (pnpm --filter @codepawlhq/orglet-ui build-storybook).
 storybook-static/
 # The kit's docs site (pnpm --filter @codepawlhq/orglet-ui build-site).

@@ -368,8 +368,6 @@ export class DesktopTools {
     const allow = () => this.allowedPrograms(run, currentTask());
     const ask = (request: DesktopHostRequest) => host.request(request, signal);
     const kind: DesktopActionKind = name === 'desktop_windows' ? 'windows' : name === 'desktop_snapshot' ? 'snapshot' : name === 'desktop_find' ? 'find' : 'screenshot';
-    // A run reading an app will likely act in it soon: the model starts loading now, so the first step does not wait.
-    this.secondOpinion?.warm();
     const actionId = this.journal(run, callId, kind);
 
     if (name === 'desktop_windows') {
