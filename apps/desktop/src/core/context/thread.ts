@@ -102,7 +102,11 @@ function said(detail: TaskDetail, artifact: Artifact, reader: Reader): ThreadTur
  */
 function broughtIn(quote: ChatQuote, reader: Reader): ThreadTurn {
   const writer = quote.authorId === reader.workerId ? 'you' : quote.author;
-  const { text, truncated } = clip(`Answer from a side thread (written by ${writer}), brought into this chat by the user:\n${quote.text}`);
+  // A schedule's run is posted into this chat (owner, 2026-10-07); anything else came from a side thread the person picked.
+  const origin = quote.schedule
+    ? `Answer from the scheduled run "${quote.schedule}" (written by ${writer}), posted into this chat by the schedule:`
+    : `Answer from a side thread (written by ${writer}), brought into this chat by the user:`;
+  const { text, truncated } = clip(`${origin}\n${quote.text}`);
   return { id: quote.id, from: 'user', text, revision: quote.afterRevision, truncated };
 }
 

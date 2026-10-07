@@ -9,8 +9,11 @@ import { sideThreadsOf } from './side-threads';
  * The sidebar lists one row per schedule, under the orglet or crew its newest run was for, showing that run under
  * the schedule's name. An archived newest run takes the row away until the next run; deleting it clears
  * `lastTaskId`, so the row goes with it.
+ *
+ * Since 2026-10-07 a finished run is posted into its orglet's DM or its channel (`ScheduleDelivery`) and marked
+ * `deliveredTo`; only a run that was not posted (no chat to post into yet, or from before posting existed) keeps a row.
  */
-type RunRow = Pick<Task, 'id' | 'createdAt' | 'workerId' | 'teamId' | 'assignees' | 'routineId' | 'archivedAt' | 'deletedAt' | 'sideOf'>;
+type RunRow = Pick<Task, 'id' | 'createdAt' | 'workerId' | 'teamId' | 'assignees' | 'routineId' | 'archivedAt' | 'deletedAt' | 'sideOf' | 'deliveredTo'>;
 type ScheduleRow = Pick<Routine, 'id' | 'name' | 'lastTaskId'>;
 
 /** The orglet or crew a sidebar row stands for. */
@@ -32,6 +35,8 @@ export function scheduleRunsOf<T extends RunRow, R extends ScheduleRow>(tasks: r
     if (!routine.lastTaskId) continue;
     const run = tasks.find(task => task.id === routine.lastTaskId);
     if (!run || run.routineId !== routine.id || run.archivedAt || run.deletedAt) continue;
+    // A run posted into its DM or channel, or a quiet one, is not a chat of its own any more (owner, 2026-10-07).
+    if (run.deliveredTo) continue;
     if (!ownedBy(run, owner)) continue;
     rows.push({ routine, run });
   }

@@ -723,6 +723,10 @@ export function App() {
   /** Opens a chat: a side thread beside its main chat when there is room, anything else in the main pane. */
   const openTask = (id: string, options: { toMessage?: boolean } = {}) => {
     if (leavingPage(() => openTask(id, options))) return;
+    if (postedAt(id)) {
+      openChatAt(id);
+      return;
+    }
     const mainTaskId = mainChatBeside(id);
     if (mainTaskId) {
       showThreadBeside(id, mainTaskId);
@@ -770,7 +774,17 @@ export function App() {
       if (!toMessage) setTimeout(() => document.getElementById('main-content')?.focus(), 0);
     }
   };
-  const openChatAt = (taskId: string, messageId?: string) => {
+  /** Where a schedule's run was posted, in its orglet's DM or its channel (owner, 2026-10-07), while that chat is there. */
+  const postedAt = (taskId: string) => {
+    const delivered = workspace?.tasks.find(task => task.id === taskId)?.deliveredTo;
+    if (!delivered || !('taskId' in delivered)) return undefined;
+    return workspace?.tasks.some(task => task.id === delivered.taskId && !task.deletedAt) ? delivered : undefined;
+  };
+  const openChatAt = (requestedTaskId: string, requestedMessageId?: string) => {
+    // A schedule's run opens where it was posted, at the post, from a notice, a card or search alike.
+    const posted = postedAt(requestedTaskId);
+    const taskId = posted?.taskId ?? requestedTaskId;
+    const messageId = posted?.quoteId ?? requestedMessageId;
     const mainTaskId = mainChatBeside(taskId);
     if (mainTaskId) {
       // The thread in the panel brings the message into view itself once it has loaded.

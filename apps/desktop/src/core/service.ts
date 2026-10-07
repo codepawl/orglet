@@ -91,6 +91,7 @@ import { runBy } from '../shared/schedule-runs';
 import { Decisions } from './decisions/service';
 import { decisionsDirectory } from './decisions/manifest';
 import { QuietRunReview } from './orchestration/quiet-runs';
+import { ScheduleDelivery } from './orchestration/schedule-delivery';
 import { askKnowledgeFit } from './decisions/knowledge-fit';
 import { actionRiskOpinion } from './decisions/action-risk';
 import { PermissionSuggestions } from './orchestration/permission-suggestions';
@@ -195,6 +196,7 @@ export class CoreService {
   decisions: Decisions;
   /** Asks Tacet whether a quiet schedule run's answer is news worth announcing (COD-303). */
   readonly quietRuns: QuietRunReview;
+  private readonly scheduleDelivery: ScheduleDelivery;
   /** Asks Tacet which permissions a message being typed needs (COD-305). */
   readonly permissionSuggestions: PermissionSuggestions;
   /** Asks Tacet who in a group chat answers a message that tags nobody (COD-305). */
@@ -257,6 +259,7 @@ export class CoreService {
     this.appTriggers = new AppTriggers(store, this.mcp, this.routines, this.sources, join(dataDirectory ?? join(tmpdir(), 'orglet'), 'app-items'), clock);
     this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
     this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
+    this.scheduleDelivery = new ScheduleDelivery(store, this.notify);
     // COD-306: Tacet adds notes the keywords missed and asks about browser and desktop steps the rules let through.
     // Both read the service afresh on every call, since the core replaces it with one that can load the model.
     this.runner.knowledgeFit = (message, notes) => askKnowledgeFit(this.decisions, message, notes);
@@ -2256,6 +2259,8 @@ export class CoreService {
     // A look at an app can take up to a minute; it runs beside the tick, one at a time, never holding the tick up.
     void this.appTriggers.poll().catch(() => {});
     await this.quietRuns.review();
+    // Each finished schedule run is posted into its orglet's DM or its channel (owner, 2026-10-07).
+    this.scheduleDelivery.deliver();
   }
   private start(task: Task, startChecked = false) {
     if (!startChecked) this.policy.assertStart(task.teamId, task.id);
