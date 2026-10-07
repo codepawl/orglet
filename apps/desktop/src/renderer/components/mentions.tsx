@@ -1,6 +1,11 @@
 import { Fragment } from 'react';
 import { parseMentions, type MentionPerson } from '../../shared/mentions';
-import { LinkedText } from './Markdown';
+import { LinkedText, Markdown } from './Markdown';
+
+/** A person's message as Markdown (bold, lists, code, links), with its `@name` tags highlighted wherever they sit. */
+export function MentionMarkdown({ text, people, allNames }: { text: string; people: readonly MentionPerson[]; allNames?: readonly string[] }) {
+  return <Markdown text={text} plainText={part => <MentionText text={part} people={people} allNames={allNames} />} />;
+}
 
 /** Highlights `@name` tags in a user message and makes its web addresses links. Unknown `@` text stays plain. */
 export function MentionText({ text, people, allNames }: { text: string; people: readonly MentionPerson[]; allNames?: readonly string[] }) {

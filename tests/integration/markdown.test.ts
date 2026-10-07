@@ -92,3 +92,11 @@ it('keeps pipe-separated prose without a table divider as prose', () => {
   expect(html).toContain('<p>Options: red | blue<br/>Still one paragraph.</p>');
   expect(html).not.toContain('<table>');
 });
+
+it("renders a person's message as Markdown and keeps its @tags inside the marks", async () => {
+  const { MentionMarkdown } = await import('../../apps/desktop/src/renderer/components/mentions');
+  const people = [{ id: 'worker-1', name: 'Researcher' }];
+  const html = renderToStaticMarkup(createElement(MentionMarkdown, { text: '**Ask @Researcher** about it\n\n- @Researcher first', people }));
+  expect(html).toContain('<strong>Ask <span class="mention">@Researcher</span></strong> about it');
+  expect(html).toContain('<li><span class="mention">@Researcher</span> first</li>');
+});

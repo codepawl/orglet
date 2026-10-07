@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, type ReactNode } from 'react';
+import { createContext, Fragment, lazy, Suspense, useContext, type ReactNode } from 'react';
 import { Tooltip } from '@codepawlhq/orglet-ui';
 import { linkHost, openableUrl } from '../../shared/links';
 import { orglet } from '../api';
@@ -15,12 +15,21 @@ const ChartBlock = lazy(() => import('./ChartBlock'));
  * and only web and mail addresses do. The full address shows on hover, and a link whose text says something else names
  * its site beside it, so a link dressed as another cannot pass unnoticed.
  * A thematic break (---) becomes extra space, not a drawn line.
+ * `plainText` draws the text between Markdown marks, so a person's message keeps its @tags inside bold or a list.
  */
-export function Markdown({ text, className }: { text: string; className?: string }) {
+export function Markdown({ text, className, plainText }: { text: string; className?: string; plainText?: (text: string) => ReactNode }) {
   const blocks = parseBlocks(text);
-  return <div className={className ? `markdown ${className}` : 'markdown'}>
+  const body = <div className={className ? `markdown ${className}` : 'markdown'}>
     {blocks.map((block, index) => <BlockView key={index} block={block} />)}
   </div>;
+  return plainText ? <PlainTextContext.Provider value={plainText}>{body}</PlainTextContext.Provider> : body;
+}
+
+const PlainTextContext = createContext<((text: string) => ReactNode) | null>(null);
+
+function PlainText({ text }: { text: string }) {
+  const draw = useContext(PlainTextContext);
+  return <>{draw ? draw(text) : text}</>;
 }
 
 type Block =
@@ -231,12 +240,12 @@ function renderInline(text: string): ReactNode[] {
 
   for (const match of text.matchAll(inlinePattern)) {
     const matchStart = match.index ?? 0;
-    if (matchStart > position) nodes.push(text.slice(position, matchStart));
+    if (matchStart > position) nodes.push(<PlainText key={nodes.length} text={text.slice(position, matchStart)} />);
     nodes.push(renderToken(match, nodes.length));
     position = matchStart + match[0].length;
   }
 
-  if (position < text.length) nodes.push(text.slice(position));
+  if (position < text.length) nodes.push(<PlainText key={nodes.length} text={text.slice(position)} />);
   return nodes;
 }
 

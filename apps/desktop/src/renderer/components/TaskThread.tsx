@@ -42,7 +42,7 @@ import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
 import { knowledgeSuggestionKey, showsKnowledgeIsland } from '../../shared/knowledge-island';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
-import { MentionText } from './mentions';
+import { MentionMarkdown } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
 import { crewPlanDiagram } from '../../shared/crew-plan';
@@ -583,7 +583,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
                 <RoutedLine route={routeOfTurn(detail.task.routedTurns, turn.revision)} nameOf={workerId => workspace.workers.find(worker => worker.id === workerId)?.name
                   ?? detail.runs.find(run => run.snapshot.worker.id === workerId)?.snapshot.worker.name} />
                 <div className="user-message" id={`message-${personMessageId}`} tabIndex={-1}>
-                  {turn.missingInput ? <p className="muted">{t('Nội dung tin nhắn gốc không còn được lưu.')}</p> : <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>}
+                  {turn.missingInput ? <p className="muted">{t('Nội dung tin nhắn gốc không còn được lưu.')}</p> : <MentionMarkdown text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} />}
                 </div>
               </>}
             {/* The files follow the text in their own sideways row, the way Slack lists a message's attachments. */}
@@ -915,7 +915,7 @@ function ForwardedTurn({ forwarded, elementId, openOrigin, mentionPeople, mentio
       {forwarded.authorKind === 'orglet' ? <Markdown className="prose" text={forwarded.text} /> : <p>{forwarded.text}</p>}
       {unshared.length > 0 && <p className="forwarded-files"><FileX size={13} aria-hidden="true" />{t('Không gửi kèm: {0}', [unshared.join(', ')])}</p>}
     </div>
-    {forwarded.note && <div className="user-message forward-note"><p><MentionText text={forwarded.note} people={mentionPeople ?? []} allNames={mentionAllNames} /></p></div>}
+    {forwarded.note && <div className="user-message forward-note"><MentionMarkdown text={forwarded.note} people={mentionPeople ?? []} allNames={mentionAllNames} /></div>}
   </>;
 }
 
