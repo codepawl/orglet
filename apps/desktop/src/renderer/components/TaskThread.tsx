@@ -328,6 +328,16 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     name: <><strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}</>,
   });
   const personHeader: MessageHeader = { face: <PersonFace />, name: <strong>{t('Bạn')}</strong> };
+  /** A schedule's post: the orglet that ran it, and the schedule it came from beside the name (owner, 2026-10-07). */
+  const scheduleHeader = (quote: ChatQuote): MessageHeader => {
+    const worker = workspace.workers.find(item => item.id === quote.authorId);
+    return {
+      face: <span className="byline">{worker
+        ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="md" />
+        : <span className="orglet-mark small">o</span>}</span>,
+      name: <><strong>{quote.author}</strong><span className="byline-role">{t('Lịch · {0}', [quote.schedule ?? ''])}</span></>,
+    };
+  };
   const reactions = detail.task.messageReactions ?? [];
   /** A message's reactions for its foot row, or nothing when nobody reacted, so the row is left out. */
   const badgesFor = (messageId: string) => hasReactions(reactions, messageId)
@@ -555,7 +565,11 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
         // While the turn is at work or asking, its header already names who is on it; a face saying they read it would repeat that.
         const standaloneReceipts = chatAnswered || (latest && (busy || detail.task.status === 'waiting_input')) ? undefined : receiptsFor(turn.revision);
         const turnQuotes = (detail.task.quotes ?? []).filter(quote => quote.afterRevision === turn.revision);
-        const quoteHeads = turnQuotes.map(quote => grouping.place({ key: personAuthorKey, at: quote.createdAt }) ? undefined : personHeader);
+        // A schedule's post is its orglet speaking, under the schedule's name (owner, 2026-10-07), so it never folds into the
+        // orglet's own replies around it; anything else the person brought in from a side thread.
+        const quoteHeads = turnQuotes.map(quote => quote.schedule
+          ? grouping.place({ key: `schedule:${quote.authorId}:${quote.schedule}`, at: quote.createdAt }) ? undefined : scheduleHeader(quote)
+          : grouping.place({ key: personAuthorKey, at: quote.createdAt }) ? undefined : personHeader);
         return <div className="chat-turn" key={personMessageId}>
           {timeMarked && <TimeMark at={turn.sentAt} />}
           <Message className="person-message" label={t('Tin của bạn')} header={personContinued ? undefined : personHeader} at={turn.sentAt}>
@@ -657,9 +671,13 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
           </Message>}
           {/* A turn whose answer is not a chat message keeps its read faces on a line of their own at the turn's end. */}
           {standaloneReceipts && <div className="turn-receipts">{standaloneReceipts}</div>}
-          {turnQuotes.map((quote, quoteIndex) => <Message key={quote.id} className="person-message brought-in-message" label={t('Tin của bạn')} header={quoteHeads[quoteIndex]} at={quote.createdAt}>
-            <BroughtInQuote quote={quote} threadName={threadName(quote.fromTaskId)} onOpen={openChat && threadName(quote.fromTaskId) ? () => openChat(quote.fromTaskId) : undefined} />
-          </Message>)}
+          {turnQuotes.map((quote, quoteIndex) => quote.schedule
+            ? <Message key={quote.id} className="assistant-message schedule-post" label={t('Lịch {0} của {1}', [quote.schedule, quote.author])} header={quoteHeads[quoteIndex]} at={quote.createdAt}>
+              <div className="chat-bubble" id={`message-${quote.id}`} tabIndex={-1}><Markdown className="prose" text={tMessage(quote.text)} /></div>
+            </Message>
+            : <Message key={quote.id} className="person-message brought-in-message" label={t('Tin của bạn')} header={quoteHeads[quoteIndex]} at={quote.createdAt}>
+              <BroughtInQuote quote={quote} threadName={threadName(quote.fromTaskId)} onOpen={openChat && threadName(quote.fromTaskId) ? () => openChat(quote.fromTaskId) : undefined} />
+            </Message>)}
         </div>;
       })}
       {/* The chat's state, not something an orglet said: it ends the thread as a card of its own, under the last

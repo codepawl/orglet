@@ -786,6 +786,8 @@ export const en: Dictionary = {
   'Thông điệp không khớp phần việc.': 'The message does not match its assignment.',
   'Thông điệp thiếu quyết định xử lý hợp lệ.': 'The message is missing a valid resolution.',
   'Đã giao lại phần việc cho {0}: {1}': 'Reassigned work to {0}: {1}',
+  'Lịch {0} của {1}': 'Schedule {0} by {1}',
+  'Lịch · {0}': 'Schedule · {0}',
   'Đã gửi lại phần việc cho {0}: {1}': 'Sent the work back to {0}: {1}',
   'Chỉ trưởng nhóm đang điều phối lượt này được gửi lại việc.': 'Only the lead running this turn can send work back.',
   'Chỉ gửi lại phần việc đã xong của một thành viên trong lượt này.': 'Only a finished part of a member of this turn can be sent back.',

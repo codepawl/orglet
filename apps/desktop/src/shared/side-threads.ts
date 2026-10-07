@@ -32,8 +32,19 @@ export const ChatQuote = z.object({
   text: z.string().min(1).max(CHAT_QUOTE_CHARS + 200),
   afterRevision: z.number().int().nonnegative(),
   createdAt: z.iso.datetime(),
+  /** Set when a schedule's run posted it (owner, 2026-10-07): the schedule's name, shown beside the orglet's. */
+  schedule: z.string().trim().min(1).max(80).optional(),
 }).strict();
 export type ChatQuote = z.infer<typeof ChatQuote>;
+/**
+ * Where a schedule's run went (owner, 2026-10-07): the chat and the message it was posted as, or `quiet` for an hourly
+ * run with nothing new that was not posted.
+ */
+export const ScheduleDeliveredTo = z.union([
+  z.object({ taskId: z.uuid(), quoteId: z.uuid() }).strict(),
+  z.object({ quiet: z.literal(true) }).strict(),
+]);
+export type ScheduleDeliveredTo = z.infer<typeof ScheduleDeliveredTo>;
 
 type ChatRow = { id: string; createdAt: string; workerId: string; teamId?: string; assignees?: 'all' | string[]; routineId?: string; archivedAt?: string; deletedAt?: string; sideOf?: SideOf };
 

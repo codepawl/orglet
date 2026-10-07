@@ -109,6 +109,14 @@ Every schedule, whatever starts it, can have a **Daily cap** (`schedule.dailyCap
 
 ## Where a run shows up
 
+**In the orglet's DM or the channel's chat (owner, 2026-10-07).** A schedule no longer reads as a chat of its own. Each finished run is posted once into the DM of the orglet it ran for, or the chat of its channel, as a message from that orglet labelled **Schedule · *name*** (`ScheduleDelivery` in `core/orchestration/schedule-delivery.ts`, on the core's tick). The orglet reads the post with the next message sent there, framed as the schedule's answer, the way it reads an answer brought in from a side thread (`ChatQuote.schedule`). The run itself keeps its record, so everything below about its permissions, folder, daily cap, Tacet's look and history still holds; it records where it went in `Task.deliveredTo`, and the sidebar stops listing it. A notice, a card's **Open latest run** or a search result about the run opens the DM or channel at the post (`postedAt` in `App.tsx`).
+
+- An hourly run with nothing new is not posted, so the chat does not fill with "all as usual"; it is marked quiet (`deliveredTo: { quiet: true }`) and stays on the card. If Tacet later rates it noteworthy, it is posted then.
+- A run whose orglet or channel has no chat yet is not posted and keeps its own row in the sidebar, as below, so nothing is lost.
+- Runs that started before this machine first posted one (`scheduleDeliverySince` in the settings) keep their own rows: posting a whole history into the DMs at once would bury them.
+
+What follows describes a run's own chat, which a run still has when it was not posted.
+
 Every run is its own chat row with `routineId`, apart from the orglet's or crew's main chat, and the routine keeps the newest one as `lastTaskId`. Before COD-258 that chat could only be reached through **Schedules → Open latest run**, so a daily run's answer went unread unless someone went looking. Now a run is found where the person looks and says when it lands, whatever started it:
 
 - **Sidebar.** Each routine has one row under the orglet or crew its newest run was for, next to the orglet's side threads, newest first and three at a time with **Show more** (`chatsUnder` and `scheduleRunsOf` in `apps/desktop/src/shared/schedule-runs.ts`). The row is named after the routine, carries a small schedule mark and the newest run's status mark, and its menu opens the routine, archives the run or deletes it. The row belongs to the run, not to the routine's current setting: a crew run sits under the crew, and a routine moved to another orglet moves when its next run starts. An archived newest run hides the row until the next run, rather than bringing an older run back; deleting it clears `lastTaskId`, which does the same.
