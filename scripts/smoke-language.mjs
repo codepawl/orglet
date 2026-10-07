@@ -1,17 +1,51 @@
 import './sample-replies.mjs';
-// Orglet starts in English. The smokes were written against the Vietnamese interface, so each switches the fresh
-// workspace to Vietnamese first and then waits for the empty worker chat. Returns the language it started in.
-export async function useVietnamese(page) {
+import { en } from '../apps/desktop/src/shared/locales/en.ts';
+
+/**
+ * The label as the app shows it in English. Source strings in the renderer are Vietnamese, so a smoke names a label by
+ * its Vietnamese source string (grep it against `t('...')`) and the English text is looked up here, with `{0}`, `{1}`
+ * filled in order. A string missing from en.ts fails at once with its key instead of falling back to Vietnamese.
+ */
+export function label(vietnamese, values = []) {
+  if (!Object.hasOwn(en, vietnamese)) throw new Error(`No English text in en.ts for the key: ${vietnamese}`);
+  return values.reduce((result, value, index) => result.replace(`{${index}}`, value), en[vietnamese]);
+}
+
+/** The English text before the first placeholder, for a label whose ending is a time or a count that changes. */
+export function labelBefore(vietnamese) {
+  return label(vietnamese, ['\u0000']).split('\u0000')[0];
+}
+
+/** The English text after the last placeholder, for a label that begins with a count or a name that changes. */
+export function labelAfter(vietnamese) {
+  return label(vietnamese, ['\u0000']).split('\u0000').at(-1);
+}
+
+/** A pattern for text that begins with the label, for rows that add a count or a name after it. */
+export function startsWith(vietnamese, values = []) {
+  return new RegExp(`^${label(vietnamese, values).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+}
+
+/**
+ * A count label such as "{0} thay đổi" for any count. Vietnamese has one form; English has "1 change" and "3 changes"
+ * as two keys, so the pattern takes either (CI failed on a lone change after the smokes moved to English).
+ */
+export function countPattern(vietnamese) {
+  const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const plural = escape(label(vietnamese, ['\u0000'])).replace('\u0000', '\\d+');
+  const singular = en[vietnamese.replace('{0}', '1')];
+  return new RegExp(singular ? `(${plural}|${escape(singular)})` : plural);
+}
+
+// Orglet starts in English and the smokes run in it. Waits for the empty chat of the fresh workspace and opens the
+// full sidebar. Returns the language the workspace started in, for the smoke that checks it.
+export async function useEnglish(page) {
   await page.waitForFunction(() => window.orglet !== undefined);
   await page.locator('.welcome, .main-pane').first().waitFor();
-  const initial = await page.evaluate(async () => {
-    const workspace = await window.orglet.call('workspace', {});
-    if (workspace.language !== 'vi') await window.orglet.call('settings', { language: 'vi', theme: workspace.theme, connectionLimitMicros: workspace.connectionLimitMicros });
-    return workspace.language;
-  });
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).waitFor();
+  const language = await page.evaluate(async () => (await window.orglet.call('workspace', {})).language);
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
   await useFullSidebar(page);
-  return initial;
+  return language;
 }
 
 /**
@@ -47,11 +81,11 @@ export async function expandSidebar(page) {
 /**
  * The area rail (COD-366) picks what the sidebar lists: Home has the orglets, and each space has a tile of its own.
  * A channel made outside every space, as a template's crew is, is put into the space kept for such channels, named
- * Kênh or Channels after the language the window had then. A smoke that works with those channels opens that
- * space; with no such channel yet there is no tile, and Home is opened instead.
+ * Channels. A smoke that works with those channels opens that space; with no such channel yet there is no tile, and
+ * Home is opened instead.
  */
 export async function openChannels(page) {
-  const tile = page.locator('.area-tile[data-name="Kênh"], .area-tile[data-name="Channels"]').first();
+  const tile = page.locator(`.area-tile[data-name="${label('Kênh')}"]`).first();
   try {
     await tile.waitFor({ timeout: 5000 });
   } catch {
@@ -62,7 +96,7 @@ export async function openChannels(page) {
 }
 
 export async function openHome(page) {
-  const home = page.locator('.area-tile[data-name="Trò chuyện"], .area-tile[data-name="Chat"]').first();
+  const home = page.locator(`.area-tile[data-name="${label('Trò chuyện')}"]`).first();
   // On Home already there is nothing to do; a click would only go back to the DM that is open.
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
 }
@@ -72,8 +106,8 @@ export async function openThreadByBrief(page, brief) {
   await expandSidebar(page);
   // Home has its search box ("Find or start a chat"); a space's head keeps room for its name and has none.
   await openHome(page);
-  await page.getByRole('button', { name: /Tìm cuộc trò chuyện|Tìm hoặc bắt đầu trò chuyện/ }).first().click();
-  await page.getByRole('combobox', { name: 'Tìm cuộc trò chuyện' }).fill(brief);
+  await page.getByRole('button', { name: label('Tìm hoặc bắt đầu trò chuyện') }).first().click();
+  await page.getByRole('combobox', { name: label('Tìm cuộc trò chuyện') }).fill(brief);
   await page.getByRole('option').filter({ hasText: brief }).first().click();
 }
 
@@ -84,10 +118,10 @@ export async function openThreadByBrief(page, brief) {
  * "first.txt" timeouts). The "Đang nhắn với …" heading only renders on the fresh chat that replaces it.
  */
 export async function archiveCurrentChat(page) {
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
-  await page.getByRole('heading', { name: /^Đang nhắn với / }).waitFor();
-  await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Lưu trữ'), exact: true }).click();
+  await page.getByRole('heading', { name: startsWith('Đang nhắn với {0}', ['']) }).waitFor();
+  await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).waitFor();
 }
 
 /**
@@ -95,5 +129,6 @@ export async function archiveCurrentChat(page) {
  */
 export async function openSettings(page) {
   await page.locator('.user-panel-who').click();
-  await page.getByRole('menuitem', { name: /^(Cài đặt|Settings)$/ }).click();
+  // The alignment check can also measure the Vietnamese interface (--language vi), so either name opens it.
+  await page.getByRole('menuitem', { name: new RegExp('^(' + label('Cài đặt') + '|Cài đặt)$') }).click();
 }

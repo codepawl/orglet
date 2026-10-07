@@ -47,7 +47,7 @@
   color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
-  --bar-line: color-mix(in srgb, var(--muted) 28%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 38%, var(--bg));
+  --bar-line: color-mix(in srgb, var(--muted) 18%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 25%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
@@ -1513,22 +1513,38 @@ button.notice-body { cursor:pointer; }
 .source-stage>.source-shape,.source-stage>.diff-shape { width:100%; max-width:720px; padding:24px 0; font-size:14px; }
 .source-shape-media { height:240px; }
 .diff-shape-lines { margin-top:14px; }
-.source-viewer .source-preview,.source-viewer .preview-table-scroll,.source-viewer .media-preview,.source-viewer .pdf-pages { background:var(--bg); max-height:none; overflow:visible; }
-.source-viewer .preview-table-scroll { overflow-x:auto; }
-.source-viewer .preview-table-scroll th { background:var(--bg); }
-.source-viewer .preview-table-scroll tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--surface) 55%, var(--bg)); }
-.source-viewer .media-image img { max-height:none; }
+.source-viewer .source-preview { background:var(--bg); max-height:none; overflow:visible; }
+/* PDF pages sit on the viewer's grey backdrop with their own shadow, like Quick Look, rather than white on white. */
+.source-viewer .pdf-pages { background:transparent; max-height:none; overflow:visible; padding:4px 0; }
+.source-viewer .media-preview { background-color:var(--bg); }
+.source-viewer pre.source-preview.no-wrap { overflow-x:auto; }
+/* A table scrolls inside its own frame, so the header and the row numbers stay in view while the rows move. */
+.source-viewer .preview-table-scroll { --table-bg:var(--bg); --table-zebra:color-mix(in srgb, var(--surface) 55%, var(--bg)); max-height:min(68vh, 760px); }
+.source-viewer .media-image img { max-height:min(72vh, 900px); }
+.source-viewer .media-image.actual-size img { max-height:none; }
 .source-viewer .media-video video { max-height:none; }
 .source-viewer .pdf-page { box-shadow:0 1px 2px #0000001a, 0 8px 28px #0000000f; }
 .preview-state,.preview-note { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; font-size:12.5px; color:var(--muted); }
 .preview-state { font-size:13px; }
-.preview-toolbar { display:flex; align-items:center; gap:8px; }
-.preview-toolbar .org-button { font-size:12.5px; min-height:30px; padding:4px 10px; }
-.code-preview,.table-preview,.json-preview,.markdown-preview,.pdf-preview { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.preview-bar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; min-height:32px; }
+.preview-bar-summary { margin:0; min-width:0; font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.preview-bar-tools { display:flex; align-items:center; gap:4px; margin-left:auto; }
+.preview-icon-button { width:30px; height:30px; min-height:30px; padding:0; color:var(--muted); }
+.preview-icon-button:hover:not(:disabled) { color:var(--text); }
+.preview-icon-button[aria-pressed=true] { color:var(--text); background:var(--row-active); }
+.preview-tabs { font-size:12.5px; }
+.preview-zoom-level { min-width:4ch; margin-right:4px; text-align:right; font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.preview-search { position:relative; display:flex; align-items:center; }
+.preview-search>svg { position:absolute; left:10px; color:var(--muted); pointer-events:none; }
+.preview-search .org-input { width:220px; max-width:100%; height:30px; min-height:30px; padding:0 10px 0 30px; font-size:12.5px; appearance:none; }
+.preview-search .org-input::-webkit-search-cancel-button { appearance:none; }
+.code-preview,.table-preview,.json-preview,.markdown-preview,.pdf-preview,.image-preview { display:flex; flex-direction:column; gap:8px; min-width:0; }
 /* Text and code: a number on every line, a hanging indent so a wrapped line starts under its text, and the
    tokenizer's colours. A cited line keeps its old outline so citation navigation still lands on it. */
 .source-preview { font-family:var(--font-mono); font-size:12px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--surface); padding:12px 14px; border-radius:10px; max-height:480px; overflow:auto; tab-size:4; }
 pre.source-preview { margin:0; }
+pre.source-preview.no-wrap { white-space:pre; overflow-wrap:normal; overflow-x:auto; }
+pre.source-preview.no-wrap>span { padding-left:0; text-indent:0; }
 pre.source-preview>span { display:block; padding-left:calc(var(--line-number-width, 4ch) + 12px); text-indent:calc(-1 * (var(--line-number-width, 4ch) + 12px)); }
 /* Cited lines read as one soft band in the accent, not a box around each line (no rules between rows). */
 .line-highlight { background:color-mix(in srgb, var(--accent) 16%, transparent); }
@@ -1546,25 +1562,47 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Markdown rendered as a document, in the interface type rather than monospace. */
 .source-preview.source-document { font-family:var(--font); font-size:13.5px; line-height:1.55; white-space:normal; }
 /* CSV and TSV as a table: sticky header, zebra rows, no rules (house rule: no divider lines). */
-.preview-table-scroll { max-width:100%; max-height:480px; overflow:auto; border-radius:10px; background:var(--surface); }
+.preview-table-scroll { --table-bg:var(--surface); --table-zebra:color-mix(in srgb, var(--bg) 45%, var(--surface)); max-width:100%; max-height:480px; overflow:auto; border-radius:10px; background:var(--table-bg); }
 .preview-table-scroll table { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-size:12.5px; font-variant-numeric:tabular-nums; }
-.preview-table-scroll th,.preview-table-scroll td { padding:6px 10px; text-align:left; vertical-align:top; white-space:nowrap; max-width:320px; overflow:hidden; text-overflow:ellipsis; }
-.preview-table-scroll th { position:sticky; top:0; background:var(--surface); font-weight:600; }
-.preview-table-scroll tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--bg) 45%, var(--surface)); }
+.preview-table-scroll th,.preview-table-scroll td { padding:7px 12px; text-align:left; vertical-align:top; white-space:nowrap; max-width:300px; overflow:hidden; text-overflow:ellipsis; background:var(--table-bg); }
+.preview-table-scroll thead th { position:sticky; top:0; z-index:2; background:color-mix(in srgb, var(--surface) 70%, var(--bg)); font-weight:600; }
+.preview-table-scroll tbody tr:nth-child(even)>* { background:var(--table-zebra); }
+.preview-table-scroll tbody tr:hover>* { background:var(--row-hover); }
+/* Numbers line up on their right edge, header included, in tabular figures. */
+.preview-table-scroll .cell-number { text-align:right; }
+/* A header is its column's sort button and has a grip on its right edge to drag the width. */
+.preview-table-scroll thead th { position:sticky; padding:0; }
+.preview-table-scroll .column-sort { display:flex; align-items:center; justify-content:flex-start; gap:4px; width:100%; min-height:0; padding:7px 12px; border-radius:0; font:inherit; font-weight:600; color:var(--text); background:transparent; }
+.preview-table-scroll th.cell-number .column-sort { justify-content:flex-end; }
+.preview-table-scroll .column-sort:hover { background:var(--row-hover); }
+.preview-table-scroll .column-sort .column-name { overflow:hidden; text-overflow:ellipsis; }
+.preview-table-scroll .column-sort svg { flex-shrink:0; color:var(--muted); }
+.preview-table-scroll .column-resize { position:absolute; top:0; right:0; bottom:0; width:6px; cursor:col-resize; touch-action:none; }
+.preview-table-scroll .column-resize:hover { background:color-mix(in srgb, var(--accent) 35%, transparent); }
+/* The row-number gutter stays at the left edge while a wide table scrolls sideways. */
+.preview-table-scroll .row-number { position:sticky; left:0; z-index:1; min-width:4ch; padding:7px 10px; text-align:right; font-weight:400; color:var(--muted); user-select:none; }
+.preview-table-scroll thead .row-number { z-index:3; }
+.cell-empty { color:var(--muted); opacity:.55; }
+.table-empty { position:sticky; left:0; justify-content:center; padding:36px 12px; }
 /* JSON as a folding tree; a leaf is indented to the toggle's text so keys line up. */
-.json-preview { white-space:normal; }
+.json-preview .json-tree { white-space:normal; }
 .json-node { display:flex; flex-direction:column; }
 .json-children { padding-left:18px; }
-.json-toggle { display:inline-flex; align-items:center; gap:4px; align-self:flex-start; padding:1px 6px 1px 2px; margin-left:-2px; border:0; border-radius:6px; background:transparent; font:inherit; color:inherit; text-align:left; }
+.json-toggle { display:inline-flex; align-items:center; gap:0; align-self:flex-start; padding:1px 6px 1px 2px; margin-left:-2px; border:0; border-radius:6px; background:transparent; font:inherit; color:inherit; text-align:left; }
 .json-toggle:hover { background:var(--row-hover); }
-.json-toggle .orglet-icon { color:var(--muted); transition:transform var(--motion-quick) var(--ease-out); }
+.json-toggle .orglet-icon { margin-right:4px; color:var(--muted); transition:transform var(--motion-quick) var(--ease-out); }
 .json-toggle .orglet-icon.open { transform:rotate(90deg); }
 .json-leaf { display:inline-block; padding:1px 0 1px 18px; overflow-wrap:anywhere; }
 .json-key { font-weight:600; }
 .json-colon,.json-summary { color:var(--muted); }
+/* In a folding row the key, colon and summary are flex items, so the space after the colon is drawn as a margin. */
+.json-toggle .json-colon { margin-right:.6ch; }
 /* Pictures, video, audio and PDF pages sit on the same soft surface as text. */
 .media-preview { margin:0; display:flex; justify-content:center; padding:12px; border-radius:10px; background:var(--surface); }
-.media-image img { display:block; max-width:100%; max-height:520px; border-radius:6px; object-fit:contain; }
+.media-image { background-color:var(--bg); background-image:conic-gradient(var(--surface) 25%, transparent 0 50%, var(--surface) 0 75%, transparent 0); background-size:16px 16px; }
+.media-image img { display:block; max-width:100%; max-height:520px; border-radius:6px; object-fit:contain; cursor:zoom-in; }
+.media-image.actual-size { justify-content:flex-start; overflow:auto; }
+.media-image.actual-size img { max-width:none; max-height:none; cursor:zoom-out; }
 .media-video video { display:block; width:100%; max-height:480px; border-radius:6px; background:#000; }
 .media-audio audio { display:block; width:100%; }
 .pdf-pages { display:flex; flex-direction:column; align-items:center; gap:12px; max-height:640px; overflow:auto; padding:12px; border-radius:10px; background:var(--surface); }
@@ -1664,6 +1702,8 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-group h4 { margin:0; font-size:13px; font-weight:600; color:var(--muted); }
 .form .routine-group input:not([type=checkbox]),.form .routine-group select,.form .routine-group textarea,.form .routine-group .org-money-input { background:var(--bg); }
 .routine-sources,.routine-folder,.routine-called { display:flex; flex-direction:column; gap:8px; }
+/* The app trigger has fields of its own, so they keep the gap the group's other fields have. */
+.routine-app { display:flex; flex-direction:column; gap:16px; }
 /* An hourly schedule's window and weekdays switches, and the daily cap with its ceiling under it (COD-288). */
 .routine-hours { display:flex; flex-direction:column; gap:12px; min-width:0; }
 .routine-cap { display:flex; flex-direction:column; gap:6px; min-width:0; }
@@ -2208,7 +2248,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markdown th:first-child,.markdown tbody tr:nth-child(even) td:first-child { border-radius:7px 0 0 7px; }
 .markdown th:last-child,.markdown tbody tr:nth-child(even) td:last-child { border-radius:0 7px 7px 0; }
 .markdown .markdown-break { height:6px; }
-.markdown-link { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
+.markdown-link { color:var(--accent); text-decoration:none; text-underline-offset:2px; overflow-wrap:anywhere; cursor:pointer; }
+.markdown-link:hover { text-decoration:underline; }
+.markdown-link:focus-visible { outline:2px solid var(--accent); outline-offset:1px; border-radius:3px; }
+.markdown-link-text { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
 .markdown-link-address { color:var(--muted); font-size:.9em; }
 /* A row of message buttons; in the chat it floats as the message's toolbar (see `.person-message .message-actions`). */
 .message-actions { display:flex; align-items:center; gap:2px; width:100%; margin:10px 0 0; color:var(--muted); }

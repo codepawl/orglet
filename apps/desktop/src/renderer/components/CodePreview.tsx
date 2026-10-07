@@ -1,9 +1,21 @@
 import { useMemo, useState } from 'react';
+import { WrapText } from 'lucide-react';
 import { Button } from './ui';
-import { t } from '../i18n';
+import { CopyButton, PreviewBar, PreviewIconButton } from './PreviewBar';
+import { currentLocale, t } from '../i18n';
 import { tokenizeLines, type Language } from './highlight';
 
 const INITIAL_LINES = 2000;
+
+const LANGUAGE_NAMES: Record<Language, string> = {
+  javascript: 'JavaScript / TypeScript', python: 'Python', shell: 'Shell', powershell: 'PowerShell', sql: 'SQL', css: 'CSS', markup: 'HTML / XML', yaml: 'YAML',
+  json: 'JSON', toml: 'TOML', 'c-family': 'C / C++ / Java', go: 'Go', rust: 'Rust', ruby: 'Ruby', text: '',
+};
+
+/** The language as the bar names it; plain text has no language, so it is called what it is. */
+function languageName(language: Language): string {
+  return LANGUAGE_NAMES[language] || t('Văn bản');
+}
 
 /** What a diff did to a line: it went, or it came. Drawn as `.line-removed` / `.line-added`. */
 export type LineMark = 'removed' | 'added';
@@ -15,18 +27,26 @@ export type LineMark = 'removed' | 'added';
  * as written. Very long files render their first two thousand lines and offer the rest on demand, unless a
  * citation lies past that point.
  */
-export function CodePreview({ text, language, citedLines, lineMarks }: {
+export function CodePreview({ text, language, citedLines, lineMarks, toolbar = false }: {
   text: string; language: Language; citedLines?: [number, number]; lineMarks?: Partial<Record<number, LineMark>>;
+  /** Adds the bar above the lines: the language, the line count, a wrap switch and a copy button. */
+  toolbar?: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [wrap, setWrap] = useState(true);
   // A file that ends with a newline has no extra empty line after it, the way an editor shows it.
   const lines = useMemo(() => tokenizeLines(text.replace(/\r?\n$/, ''), language), [text, language]);
   const total = lines.length;
   const citedEnd = citedLines ? citedLines[1] : 0;
   const visible = showAll || citedEnd > INITIAL_LINES ? total : Math.min(total, INITIAL_LINES);
   const numberWidth = `${String(total).length + 1}ch`;
+  const lineCount = total === 1 ? t('1 dòng văn bản') : t('{0} dòng văn bản', [total.toLocaleString(currentLocale())]);
   return <div className="code-preview">
-    <pre className={`source-preview language-${language}`} style={{ '--line-number-width': numberWidth } as React.CSSProperties}>
+    {toolbar && <PreviewBar summary={`${languageName(language)} · ${lineCount}`}>
+      <PreviewIconButton label={t('Xuống dòng tự động')} icon={<WrapText size={15} aria-hidden="true" />} pressed={wrap} onClick={() => setWrap(current => !current)} />
+      <CopyButton text={text} label={t('Sao chép')} />
+    </PreviewBar>}
+    <pre className={`source-preview language-${language}${wrap ? '' : ' no-wrap'}`} data-align-ignore={wrap ? undefined : 'overflow'} style={{ '--line-number-width': numberWidth } as React.CSSProperties}>
       {lines.slice(0, visible).map((tokens, index) => {
         const lineNumber = index + 1;
         const cited = citedLines !== undefined && lineNumber >= citedLines[0] && lineNumber <= citedLines[1];

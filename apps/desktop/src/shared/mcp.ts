@@ -49,12 +49,16 @@ const Arguments = z.array(z.string().max(4096)).max(64);
 /** How the core reaches a server, as the core stores it: secret values are absent, only their names are kept. */
 export const McpStoredTransport = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('stdio'), command: Command, args: Arguments, envNames: z.array(McpVariableName).max(32) }).strict(),
-  z.object({ kind: z.literal('http'), url: McpUrl, headerNames: z.array(McpHeaderName).max(16), bearer: z.boolean() }).strict(),
+  // oauth: the person signs in with the service in the browser, and Orglet keeps the tokens (stage 4, 2026-10-07).
+  z.object({ kind: z.literal('http'), url: McpUrl, headerNames: z.array(McpHeaderName).max(16), bearer: z.boolean(), oauth: z.boolean().optional() }).strict(),
 ]);
 export type McpStoredTransport = z.infer<typeof McpStoredTransport>;
 
-/** A tool as Settings lists it: the server's name for it and the first line of what it does. */
-export const McpToolSummary = z.object({ name: z.string().min(1).max(128), description: z.string().max(300) }).strict();
+/**
+ * A tool as Settings lists it: the server's name for it and the first line of what it does, and whether the server marks
+ * it read-only, which is what an app trigger may call on its own.
+ */
+export const McpToolSummary = z.object({ name: z.string().min(1).max(128), description: z.string().max(300), readOnly: z.boolean().optional() }).strict();
 export type McpToolSummary = z.infer<typeof McpToolSummary>;
 
 export const McpServer = z.object({
@@ -77,11 +81,26 @@ export type McpServer = z.infer<typeof McpServer>;
 export const McpServerConfig = McpServer.pick({ id: true, name: true, enabled: true, transport: true }).strict();
 export type McpServerConfig = z.infer<typeof McpServerConfig>;
 
+/**
+ * A remote server's sign-in: the client Orglet registered with the service, the tokens it issued, and what discovery
+ * found, all tied to the address they were made for. The SDK's own schemas check the inner objects where they are used.
+ */
+export const McpOAuthState = z.object({
+  serverUrl: McpUrl,
+  /** The loopback address this client was registered with; a sign-in reuses its port when it is free. */
+  redirectUri: z.string().max(200),
+  client: z.record(z.string(), z.unknown()).optional(),
+  tokens: z.record(z.string(), z.unknown()).optional(),
+  discovery: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+export type McpOAuthState = z.infer<typeof McpOAuthState>;
+
 /** The secret values of one server. Only main and the core ever hold these. */
 export const McpSecrets = z.object({
   env: z.record(McpVariableName, SecretValue),
   headers: z.record(z.string(), SecretValue),
   bearer: SecretValue.optional(),
+  oauth: McpOAuthState.optional(),
 }).strict();
 export type McpSecrets = z.infer<typeof McpSecrets>;
 export const emptyMcpSecrets = (): McpSecrets => ({ env: {}, headers: {} });
@@ -100,7 +119,7 @@ export const McpServerDraft = z.object({
   transport: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('stdio'), command: Command, args: Arguments, env: z.array(DraftEntry(McpVariableName)).max(32) }).strict(),
     // bearer: a string sets the token, null removes it, absent keeps the saved one.
-    z.object({ kind: z.literal('http'), url: McpUrl, headers: z.array(DraftEntry(McpHeaderName)).max(16), bearer: SecretValue.nullable().optional() }).strict(),
+    z.object({ kind: z.literal('http'), url: McpUrl, headers: z.array(DraftEntry(McpHeaderName)).max(16), bearer: SecretValue.nullable().optional(), oauth: z.boolean().optional() }).strict(),
   ]),
 }).strict().superRefine((draft, context) => {
   const names = draft.transport.kind === 'stdio' ? draft.transport.env.map(entry => entry.name) : draft.transport.headers.map(entry => entry.name.toLowerCase());
@@ -130,14 +149,26 @@ export function splitMcpDraft(draft: McpServerDraft, id: string, saved: McpSecre
     if (!value) throw new Error(`Nhập giá trị cho header ${entry.name}.`);
     headers[entry.name] = value;
   }
+  const headerNames = draft.transport.headers.map(entry => entry.name);
+  const authorizationHeader = headerNames.some(name => name.toLowerCase() === 'authorization');
+  if (draft.transport.oauth) {
+    if (draft.transport.bearer || authorizationHeader) throw new Error('Máy chủ đăng nhập bằng trình duyệt không dùng thêm token hay header Authorization.');
+    // A sign-in belongs to the address it was made for; a new address needs a new one.
+    const oauth = saved.oauth?.serverUrl === draft.transport.url ? saved.oauth : undefined;
+    const transport = { kind: 'http' as const, url: draft.transport.url, headerNames, bearer: false, oauth: true };
+    return { config: McpServerConfig.parse({ ...base, transport }), secrets: { env: {}, headers, ...(oauth ? { oauth } : {}) } };
+  }
   const bearer = draft.transport.bearer === undefined ? saved.bearer : draft.transport.bearer ?? undefined;
-  if (bearer && Object.keys(headers).some(name => name.toLowerCase() === 'authorization')) throw new Error('Dùng bearer token hoặc header Authorization, không dùng cả hai.');
-  const transport = { kind: 'http' as const, url: draft.transport.url, headerNames: draft.transport.headers.map(entry => entry.name), bearer: Boolean(bearer) };
+  if (bearer && authorizationHeader) throw new Error('Dùng bearer token hoặc header Authorization, không dùng cả hai.');
+  const transport = { kind: 'http' as const, url: draft.transport.url, headerNames, bearer: Boolean(bearer) };
   return { config: McpServerConfig.parse({ ...base, transport }), secrets: { env: {}, headers, ...(bearer ? { bearer } : {}) } };
 }
 
-/** Whether a server is running for the core right now; `idle` has not been started since the app opened. */
-export const McpServerStatus = z.enum(['disabled', 'idle', 'connecting', 'connected', 'error']);
+/**
+ * Whether a server is running for the core right now; `idle` has not been started since the app opened, and `signIn`
+ * is a remote server waiting for the person to sign in with the service (again, once its sign-in ran out).
+ */
+export const McpServerStatus = z.enum(['disabled', 'idle', 'connecting', 'connected', 'error', 'signIn']);
 export type McpServerStatus = z.infer<typeof McpServerStatus>;
 
 /** A server as the window sees it: its shape with names but no values, and its current state. */

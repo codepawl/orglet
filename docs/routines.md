@@ -16,10 +16,11 @@ The editor's **Starts** field picks one trigger per routine (COD-245):
 | **On a schedule** | The clock reaches the daily, weekday, weekly or hourly time ([how often](#how-often)) | Missed times become one catch-up you can run or skip (below) |
 | **When a file arrives** | A new file lands in the folder you picked | Nothing is recorded and nothing is replayed |
 | **Only when called** | `orglet run "<name>"` calls it from a terminal ([cli.md](cli.md#run)) | The command starts the app first; nothing is queued |
+| **When something new shows up in an app** | A connected app's read-only tool, which Orglet calls every few minutes, returns items it has not seen ([below](#when-something-new-shows-up-in-an-app)) | Nothing is looked at; what the tool still returns later counts as new then |
 
-Every trigger fires only while Orglet is open. The two event triggers are a clear break from the clock's catch-up: an event that happens while the app is closed is gone, and opening the app never runs it late. Any routine, whatever its trigger, can also be started with `orglet run`, or with **Run now** (the play button) on its card in **Schedules** (`runRoutineNow`). Run now takes the same path as `orglet run` without files (`Routines.runCalled`): the routine must be switched on, approved as it is now and done with its previous run, it runs with the routine's own sources only, and it leaves the next scheduled time where it was. The run opens like any scheduled run.
+Every trigger fires only while Orglet is open. The event triggers are a clear break from the clock's catch-up: an event that happens while the app is closed is gone, and opening the app never runs it late. Any routine, whatever its trigger, can also be started with `orglet run`, or with **Run now** (the play button) on its card in **Schedules** (`runRoutineNow`). Run now takes the same path as `orglet run` without files (`Routines.runCalled`): the routine must be switched on, approved as it is now and done with its previous run, it runs with the routine's own sources only, and it leaves the next scheduled time where it was. The run opens like any scheduled run.
 
-The row in **Schedules** says the trigger on the line under the name: "Daily at 09:00", "Every 2 hours, 09:00–18:00, weekdays only", "When a file arrives in Invoices" or "Only when called". A routine saved before triggers existed runs on its clock, as it always did.
+The row in **Schedules** says the trigger on the line under the name: "Daily at 09:00", "Every 2 hours, 09:00–18:00, weekdays only", "When a file arrives in Invoices", "When something new shows up in Linear" or "Only when called". A routine saved before triggers existed runs on its clock, as it always did.
 
 ### The trigger is part of what saving approves
 
@@ -41,6 +42,17 @@ How often and how much are approved the same way (COD-288): an hourly or weekday
 - **Watching.** Node's `fs.watch` tells the core to look soon; what counts is the folder listing, so a missed or doubled event changes nothing. The core also looks on its five-second tick, which covers a watcher that fails or a network drive that sends no events. A quiet folder costs one directory listing per tick.
 
 When a batch cannot start (the routine changed and needs saving, the folder was replaced), the routine shows the reason as **The schedule did not run** in **Schedules** until you dismiss it. There is nothing to catch up: the files stay where they are, and the ones that were handed to the failed batch do not run again.
+
+### When something new shows up in an app
+
+One hook per connected app (stage 4, 2026-10-07): any app in **Settings → MCP** can start a routine when something new appears in it, such as a GitHub notification or a Linear issue (`core/orchestration/app-triggers.ts`).
+
+- **What it calls.** Pick the app, one of its tools the app marks as read-only, the tool's arguments as a JSON object, and how often to look: every 5 to 1440 minutes. Orglet itself calls the tool, with nobody there to approve a call, so only a read-only tool can be picked, and the core checks it again before every call and when the routine is saved. The app, the tool and its arguments are part of the approval fingerprint, so changing any of them is a new save.
+- **What counts as new.** The tool's answer is split into items: the elements of a JSON array, or of the first array inside a JSON object (most list tools wrap their results that way), and otherwise the lines of the text. Up to 200 items, each cut to 2,000 characters. The first look after saving is the baseline and never runs; after that, an item whose text was not seen before is new, so an issue that changed counts again. The routine remembers the last 2,000 items it saw.
+- **Words.** With words set, only new items that contain one of them start a run, ignoring case and Vietnamese marks (`hoa don` matches `Hóa đơn`). Without words, every new item does.
+- **The run.** The new items go into one Markdown file, kept next to the database in `app-items`, which says it is the app's data and not instructions, and the run gets it attached like a file from a watched folder. Its answer is posted into the orglet's DM or the channel like every routine's.
+- **One run at a time.** While the previous run is still going, new items wait (up to 200) and join the next run; the routine says items are waiting.
+- **When it cannot look.** An app that was removed, turned off, needs a sign-in, or no longer has the tool shows the reason on the routine's card. The next look is at the routine's interval, not on every tick.
 
 ### Web search on a routine's run
 

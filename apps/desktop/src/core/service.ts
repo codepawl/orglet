@@ -1,5 +1,6 @@
 import type { NativeEffortSetting } from '../shared/effort';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { WorkspaceRecovery, restoredChangesKey } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
@@ -33,6 +34,7 @@ import { Marketplace } from './market/service';
 import { harnessReady, isHarness } from '../shared/harness';
 import { Routines, SCHEDULE_NEVER_ACTS, SCHEDULE_NO_DESKTOP } from './orchestration/routines';
 import { FolderTriggers } from './orchestration/folder-triggers';
+import { AppTriggers } from './orchestration/app-triggers';
 import { RoutineFolders } from './storage/routine-folders';
 import type { WatchFolderView } from '../shared/routine-triggers';
 import { WorkPolicy } from './orchestration/work-policy';
@@ -166,6 +168,7 @@ export class CoreService {
   readonly routineFolders: RoutineFolders;
   /** "When a file arrives" routines; they watch only while the app is open. */
   readonly folderTriggers: FolderTriggers;
+  readonly appTriggers: AppTriggers;
   readonly policy: WorkPolicy;
   readonly knowledge: KnowledgeBase;
   /** App changes workers propose in chats, applied through this service's own commands (COD-199). */
@@ -252,6 +255,8 @@ export class CoreService {
     this.routines = new Routines(store, this.sources, this.notify, (input, next, folder) => this.createTask(input, next, folder && { pending: { ...folder.resolved, permissions: folder.permissions }, resolved: folder.resolved }), clock, this.routineFolders);
     this.folderTriggers = new FolderTriggers(store, this.routineFolders, this.routines, this.sources, clock);
     const dataDirectory = store.databasePath && store.databasePath !== ':memory:' ? dirname(resolve(store.databasePath)) : undefined;
+    // New items from an app are kept as files next to the database, since a source points at the file it was read from.
+    this.appTriggers = new AppTriggers(store, this.mcp, this.routines, this.sources, join(dataDirectory ?? join(tmpdir(), 'orglet'), 'app-items'), clock);
     this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
     this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
     this.scheduleDelivery = new ScheduleDelivery(store, this.notify);
@@ -274,6 +279,13 @@ export class CoreService {
   }
   removeMcpServer(raw: unknown) {
     return this.mcp.remove(Id.parse(raw));
+  }
+  /** The address main signs in to for a remote server that uses the browser sign-in (stage 4). Only main calls this. */
+  mcpSignInTarget(raw: unknown): string {
+    const server = this.mcp.find(Id.parse(raw));
+    if (!server) throw new Error('Không tìm thấy máy chủ MCP.');
+    if (server.transport.kind !== 'http' || !server.transport.oauth) throw new Error('Máy chủ này không đăng nhập bằng trình duyệt.');
+    return server.transport.url;
   }
   /** Path of a task's source for the main process to open in the default app; the renderer only ever sends ids. */
   sourcePath(raw: unknown): string {
@@ -1119,7 +1131,11 @@ export class CoreService {
   }
   private saveRoutine(input: Args<'saveRoutine'>): Routine {
     if (input.enabled) this.prepareTask(input.task);
-    const routine = this.routines.save(input);
+    const previous = input.id ? this.store.all<Routine>('routines').find(item => item.id === input.id) : undefined;
+    const trigger = this.appTriggers.normalize(input.trigger);
+    const routine = this.routines.save(trigger ? { ...input, trigger } : input);
+    // An app trigger pointed at another app, tool or arguments looks again from a new baseline.
+    if (JSON.stringify(previous?.trigger) !== JSON.stringify(routine.trigger)) this.appTriggers.forget(routine.id);
     // A new or changed folder starts watching now, not at the next tick, so files already there stay the baseline.
     void this.folderTriggers.sync().catch(() => {});
     return routine;
@@ -1127,6 +1143,7 @@ export class CoreService {
   /** A deleted folder routine stops watching now; its past runs stay as chats (COD-283). */
   private deleteRoutine(routineId: string) {
     this.routines.remove(routineId);
+    this.appTriggers.forget(routineId);
     void this.folderTriggers.sync().catch(() => {});
   }
   /** Writes the settings given; a key left out keeps its value. The settings dialog and an applied proposal share this. */
@@ -2239,6 +2256,8 @@ export class CoreService {
     if (currency.code !== 'USD' && !this.currencyRefresh && Date.now() - this.currencyAttemptAt > 600_000 && (!currency.updatedAt || this.clock().getTime() - new Date(currency.updatedAt).getTime() > RATE_MAX_AGE_MS)) { this.currencyAttemptAt = Date.now(); void this.updateCurrency(currency.code, false); }
     await this.routines.tick();
     await this.folderTriggers.poll();
+    // A look at an app can take up to a minute; it runs beside the tick, one at a time, never holding the tick up.
+    void this.appTriggers.poll().catch(() => {});
     await this.quietRuns.review();
     // Each finished schedule run is posted into its orglet's DM or its channel (owner, 2026-10-07).
     this.scheduleDelivery.deliver();

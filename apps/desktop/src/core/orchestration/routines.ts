@@ -99,7 +99,7 @@ export class Routines {
     const approved = triggerOf({ trigger });
     const base = approved.kind === 'schedule'
       ? { team, workers, skills, models }
-      : { team, workers, skills, models, trigger: { kind: approved.kind, folder: approved.kind === 'folder' ? this.folders.identity(approved.folderId) : null } };
+      : { team, workers, skills, models, trigger: { kind: approved.kind, folder: approved.kind === 'folder' ? this.folders.identity(approved.folderId) : null, ...(approved.kind === 'app' ? { app: { serverId: approved.serverId, tool: approved.tool, arguments: approved.arguments } } : {}) } };
     return fingerprint(JSON.stringify({ ...base, ...(browser ? { browser } : {}), ...(folder ? { workspace: folder } : {}), ...(cadence ? { schedule: cadence } : {}) }));
   }
   /** What saving approves about a working folder: which folder on disk (path, volume, file id), how far, and review. */
@@ -229,10 +229,11 @@ export class Routines {
     if (workspace.review) return withoutApply;
     return [...withoutApply, 'workspace.apply'];
   }
-  /** New files in a watched folder start one run with them attached (COD-245). */
+  /** New files in a watched folder (COD-245), or new items from an app (stage 4), start one run with them attached. */
   async runArrivals(routineId: string, additions: RunAdditions): Promise<string> {
     const routine = this.store.get<Routine>('routines', routineId);
-    if (triggerOf(routine).kind !== 'folder') throw new Error('Lịch này không theo dõi thư mục.');
+    const kind = triggerOf(routine).kind;
+    if (kind !== 'folder' && kind !== 'app') throw new Error('Lịch này không theo dõi thư mục hay ứng dụng.');
     return this.runEvent(routine, additions);
   }
   /** `orglet run`: an existing, enabled, approved routine starts now, whatever its trigger. It never creates or edits one. */

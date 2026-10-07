@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import electronPath from 'electron';
-import { useVietnamese, openThreadByBrief, archiveCurrentChat, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
+import { label, startsWith, useEnglish, openThreadByBrief, archiveCurrentChat, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
 
 const data = await mkdtemp(join(tmpdir(), 'orglet-desktop-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
@@ -16,7 +16,7 @@ const errors = [];
 try {
   app = await launch();
   const page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.message));
-  await useVietnamese(page);
+  await useEnglish(page);
   const native = await app.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]; const prefs = window.webContents.getLastWebPreferences();
     return { title: window.getTitle(), visible: window.isVisible(), sandbox: prefs.sandbox, contextIsolation: prefs.contextIsolation, nodeIntegration: prefs.nodeIntegration, bounds: window.getBounds() };
@@ -27,37 +27,37 @@ try {
   const exposed = await page.evaluate(async url => { try { return await (await fetch(url)).text(); } catch { return null; } }, pathToFileURL(forbidden).href);
   assert.equal(exposed, null, 'Renderer must not read arbitrary local files');
   await page.screenshot({ path: join(output, 'desktop-empty.png') });
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('IME chưa hoàn tất');
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true })));
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('IME chưa hoàn tất');
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true })));
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 0);
   const sourcePath = join(data, 'evidence.txt'); await writeFile(sourcePath, 'Evidence fixture.\nSecond line.');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, sourcePath);
-  await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Tệp/ }).click();
+  await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).click(); await page.getByRole('menuitem', { name: startsWith('Tệp') }).click();
   await page.getByText('evidence.txt', { exact: true }).waitFor();
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: persistent task');
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).press('Shift+Enter');
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Desktop smoke: persistent task');
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).press('Shift+Enter');
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 0);
-  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
+  await page.getByRole('button', { name: label('Gửi tin nhắn'), exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   // A chat answer has no accept step; it is kept like any message.
-  await page.getByRole('button', { name: 'Sao chép', exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Sao chép'), exact: true }).waitFor();
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   const taskId = state.tasks[0].id; assert.equal(state.tasks[0].accepted, false);
   const answer = page.locator('.chat-reply').first();
   // The buttons are the message's toolbar, which shows while the message is pointed at (COD-365).
   await answer.hover();
-  await answer.getByRole('button', { name: 'Thả react' }).click();
-  await answer.getByRole('button', { name: 'Mình thấy ổn, giữ hướng này.' }).click();
+  await answer.getByRole('button', { name: label('Thả react') }).click();
+  await answer.getByRole('button', { name: label('Mình thấy ổn, giữ hướng này.') }).click();
   const reacted = await page.evaluate(id => window.orglet.call('task', { id }), taskId);
   assert.equal(reacted.task.messageReactions?.[0].emoji, 'agree');
   await answer.hover();
-  await answer.getByRole('button', { name: 'Trả lời tin này' }).click();
+  await answer.getByRole('button', { name: label('Trả lời tin này') }).click();
   await page.locator('.composer-reply').waitFor();
-  await page.getByRole('button', { name: 'Bỏ trả lời' }).click();
+  await page.getByRole('button', { name: label('Bỏ trả lời') }).click();
   await page.screenshot({ path: join(output, 'desktop-report.png') });
   await page.locator('.topbar-actions .thread-menu').click();
-  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
-  const details = page.getByRole('complementary', { name: 'Chi tiết' });
+  await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
+  const details = page.getByRole('complementary', { name: label('Chi tiết') });
   await details.waitFor(); await page.keyboard.press('Escape');
   assert.equal(await details.count(), 0);
   await page.waitForFunction(() => document.activeElement?.classList.contains('thread-menu'));
@@ -67,14 +67,14 @@ try {
   const viewer = page.getByRole('dialog', { name: 'evidence.txt' });
   await viewer.locator('.source-preview').filter({ hasText: 'Evidence fixture.' }).waitFor();
   assert.equal(await viewer.getByText(/SHA-256/).count(), 0);
-  await viewer.getByRole('button', { name: 'Thông tin về evidence.txt', exact: true }).hover();
+  await viewer.getByRole('button', { name: label('Thông tin về {0}', ['evidence.txt']), exact: true }).hover();
   await page.getByRole('tooltip').getByText(/SHA-256/).waitFor();
   await page.screenshot({ path: join(output, 'desktop-source.png') });
   await page.keyboard.press('Escape');
-  await viewer.getByRole('button', { name: 'Tùy chọn cho evidence.txt', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Thu hồi quyền đọc', exact: true }).click();
-  await page.getByRole('menu').getByRole('menuitem', { name: 'Thu hồi quyền đọc', exact: true }).click();
-  await viewer.getByText('Đã thu hồi quyền đọc', { exact: true }).waitFor();
+  await viewer.getByRole('button', { name: label('Tùy chọn cho {0}', ['evidence.txt']), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Thu hồi quyền đọc'), exact: true }).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: label('Thu hồi quyền đọc'), exact: true }).click();
+  await viewer.getByText(label('Đã thu hồi quyền đọc'), { exact: true }).waitFor();
   assert.equal(await page.locator('.source-preview').count(), 0);
   await page.keyboard.press('Escape');
   await viewer.waitFor({ state: 'hidden' });
@@ -85,13 +85,13 @@ try {
   const toolbar = answer.locator('.message-actions');
   const toolbarShown = () => toolbar.evaluate(element => getComputedStyle(element).opacity);
   await page.mouse.move(0, 0);
-  await toolbar.getByRole('button', { name: 'Tải xuống', exact: true }).focus();
+  await toolbar.getByRole('button', { name: label('Tải xuống'), exact: true }).focus();
   assert.equal(await toolbarShown(), '1');
   await page.locator(':focus').evaluate(element => element.blur());
   await answer.hover();
   assert.equal(await toolbarShown(), '1');
-  await toolbar.getByRole('button', { name: 'Tải xuống', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Tải Markdown (.md)', exact: true }).click();
+  await toolbar.getByRole('button', { name: label('Tải xuống'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Tải Markdown (.md)'), exact: true }).click();
   // The export is written asynchronously after the save dialog resolves.
   for (let attempt = 0; attempt < 50 && !(await readFile(exported, 'utf8').catch(() => '')); attempt++) await new Promise(resolve => setTimeout(resolve, 100));
   // A chat answer downloads as the message itself.
@@ -100,48 +100,48 @@ try {
   const fakeKeyPath = join(data, 'fixture-key.txt'); const fakeKey = 'sk-orglet-fixture-not-a-real-api-key'; await writeFile(fakeKeyPath, fakeKey);
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, fakeKeyPath);
   await openSettings(page);
-  await page.getByRole('tab', { name: 'Kết nối API', exact: true }).click();
-  const openaiRegion = page.getByRole('region', { name: 'Kết nối OpenAI', exact: true });
+  await page.getByRole('tab', { name: label('Kết nối API'), exact: true }).click();
+  const openaiRegion = page.getByRole('region', { name: label('Kết nối {0}', ['OpenAI']), exact: true });
   await openaiRegion.getByRole('switch').click();
-  await openaiRegion.getByRole('button', { name: 'Từ tệp', exact: true }).click();
-  await page.getByRole('status').filter({ hasText: 'Đã lưu API key OpenAI' }).waitFor();
+  await openaiRegion.getByRole('button', { name: label('Từ tệp'), exact: true }).click();
+  await page.getByRole('status').filter({ hasText: label('Đã lưu API key {0}', ['OpenAI']) }).waitFor();
   assert.equal((await readFile(join(data, 'openai.credential'))).includes(Buffer.from(fakeKey)), false);
   assert.equal(JSON.stringify(await page.evaluate(() => window.orglet.call('workspace', {}))).includes(fakeKey), false);
   await openaiRegion.getByRole('switch').click();
-  await page.getByRole('status').filter({ hasText: 'Đã ngắt OpenAI' }).waitFor();
-  const anthropicRegion = page.getByRole('region', { name: 'Kết nối Anthropic', exact: true });
+  await page.getByRole('status').filter({ hasText: label('Đã ngắt {0}', ['OpenAI']) }).waitFor();
+  const anthropicRegion = page.getByRole('region', { name: label('Kết nối {0}', ['Anthropic']), exact: true });
   await anthropicRegion.getByRole('switch').click();
-  await anthropicRegion.getByRole('button', { name: 'Từ tệp', exact: true }).click();
-  await page.getByRole('status').filter({ hasText: 'Đã lưu API key Anthropic' }).waitFor();
+  await anthropicRegion.getByRole('button', { name: label('Từ tệp'), exact: true }).click();
+  await page.getByRole('status').filter({ hasText: label('Đã lưu API key {0}', ['Anthropic']) }).waitFor();
   assert.equal((await readFile(join(data, 'anthropic.credential'))).includes(Buffer.from(fakeKey)), false);
   await anthropicRegion.getByRole('switch').click();
-  await page.getByRole('status').filter({ hasText: 'Đã ngắt Anthropic' }).waitFor();
+  await page.getByRole('status').filter({ hasText: label('Đã ngắt {0}', ['Anthropic']) }).waitFor();
   // Typed-key path: enable the provider, send once to main, never return, clear the draft.
   const typed = 'sk-orglet-typed-fixture-not-a-real-key';
   await openaiRegion.getByRole('switch').click();
-  await page.getByLabel('API key OpenAI', { exact: true }).fill(typed);
-  await openaiRegion.getByRole('button', { name: 'Lưu key', exact: true }).click();
-  await page.getByRole('status').filter({ hasText: 'Đã lưu API key OpenAI' }).waitFor();
+  await page.getByLabel(label('API key {0}', ['OpenAI']), { exact: true }).fill(typed);
+  await openaiRegion.getByRole('button', { name: label('Lưu key'), exact: true }).click();
+  await page.getByRole('status').filter({ hasText: label('Đã lưu API key {0}', ['OpenAI']) }).waitFor();
   // Saved key stays as mask dots in the field (not the real secret) so the user sees it is filled.
-  assert.equal(await page.getByLabel('API key OpenAI', { exact: true }).inputValue(), '••••••••••••••••');
+  assert.equal(await page.getByLabel(label('API key {0}', ['OpenAI']), { exact: true }).inputValue(), '••••••••••••••••');
   assert.equal((await readFile(join(data, 'openai.credential'))).includes(Buffer.from(typed)), false);
   assert.equal(JSON.stringify(await page.evaluate(() => window.orglet.call('workspace', {}))).includes(typed), false);
   await openaiRegion.getByRole('switch').click();
-  await page.getByRole('status').filter({ hasText: 'Đã ngắt OpenAI' }).waitFor();
-  await page.getByRole('tab', { name: 'Chung', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Giao diện', exact: true }).click(); await page.getByRole('option', { name: 'Tối', exact: true }).click();
-  await page.getByText('Đã lưu', { exact: true }).waitFor();
+  await page.getByRole('status').filter({ hasText: label('Đã ngắt {0}', ['OpenAI']) }).waitFor();
+  await page.getByRole('tab', { name: label('Chung'), exact: true }).click();
+  await page.getByRole('combobox', { name: label('Giao diện'), exact: true }).click(); await page.getByRole('option', { name: label('Tối'), exact: true }).click();
+  await page.getByText(label('Đã lưu'), { exact: true }).waitFor();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark', undefined, { timeout: 5000 });
   await page.screenshot({ path: join(output, 'desktop-dark-settings.png') });
   // About shows the version the running build reports, and that version is package.json's (COD-176). A dev run
   // cannot update itself and says so instead of pretending to check.
-  await page.getByRole('tab', { name: 'Giới thiệu', exact: true }).click();
+  await page.getByRole('tab', { name: label('Giới thiệu'), exact: true }).click();
   const packageVersion = JSON.parse(await readFile('package.json', 'utf8')).version;
   const about = await page.evaluate(() => window.orglet.about());
   assert.equal(about.version, packageVersion, 'About must report the package.json version');
   assert.equal(about.install, 'dev');
-  await page.getByText(`Phiên bản ${packageVersion}`, { exact: true }).waitFor();
-  await page.getByText('Bản chạy từ mã nguồn không tự cập nhật.', { exact: true }).waitFor();
+  await page.getByText(label('Phiên bản {0}', [packageVersion]), { exact: true }).waitFor();
+  await page.getByText(label('Bản chạy từ mã nguồn không tự cập nhật.'), { exact: true }).waitFor();
   assert.equal((await page.evaluate(() => window.orglet.updateState())).status, 'unsupported');
   await page.screenshot({ path: join(output, 'desktop-about.png') });
   await page.keyboard.press('Escape');
@@ -149,17 +149,17 @@ try {
   await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).first().waitFor();
   await page.getByRole('button', { name: '#Research Review', exact: true }).first().click();
-  await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
+  await page.getByRole('heading', { name: label('Đang nhắn với {0}', ['Research Review']) }).waitFor();
   // A crew on Demo offers the way to a real model under its message box (COD-293); its own settings lead the
   // header's menu.
-  await page.locator('.demo-note').getByRole('button', { name: 'Kết nối model', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Thiết lập kênh', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Thiết lập kênh' }).waitFor();
-  assert.equal(await page.getByLabel('Tên kênh', { exact: true }).inputValue(), 'Research Review');
+  await page.locator('.demo-note').getByRole('button', { name: label('Kết nối model'), exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Thiết lập kênh'), exact: true }).click();
+  await page.getByRole('dialog', { name: label('Thiết lập kênh') }).waitFor();
+  assert.equal(await page.getByLabel(label('Tên kênh'), { exact: true }).inputValue(), 'Research Review');
   await page.keyboard.press('Escape');
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: team synthesis');
-  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Desktop smoke: team synthesis');
+  await page.getByRole('button', { name: label('Gửi tin nhắn'), exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const teamTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   const teamDetail = await page.evaluate(id => window.orglet.call('task', { id }), teamTask.id);
@@ -171,15 +171,15 @@ try {
   assert.equal(teamDetail.runs.filter(run => run.stage === 'synthesis').length, 1);
   // Transcript is the synthesis only. Member jobs stay in Chi tiết; the plan job has no artifact.
   assert.equal(await page.locator('.assistant-message .chat-reply, .assistant-message .report').count(), 1);
-  await page.getByRole('button', { name: 'Sao chép', exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Sao chép'), exact: true }).waitFor();
   await page.locator('.topbar-actions .thread-menu').click();
-  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
   // Each job is a line of the story, with its stage as a chip beside the worker's name.
-  await page.locator('.details-run-who').filter({ hasText: 'phân việc' }).waitFor();
-  await page.locator('.details-run-who').filter({ hasText: 'gộp kết quả' }).waitFor();
+  await page.locator('.details-run-who').filter({ hasText: label('phân việc') }).waitFor();
+  await page.locator('.details-run-who').filter({ hasText: label('gộp kết quả') }).waitFor();
   // Run ids, the context manifest, the plan's assignments and export live in their own dialog, opened from the
   // panel (user, 2026-09-20), so the panel itself stays plain facts.
-  await page.getByRole('button', { name: 'Chi tiết kỹ thuật', exact: true }).click();
+  await page.getByRole('button', { name: label('Chi tiết kỹ thuật'), exact: true }).click();
   const technical = page.getByRole('dialog');
   // The plan sets each member's name in bold against their brief, so assert the two parts rather than one string.
   // Both members carry the same brief, so the name is what picks one row out.
@@ -187,8 +187,8 @@ try {
   await assignment.waitFor();
   assert.equal((await assignment.locator('strong').textContent())?.trim(), 'Source researcher');
   assert.match((await assignment.textContent()) ?? '', /Desktop smoke: team synthesis/);
-  await technical.getByRole('button', { name: 'Xuất câu trả lời', exact: true }).first().waitFor();
-  await technical.getByRole('button', { name: 'Đóng panel', exact: true }).click();
+  await technical.getByRole('button', { name: label('Xuất câu trả lời'), exact: true }).first().waitFor();
+  await technical.getByRole('button', { name: label('Đóng panel'), exact: true }).click();
   await technical.waitFor({ state: 'hidden' });
   await page.keyboard.press('Escape');
   await openHome(page);
@@ -196,22 +196,22 @@ try {
   await archiveCurrentChat(page);
   const datasetPath = join(data, 'dataset.csv'); await writeFile(datasetPath, 'id,label\n1,a\n2,b\n2,c\n');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, datasetPath);
-  await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Tệp/ }).click();
+  await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).click(); await page.getByRole('menuitem', { name: startsWith('Tệp') }).click();
   await page.getByText('dataset.csv', { exact: true }).waitFor();
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: deterministic dataset checker');
-  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Desktop smoke: deterministic dataset checker');
+  await page.getByRole('button', { name: label('Gửi tin nhắn'), exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   // The checker tools live with the chat's files, its Files view (COD-355); a file card opens the file itself.
   // The chat's other views open from its menu (user, 2026-10-07).
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).first().click();
-  await page.getByRole('menuitem', { name: /^Tệp/ }).click();
-  await page.getByRole('region', { name: /^Tệp/ }).waitFor();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click();
+  await page.getByRole('menuitem', { name: startsWith('Tệp') }).click();
+  await page.getByRole('region', { name: startsWith('Tệp') }).waitFor();
   await page.getByRole('checkbox', { name: 'dataset.csv', exact: true }).check();
-  await page.getByLabel('Cột ID (không bắt buộc)').fill('id');
-  await page.getByRole('button', { name: 'Kiểm tra dữ liệu', exact: true }).click();
+  await page.getByLabel(label('Cột ID (không bắt buộc)')).fill('id');
+  await page.getByRole('button', { name: label('Kiểm tra dữ liệu'), exact: true }).click();
   // The newest result opens by itself under the button once the check finishes (COD-292).
-  await page.getByText('3 dòng · 2 cột', { exact: true }).waitFor({ timeout: 25_000 });
-  await page.getByText('Cột mã id: ô trống 0 · dòng trùng mã 1.', { exact: true }).waitFor();
+  await page.getByText(`${label('{0} dòng', [3])} · ${label('{0} cột', [2])}`, { exact: true }).waitFor({ timeout: 25_000 });
+  await page.getByText(label('Cột mã {0}: ô trống {1} · dòng trùng mã {2}.', ['id', 0, 1]), { exact: true }).waitFor();
   await page.screenshot({ path: join(output, 'desktop-checker.png') });
   const checkedTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   const checkedDetail = await page.evaluate(id => window.orglet.call('task', { id }), checkedTask.id);
@@ -222,12 +222,12 @@ try {
     const folder = join(data, name); await mkdir(folder);
     await writeFile(join(folder, `${name}.txt`), 'Folder evidence'); await writeFile(join(folder, `${name}.bin`), 'Unsupported fixture');
     await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, folder);
-    await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Thư mục/ }).click();
+    await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).click(); await page.getByRole('menuitem', { name: startsWith('Thư mục') }).click();
     await page.getByText(`${name}.txt`, { exact: true }).waitFor();
   }
-  await page.getByText('2 mục không được thêm vào chat', { exact: true }).waitFor();
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: two folders');
-  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
+  await page.getByText(label('{0} mục không được thêm vào chat', [2]), { exact: true }).waitFor();
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Desktop smoke: two folders');
+  await page.getByRole('button', { name: label('Gửi tin nhắn'), exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const folderTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   assert.equal(folderTask.excludedSources.length, 2); assert.equal(folderTask.sourceIds.length, 2);
@@ -237,7 +237,7 @@ try {
     await window.orglet.call('pause', { id }); return id;
   });
   await openThreadByBrief(page, 'Desktop smoke: pause and resume');
-  await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tiếp tục từ checkpoint'), exact: true }).waitFor();
   const pausedRunId = (await page.evaluate(id => window.orglet.call('task', { id }), pausedTaskId)).runs[0].id;
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1024, 768));
   await page.screenshot({ path: join(output, 'desktop-1024.png') });
@@ -248,7 +248,7 @@ try {
   await writeFile(join(output, 'desktop-zoom-200.png'), Buffer.from(zoomCapture, 'base64'));
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await app.close(); app = await launch();
-  const reopened = await app.firstWindow(); await useVietnamese(reopened);
+  const reopened = await app.firstWindow(); await useEnglish(reopened);
   await expandSidebar(reopened);
   await openThreadByBrief(reopened, 'Desktop smoke: persistent task');
   await reopened.locator('.chat-reply, .report').first().waitFor();
@@ -259,7 +259,7 @@ try {
   assert.equal(restored.task.messageReactions?.[0].emoji, 'agree');
   await expandSidebar(reopened);
   await openThreadByBrief(reopened, 'Desktop smoke: pause and resume');
-  await reopened.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).click();
+  await reopened.getByRole('button', { name: label('Tiếp tục từ checkpoint'), exact: true }).click();
   await reopened.locator('.chat-reply, .report').first().waitFor();
   const resumed = await reopened.evaluate(id => window.orglet.call('task', { id }), pausedTaskId);
   assert.equal(resumed.task.status, 'completed'); assert.equal(resumed.runs.length, 1); assert.equal(resumed.runs[0].id, pausedRunId);

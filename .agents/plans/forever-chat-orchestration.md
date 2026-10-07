@@ -203,3 +203,12 @@ trang gốc lúc triển khai trước khi đưa vào code.
   cho chính Tí trưởng thì Tí trưởng làm luôn ở bước cuối. Benchmark Claude Code, kênh 2/4/8 Tí × 3 bài: tất cả đạt sau
   khi sửa; bài đơn giản 1 lời gọi, 20-27 s (trước: 3 lời gọi, 82-305 s, có lúc trả lời trùng). Chưa đo: quy tắc giao
   việc với Cursor/Codex, và việc gửi lại trên model thật (mới có test với model giả).
+- Giai đoạn 3 (2026-10-07, PR #566): mỗi lần chạy của lịch được đăng một lần vào DM của Tí hoặc chat của kênh, dưới tên
+  "Lịch · tên lịch" (`ScheduleDelivery`); lần chạy vẫn giữ record riêng (quyền, thư mục, giới hạn ngày, Tacet), sidebar
+  bỏ dòng của nó, thông báo mở thẳng tới bài đăng; lịch hằng giờ không có gì mới thì không đăng, Tacet thấy đáng báo mới
+  đăng. Khác plan: lượt của lịch không đi qua Tí trưởng của kênh mà được đăng như câu trả lời có sẵn; chat cũ của lịch
+  giữ nguyên. Cùng PR sửa lỗi sidebar ở khung hẹp bị gập lại khi chat đang mở bị xóa (alignment check fail trên CI).
+- Giai đoạn 4a (2026-10-07, PR #567): đăng nhập OAuth cho MCP từ xa (main làm luồng, loopback, PKCE, `state`, `iss`,
+  DCR; core tự refresh), danh mục Linear/Notion/Atlassian (trình duyệt) và GitHub (token). GitHub cần OAuth app do
+  CodePawl đăng ký mới đăng nhập bằng trình duyệt được. Chưa thử đăng nhập thật với dịch vụ nào (cần người ở trình
+  duyệt). Chưa làm: 4b, hook theo từng app.

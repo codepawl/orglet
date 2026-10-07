@@ -174,13 +174,6 @@
     "titleAttribute": 2,
     "hexColour": 0
   },
-  "components/Markdown.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
-    "hexColour": 0
-  },
   "components/mascots.tsx": {
     "rawButton": 0,
     "rawSelect": 0,

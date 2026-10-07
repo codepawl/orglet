@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openChannels, openHome } from './smoke-language.mjs';
+import { label, useEnglish, openChannels, openHome } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 // Sidebar: worker click opens chat, press-and-hold reorder, keyboard reorder, persistence across restarts.
@@ -15,7 +15,7 @@ const waitFor = async (check, label) => { for (let i = 0; i < 50; i++) { if (awa
 let app = await launch();
 try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
-  await useVietnamese(page);
+  await useEnglish(page);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).waitFor();
@@ -27,26 +27,26 @@ try {
   const researcher = page.getByRole('button', { name: 'Researcher', exact: true });
   assert.equal(await researcher.getAttribute('aria-expanded'), null);
   await researcher.click();
-  await page.getByRole('heading', { name: 'Đang nhắn với Researcher' }).waitFor();
+  await page.getByRole('heading', { name: label('Đang nhắn với {0}', ['Researcher']) }).waitFor();
   assert.equal(await researcher.getAttribute('aria-expanded'), null);
 
   // Double-click no longer edits a name; a worker is renamed in its edit dialog.
   await page.getByRole('button', { name: 'Researcher', exact: true }).dblclick();
   assert.equal(await page.locator('.row-rename').count(), 0);
-  await page.getByRole('button', { name: 'Tùy chọn Researcher', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
-  await page.getByLabel('Tên Tí').fill('Lead researcher'); await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn {0}', ['Researcher']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Chỉnh sửa') }).click();
+  await page.getByLabel(label('Tên Tí')).fill('Lead researcher'); await page.getByRole('button', { name: label('Lưu Tí'), exact: true }).click();
   await waitFor(async () => (await workspace(page)).workers.some(worker => worker.name === 'Lead researcher'), 'worker rename');
 
-  const box = page.getByRole('textbox', { name: 'Tin nhắn' });
+  const box = page.getByRole('textbox', { name: label('Tin nhắn') });
   await page.getByRole('button', { name: 'Lead researcher', exact: true }).click();
   await box.fill('Một brief rất dài về việc review dataset'); await box.press('Enter');
   await page.locator('.chat-reply, .report').first().waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Thiết lập chat', exact: true }).click();
-  await page.getByLabel('Tên chat').fill('Review dataset');
-  await page.getByRole('button', { name: 'Lưu chat', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Thiết lập chat'), exact: true }).click();
+  await page.getByLabel(label('Tên chat')).fill('Review dataset');
+  await page.getByRole('button', { name: label('Lưu chat'), exact: true }).click();
   await waitFor(async () => (await workspace(page)).tasks[0].title === 'Review dataset', 'thread rename');
-  assert.equal(await page.getByRole('navigation', { name: 'Tất cả công việc' }).count(), 0);
+  assert.equal(await page.getByRole('navigation', { name: label('Tất cả công việc') }).count(), 0);
 
   // Press and hold a worker, drag it to the top.
   const before = (await workspace(page)).workers.map(worker => worker.name);
@@ -74,7 +74,7 @@ try {
   // Dragging the handle resizes the sidebar, and the width survives a restart.
   const sidebarWidth = () => page.locator('.sidebar').evaluate(element => Math.round(element.getBoundingClientRect().width));
   const startWidth = await sidebarWidth();
-  const handle = page.getByRole('separator', { name: 'Kéo để đổi độ rộng thanh bên', exact: true });
+  const handle = page.getByRole('separator', { name: label('Kéo để đổi độ rộng thanh bên'), exact: true });
   const handleBox = await handle.boundingBox();
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 200);
   await page.mouse.down();
@@ -89,7 +89,7 @@ try {
   const saved = await workspace(page);
   const widthBeforeRestart = await sidebarWidth();
   await app.close(); app = await launch(); page = await app.firstWindow();
-  await useVietnamese(page);
+  await useEnglish(page);
   assert.equal(await sidebarWidth(), widthBeforeRestart, 'sidebar width is remembered');
   const reopened = await workspace(page);
   assert.deepEqual(reopened.workers.map(worker => worker.id), saved.workers.map(worker => worker.id));
@@ -100,15 +100,15 @@ try {
     name: 'Archive smoke', description: 'Checks the archive link', instructions: 'Answer briefly.', provider: 'demo', skillId,
   }), reopened.workers[0].skillId);
   await openHome(page);
-  await page.getByRole('button', { name: 'Tùy chọn Archive smoke', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn {0}', ['Archive smoke']), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Lưu trữ'), exact: true }).click();
   await waitFor(async () => (await workspace(page)).archivedWorkers.some(worker => worker.id === archiveOrglet.id), 'orglet archive');
-  await page.locator('.area-tile[data-name="Hoạt động"]').click();
+  await page.locator(`.area-tile[data-name="${label('Hoạt động')}"]`).click();
   // Activity's parts are chosen in the sidebar; the page has no tabs of its own.
-  await page.locator('.sidebar .sidebar-nav-item', { hasText: 'Xong' }).click();
-  await page.getByRole('button', { name: 'Mở mục lưu trữ', exact: true }).click();
-  await page.getByRole('tab', { name: 'Lưu trữ', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Khôi phục Archive smoke', exact: true }).click();
+  await page.locator('.sidebar .sidebar-nav-item', { hasText: label('Xong') }).click();
+  await page.getByRole('button', { name: label('Mở mục lưu trữ'), exact: true }).click();
+  await page.getByRole('tab', { name: label('Lưu trữ'), exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Khôi phục {0}', ['Archive smoke']), exact: true }).click();
   await waitFor(async () => (await workspace(page)).workers.some(worker => worker.id === archiveOrglet.id), 'orglet restore');
   console.log(JSON.stringify({ directory, workers: reopened.workers.map(worker => worker.name), teams: reopened.teams.map(team => team.name), result: 'passed' }));
 } finally { await app.close(); }

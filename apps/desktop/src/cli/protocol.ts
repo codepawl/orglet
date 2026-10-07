@@ -323,7 +323,7 @@ export type CliScheduleRow = {
   name: string;
   enabled: boolean;
   target: string;
-  trigger: 'schedule' | 'folder' | 'called';
+  trigger: 'schedule' | 'folder' | 'called' | 'app';
   frequency: 'daily' | 'weekdays' | 'weekly' | 'hours';
   time: string;
   weekday: number;

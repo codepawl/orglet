@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
-import { useVietnamese, openThreadByBrief, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
+import { label, countPattern, startsWith, useEnglish, openThreadByBrief, openChannels, openHome, openSettings, expandSidebar } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
@@ -18,7 +18,7 @@ let app = await launch(directory);
 try {
   const userData = await app.evaluate(({ app }) => app.getPath('userData'));
   assert.ok(userData.toLowerCase().startsWith(directory.toLowerCase()), 'Packaged smoke requires an isolated data folder');
-  let page = await app.firstWindow(); await useVietnamese(page);
+  let page = await app.firstWindow(); await useEnglish(page);
   const csv = join(directory, 'sample.csv'); await writeFile(csv, 'id,label\n1,alpha\n2,beta\n2,gamma\n');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, csv);
   const result = await page.evaluate(async () => {
@@ -30,14 +30,14 @@ try {
   assert.equal(result.profile.datasets[0].rows, 3); assert.equal(result.profile.datasets[0].id.duplicateNonNull, 1);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'data-check', provider: 'demo' }));
   await openChannels(page);
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Data Check', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Data Check', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
-  await page.getByRole('tab', { name: 'Cách làm việc', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Data Check']), exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Data Check']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Thiết lập kênh') }).click();
+  await page.getByRole('tab', { name: label('Cách làm việc'), exact: true }).click();
   // The team editor no longer edits a checklist or a dataset check (COD-143). A template team keeps both and says so.
-  await page.getByText('Câu trả lời của kênh phải trả lời 5 mục kiểm tra.', { exact: true }).waitFor();
-  await page.getByText('Tệp CSV/JSON được kiểm tra trên máy trước khi kênh review.', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Lưu kênh', exact: true }).click();
-  await page.getByText('Đã lưu kênh', { exact: true }).first().waitFor();
+  await page.getByText(label('Câu trả lời của kênh phải trả lời {0} mục kiểm tra.', [5]), { exact: true }).waitFor();
+  await page.getByText(label('Tệp CSV/JSON được kiểm tra trên máy trước khi kênh review.'), { exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Lưu kênh'), exact: true }).click();
+  await page.getByText(label('Đã lưu kênh'), { exact: true }).first().waitFor();
   const keptOnSave = await page.evaluate(async () => {
     const workspace = await window.orglet.call('workspace', {});
     const team = workspace.teams.find(item => item.name === 'Data Check');
@@ -52,7 +52,7 @@ try {
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Packaged automatic preflight', sourceIds: [sourceId], consent: false, budgetMicros: 1000 });
   }, result.profile.datasets[0].sourceId);
   await openThreadByBrief(page, 'Packaged automatic preflight');
-  await page.locator('.report-file', { hasText: 'Báo cáo mẫu' }).first().waitFor();
+  await page.locator('.report-file', { hasText: label('Báo cáo mẫu') }).first().waitFor();
   await page.locator('.report-file').first().click();
   const preflightDetail = await page.evaluate(id => window.orglet.call('task', { id }), preflightTaskId);
   assert.equal(preflightDetail.preflights[0].status, 'complete'); assert.equal(preflightDetail.profiles.length, 1);
@@ -60,12 +60,12 @@ try {
   assert.equal(preflightDetail.artifacts.length, 4);
   assert.equal(preflightDetail.task.evidenceRequests.length, 1);
   assert.equal(preflightDetail.task.evidenceRequests[0].state, "pending");
-  await page.getByRole("button", { name: "Ghi nhận giới hạn", exact: true }).waitFor();
+  await page.getByRole("button", { name: label('Ghi nhận giới hạn'), exact: true }).waitFor();
   const review = preflightDetail.artifacts.find(artifact => preflightDetail.runs.some(run => run.id === artifact.runId && run.stage === 'synthesis')).report.review;
   assert.equal(review.recommendation, 'insufficient_evidence'); assert.equal(review.checks.length, 5);
   assert.ok(review.checks.every(check => check.status === 'not_assessed'));
-  await page.getByRole('heading', { name: 'Chưa đủ bằng chứng', exact: true }).waitFor();
-  await page.getByText('Run stability · Chưa đánh giá', { exact: true }).click();
+  await page.getByRole('heading', { name: label('Chưa đủ bằng chứng'), exact: true }).waitFor();
+  await page.getByText(`Run stability · ${label('Chưa đánh giá')}`, { exact: true }).click();
   const layout = await page.evaluate(() => ({ viewport: innerHeight, main: document.querySelector('.main-pane').getBoundingClientRect().bottom, settings: document.querySelector('.user-panel').getBoundingClientRect().bottom }));
   assert.ok(layout.main <= layout.viewport + 1 && layout.settings <= layout.viewport + 1, 'Long report and role list must keep the main card and the user panel inside the viewport');
   console.log(JSON.stringify({ automaticPreflight: 'passed', taskId: preflightTaskId, checks: preflightDetail.profiles.length, reports: preflightDetail.artifacts.length, layout }));
@@ -74,9 +74,9 @@ try {
   const templatePath = join(directory, 'team-template.json');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, templatePath);
   await openChannels(page);
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Data Check', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
-  await page.getByRole('button', { name: 'Xuất template', exact: true }).click();
-  await page.getByText('Đã xuất template', { exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Data Check']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Thiết lập kênh') }).click();
+  await page.getByRole('button', { name: label('Xuất template'), exact: true }).click();
+  await page.getByText(label('Đã xuất template'), { exact: true }).waitFor();
   const template = JSON.parse(await readFile(templatePath, 'utf8'));
   assert.equal(template.team.reviewPolicy.requiredChecks.length, 5);
   assert.equal(template.team.reviewPolicy.requiredChecks[4].checker, 'run_audit');
@@ -86,8 +86,8 @@ try {
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
   // A template file is imported from Home's Add orglet page; a channel is no longer made from Home's sidebar.
   await openHome(page);
-  await page.locator('.sidebar').getByRole('button', { name: 'Thêm Tí', exact: true }).click();
-  await page.getByRole('button', { name: 'Nhập mẫu', exact: true }).click();
+  await page.locator('.sidebar').getByRole('button', { name: label('Thêm Tí'), exact: true }).click();
+  await page.getByRole('button', { name: label('Nhập mẫu'), exact: true }).click();
   // The imported crew's channel is put into the space kept for channels made outside the spaces. The import
   // itself lands on Home when it ends, so wait for both before opening that space.
   await page.waitForFunction(async () => {
@@ -96,7 +96,7 @@ try {
   });
   await page.waitForTimeout(500);
   await openChannels(page);
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Imported review', exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Imported review']), exact: true }).waitFor();
   const importedWorkspace = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(importedWorkspace.teams.length, 2); assert.equal(importedWorkspace.tasks.length, 2);
   assert.notDeepEqual(importedWorkspace.teams[0].memberIds, importedWorkspace.teams[1].memberIds);
@@ -113,7 +113,7 @@ try {
   const grant = await page.evaluate(taskId => window.orglet.pickWorkspace(taskId, ['read', 'write']), result.id);
   assert.equal(grant.name, 'task-workspace');
   assert.equal(grant.directory, undefined);
-  assert.equal(await app.evaluate(() => globalThis.workspaceGrantTitle), 'Chọn workspace: đọc và sửa file');
+  assert.equal(await app.evaluate(() => globalThis.workspaceGrantTitle), label('Chọn workspace: đọc và sửa file'));
   const bypass = await page.evaluate(async taskId => {
     try {
       await window.orglet.call('grantWorkspace', { taskId, directory: 'C:\\', permissions: ['read', 'write'] });
@@ -133,13 +133,13 @@ try {
   assert.deepEqual((await page.evaluate(() => window.orglet.call('workspace', {}))).newChatWorkspace, {});
   console.log(JSON.stringify({ workspaceGrantBridge: 'passed', pendingFolderBridge: 'passed' }));
   await openThreadByBrief(page, 'Packaged native checker fixture');
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
   const toolsPanel = page.locator('.task-tools');
-  await toolsPanel.getByRole('heading', { name: 'Quyền công cụ', exact: true }).waitFor();
-  const folderAccess = toolsPanel.getByRole('combobox', { name: 'Thư mục làm việc', exact: true });
+  await toolsPanel.getByRole('heading', { name: label('Quyền công cụ'), exact: true }).waitFor();
+  const folderAccess = toolsPanel.getByRole('combobox', { name: label('Thư mục làm việc'), exact: true });
   assert.equal(await folderAccess.isDisabled(), true, 'Demo must state its unsupported tools');
-  await toolsPanel.getByText('Tí Demo không dùng công cụ, nên chưa bật được quyền.', { exact: true }).waitFor();
+  await toolsPanel.getByText(label('Tí Demo không dùng công cụ, nên chưa bật được quyền.'), { exact: true }).waitFor();
   const originalWorker = await page.evaluate(async taskId => {
     const detail = await window.orglet.call('task', { id: taskId });
     const workspace = await window.orglet.call('workspace', {});
@@ -178,11 +178,11 @@ try {
     return grant?.revoked === false && grant.permissions.includes('execute');
   }, result.id);
   await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'execute');
-  assert.equal(await app.evaluate(() => globalThis.workspaceGrantTitle), 'Chọn workspace: đọc, sửa file và chạy lệnh');
+  assert.equal(await app.evaluate(() => globalThis.workspaceGrantTitle), label('Chọn workspace: đọc, sửa file và chạy lệnh'));
   await chooseFolderLevel('Home');
   await page.waitForFunction(async taskId => (await window.orglet.call('workspaceAccess', { taskId }))?.revoked === true, result.id);
   await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'none');
-  const webAccess = toolsPanel.getByRole('switch', { name: 'Đọc và tìm kiếm web', exact: true });
+  const webAccess = toolsPanel.getByRole('switch', { name: label('Đọc và tìm kiếm web'), exact: true });
   await webAccess.focus();
   await webAccess.press('Space');
   await page.waitForFunction(async taskId => (await window.orglet.call('task', { id: taskId })).task.toolCapabilities?.includes('network.web'), result.id);
@@ -203,15 +203,15 @@ try {
   assert.equal(toolLayout.overflow, false);
   assert.ok(toolLayout.centerDifference < 1, 'Permission switch and its label block must share a vertical center');
   await page.setViewportSize({ width: 1100, height: 800 });
-  await page.getByRole('button', { name: 'Đóng panel', exact: true }).click();
+  await page.getByRole('button', { name: label('Đóng panel'), exact: true }).click();
   await expandSidebar(page);
   await page.evaluate(taskId => window.orglet.pickWorkspace(taskId, ['read']), result.id);
   console.log(JSON.stringify({ taskToolPermissionsUI: 'passed', toolLayout }));
   const backupPath = join(directory, 'workspace.json');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, backupPath);
-  await openSettings(page); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
-  await page.getByRole('button', { name: 'Lưu bản sao lưu', exact: true }).click();
-  await page.getByText('Đã lưu bản sao lưu', { exact: true }).waitFor();
+  await openSettings(page); await page.getByRole('tab', { name: label('Dữ liệu'), exact: true }).click();
+  await page.getByRole('button', { name: label('Lưu bản sao lưu'), exact: true }).click();
+  await page.getByText(label('Đã lưu bản sao lưu'), { exact: true }).waitFor();
   const backup = JSON.parse(await readFile(backupPath, 'utf8'));
   assert.equal(backup.payload.profiles.length, 2); assert.equal(backup.payload.artifacts.length, 5); assert.equal(backup.payload.preflights.length, 1);
   assert.equal(backup.payload.sources[0].path, undefined);
@@ -256,7 +256,7 @@ try {
   } finally { recoveryDatabase.close(); }
   app = await launch(directory);
   page = await app.firstWindow();
-  await useVietnamese(page);
+  await useEnglish(page);
   // The members' jobs are part of the work, which a chat shows only with Show how orglets work on (user, 2026-10-06).
   await page.evaluate(async () => {
     const workspace = await window.orglet.call('workspace', {});
@@ -265,9 +265,9 @@ try {
   await openThreadByBrief(page, 'Packaged native checker fixture');
   // Each unfinished job is a row: the orglet's name and its state on one line, the brief under them (COD-352).
   const reviewerJob = page.locator('.team-progress .team-job').filter({ has: page.getByText('Fixture reviewer', { exact: true }) });
-  await reviewerJob.locator('.team-job-state').getByText('Bị gián đoạn · Chờ Fixture researcher', { exact: true }).waitFor();
+  await reviewerJob.locator('.team-job-state').getByText(`${label('Bị gián đoạn')} · ${label('Chờ {0}', ['Fixture researcher'])}`, { exact: true }).waitFor();
   const researcherJob = page.locator('.team-progress .team-job').filter({ has: page.getByText('Fixture researcher', { exact: true }) });
-  await researcherJob.locator('.team-job-state').getByText('Cần xem lại', { exact: true }).waitFor();
+  await researcherJob.locator('.team-job-state').getByText(label('Cần xem lại'), { exact: true }).waitFor();
   await researcherJob.locator('.team-job-brief').getByText('Inspect the source', { exact: true }).waitFor();
   const assignmentDetails = page.locator('.team-progress details');
   assert.equal(await assignmentDetails.getAttribute('open'), null);
@@ -276,13 +276,13 @@ try {
   assert.equal(await assignmentDetails.locator('p').innerText(), reviewAssignment);
   assert.notEqual(await assignmentDetails.getAttribute('open'), null);
   console.log(JSON.stringify({ teamDependencyProgressUI: 'passed', assignmentDescription: 'passed', keyboardDisclosure: 'passed' }));
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
   const recoveryPanel = page.locator('.workspace-recovery');
-  await recoveryPanel.getByRole('heading', { name: 'File và tiến trình', exact: true }).waitFor();
+  await recoveryPanel.getByRole('heading', { name: label('File và tiến trình'), exact: true }).waitFor();
   // The attempt's files fold under their count (COD-191); open the group before reaching the private edit.
-  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: /thay đổi trong bản làm việc/ }).click();
-  await recoveryPanel.getByRole('button', { name: 'Xem bản sửa riêng', exact: true }).click();
+  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: countPattern('{0} thay đổi trong bản làm việc') }).click();
+  await recoveryPanel.getByRole('button', { name: label('Xem bản sửa riêng'), exact: true }).click();
   const privateEdit = recoveryPanel.locator('pre').filter({ hasText: 'Private edit for inspection' });
   const privateEditError = recoveryPanel.getByRole('alert');
   const previewOutcome = await Promise.race([
@@ -290,23 +290,23 @@ try {
     privateEditError.waitFor().then(() => privateEditError.innerText()),
   ]);
   const sandboxUnavailable = process.env.CI === 'true'
-    && previewOutcome === 'Không xác minh được sandbox Windows. Chưa cho phép chạy lệnh.';
+    && previewOutcome === label('Không xác minh được sandbox Windows. Chưa cho phép chạy lệnh.');
   assert.ok(previewOutcome === null || sandboxUnavailable, `Private edit preview failed: ${previewOutcome}`);
   if (sandboxUnavailable) assert.equal(await privateEdit.count(), 0, 'An unavailable sandbox must not expose private file content');
   console.log(JSON.stringify({ privateFilePreview: sandboxUnavailable ? 'sandbox-unavailable' : 'passed' }));
   assert.equal(await readFile(join(taskWorkspace, 'note.txt'), 'utf8'), 'Current user file');
   // Commands fold under their attempt's count (COD-191): open the group, then the unknown process inside it.
-  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: /lệnh/ }).click();
-  await recoveryPanel.locator('details.recovery-process > summary').filter({ hasText: 'Chưa rõ kết quả' }).click();
-  await recoveryPanel.getByRole('button', { name: 'Xem đầu ra', exact: true }).click();
+  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: countPattern('{0} lệnh') }).click();
+  await recoveryPanel.locator('details.recovery-process > summary').filter({ hasText: label('Chưa rõ kết quả') }).click();
+  await recoveryPanel.getByRole('button', { name: label('Xem đầu ra'), exact: true }).click();
   await page.waitForFunction(() => [...document.querySelectorAll('.workspace-process-output pre')].some(pre => [...(pre.textContent ?? '')].length === 16000));
-  await recoveryPanel.getByRole('button', { name: 'Trang đầu ra tiếp theo', exact: true }).click();
+  await recoveryPanel.getByRole('button', { name: label('Trang đầu ra tiếp theo'), exact: true }).click();
   await page.waitForFunction(() => [...document.querySelectorAll('.workspace-process-output pre')].some(pre => pre.textContent === '🙂'));
-  await recoveryPanel.getByRole('button', { name: /^Giữ file hiện tại ·/ }).click();
-  await page.getByRole('button', { name: 'Quay lại kiểm tra', exact: true }).click();
+  await recoveryPanel.getByRole('button', { name: startsWith('Giữ file hiện tại') }).click();
+  await page.getByRole('button', { name: label('Quay lại kiểm tra'), exact: true }).click();
   assert.equal((await page.evaluate(taskId => window.orglet.call('workspaceRecovery', { taskId }), result.id)).attempts[0].retired, false);
-  await recoveryPanel.getByRole('button', { name: /^Giữ file hiện tại ·/ }).click();
-  await page.getByRole('button', { name: 'Giữ file hiện tại', exact: true }).click();
+  await recoveryPanel.getByRole('button', { name: startsWith('Giữ file hiện tại') }).click();
+  await page.getByRole('button', { name: label('Giữ file hiện tại'), exact: true }).click();
   await page.waitForFunction(async taskId => (await window.orglet.call('workspaceRecovery', { taskId })).attempts[0]?.retired, result.id);
   const recoveryState = await page.evaluate(taskId => window.orglet.call('workspaceRecovery', { taskId }), result.id);
   assert.equal(recoveryState.processes[0].state, 'uncertain');
@@ -318,15 +318,15 @@ try {
   await app.close();
   const restoreDirectory = await mkdtemp(join(tmpdir(), 'orglet-restored-'));
   app = await launch(restoreDirectory); page = await app.firstWindow();
-  await useVietnamese(page);
+  await useEnglish(page);
   await app.evaluate(({ dialog }, path) => {
     globalThis.orgletTestDialogs = { open: dialog.showOpenDialog, message: dialog.showMessageBox };
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
     dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
   }, backupPath);
-  await openSettings(page); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
-  await page.getByRole('button', { name: 'Khôi phục từ tệp', exact: true }).click();
-  await page.getByText('Đã khôi phục các mục còn thiếu', { exact: true }).waitFor();
+  await openSettings(page); await page.getByRole('tab', { name: label('Dữ liệu'), exact: true }).click();
+  await page.getByRole('button', { name: label('Khôi phục từ tệp'), exact: true }).click();
+  await page.getByText(label('Đã khôi phục các mục còn thiếu'), { exact: true }).waitFor();
   const restored = await page.evaluate(id => window.orglet.call('task', { id }), result.id);
   assert.equal(restored.artifacts.length, 1); assert.equal(restored.profiles[0].result.datasets[0].rows, 3);
   assert.equal(restored.sources[0].revoked, true); assert.equal(restored.task.consent, false);
@@ -341,7 +341,7 @@ try {
   console.log(JSON.stringify({ userData, taskId: result.id, engine: result.profile.engine, rows: 3, duplicateIds: 1 }, null, 2));
   if (process.argv.includes('--inspect-ui')) {
     await openThreadByBrief(page, 'Packaged automatic preflight');
-    await page.getByRole('button', { name: 'Xem kiểm tra trước review', exact: true }).waitFor();
+    await page.getByRole('button', { name: label('Xem kiểm tra trước review'), exact: true }).waitFor();
     console.log('Packaged UI ready for computer use; close its window when finished.');
     await new Promise(resolve => app.once('close', resolve));
   }

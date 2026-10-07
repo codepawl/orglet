@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
+import { label, startsWith, useEnglish, openThreadByBrief } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-finding-ui-')); const data = join(directory, 'data');
@@ -16,7 +16,7 @@ let closed = true;
 const launch = async () => { const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${data}`], env }); closed = false; instance.once('close', () => { closed = true; }); return instance; };
 let app = await launch();
 try {
-  let page = await app.firstWindow(); await useVietnamese(page);
+  let page = await app.firstWindow(); await useEnglish(page);
   const userData = await app.evaluate(({ app }) => app.getPath('userData'));
   const within = relative(directory, userData); assert.ok(within && !within.startsWith('..') && !isAbsolute(within));
   await app.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, [text, csv]);
@@ -44,16 +44,16 @@ try {
   // The report arrives as a file; open it to read.
   await page.locator('.report-file', { hasText: 'Evidence navigation fixture' }).click();
   await page.getByRole('dialog', { name: 'Evidence navigation fixture' }).waitFor();
-  await page.getByRole('heading', { name: 'Chưa đủ bằng chứng', exact: true }).waitFor();
-  await page.getByText('Run stability · Chưa đánh giá', { exact: true }).click();
+  await page.getByRole('heading', { name: label('Chưa đủ bằng chứng'), exact: true }).waitFor();
+  await page.getByText(`Run stability · ${label('Chưa đánh giá')}`, { exact: true }).click();
   await page.getByText('Run logs were not supplied.', { exact: true }).waitFor();
   await page.getByText('Please supply run logs before assessing stability.', { exact: true }).waitFor();
   await app.evaluate(({ clipboard }) => { globalThis.originalClipboardWrite = clipboard.writeText; clipboard.writeText = text => { globalThis.copiedFeedback = text; }; });
-  await page.getByRole('button', { name: 'Sao chép feedback', exact: true }).click();
-  await page.getByText('Đã sao chép feedback', { exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Sao chép feedback'), exact: true }).click();
+  await page.getByText(label('Đã sao chép feedback'), { exact: true }).waitFor();
   assert.equal(await app.evaluate(() => globalThis.copiedFeedback), 'Please supply run logs before assessing stability.');
   await app.evaluate(({ clipboard }) => { clipboard.writeText = globalThis.originalClipboardWrite; });
-  await page.getByText('Nguồn gốc finding', { exact: true }).click();
+  await page.getByText(label('Nguồn gốc finding'), { exact: true }).click();
   await page.getByText(`Finding: ${findingId}`, { exact: false }).waitFor();
   // A cited file opens on its own, content first, with focus inside its viewer.
   await page.getByRole('button', { name: 'evidence.txt', exact: true }).click();
@@ -63,7 +63,7 @@ try {
   await page.keyboard.press('Escape');
   await viewer.waitFor({ state: 'hidden' });
   await page.locator('.report-file').first().click();
-  await page.getByRole('button', { name: 'evidence.txt · dòng 2', exact: true }).click();
+  await page.getByRole('button', { name: `evidence.txt · ${label('dòng {0}', [2])}`, exact: true }).click();
   const highlighted = viewer.locator('.line-highlight');
   await highlighted.waitFor();
   assert.deepEqual(await highlighted.evaluateAll(lines => lines.map(line => [line.dataset.line, line.textContent])), [['2', '2Second line.\n']]);
@@ -73,7 +73,7 @@ try {
   await page.getByRole('button', { name: 'Xem checker 1', exact: true }).click();
   assert.equal(await page.locator(`#checker-${profile.id}`).evaluate(element => element.open), true);
   assert.equal(await page.evaluate(() => document.activeElement.id), `checker-${profile.id}`);
-  await page.getByText('1 dòng · 2 cột', { exact: true }).waitFor();
+  await page.getByText(`${label('1 dòng')} · ${label('{0} cột', [2])}`, { exact: true }).waitFor();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 640));
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await mkdir('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/finding-evidence.png' }); assert.deepEqual(errors, []);

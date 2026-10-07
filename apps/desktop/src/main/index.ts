@@ -37,7 +37,9 @@ import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
 import { WebSearchKeys } from './web-search-keys';
 import { WebSearchKeyProvider } from '../shared/web-tools';
 import type { ProcessIdentity } from '../core/tools/process-identity';
-import { McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
+import { McpOAuthState, McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
+import { McpSignIns } from './mcp-sign-in';
+import { openableUrl } from '../shared/links';
 import type { Incoming, SendToState } from '../shared/incoming';
 import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
 import { DesktopOverlayWindow } from './desktop-overlay';
@@ -93,6 +95,7 @@ const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
+let mcpSignIns: McpSignIns;
 /** The optional CodePawl account (COD-337): its tokens stay here, the window hears only `AccountState`. */
 let account: AccountService;
 /** Account sync (COD-329 phase 3); it stays off in a build with no `ORGLET_SYNC_URL`. */
@@ -530,6 +533,12 @@ async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
   mcpSecrets = new McpSecretStore(directory, safeStorage);
+  mcpSignIns = new McpSignIns({
+    readSecrets: serverId => mcpSecrets.read(serverId),
+    saveSecrets: (serverId, secrets) => mcpSecrets.save(serverId, secrets),
+    openExternal: url => shell.openExternal(url),
+    translate: key => tr(key),
+  });
   webSearchKeys = new WebSearchKeys(directory, safeStorage);
   account = new AccountService({
     baseUrl: accountsBaseUrl(process.env.ORGLET_ACCOUNTS_URL),
@@ -631,6 +640,15 @@ async function start() {
       if (message.type === 'mcpSecrets') {
         const serverId = Id.safeParse(message.serverId);
         core.postMessage({ id: message.id, command: 'mcpSecretsReply', args: serverId.success ? await mcpSecrets.read(serverId.data) : null });
+        return;
+      }
+      // The core refreshed a server's sign-in (or the service dropped it): kept only while it is still for that address.
+      if (message.type === 'mcpSignInSave') {
+        const serverId = Id.safeParse(message.serverId);
+        const state = McpOAuthState.safeParse(message.state);
+        if (!serverId.success || !state.success) return;
+        const saved = await mcpSecrets.read(serverId.data);
+        if (saved.oauth?.serverUrl === state.data.serverUrl) await mcpSecrets.save(serverId.data, { ...saved, oauth: state.data });
         return;
       }
       if (message.type === 'mcpProcesses') {
@@ -821,6 +839,13 @@ async function start() {
   });
   // The renderer names a link; the address comes from the allowlist, so nothing shown in the window can choose one.
   handle('orglet:open-link', async raw => { await shell.openExternal(ABOUT_LINKS[AboutLink.parse(raw)]); });
+  // A link the person clicked in a chat. The window chose it, so main checks it again: web and mail addresses only,
+  // never a file, a script or another app's scheme.
+  handle('orglet:open-url', async raw => {
+    const url = openableUrl(z.string().max(2048).parse(raw));
+    if (!url) throw new Error('Không mở được liên kết này.');
+    await shell.openExternal(url);
+  });
   handle('orglet:changelog', async raw => changelog.read(z.boolean().default(false).parse(raw)));
   handle('orglet:update-state', async () => updater.state);
   handle('orglet:check-for-updates', async () => updater.check());
@@ -941,8 +966,22 @@ async function start() {
     }
   };
   handle('orglet:mcp-save', async raw => saveMcpDraft(McpServerDraft.parse(raw)));
+  /**
+   * Signs in to a remote server in the system browser (stage 4). The address comes from the core's saved server, never
+   * from the window; once the tokens are stored the server starts again, and the window gets its new state.
+   */
+  handle('orglet:mcp-sign-in', async raw => {
+    const serverId = Id.parse(raw);
+    const serverUrl = await request('mcpSignInTarget', serverId) as string;
+    await mcpSignIns.signIn(serverId, serverUrl);
+    return await request('testMcpServer', { id: serverId }) as McpServerView;
+  });
+  handle('orglet:mcp-sign-in-cancel', async raw => {
+    mcpSignIns.cancel(Id.parse(raw));
+  });
   handle('orglet:mcp-remove', async raw => {
     const serverId = Id.parse(raw);
+    mcpSignIns.cancel(serverId);
     await request('removeMcpServer', serverId);
     await mcpSecrets.remove(serverId);
   });

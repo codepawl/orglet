@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink, Search, Trash2 } from 'lucide-react';
+import { BrandMark } from './brandMarks';
 import type { Connections } from '../../shared/contracts';
 import { WEB_SEARCH_PROVIDER_NAMES, WEB_SEARCH_TEST_QUERY, type WebSearchProvider } from '../../shared/web-tools';
 import { Button } from './ui';
@@ -78,7 +79,7 @@ export function WebSearchSettings({ provider, hasKey, busy, act, onProvider, onC
       <div className="setting-control">
         <Select ariaLabel={t('Nhà cung cấp tìm kiếm web')} className="setting-select" value={provider} disabled={busy}
           onChange={value => onProvider(value as WebSearchProvider)}
-          options={[{ value: 'exa', label: 'Exa', note: t('mặc định') }, { value: 'duckduckgo', label: 'DuckDuckGo' }]} menuMinWidth={210} />
+          options={[{ value: 'exa', label: 'Exa', note: t('mặc định'), icon: <BrandMark brand="exa" size={14} /> }, { value: 'duckduckgo', label: 'DuckDuckGo', icon: <BrandMark brand="duckduckgo" size={15} /> }]} menuMinWidth={210} />
       </div>
     </div>
     {provider === 'exa' && <div role="region" aria-labelledby="exa-key-title" className="setting-row web-search-key">
