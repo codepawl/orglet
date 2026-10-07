@@ -198,3 +198,8 @@ trang gốc lúc triển khai trước khi đưa vào code.
   sách, đọc `cached_tokens` của OpenAI vào usage. Chưa làm: TTL cache 1 giờ của Anthropic (cần đo bằng API key thật;
   AGENTS.md không cho tìm key trên máy), giá đọc cache của OpenAI (chưa kiểm ở trang giá gốc), cắt kết quả công cụ cũ
   trong harness (nguồn được trích theo dòng; cần đo trên `harness-step-cost` với công cụ thật trước).
+- Giai đoạn 2 (2026-10-07): Tí trưởng tự trả lời ở bước lập kế hoạch, tin có tag đi thẳng tới Tí được tag, gửi lại
+  việc kèm nhận xét (tối đa 2 lần), song song theo giới hạn kết nối, kênh mới mặc định có Tí trưởng, kế hoạch chỉ giao
+  cho chính Tí trưởng thì Tí trưởng làm luôn ở bước cuối. Benchmark Claude Code, kênh 2/4/8 Tí × 3 bài: tất cả đạt sau
+  khi sửa; bài đơn giản 1 lời gọi, 20-27 s (trước: 3 lời gọi, 82-305 s, có lúc trả lời trùng). Chưa đo: quy tắc giao
+  việc với Cursor/Codex, và việc gửi lại trên model thật (mới có test với model giả).

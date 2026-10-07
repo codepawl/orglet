@@ -71,7 +71,7 @@ export type CompactedThread = {
 type Reader = { runId?: string; workerId: string };
 
 function answers(detail: TaskDetail, runs: Run[], reader: Reader) {
-  return detail.artifacts.filter(item => runs.some(owner => owner.id === item.runId && owner.id !== reader.runId && (owner.stage === 'group' || (detail.task.teamSnapshot ? owner.stage === 'synthesis' : !owner.stage))));
+  return detail.artifacts.filter(item => runs.some(owner => owner.id === item.runId && owner.id !== reader.runId && (owner.stage === 'group' || (detail.task.teamSnapshot ? owner.stage === 'synthesis' || owner.stage === 'plan' : !owner.stage))));
 }
 
 function clip(text: string): { text: string; truncated: boolean } {

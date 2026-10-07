@@ -155,7 +155,9 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
   const turns: Turn[] = chatTurnRevisions(detail).map(revision => {
     const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
     const input = chatTurnInput(detail, revision);
-    const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
+    // In a channel with a principal, its answer comes from the check that follows members' work, or from the plan step when
+    // it answered by itself (owner, 2026-10-07).
+    const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis' || run.stage === 'plan')));
     // Group chat: each worker's latest answered run for this message, in the order they answered.
     const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
     return { missingInput: input === undefined, revision, runs, sentAt: chatTurnCreatedAt(detail, revision), brief: input?.brief ?? '', replyTo: input?.replyTo, forwarded: input?.forwarded, sources: (input?.sourceIds ?? []).map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };

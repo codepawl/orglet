@@ -66,12 +66,25 @@ export class TeamRunner {
       if (control.cancelled) { this.finish(task, 'cancelled'); return; }
       if (control.paused) { this.finish(task, plannedNow.status === 'waiting_budget' ? 'waiting_budget' : 'paused'); return; }
       if (plannedNow.status === 'waiting_input') { this.finish(task, 'waiting_input'); return; }
+      // The principal answered by itself (owner, 2026-10-07): its reply is the turn's answer and nobody else runs.
+      if (plannedNow.status === 'completed' && !plannedNow.snapshot.plan && this.store.detail(task.id).artifacts.some(artifact => artifact.runId === plannedNow.id)) {
+        for (const run of [...planned.members.values(), planned.synthesis]) {
+          if (run.status === 'queued') this.store.update('runs', { ...run, status: 'cancelled', error: UNASSIGNED_PLAN_ERROR });
+        }
+        this.finish(task, 'completed');
+        return;
+      }
       if (plannedNow.status !== 'completed' || !plannedNow.snapshot.plan) {
         this.deferQueued(planned, MISSING_PLAN_ERROR);
         this.finish(task, plannedNow.status === 'failed' ? 'failed' : 'interrupted');
         return;
       }
-      const assigned = new Set(plannedNow.snapshot.plan.assignments.map(assignment => assignment.workerId));
+      // A plan that hands the work only to the lead itself (a lead listed among its own members) is the lead working
+      // alone (owner, 2026-10-07): its part runs as the final step, which has every tool and answers once, instead of a
+      // member run followed by a second answer from the same orglet.
+      const plan = plannedNow.snapshot.plan;
+      const leadAlone = plan.assignments.length === 1 && plan.assignments[0].workerId === team.synthesizerId;
+      const assigned = new Set(leadAlone ? [] : plan.assignments.map(assignment => assignment.workerId));
       for (const workerId of team.memberIds) {
         if (assigned.has(workerId)) continue;
         const run = planned.members.get(workerId)!;
@@ -82,6 +95,17 @@ export class TeamRunner {
       const failures: { role: string; error: string }[] = [];
       // A member stopped at the task's cap pauses the crew the same way, but the chat must say it is the budget.
       let waitingBudget = false;
+      // What a part reads from the parts before it: everything so far in a sequential crew, else the parts it depends on.
+      const upstreamFor = (workerId: string) => {
+        const assignment = plannedNow.snapshot.plan!.assignments.find(item => item.workerId === workerId);
+        if (team.workflow === 'sequential') return [...memberArtifacts];
+        const runs = this.store.detail(task.id).runs;
+        return memberArtifacts.filter(artifact => {
+          const writerRun = runs.find(candidate => candidate.id === artifact.runId);
+          const writer = writerRun && assignmentKey(writerRun);
+          return writer && assignment?.dependsOn?.includes(writer);
+        });
+      };
       const execute = async (workerId: string, signal?: AbortSignal) => {
         signal?.throwIfAborted();
         if (!this.canDispatch(task)) control.paused = true;
@@ -95,11 +119,7 @@ export class TeamRunner {
           return;
         }
         const assignment = plannedNow.snapshot.plan!.assignments.find(item => item.workerId === workerId)!;
-        const upstream = team.workflow === 'sequential' ? [...memberArtifacts] : memberArtifacts.filter(artifact => {
-          const writerRun = existing.runs.find(candidate => candidate.id === artifact.runId);
-          const writer = writerRun && assignmentKey(writerRun);
-          return writer && assignment.dependsOn?.includes(writer);
-        });
+        const upstream = upstreamFor(workerId);
         const prepared = this.join(planned.members.get(workerId)!, upstream, preflightId);
         const run = claimAssignment(this.store, prepared, assignment);
         await this.runner.run(task, run, { keepTaskOpen: true, upstream, signal,
@@ -116,7 +136,7 @@ export class TeamRunner {
           failures.push({ role: run.snapshot.worker.name, error: result.runs.find(r => r.id === run.id)?.error ?? 'chưa hoàn tất' });
         }
       };
-      const orderedAssignments = team.memberIds.map(workerId => plannedNow.snapshot.plan!.assignments.find(assignment => assignment.workerId === workerId)).filter(assignment => assignment !== undefined);
+      const orderedAssignments = leadAlone ? [] : team.memberIds.map(workerId => plannedNow.snapshot.plan!.assignments.find(assignment => assignment.workerId === workerId)).filter(assignment => assignment !== undefined);
       const pending = new Map(orderedAssignments.map(assignment => [assignment.workerId, assignment]));
       const drain = async (signal?: AbortSignal) => {
         while (pending.size && !control.cancelled && !control.paused) {
@@ -125,7 +145,9 @@ export class TeamRunner {
           const batch: typeof ready = [];
           for (const assignment of ready) {
             if (batch.every(selected => !resourcesOverlap(selected, assignment))) batch.push(assignment);
-            if (batch.length === (team.workflow === 'parallel' ? 2 : 1)) break;
+            // Independent parts all start at once; each provider's own limit (ProviderSlots, Settings) paces the calls, so a
+            // crew is no longer held to two at a time whatever its size (owner, 2026-10-07).
+            if (team.workflow !== 'parallel' && batch.length === 1) break;
           }
           if (!batch.length) {
             for (const assignment of pending.values()) {
@@ -160,7 +182,34 @@ export class TeamRunner {
       const unfinishedRoles = () => failures.map(failure => `Role chưa hoàn tất: ${failure.role}: ${failure.error}`);
       const limitations = unfinishedRoles();
       await this.runner.run(task, synthesis, { keepTaskOpen: true, upstream: memberArtifacts, limitations,
-        assignment: plannedNow.snapshot.plan.synthesisBrief,
+        assignment: leadAlone
+          ? [plan.assignments[0].brief, plan.assignments[0].expectedOutput && `Expected output: ${plan.assignments[0].expectedOutput}`, plan.synthesisBrief].filter(Boolean).join('\n')
+          : plan.synthesisBrief,
+        sendBack: async (callId, input, signal) => {
+          signal.throwIfAborted();
+          if (control.cancelled || control.paused) throw new Error('Kênh bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.');
+          const attempt = new TeamRecovery(this.store).prepareSendBack(synthesis, callId, input);
+          const key = assignmentKey(attempt);
+          if (attempt.status !== 'completed') {
+            const assignment = plannedNow.snapshot.plan!.assignments.find(item => item.workerId === key)!;
+            const brief = assignment.expectedOutput ? `${assignment.brief}\nExpected output: ${assignment.expectedOutput}` : assignment.brief;
+            await this.runner.run(task, attempt, { keepTaskOpen: true, upstream: upstreamFor(key), signal,
+              assignment: `${brief}\n\nYour principal checked your last result and sent it back: ${attempt.snapshot.sendBack!.feedback}\nFix exactly that and hand in the whole result again.` });
+          }
+          const detail = this.store.detail(task.id);
+          const status = detail.runs.find(candidate => candidate.id === attempt.id)?.status;
+          const artifact = detail.artifacts.find(candidate => candidate.runId === attempt.id);
+          if (artifact && status === 'completed') {
+            // The new result takes the place of the one sent back, so the answer is built from the latest.
+            const replaced = memberArtifacts.findIndex(candidate => {
+              const owner = detail.runs.find(runOf => runOf.id === candidate.runId);
+              return owner !== undefined && assignmentKey(owner) === key;
+            });
+            if (replaced >= 0) memberArtifacts.splice(replaced, 1, artifact);
+            else memberArtifacts.push(artifact);
+          }
+          return { attemptId: attempt.id, status, results: savedArtifactContext(memberArtifacts, detail.runs) };
+        },
         reassign: async (callId, input, signal) => {
           signal.throwIfAborted();
           if (control.cancelled || control.paused) throw new Error('Kênh bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.');
@@ -185,7 +234,7 @@ export class TeamRunner {
         },
       });
       const result = this.store.get<Run>('runs', synthesis.id);
-      this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : !memberArtifacts.length ? 'failed' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
+      this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : !memberArtifacts.length && !leadAlone ? 'failed' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
     } catch (error) {
       const last = this.store.detail(task.id).runs.at(-1);
       if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Kênh bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
@@ -272,7 +321,7 @@ export class TeamRunner {
     this.store.transaction(() => {
       const detail = this.store.detail(task.id);
       if (status === 'completed' && this.unresolvedMessages(task).length) status = 'partial';
-      const final = detail.artifacts.findLast(artifact => detail.runs.some(run => run.id === artifact.runId && run.stage === 'synthesis' && (run.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0)));
+      const final = detail.artifacts.findLast(artifact => detail.runs.some(run => run.id === artifact.runId && (run.stage === 'synthesis' || run.stage === 'plan') && (run.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0)));
       if (['completed', 'partial'].includes(status) && final?.report.review?.checks.some(check => check.status === 'not_assessed')) status = 'waiting_input';
       for (const run of this.store.detail(task.id).runs) if (run.status === 'queued') this.store.update('runs', { ...run, status: status === 'paused' ? 'paused' : status === 'cancelled' ? 'cancelled' : 'interrupted' });
       this.store.update('tasks', { ...this.store.get<Task>('tasks', task.id), status });

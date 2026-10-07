@@ -3,7 +3,7 @@
 // page error. `grade.mjs` scores the saved chats. Real models are called; nothing here fakes a reply unless
 // --provider demo is given, which only proves the pipeline.
 //
-//   node scripts/agent-bench/run.mjs --provider cursor [--only finance,swe] [--out <folder>] [--timeout-minutes 15]
+//   node scripts/agent-bench/run.mjs --provider cursor [--only finance,swe] [--out <folder>] [--timeout-minutes 15] [--crew-size 4]
 
 import { _electron as electron } from 'playwright';
 import { spawnSync } from 'node:child_process';
@@ -13,20 +13,21 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packagedExecutable } from '../packaged-executable.mjs';
 import { openChannels, openHome, useVietnamese } from '../smoke-language.mjs';
-import { tasks } from './tasks.mjs';
+import { channelRoles, principalRole, tasks } from './tasks.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(here, 'fixtures');
 const finished = new Set(['completed', 'failed', 'cancelled', 'partial', 'waiting_input', 'paused']);
 
 function parseArguments(argv) {
-  const options = { provider: 'cursor', only: undefined, out: undefined, timeoutMinutes: 15 };
+  const options = { provider: 'cursor', only: undefined, out: undefined, timeoutMinutes: 15, crewSize: 4 };
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === '--provider') options.provider = argv[++index];
     else if (argument === '--only') options.only = argv[++index].split(',');
     else if (argument === '--out') options.out = resolve(argv[++index]);
     else if (argument === '--timeout-minutes') options.timeoutMinutes = Number(argv[++index]);
+    else if (argument === '--crew-size') options.crewSize = Number(argv[++index]);
     else throw new Error(`Unknown argument ${argument}`);
   }
   return options;
@@ -58,6 +59,23 @@ async function launch(profile, videoDir) {
 async function setUp(app, page, task, workDir) {
   const workspace = await callCore(page, 'workspace', {});
   const base = workspace.workers[0];
+  if (task.channel) {
+    // The orglet the message needs, then unrelated colleagues, until the channel has --crew-size orglets with its lead.
+    const needed = channelRoles.filter(role => role.name === task.channel.routes);
+    const others = channelRoles.filter(role => role.name !== task.channel.routes);
+    const chosen = [...needed, ...others].slice(0, Math.max(1, options.crewSize - 1));
+    const roles = channelRoles.filter(role => chosen.includes(role));
+    const make = role => callCore(page, 'saveWorker', { name: role.name, description: role.description, instructions: base.instructions, provider: options.provider, skillId: base.skillId });
+    const principal = await make(principalRole);
+    const members = [];
+    for (const role of roles) members.push(await make(role));
+    const name = `po-${options.crewSize}`;
+    await callCore(page, 'createChannel', { name, topic: '', members: [principal, ...members].map(worker => ({ kind: 'orglet', id: worker.id })), mode: 'lead', lead: { synthesizerId: principal.id, workflow: 'parallel' } });
+    const crewId = (await callCore(page, 'workspace', {})).emptyChannels.find(channel => channel.name === name)?.crewId;
+    if (!crewId) throw new Error('The principal channel was not created');
+    if (task.capabilities.length) await callCore(page, 'setToolCapabilities', { teamId: crewId, capabilities: task.capabilities });
+    return { teamId: crewId, workerId: principal.id, label: `#${name}` };
+  }
   if (task.template) {
     // A template starts on Demo, as Add orglet makes it; then each of its orglets moves to the connection under test.
     const team = await callCore(page, 'createTemplate', { templateId: task.template, provider: 'demo' });
@@ -203,7 +221,7 @@ for (const task of selected) {
   } finally {
     await app.close().catch(() => {});
   }
-  await writeFile(join(taskDir, 'chat.json'), JSON.stringify({ task, detail, problems, timedOut }, null, 2));
+  await writeFile(join(taskDir, 'chat.json'), JSON.stringify({ task, detail, problems, timedOut, ...(task.channel ? { crewSize: options.crewSize } : {}) }, null, 2));
   await writeFile(join(taskDir, 'chat.md'), transcriptOf(task, detail, problems));
   const raw = (await readdir(join(taskDir, 'raw')).catch(() => [])).find(name => name.endsWith('.webm'));
   if (raw) {
@@ -211,7 +229,7 @@ for (const task of selected) {
     if (failed) problems.push(`video: ${failed.trim().slice(0, 200)}`);
   }
   await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }).catch(() => {});
-  summary.push({ id: task.id, status: detail?.task.status ?? 'none', answers: detail?.artifacts.length ?? 0, problems: problems.length });
+  summary.push({ id: task.id, status: detail?.task.status ?? 'none', answers: detail?.artifacts.length ?? 0, problems: problems.length, ...(task.channel ? { crewSize: options.crewSize } : {}) });
   console.log(JSON.stringify(summary.at(-1)));
 }
 await writeFile(join(outRoot, 'summary.json'), JSON.stringify(summary, null, 2));
