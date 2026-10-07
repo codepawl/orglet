@@ -117,7 +117,7 @@ What is sent:
 - **When Orglet starts**: the version, the operating system and processor type, the app language and how Orglet was installed, and the old and new version after an update.
 - **When you send a message**: the kind of chat (one orglet, a channel, a side thread or a schedule), the kind of connection (Demo, API, local harness or a custom connection) and, except for a custom connection, the provider and model id.
 - **When a run ends**: how it ended (done, partly done, failed, stopped, interrupted), roughly how long it took and roughly how many steps it made.
-- **Features you use**, counted once per session: tabs, the rail, side threads, schedules, the browser, desktop apps, MCP, the file viewer, editing a file, forwarding, the `orglet` command, Send to and Tacet.
+- **Features you use**, counted once per session: tabs, the rail, side threads, schedules, the browser, desktop apps, MCP, the file viewer, editing a file, forwarding, the `orglet` command, Send to and the decision model.
 - **Settings you change**: which setting, and its new value only when it is a fixed choice such as the theme or an on/off switch.
 - **Errors**: the kind of error, its message and where in Orglet's code it happened. Before anything is kept, your home folder and user name become `~`, emails and the part of a web address after `?` are removed, and anything that looks like a key or token is masked. A failed run is sent as its error code only.
 - A random install id, so reports from one computer can be told apart.

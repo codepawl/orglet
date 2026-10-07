@@ -23,7 +23,7 @@ Permissions belong to a **chat**. You find the same controls in two places:
 
 A control the orglet cannot use yet, because it is on Demo or its connection is missing, is disabled with the reason beside it.
 
-If Tacet is on in **Settings → Chat**, the message box also reads what you type, which sends the text to the provider you chose. When your message seems to need the web, a working folder (or a higher folder level) or the browser, and the chat does not have it, one line appears under the box, such as "This message seems to need the web, which is off in this chat. **Turn on web**". The link does what the control above would do; for the browser it opens the control so you choose the level. Nothing turns on unless you click, you can send without it, and ✕ hides that hint in this chat. See [how Tacet decides](decisions.md#permission-hints-before-sending).
+If the decision model is on in **Settings → Chat**, a message is also read when you send it, which sends that message to the provider you chose; a draft you have not sent is never read. When the message seemed to need the web, a working folder (or a higher folder level) or the browser, and the chat does not have it, one line appears under the box about it, such as "This message seems to need the web, which is off in this chat. **Turn on web**". The link does what the control above would do; for the browser it opens the control so you choose the level. Nothing turns on unless you click, sending is never held up, the line goes away when you start the next message, and ✕ hides that hint in this chat. See [how the decision model decides](decisions.md#permission-hints-after-sending).
 
 ### The working folder
 
