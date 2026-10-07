@@ -27,7 +27,7 @@ import type { OpenChatTarget } from '../shared/cli';
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, planFirstInput, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { Composer, ComposerFoot, DemoNote, LeadNudge, FollowUpComposer, SkippedFiles, planFirstInput, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
 import { IslandDock } from './components/islandDock';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
@@ -362,6 +362,14 @@ export function App() {
   const [addOrgletOpen, setAddOrgletOpen] = useState(false);
   const [activityTab, setActivityTab] = useState<ActivityTab>('needs');
   const [membersOpen, setMembersOpen] = useState(() => { try { return localStorage.getItem('orglet.members') !== 'hidden'; } catch { return true; } });
+  // A channel whose orglets take turns is offered a lead once (2026-10-07); "not now" is remembered per channel on this
+  // computer only, as window chrome.
+  const [leadNudgeDismissed, setLeadNudgeDismissed] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('orglet.leadNudgeDismissed') || '[]') as string[]; } catch { return []; } });
+  const dismissLeadNudge = (channelId: string) => setLeadNudgeDismissed(current => {
+    const next = [...current, channelId];
+    try { localStorage.setItem('orglet.leadNudgeDismissed', JSON.stringify(next)); } catch { /* chrome only */ }
+    return next;
+  });
   const toggleMembers = () => setMembersOpen(current => { try { localStorage.setItem('orglet.members', current ? 'hidden' : 'shown'); } catch { /* chrome only */ } return !current; });
   const [newOrgletName, setNewOrgletName] = useState('');
   const [friendsBusy, setFriendsBusy] = useState(false);
@@ -1993,9 +2001,9 @@ export function App() {
     : !selected && emptyChannel ? { id: emptyChannel.channelId, name: emptyChannel.name, topic: emptyChannel.topic, members: emptyChannel.members, crewId: undefined, category: undefined, workers: channelWorkers, taskId: undefined }
     : !selected && crewChannel ? { id: crewChannel.id, name: crewChannel.name, topic: crewChannel.topic, members: crewChannel.members, crewId: crewChannel.crewId, category: crewChannel.category, spaceId: crewChannel.spaceId, categoryId: crewChannel.categoryId, access: crewChannel.access, workers: executionWorkers, taskId: undefined }
     : undefined;
-  const editChannel = (initialTab?: 'members') => {
+  const editChannel = (initialTab?: 'members' | 'how', suggestLead?: boolean) => {
     if (!headerChannel) return;
-    setChannelDraft({ id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic, members: headerChannel.members, crewId: headerChannel.crewId, category: headerChannel.category, spaceId: headerChannel.spaceId, categoryId: headerChannel.categoryId, access: headerChannel.access, initialTab });
+    setChannelDraft({ id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic, members: headerChannel.members, crewId: headerChannel.crewId, category: headerChannel.category, spaceId: headerChannel.spaceId, categoryId: headerChannel.categoryId, access: headerChannel.access, initialTab, ...(suggestLead ? { suggestLead } : {}) });
   };
   const headerName = headerChannel ? headerChannel.name
     : openSideThread ? taskName(openSideThread.id) ?? openSideThread.brief
@@ -2151,12 +2159,15 @@ export function App() {
       },
     };
   };
+  const leadNudge = headerChannel && headerChannel.taskId !== undefined && !headerChannel.crewId && headerChannel.members.length >= 2 && !leadNudgeDismissed.includes(headerChannel.id)
+    ? <LeadNudge onChoose={() => editChannel('how', true)} onDismiss={() => dismissLeadNudge(headerChannel.id)} />
+    : null;
   const composerHint = missingConnections.length > 0
     ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p>
     : emptyChatDemoWorker
       ? <DemoNote someOnDemo={isDemo ? undefined : emptyChatDemoWorker.name} preflight={isDemo && Boolean(team?.preflight)} onConnect={() => connectModel(emptyChatDemoWorker)} />
       : emptyChatUsage.out ? emptyChatUsage.note
-      : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} fallback={emptyChatUsage.note} /> : emptyChatUsage.note ?? null;
+      : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} fallback={emptyChatUsage.note} /> : emptyChatUsage.note ?? leadNudge;
   /** An orglet's face at a given size, the same drawing the sidebar row uses. */
   const workerFace = (item: Worker, size: 'xs' | 'sm') => <Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size={size} />;
   const orderedWorkers = workerOrder.order.map(id => workspace.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item));

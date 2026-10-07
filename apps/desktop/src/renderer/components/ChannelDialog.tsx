@@ -34,7 +34,7 @@ const limitsTab = { id: 'limits' as const, label: 'Giới hạn & ca', icon: <Wa
  * starts (docs/spaces-design.md).
  */
 type Placed = { spaceId?: string; categoryId?: string; access?: ChannelAccess };
-export type ChannelDraft = (Placed & { id: string; name: string; topic?: string; category?: string; members: ChannelMember[]; crewId?: string; initialTab?: 'members' })
+export type ChannelDraft = (Placed & { id: string; name: string; topic?: string; category?: string; members: ChannelMember[]; crewId?: string; initialTab?: 'members' | 'how'; suggestLead?: boolean })
   | (Placed & { id?: undefined; members?: ChannelMember[]; category?: string; initialTab?: undefined });
 
 /** A new channel's lead while the person has not picked one: kept while it is still a member, else the first member. */
@@ -78,7 +78,8 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
     if (invalid === 'members') clearError();
   };
   // A new channel has a lead who takes every message nobody was tagged in (owner, 2026-10-07); one that takes turns keeps it.
-  const [mode, setMode] = useState<ChannelMode>(crew || !editing ? 'lead' : 'turns');
+  // A channel opened from the lead suggestion starts on a lead, for the person to look over and save.
+  const [mode, setMode] = useState<ChannelMode>(crew || !editing || draft.suggestLead ? 'lead' : 'turns');
   const lead = useLeadSettings(crew, orgletIds);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);

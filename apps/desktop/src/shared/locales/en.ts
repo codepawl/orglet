@@ -2631,6 +2631,8 @@ export const en: Dictionary = {
   '1 lượt chạy đang làm việc sẽ bị ngắt. Mở lại chat đó để xem và chạy tiếp.': '1 run that is working will be interrupted. Open its chat again to review it and carry on.',
   '{0} lượt chạy đang làm việc sẽ bị ngắt. Mở lại các chat đó để xem và chạy tiếp.': '{0} runs that are working will be interrupted. Open their chats again to review them and carry on.',
   'Để sau': 'Later',
+  'Chọn Tí trưởng': 'Choose a lead',
+  'Các Tí trong kênh này đang lần lượt trả lời. Một Tí trưởng có thể nhận tin, giao việc và kiểm tra trước khi trả lời bạn.': 'The orglets in this channel take turns answering. A lead can take your messages, hand the work out and check it before answering you.',
   // App-change proposals (COD-199): the permission switch, the worker's auto-apply switch, the cards and the core's answers.
   'Đề xuất thay đổi trong app': 'Propose app changes',
   'Đề xuất Tí, kênh, skill và cài đặt mới.': 'New orglets, channels, skills or settings.',

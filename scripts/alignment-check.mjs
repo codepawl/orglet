@@ -482,9 +482,14 @@ const SCREENS = [
     await page.getByRole('combobox', { name: label('Bắt đầu') }).click();
     await page.getByRole('option', { name: label('Khi có mục mới trong ứng dụng') }).click();
     await page.locator('.routine-app textarea').waitFor();
-  }, close: page => page.evaluate(async () => {
-    for (const server of (await window.orglet.call('workspace', {})).mcpServers ?? []) await window.orglet.removeMcpServer(server.id);
-  }) },
+  }, close: async page => {
+    // Picking the trigger changed the form, so leaving it asks first; the screen discards it.
+    await page.getByRole('button', { name: label('Hủy'), exact: true }).click();
+    await page.getByRole('button', { name: label('Bỏ thay đổi'), exact: true }).click();
+    await page.evaluate(async () => {
+      for (const server of (await window.orglet.call('workspace', {})).mcpServers ?? []) await window.orglet.removeMcpServer(server.id);
+    });
+  } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
   // Channels (COD-361): one written in, its settings, a new one, and one still empty.
   { name: 'channel-chat', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click(); await page.locator('.topbar-topic').waitFor(); } },

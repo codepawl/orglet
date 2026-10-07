@@ -1,6 +1,6 @@
 import { demoReplies } from '../demoReplies';
 import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, ChevronUp, Combine, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Run, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
 import { MessageBoxFocus, SourcePicker } from './SourcePicker';
@@ -348,6 +348,18 @@ export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some o
   return <div className="demo-note">
     <p>{sentence}</p>
     <Button type="button" variant="outline" onClick={onConnect}><Plug size={14} aria-hidden="true" />{t('Kết nối model')}</Button>
+  </div>;
+}
+
+/**
+ * A channel whose orglets take turns, made before channels had a lead (2026-10-07): a lead could take its untagged
+ * messages, hand the work out and check it first. Offered under the prompt bar until the person picks one or says not now.
+ */
+export function LeadNudge({ onChoose, onDismiss }: { onChoose: () => void; onDismiss: () => void }) {
+  return <div className="demo-note lead-nudge">
+    <p>{t('Các Tí trong kênh này đang lần lượt trả lời. Một Tí trưởng có thể nhận tin, giao việc và kiểm tra trước khi trả lời bạn.')}</p>
+    <Button type="button" variant="outline" onClick={onChoose}><Combine size={14} aria-hidden="true" />{t('Chọn Tí trưởng')}</Button>
+    <Button type="button" variant="ghost" onClick={onDismiss}>{t('Để sau')}</Button>
   </div>;
 }
 
