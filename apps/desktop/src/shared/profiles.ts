@@ -10,7 +10,9 @@ export const ExactMatchRequest = z.object({
   predictionColumn: z.string().trim().min(1).max(256), answerColumn: z.string().trim().min(1).max(256),
 }).strict().refine(value => value.predictionSourceId !== value.answerSourceId, 'Cần hai nguồn khác nhau để tính accuracy.');
 export type ExactMatchRequest = z.infer<typeof ExactMatchRequest>;
-export const ProfileInput = z.object({ files: z.array(z.object({ sourceId: z.string().uuid(), format: DataFormat, base64: z.string().max(45_000_000) })).min(1).max(2), idColumn: z.string().min(1).max(256).nullable(), runAudit: z.object({ direction: ScoreDirection }).strict().optional(), exactMatch: ExactMatchRequest.optional() });
+export const ProfileInput = z.object({ files: z.array(z.object({ sourceId: z.string().uuid(), format: DataFormat, base64: z.string().max(45_000_000) })).min(1).max(2), idColumn: z.string().min(1).max(256).nullable(), runAudit: z.object({ direction: ScoreDirection }).strict().optional(), exactMatch: ExactMatchRequest.optional(),
+  // The first rows as text, for the file viewer of a format the window cannot read itself (Parquet).
+  sampleRows: z.number().int().min(1).max(500).optional() });
 export type ProfileInput = z.infer<typeof ProfileInput>;
 const Count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const ExactMatchAccuracy = ExactMatchRequest.safeExtend({
@@ -51,6 +53,7 @@ export const DatasetProfile = z.object({
     id: z.object({ column: z.string(), nulls: Count, duplicateNonNull: Count, repeats: RowRepeats.optional() }).nullable(),
     duplicateRows: RowRepeats.optional(),
     firstColumn: RowRepeats.extend({ column: z.string() }).nullable().optional(),
+    sample: z.object({ columns: z.array(z.string()).max(128), rows: z.array(z.array(z.string().max(4000))).max(500) }).optional(),
   })).min(1).max(2),
   // Fields after sameIdOrder were added later; stored profiles without them stay valid and never satisfy alignment gates.
   comparison: z.object({ schemaMatches: z.boolean(), overlappingDistinctIds: Count.nullable(), sameIdOrder: z.boolean().nullable(), columnsMatch: z.boolean().optional(), rowCountsMatch: z.boolean().optional(), onlyInFirst: Count.nullable().optional(), onlyInSecond: Count.nullable().optional() }).nullable(),
@@ -61,3 +64,5 @@ export const DatasetProfile = z.object({
 export type DatasetProfile = z.infer<typeof DatasetProfile>;
 export type ProfileRecord = { id: string; taskId: string; runId?: string; createdAt: string; sourceHashes: Record<string, string>; result: DatasetProfile };
 export type ProfileExecutor = (input: ProfileInput, signal?: AbortSignal) => Promise<DatasetProfile>;
+/** A table file's first rows, as the viewer shows them, with how many rows the file has in all. */
+export type TableSample = { columns: string[]; rows: string[][]; total: number };

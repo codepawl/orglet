@@ -791,6 +791,12 @@ export class CoreService {
         const task = this.store.get<Task>('tasks', input.taskId);
         return this.sources.readPreview(input.id, task.sourceIds);
       }
+      // A Parquet file's first rows for the viewer, read by the checker; the chat's own files only.
+      case 'tablePreview': {
+        const input = commands.tablePreview.parse(args);
+        const task = this.store.get<Task>('tasks', input.taskId);
+        return this.sources.sampleTable(input.id, task.sourceIds);
+      }
       case 'saveSourceVersion': {
         const input = commands.saveSourceVersion.parse(args);
         const task = this.liveTask(input.taskId);

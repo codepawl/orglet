@@ -92,6 +92,7 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   setWorkspaceLevel: held(A_GRANT),
   previewSource: windowOnly(VISUAL),
   sourceBytes: windowOnly(VISUAL),
+  tablePreview: windowOnly(VISUAL),
   sourceOrigins: windowOnly('shows where a file came from; ' + NOT_BUILT),
   saveSourceVersion: windowOnly('saves an edit made in the file editor'),
   sourceMetadata: windowOnly('a file list the window draws; ' + NOT_BUILT),

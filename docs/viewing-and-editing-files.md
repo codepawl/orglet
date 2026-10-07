@@ -15,13 +15,13 @@ Click a file card in the chat, or open the chat's **Files** tab and click a row.
 
 - text and code with line numbers and colours
 - Markdown as a document, with a **Source text** tab to see the text
-- CSV and TSV as a table, JSON and JSONL as a tree
+- CSV, TSV and Parquet as a table, JSON and JSONL as a tree
 - images, video and audio
 - PDF pages
 
 Above the content, a slim bar names what you are looking at and how much of it is on screen, with the few controls that change how it is drawn. Each kind has its own:
 
-- **Tables** (CSV, TSV). The first row is a header that stays in view while you scroll, and a row-number column stays at the left edge. Columns that hold numbers are right-aligned, header included, in digits of equal width, so they line up. An empty cell shows a faint dash. A long value is cut to the column width; hover it to read the whole value. **Filter rows** narrows the table to the rows with any cell containing your text, and the bar says how many match. Only the first 200 rows are drawn at first and the bar says "Showing 200 of 260 rows"; **Show more rows** adds the next batch.
+- **Tables** (CSV, TSV, Parquet). The first row is a header that stays in view while you scroll, and a row-number column stays at the left edge. Columns that hold numbers are right-aligned, header included, in digits of equal width, so they line up. An empty cell shows a faint dash. A long value is cut to the column width; hover it to read the whole value. **Filter rows** narrows the table to the rows with any cell containing your text, and the bar says how many match. Only the first 200 rows are drawn at first and the bar says "Showing 200 of 260 rows"; **Show more rows** adds the next batch. Click a column's header to sort by it (largest or Z last, then largest or Z first, then the file's order again): numbers by value, text in your language's order with numbers inside words read as numbers, empty cells always last; the row numbers stay those of the file. Drag the right edge of a header to make a column wider or narrower. **Ctrl+F** (**Cmd+F** on a Mac) goes to the filter. A Parquet file is read by the local checker (DuckDB, within its 32 MB and 20-second limits), which hands over its first 200 rows; the bar says how many rows the file has in all.
 - **JSON and JSONL.** A tree you can fold, with **Source text** one tab away. **Expand all** and **Collapse all** open or close every node, and **Copy** puts the whole text on the clipboard. A file that does not parse opens as code instead of an error.
 - **Code and plain text.** The bar shows the language and the number of lines. **Wrap lines** is on by default; switch it off and long lines scroll sideways instead. And **Copy** copies the whole file.
 - **Images.** The picture sits on a checkerboard so transparent parts read as transparent, and the bar shows its size in pixels. It opens fitted to the window; **Actual size** (or a click on the picture) shows every pixel, and the same control fits it again.

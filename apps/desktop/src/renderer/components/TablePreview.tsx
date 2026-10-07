@@ -3,6 +3,7 @@ import { Button, Input, Tooltip } from '@codepawlhq/orglet-ui';
 import { ArrowDown, ArrowUp, Search } from 'lucide-react';
 import { currentLocale, t } from '../i18n';
 import { PreviewBar } from './PreviewBar';
+import type { TableSample } from '../../shared/profiles';
 
 /** How many rows are drawn at first, and how many more each "show more" adds, so a large dataset stays quick to open. */
 const ROW_PAGE = 200;
@@ -146,8 +147,9 @@ function summaryLabel(total: number, columnCount: number, matched: number, drawn
  * the whole value on hover. A filter box narrows the rows as you type. Only the first rows are drawn; the bar says
  * how many of the total, and more come on request.
  */
-export function TablePreview({ text, delimiter }: { text: string; delimiter: ',' | '\t' }) {
-  const rows = useMemo(() => parseDelimited(text, delimiter), [text, delimiter]);
+export function TablePreview({ text, delimiter, sample }: { text?: string; delimiter?: ',' | '\t'; sample?: TableSample }) {
+  // A Parquet file comes as rows the checker read; a CSV or TSV as its text.
+  const rows = useMemo(() => sample ? [sample.columns, ...sample.rows] : parseDelimited(text ?? '', delimiter ?? ','), [sample, text, delimiter]);
   const [header, ...body] = rows;
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(ROW_PAGE);
@@ -199,7 +201,9 @@ export function TablePreview({ text, delimiter }: { text: string; delimiter: ','
   // Each request doubles what is drawn, up to a bounded step, so a very long file is reachable without a thousand clicks.
   const step = Math.min(MAX_ROW_STEP, Math.max(ROW_PAGE, drawn.length));
   return <div className="table-preview">
-    <PreviewBar summary={summaryLabel(body.length, header.length, matches.length, drawn.length, filtering)}>
+    <PreviewBar summary={sample && sample.total > body.length && !filtering
+      ? t('Đang hiện {0} dòng đầu trong {1} dòng', [body.length.toLocaleString(currentLocale()), sample.total.toLocaleString(currentLocale())])
+      : summaryLabel(body.length, header.length, matches.length, drawn.length, filtering)}>
       <div className="preview-search">
         <Search size={14} aria-hidden="true" />
         <Input ref={filterInput} type="search" aria-label={t('Lọc dòng')} placeholder={t('Lọc dòng…')} value={query}
