@@ -803,21 +803,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Wider than it was: 828px left the column feeling cramped against the panel around it (user, 2026-09-20).
    Not the full pane — a line of body text still has to end somewhere the eye can find the next one. */
 .thread-content { max-width:960px; margin:auto; padding:22px var(--page-x) 32px; }
-/* The views of the chat on screen (COD-355): quiet text buttons, the chosen one on the active row tint, no track and no
-   lines (owner, 2026-10-01: the segmented control read as boxy). On the header row they follow the name after a wider
-   gap than the header's own; `.views-below` gives them the row under it while the header has no room. */
+/* Quiet text tabs (PageTabs, COD-355): the chosen one on the active row tint, no track and no
+   lines (owner, 2026-10-01: the segmented control read as boxy). The chat itself has no tabs since 2026-10-07: its other views open from its menu. */
 .chat-views { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px; }
-.topbar-main > .chat-views { flex:0 0 auto; }
-.topbar.views-below { flex-wrap:wrap; row-gap:4px; }
-.topbar.views-below > .chat-views { order:3; flex-basis:100%; margin-left:-10px; }
 /* The name's line height and even padding, so the fill is centred on the label and the label sits on the baseline. */
 .chat-view-tab { display:inline-flex; align-items:baseline; gap:5px; flex-shrink:0; padding:4px 10px; border:0; border-radius:var(--radius); background:transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:500; line-height:20px; white-space:nowrap; cursor:pointer; }
 .chat-view-tab:hover { background:var(--row-hover); color:var(--text); }
 .chat-view-tab[aria-selected=true] { background:var(--row-active); color:var(--text); }
 .chat-view-count { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
-/* Variant B (`CHAT_VIEWS_PLACEMENT = 'row'`): a slim row under the header whose labels start where the chat column does. */
-.chat-views-row { flex-shrink:0; width:100%; max-width:960px; margin:-6px auto 4px; padding:0 var(--page-x); }
-.chat-views-row > .chat-views { margin-left:-10px; }
 /* A view other than the chat scrolls on its own at the thread's reading width. */
 .chat-view-panel { flex:1; min-height:0; overflow:auto; }
 .chat-view-panel:focus { outline:none; }

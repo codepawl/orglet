@@ -4093,7 +4093,6 @@ export const en: Dictionary = {
   'Chat cũ của {0}': 'Earlier chat with {0}',
   'Trò chuyện': 'Chat',
   'Thay đổi': 'Changes',
-  'Các phần của chat': 'Chat views',
   '1 tệp đính kèm': '1 attached file',
   '{0} tệp đính kèm': '{0} attached files',
   'Mở phần Tệp của chat': 'Open the chat’s Files',

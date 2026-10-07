@@ -276,8 +276,8 @@ async function reset(page, context) {
   await openArea(page, 'Trò chuyện');
   await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
   // A chat keeps the view it was on (COD-355): come back to its messages.
-  const chatView = page.getByRole('tab', { name: label('Trò chuyện'), exact: true });
-  if (await chatView.count()) await chatView.click();
+  const backToChat = page.locator('.topbar-back-to-chat');
+  if (await backToChat.count()) await backToChat.click();
   await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
 }
 
@@ -296,7 +296,7 @@ async function openWorkerTab(page, context, tab) {
 
 /**
  * The earlier chat opened from search, the way a chat without a row is found again, so it lands on the Open list
- * (COD-355); then back to the orglet's own chat, whose views (Chat, Schedules) show beside its name.
+ * (COD-355); then back to the orglet's own chat, whose other views (Schedules) open from its menu.
  */
 async function openOpenChats(page, context) {
   await page.keyboard.press('Control+K');
@@ -394,8 +394,10 @@ const SCREENS = [
   { name: 'open-chats', open: openOpenChats },
   { name: 'chat-view-schedules', open: async (page, context) => {
     await openOpenChats(page, context);
-    await page.getByRole('tab', { name: startsWith('Lịch chạy') }).click();
-    await page.getByRole('tabpanel').getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor();
+    // The chat's other views open from its menu (user, 2026-10-07).
+    await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+    await page.getByRole('menuitem', { name: startsWith('Lịch chạy') }).click();
+    await page.locator('#chat-view-panel').getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor();
   } },
   { name: 'rail', open: async (page, context) => { await openOpenChats(page, context); await foldSidebar(page); } },
   { name: 'rail-details', open: async (page, context) => {

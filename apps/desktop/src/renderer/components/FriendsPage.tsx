@@ -21,9 +21,9 @@ export type HomePageView = 'market';
  */
 export function MarketplacePage({ onMarketAdded }: { onMarketAdded: (result: MarketAdded) => void | Promise<void> }) {
   return <>
-    <ChatHeader contentKey="home:market"
+    <ChatHeader
       lead={<span className="topbar-title"><Store size={16} aria-hidden="true" /><span className="topbar-name">Marketplace</span></span>}
-      views={null} actions={null} />
+      actions={null} />
     <div className="page-scroll"><div className="page-body friends-add"><Marketplace onAdded={onMarketAdded} /></div></div>
   </>;
 }
