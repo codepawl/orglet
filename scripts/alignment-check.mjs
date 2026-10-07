@@ -15,13 +15,13 @@ import { openSettings, expandSidebar } from './smoke-language.mjs';
 // themes, and runs the checks in scripts/alignment/rules.ts in the window. Findings go to stdout, a JSON report and one outlined
 // screenshot per screen that has any. Exits 1 on findings unless --report-only.
 //
-//   pnpm test:alignment [--report-only] [--all-screenshots] [--snapshot] [--only schedules,settings-general] [--language vi|en] [--out <folder>]
+//   pnpm test:alignment [--report-only] [--all-screenshots] [--snapshot] [--only schedules,settings-general] [--language en|vi] [--out <folder>]
 
 const SIZES = [{ width: 1200, height: 820 }, { width: 740, height: 600 }];
 const THEMES = ['light', 'dark'];
 
 function parseArguments(argv) {
-  const options = { reportOnly: false, allScreenshots: false, snapshot: false, only: undefined, language: 'vi', out: undefined };
+  const options = { reportOnly: false, allScreenshots: false, snapshot: false, only: undefined, language: 'en', out: undefined };
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === '--report-only') options.reportOnly = true;
