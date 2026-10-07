@@ -371,6 +371,8 @@ Not verified: a borrow that runs to its end through the app, and one stopped by 
 
 ## Tacet on this computer (COD-303)
 
+**Superseded 2026-10-07 (owner's decision).** The on-device model, its download and its update notices were removed; Tacet now answers through OpenAI's Decisions API or any chat connection ([decisions.md](decisions.md)). Nothing below was re-measured against a hosted model. Checked for the move: unit tests with a fake `fetch` and a fake chat adapter for the mapping both ways, refusals, the 15-second limit and the setting's default; the Settings block in the packaged app (`pnpm test:alignment --only settings-chat,settings-chat-tacet`). Not checked: a live call to OpenAI's Decisions API or to any other provider (no key was used).
+
 Measured 2026-09-27 on the Windows 11 development machine (Ryzen 5 5600X, 6 cores, shared with other jobs, so p95 figures are noisy), onnxruntime-node 1.30.0, two intra-op threads, CPU provider. How it works: [decisions.md](decisions.md).
 
 | Variant | File | Worst probability difference vs Python (43 answers) | Answers changed | Load | +RSS | 56 tokens p50 | 512 tokens p50 | 1,536 tokens p50 |

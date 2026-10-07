@@ -92,16 +92,16 @@ Only a chat with one orglet can ask, side threads included. In a crew, a group c
 
 ### A second opinion from Tacet
 
-The rules above are the authority, and a word list misses things: "Chuyển khoản", "Empty trash now", "Hủy đơn hàng" and "Close account" all sound harmless to it. When [Tacet](decisions.md) is on this computer, it gives a second opinion on the steps the rules let through (COD-306):
+The rules above are the authority, and a word list misses things: "Chuyển khoản", "Empty trash now", "Hủy đơn hàng" and "Close account" all sound harmless to it. When [Tacet](decisions.md) is on, it gives a second opinion on the steps the rules let through (COD-306):
 
 - Only on a click, Enter, or typing that ends with Enter. Typing alone, choosing in a list and the other keys only fill in or move around, and are never asked about.
 - Only in a chat that can show a card: a chat with one orglet, side threads included. In a crew, a group chat or a schedule nothing changes.
 - Tacet reads the step as fields (the action, the element's name and role, the site and the page's title) and answers two questions in one pass: which of six kinds the step is (looks around, edits a draft, sends, pays, deletes, publishes), and whether it only looks around or does something that counts. The share it gives sending, paying, deleting and publishing, averaged over the two, is its reading.
-- At **0.35** or above, the step asks you, with the reason **Tacet on this computer thinks this step may send, pay, delete or publish something**. Allow once and Don't allow work as for any other card.
+- At **0.35** or above, the step asks you, with the reason **Tacet thinks this step may send, pay, delete or publish something**. Allow once and Don't allow work as for any other card.
 - It can only add a card. A step the rules ask about asks whatever Tacet thinks, a step they refuse stays refused, and Tacet is not even asked about either.
-- When Tacet is not downloaded, fails, or has not answered within one second, the step goes ahead on the rules alone, as before Tacet. The model starts loading as soon as a run uses the browser, so the first click rarely meets a cold one.
+- When Tacet is off, fails, or has not answered within three seconds, the step goes ahead on the rules alone, as before Tacet. The step's fields (the element's name and role, the site and the page's title, and the text typed before Enter) are sent to the provider you chose in Settings → Chat → Tacet.
 
-The threshold was measured on 48 steps written for it (`scripts/tacet/action_cases.json`, English and Vietnamese sites and apps, half risky; `scripts/tacet/eval_uses.ts`). Of the 19 risky steps the rules let through, 13 now ask; of the 24 harmless ones, 4 get a card they did not need ("Inbox", "Chi tiết sản phẩm", a Cancel button in a delete dialog, "Chèn bảng"). The tune half and the held-out half gave the same result. At 0.30 it would catch 15 of the 19, but ask about 9 of the 24 harmless steps, a search button and next-page links among them, the steps a browser session takes most. On a busy six-core desktop a warm answer takes about 0.2 seconds.
+The threshold was measured with the on-device model Tacet used before it moved to an API, on 48 steps written for it (`scripts/tacet/action_cases.json`, English and Vietnamese sites and apps, half risky); it has not been re-measured against a hosted model. Of the 19 risky steps the rules let through, 13 now ask; of the 24 harmless ones, 4 get a card they did not need ("Inbox", "Chi tiết sản phẩm", a Cancel button in a delete dialog, "Chèn bảng"). The tune half and the held-out half gave the same result. At 0.30 it would catch 15 of the 19, but ask about 9 of the 24 harmless steps, a search button and next-page links among them, the steps a browser session takes most.
 
 ## Never, whoever asks
 
