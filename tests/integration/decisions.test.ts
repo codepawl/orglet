@@ -248,6 +248,33 @@ describe('downloading Tacet (COD-303)', () => {
     expect(ranges).toHaveLength(1);
   });
 
+  it('keeps a cut update marked as an update, so Needs you keeps offering it (2026-10-07)', async () => {
+    const { tacetUpdateWaiting } = await import('../../apps/desktop/src/shared/decisions');
+    const files = pinned();
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, files.model.name), Buffer.alloc(10, 3));
+    await writeFile(join(directory, files.tokenizer.name), tokenizerBytes);
+    const decisions = new Decisions({ directory, files });
+    expect(tacetUpdateWaiting(decisions.state())).toBe(true);
+    mode.cutModelAfter = 1000;
+    decisions.install();
+    const cut = await settled(decisions);
+    expect(cut).toMatchObject({ status: 'failed', update: true });
+    expect(tacetUpdateWaiting(cut)).toBe(true);
+    // A first download that fails is not an update.
+    const fresh = await mkdtemp(join(tmpdir(), 'orglet-decisions-fresh-'));
+    try {
+      const first = new Decisions({ directory: fresh, files });
+      first.install();
+      const failed = await settled(first);
+      expect(failed.status).toBe('failed');
+      expect(failed.update).toBeUndefined();
+      expect(tacetUpdateWaiting(failed)).toBe(false);
+    } finally {
+      await rm(fresh, { recursive: true, force: true });
+    }
+  });
+
   it('takes a folder from before the record at its word, records it once it loads, and sees an earlier one by its size', async () => {
     const files = pinned();
     await mkdir(directory, { recursive: true });

@@ -136,7 +136,8 @@ export class Decisions {
     if (this.isInstalled()) return { status: 'ready', receivedBytes: total, totalBytes: total };
     if (this.isOutdated() && !this.failure) return { status: 'outdated', receivedBytes: 0, totalBytes: total };
     const received = this.partialBytes();
-    if (this.failure) return { status: 'failed', receivedBytes: received, totalBytes: total, error: this.failure };
+    // A failed update still has the earlier Tacet on disk, so the window keeps offering it (user, 2026-10-07).
+    if (this.failure) return { status: 'failed', receivedBytes: received, totalBytes: total, error: this.failure, ...(this.isOutdated() ? { update: true as const } : {}) };
     return { status: 'absent', receivedBytes: received, totalBytes: total };
   }
 

@@ -12,6 +12,7 @@ import { WorkerDialog, workerProviderOptions } from './components/WorkerDialog';
 import { chatSettingsTarget, connectModelStep, demoWorkerToConnect } from './chatSettings';
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog';
 import { useDecisionModel } from './components/TacetSetup';
+import { tacetUpdateWaiting } from '../shared/decisions';
 import { TaskThread, ThreadSkeleton, type ThreadStartInfo } from './components/TaskThread';
 import { SideThreadPanel } from './components/SideThreadPanel';
 import { focusMessage } from './components/messageMarks';
@@ -405,7 +406,9 @@ export function App() {
   // A newer Tacet pinned by this Orglet than the one on disk (user, 2026-10-07): said once a launch as a note kept in
   // Notifications, offered in Needs you and in Settings until the person updates. The download starts only on a click.
   const decisionModel = useDecisionModel();
-  const tacetOutdated = decisionModel?.status === 'outdated';
+  // Still waiting after a cut update too, so Needs you keeps it (with Retry) until it is done.
+  const tacetOutdated = tacetUpdateWaiting(decisionModel);
+  const tacetUpdateError = decisionModel?.status === 'failed' ? decisionModel.error : undefined;
   const updateTacet = () => {
     void orglet.call('installDecisionModel', {}).catch(failure => toast(tMessage((failure as Error).message), 'error', t('Tacet trên máy')));
   };
@@ -2283,7 +2286,7 @@ export function App() {
       pendingSchedules={pendingRoutines} notesToReview={knowledgeToReview} onOpenChat={taskId => { setPanel(null); openTask(taskId); }} onOpenMessage={(taskId, messageId) => { setPanel(null); openChatAt(taskId, messageId); }}
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
       onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate}
-      tacetOutdated={tacetOutdated} onUpdateTacet={updateTacet} />
+      tacetOutdated={tacetOutdated} tacetUpdateError={tacetUpdateError} onUpdateTacet={updateTacet} />
     : area === 'home' && friendsOpen
       ? <MarketplacePage onMarketAdded={async result => {
           await refresh();
