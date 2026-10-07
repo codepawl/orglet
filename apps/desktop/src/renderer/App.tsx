@@ -129,7 +129,7 @@ import { ConnectWays, type ConnectWay } from './components/ConnectWays';
 import { useSavedMessages } from './saved';
 import { reportFeature } from './analytics';
 import { chatKey, chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, shownOpenChats, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
-import { availableChatViews, viewOwnerOfTask, chatViewToShow, memoriesOf, schedulesOf, type ViewOwner, type ChatViewName } from './chatViews';
+import { availableChatViews, chartsOfChat, viewOwnerOfTask, chatViewToShow, memoriesOf, schedulesOf, type ViewOwner, type ChatViewName } from './chatViews';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -2222,7 +2222,7 @@ export function App() {
   const ownerSchedules = schedulesOf(workspace.routines, viewOwner);
   const ownerMemories = memoriesOf(workspace.knowledge, viewOwner);
   const chatViewList = availableChatViews({
-    files: viewDetail?.sources.length ?? 0,
+    files: (viewDetail?.sources.length ?? 0) + chartsOfChat(viewDetail?.artifacts ?? []).length,
     changes: changedRunCount(viewDetail, workspaceRecovery),
     schedules: ownerSchedules.length,
     memory: ownerMemories.length,

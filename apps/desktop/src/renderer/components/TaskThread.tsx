@@ -27,7 +27,8 @@ import { orglet } from '../api';
 import { isHarness, type HarnessInfo } from '../../shared/harness';
 import { harnessAccountLabel } from './PlanUsage';
 import { accountSwitchFor, outOfPlanRun, type AccountSwitch } from '../../shared/account-switch';
-import { Markdown } from './Markdown';
+import { ChartAskContext, Markdown } from './Markdown';
+import { replyToChartPoint } from './messageMarks';
 import { Attachment } from './Attachment';
 import { clockLabel, needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges, hasReactions } from './MessageActions';
@@ -404,7 +405,8 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     // The reactions sit under the answer, whichever shape it takes (COD-219, COD-365).
     const badges = badgesFor(artifact.id);
     return chat
-      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} receipts={receipts} toolbar={toolbar} limitationsOnBar={limitationsOnBar} />
+      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} receipts={receipts} toolbar={toolbar} limitationsOnBar={limitationsOnBar}
+          onAskChartPoint={quote => replyToChartPoint(detail.task.id, artifact.id, authorName, quote)} />
       : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} toolbar={toolbar} />;
   };
   /**
@@ -812,10 +814,12 @@ function MessageFoot({ badges, receipts }: { badges?: ReactNode; receipts?: Reac
  * While the chat still waits on the unfinished parts they end the thread as a card of their own with Retry
  * (`unfinishedWork`), not here: that is the chat's state, and inside the thread it read as part of what the orglet said.
  */
-function ChatReply({ artifact, text, notices, badges, receipts, toolbar, limitationsOnBar }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; limitationsOnBar: boolean }) {
+function ChatReply({ artifact, text, notices, badges, receipts, toolbar, limitationsOnBar, onAskChartPoint }: { onAskChartPoint?: (quote: string) => void; artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; limitationsOnBar: boolean }) {
   return <div className="chat-reply">
     {notices.before}
-    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} /></div>
+    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}>
+      <ChartAskContext.Provider value={onAskChartPoint}><Markdown className="prose" text={text} /></ChartAskContext.Provider>
+    </div>
     {notices.after}
     {artifact.report.limitations.length > 0 && !limitationsOnBar && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>

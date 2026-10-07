@@ -168,3 +168,19 @@ it('persists checker provenance and cancels without recording unfinished checks'
     expect(store.detail(task.id).profiles).toHaveLength(1);
   } finally { store.close(); await rm(directory, { recursive: true, force: true }); }
 });
+
+// Group totals for charts (2026-10-07): the checker aggregates the whole file, the model only reads a few rows.
+const sales = 'month,region,revenue\n2024-01-05,North,10\n2024-01-20,South,5\n2024-02-03,North,20\n2024-02-09,North,x\n,South,99\n2024-03-01,South,7\n';
+it('totals a column by group over the whole file, with dates bucketed by month', async () => {
+  const result = await analyze({ files: [file(sales)], idColumn: null, aggregate: { groupBy: 'month', dateBucket: 'month', measures: [{ column: 'revenue', fn: 'sum' }, { column: null, fn: 'count' }], sort: 'group', limit: 10 } });
+  expect(result.aggregate).toMatchObject({ columns: ['month', 'sum(revenue)', 'count'], rows: [['2024-01', 15, 2], ['2024-02', 20, 2], ['2024-03', 7, 1]], groups: 3, ungrouped: 1 });
+  expect(result.checks).toContain('group_totals');
+});
+it('sorts groups by the first measure and says how many groups there were beyond the limit', async () => {
+  const result = await analyze({ files: [file(sales)], idColumn: null, aggregate: { groupBy: 'region', dateBucket: null, measures: [{ column: 'revenue', fn: 'avg' }], sort: 'largest', limit: 1 } });
+  expect(result.aggregate?.rows).toEqual([['South', 37]]);
+  expect(result.aggregate?.groups).toBe(2);
+});
+it('refuses a column the file does not have, and never runs the name as SQL', async () => {
+  await expect(analyze({ files: [file(sales)], idColumn: null, aggregate: { groupBy: 'region"; DROP TABLE data0; --', dateBucket: null, measures: [{ column: 'revenue', fn: 'sum' }], sort: 'group', limit: 5 } })).rejects.toThrow('không có trong tệp');
+});

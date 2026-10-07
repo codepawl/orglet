@@ -9,6 +9,12 @@ import { t } from '../i18n';
 const ChartBlock = lazy(() => import('./ChartBlock'));
 
 /**
+ * What a click on a chart point does in the Markdown below it: the answer that holds the chart provides it, and it
+ * quotes the point in the composer. Without a provider (a viewer, a release note) a chart can be read but not asked about.
+ */
+export const ChartAskContext = createContext<((quote: string) => void) | undefined>(undefined);
+
+/**
  * Renders the Markdown that workers write in chat replies: paragraphs, headings, lists, tables, quotes, code and inline
  * emphasis. It builds React elements rather than HTML, so nothing in a reply can inject markup or scripts.
  * Links, written as Markdown or as a bare address, open in the person's browser through main, never in the app window,
@@ -197,6 +203,7 @@ function startsNewBlock(line: string) {
 }
 
 function BlockView({ block }: { block: Block }) {
+  const askAboutChartPoint = useContext(ChartAskContext);
   switch (block.kind) {
     case 'paragraph':
       return <p><Lines lines={block.lines} /></p>;
@@ -215,7 +222,7 @@ function BlockView({ block }: { block: Block }) {
       return <blockquote><Lines lines={block.lines} /></blockquote>;
     case 'code':
       // A chart fence holds a chart spec (shared/charts.ts): drawn by the app, never run as code.
-      if (block.language === 'chart') return <Suspense fallback={<SkeletonGroup label={t('Đang vẽ biểu đồ…')} className='chart-shape'><Skeleton shape='block' className='chart-shape-plot' /></SkeletonGroup>}><ChartBlock source={block.code} /></Suspense>;
+      if (block.language === 'chart') return <Suspense fallback={<SkeletonGroup label={t('Đang vẽ biểu đồ…')} className='chart-shape'><Skeleton shape='block' className='chart-shape-plot' /></SkeletonGroup>}><ChartBlock source={block.code} onAskPoint={askAboutChartPoint} /></Suspense>;
       return <pre><code>{block.code}</code></pre>;
     case 'break':
       return <div className="markdown-break" aria-hidden="true" />;

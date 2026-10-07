@@ -244,6 +244,19 @@ async function seedViewerFiles(page, analyst) {
   await waitForTask(page, taskId);
 }
 
+/** Opens the Evidence reviewer's chat with the sample chart answer on screen (the Demo reply draws two charts). */
+async function openChartChat(page) {
+  await openArea(page, 'Trò chuyện');
+  await page.locator('.sidebar').getByRole('button', { name: 'Evidence reviewer', exact: true }).first().click();
+  const box = page.getByRole('textbox', { name: label('Tin nhắn') }).first();
+  if (!await page.locator('.chart-block .chart-plot svg').count()) {
+    await box.fill('/demo-chart How did revenue go this half?');
+    await box.press('Enter');
+  }
+  await page.locator('.chart-block .chart-plot svg').nth(1).waitFor({ timeout: 30_000 });
+  await page.locator('.chart-block').first().scrollIntoViewIfNeeded();
+}
+
 /** Opens one of the seeded files in the viewer, from the Data analyst's chat, and waits until its content is drawn. */
 async function openViewerFile(page, name, ready) {
   await openArea(page, 'Trò chuyện');
@@ -486,17 +499,31 @@ const SCREENS = [
   { name: 'sidebar-row-menu', open: async (page, context) => { await openArea(page, 'Trò chuyện'); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   // Charts in a reply (2026-10-07): the sample answer on Demo draws a line chart with two series and a bar chart.
-  { name: 'chat-chart', open: async page => {
-    await openArea(page, 'Trò chuyện');
-    await page.locator('.sidebar').getByRole('button', { name: 'Evidence reviewer', exact: true }).first().click();
-    const box = page.getByRole('textbox', { name: label('Tin nhắn') }).first();
-    if (!await page.locator('.chart-block .chart-plot svg').count()) {
-      await box.fill('/demo-chart How did revenue go this half?');
-      await box.press('Enter');
-    }
-    await page.locator('.chart-block .chart-plot svg').nth(1).waitFor({ timeout: 30_000 });
-    await page.locator('.chart-block').first().scrollIntoViewIfNeeded();
-  } },
+  { name: 'chat-chart', open: openChartChat },
+  // Asking about a point: a click on the line quotes that value in the composer, as a reply does.
+  { name: 'chat-chart-asked', open: async page => {
+    await openChartChat(page);
+    const plot = page.locator('.chart-block .chart-plot').first();
+    await plot.scrollIntoViewIfNeeded();
+    const box = await plot.boundingBox();
+    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.locator('.composer-reply').waitFor();
+    const quote = await page.locator('.composer-reply').innerText();
+    if (!quote.includes(label('Về biểu đồ “{0}”: {1} = {2}', ['Monthly revenue', '', '']).split(':')[0])) throw new Error('The composer quotes ' + quote);
+  }, close: async page => { await page.getByRole('button', { name: label('Bỏ trả lời'), exact: true }).click(); } },
+  // The same chart opened large from its header, in the viewer a file opens in.
+  { name: 'chat-chart-large', open: async page => {
+    await openChartChat(page);
+    await page.getByRole('button', { name: label('Mở lớn'), exact: true }).first().click();
+    await page.locator('#source-viewer .chart-plot svg').waitFor();
+  }, close: async page => { await page.keyboard.press('Escape'); await page.locator('#source-viewer').waitFor({ state: 'detached' }); } },
+  // The chat's Files lists the charts its answers sent, above any attached file.
+  { name: 'chat-chart-files', open: async page => {
+    await openChartChat(page);
+    await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click();
+    await page.getByRole('menuitem', { name: new RegExp('^' + label('Tệp')) }).click();
+    await page.locator('.chart-list .source-row').first().waitFor();
+  }, close: async page => { await page.locator('.topbar-back-to-chat').click(); } },
   // The app trigger (stage 4): a connected app, its read-only tool, arguments, how often and words. The app here was
   // never reached, so the form says it has no read-only tool yet; nothing goes over the network.
   { name: 'schedule-editor-app', open: async page => {

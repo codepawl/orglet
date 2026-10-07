@@ -1,8 +1,11 @@
 import { expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { chartCsv, chartProblemsIn, checkChart, echartsOption, histogramBins, type ChartTheme } from '../../apps/desktop/src/shared/charts';
+import { chartCsv, chartPointOf, chartProblemsIn, checkChart, echartsOption, histogramBins, type ChartTheme } from '../../apps/desktop/src/shared/charts';
 import { DEMO_CHART_REPLY } from '../../apps/desktop/src/shared/demo-replies';
+import { chartPointQuote } from '../../apps/desktop/src/renderer/chartPoint';
+import { chartsOfChat } from '../../apps/desktop/src/renderer/chatViews';
+import { clearReplyTarget, currentReplyTarget, replyToChartPoint } from '../../apps/desktop/src/renderer/components/messageMarks';
 import { Markdown } from '../../apps/desktop/src/renderer/components/Markdown';
 
 const theme: ChartTheme = { series: ['#111111', '#222222'], text: '#000000', muted: '#666666', grid: '#eeeeee', surface: '#ffffff', font: 'Inter' };
@@ -44,4 +47,40 @@ it('renders a chart fence as a chart, never as code, in a reply', () => {
   const html = renderToStaticMarkup(createElement(Markdown, { text: DEMO_CHART_REPLY }));
   expect(html).not.toContain('<pre><code>{');
   expect(html).toContain('Revenue grew every month');
+});
+
+// Asking about a chart point, and charts in the chat's Files (2026-10-07).
+const scatterSpec = checkChart({ ...revenue, type: 'scatter', columns: ['Spend', 'Sales'], rows: [[1, 10], [2, 12]], x: 'Spend', y: ['Sales'] });
+const barSpec = checkChart({ ...revenue, type: 'bar' });
+const pieSpec = checkChart({ ...revenue, type: 'pie' });
+
+it('turns a click on a mark into the point it shows', () => {
+  if (!scatterSpec.ok || !barSpec.ok || !pieSpec.ok) throw new Error('fixture charts must be valid');
+  expect(chartPointOf(barSpec.spec, { seriesName: 'Revenue', name: 'Feb', value: 12 })).toEqual({ series: 'Revenue', x: 'Feb', value: '12' });
+  expect(chartPointOf(scatterSpec.spec, { seriesName: 'Sales', name: '', value: [2, 12.30000001] })).toEqual({ series: 'Sales', x: '2', value: '12.3' });
+  expect(chartPointOf(pieSpec.spec, { seriesName: '', name: 'Jan', value: 10 })).toEqual({ series: null, x: 'Jan', value: '10' });
+  expect(chartPointOf(barSpec.spec, { name: 'Feb' })).toBeUndefined();
+  expect(chartPointOf(scatterSpec.spec, { value: 5 })).toBeUndefined();
+});
+
+it('words the quote of a point with the chart, the series, the place and the value', () => {
+  expect(chartPointQuote('Revenue', { series: 'Revenue', x: 'Feb', value: '12' })).toBe('About the chart “Revenue”: Revenue, Feb = 12');
+  expect(chartPointQuote('Mix', { series: null, x: 'Jan', value: '10' })).toBe('About the chart “Mix”: Jan = 10');
+});
+
+it('puts the point in the composer as a reply and carries it ahead of the question', () => {
+  replyToChartPoint('task-1', 'message-1', 'Researcher', 'Về biểu đồ “Revenue”: Feb = 12');
+  expect(currentReplyTarget()).toMatchObject({ taskId: 'task-1', messageId: 'message-1', author: 'Researcher', point: 'Về biểu đồ “Revenue”: Feb = 12', text: 'Về biểu đồ “Revenue”: Feb = 12' });
+  clearReplyTarget();
+  expect(currentReplyTarget()).toBeUndefined();
+});
+
+it('lists the charts the answers of a chat carry, newest first, leaving out the ones that cannot be drawn', () => {
+  const answer = (id: string, createdAt: string, summary: string) => ({ id, createdAt, report: { summary } as never });
+  const charts = chartsOfChat([
+    answer('a1', '2026-10-07T09:00:00Z', ['Old:', '```chart', JSON.stringify(revenue), '```'].join('\n')),
+    answer('a2', '2026-10-07T10:00:00Z', ['New:', '```chart', JSON.stringify({ ...revenue, title: 'Second' }), '```', '```chart', '{broken', '```', '```chart', JSON.stringify({ ...revenue, title: 'Third' }), '```'].join('\n')),
+    answer('a3', '2026-10-07T11:00:00Z', 'No chart here.'),
+  ]);
+  expect(charts.map(chart => [chart.id, chart.spec.title])).toEqual([['a2:0', 'Second'], ['a2:2', 'Third'], ['a1:0', 'Revenue']]);
 });
