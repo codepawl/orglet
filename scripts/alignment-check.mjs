@@ -305,7 +305,7 @@ async function openOpenChats(page, context) {
   await page.locator('.open-chat-row .worker.active').waitFor({ state: 'attached' });
   await openArea(page, 'Trò chuyện');
   await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
-  await page.locator('.chat-views').waitFor();
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
 }
 
 /** Folds the sidebar to the rail (COD-340); the next reset opens it again. A narrow window has folded it already. */
