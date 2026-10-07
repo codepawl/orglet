@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
+import { candidates, detectHarnesses, harnessAccountEnv, isDesktopAppBuild, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { HarnessAccounts, type HarnessAccountMap } from '../../apps/desktop/src/core/harness/accounts';
 import { cursorAuthFile } from '../../apps/desktop/src/core/harness/usage';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
@@ -31,13 +31,17 @@ describe('detection', () => {
     await touch(join(bin, 'codex.cmd'));
     await touch(join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'));
     await touch(join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.10', 'claude.exe'));
+    // Newer desktop builds sit one folder deeper, under a content hash (2026-10-07).
+    await touch(join(roaming, 'Claude', 'claude-code', '2.1.289', 'e1f0154146bb', 'claude.exe'));
     await touch(join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe'));
     await touch(join(home, '.cursor', 'bin', 'agent.exe'));
     const env = { USERPROFILE: home, LOCALAPPDATA: local, APPDATA: roaming, PATH: bin };
     expect(await candidates('claude-code', env, 'win32')).toEqual([
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.10', 'claude.exe'),
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'),
+      join(roaming, 'Claude', 'claude-code', '2.1.289', 'e1f0154146bb', 'claude.exe'),
     ]);
+    expect(isDesktopAppBuild(join(roaming, 'Claude', 'claude-code', '2.1.289', 'e1f0154146bb', 'claude.exe'))).toBe(true);
     // The app's executable outranks the npm shim on PATH: a shim can only start through cmd.exe (COD-170).
     expect(await candidates('codex', env, 'win32')).toEqual([join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe'), join(bin, 'codex.cmd')]);
     expect(await candidates('cursor', env, 'win32')).toEqual([join(home, '.cursor', 'bin', 'agent.exe')]);
@@ -217,9 +221,13 @@ describe('command contract', () => {
     const overrides = codex.flatMap((argument, index) => argument === '-c' ? [codex[index + 1]] : []);
     expect(overrides).toEqual(expect.arrayContaining(['web_search="disabled"', 'project_doc_max_bytes=0', 'tools.view_image=false']));
     expect(codex.join(' ')).not.toMatch(/danger|workspace-write|approve-for-me/);
-    const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 });
-    expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'json']));
+    const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 }, 'linux');
+    expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'stream-json', '--stream-partial-output']));
     expect(cursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
+    // Windows has no Cursor sandbox: ask mode and the deny rules keep the run read-only there (measured 2026-10-07).
+    const windowsCursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 }, 'win32');
+    expect(windowsCursor).toEqual(expect.arrayContaining(['--mode=ask', '--sandbox', 'disabled']));
+    expect(windowsCursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
     expect(harnessArgs({ harness: 'claude-code', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 0.25, model: 'haiku' })).toEqual(expect.arrayContaining(['--model', 'haiku']));
     expect(harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1, model: 'gpt-5' })).toEqual(expect.arrayContaining(['-m', 'gpt-5']));
   });
@@ -244,6 +252,10 @@ describe('command contract', () => {
     expect(() => parseCodexOutput('{"type":"turn.completed"}', null)).toThrow(HarnessError);
     expect(parseCodexOutput('{"type":"turn.completed"}', '{"title":"z"}').output).toEqual({ title: 'z' });
     expect(parseCursorOutput(JSON.stringify({ result: '{"title":"c"}' })).output).toEqual({ title: 'c' });
+    // Cursor Agent narrates before the object even when asked for the object only (measured on the Windows CLI, 2026-10-07).
+    const narrated = "Looking for the attached invoice source ID so I can select the correct Orglet `read_source` call.The workspace looks sparse; checking for an attachment.{\"call\":{\"name\":\"read_source\",\"arguments\":{\"sourceId\":\"a\"}},\"notes\":\"Need the {amounts}.\"}";
+    expect(parseCursorOutput(JSON.stringify({ result: narrated })).output).toEqual({ call: { name: "read_source", arguments: { sourceId: "a" } }, notes: "Need the {amounts}." });
+    expect(() => parseCursorOutput(JSON.stringify({ result: "{\"call\":{}} and then more words" }))).toThrow("schema");
     expect(() => parseCursorOutput(JSON.stringify({ error: 'Please run agent login' }))).toThrow('Harness trên máy');
   });
 

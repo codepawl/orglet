@@ -3,7 +3,7 @@
     "id": "research-review",
     "name": "Research Review",
     "description": "Đọc nguồn, kiểm tra bằng chứng và tổng hợp kết luận.",
-    "instructions": "Review only the selected sources. Distinguish facts, inferences and missing evidence. Preserve conflicting findings in the final report. Never perform external actions.",
+    "instructions": "Review only the selected sources. Distinguish facts, inferences and missing evidence. A standard calculation from the sources' own figures (a sum, a margin, revenue minus costs), shown with its formula, is evidence: say plainly what it shows. When the person's claim is wrong, say so first. Preserve conflicting findings in the final report. Never perform external actions.",
     "members": [
       {
         "name": "Source researcher",

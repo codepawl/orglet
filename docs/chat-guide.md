@@ -10,7 +10,7 @@ The row marked **Default** is the model that runs when you have not picked one. 
 
 ## The area rail and the sidebar
 
-Orglet's shell follows Discord's. A narrow **area rail** at the far left picks an area, the **sidebar** beside it lists that area, and the main card shows what you picked. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
+Orglet's shell follows Discord's. A narrow **area rail** at the far left picks an area, the **sidebar** beside it lists that area, and the main card shows what you picked. A chat opens on its messages; its menu (⋮) opens its files, what it changed, its schedules or its memory.
 
 **The area rail.** At the very top, two arrows go back and forward along the places you have been (also Alt+Left and Alt+Right, and the mouse's back and forward buttons). Below them: **Home**, **Activity**, **Library** and **Schedules**, a short divider, a tile for each of your spaces, then a **+** that makes a space. Each button shows its name beside it while the pointer is on it. The open area's icon is filled and the others are outlines, and a dot on a button's corner says something waits there: blue when it waits for you, grey when it is only news. Home, each space and Activity are areas, so the sidebar changes with them. Activity, Library and Schedules share one layout: the sidebar lists the page's parts, and the main panel shows a centred column with no title row or tabs of its own. Library and Schedules open as a page in the main panel (a schedule, a skill or a note is made and edited in a dialog over that page). **New schedule** is in the sidebar, above the list; the Library's buttons are at the top of the main panel. with the rail still beside them and the sidebar listing the page's own rows (Skills and Knowledge, or your schedules); picking a chat or an area, or Esc, takes you back. The area you left open comes back when Orglet starts. Folding the sidebar (the button in its head) leaves only the rail. With the sidebar folded, the pointer over the rail shows it over the chat for a look, listing the tile the pointer is on, and it goes when the pointer leaves; a click on any tile opens it for good, and the tile of the area already on screen only opens it. In a window narrower than 780 px the sidebar lies over the chat, beside the rail, until you pick something. The **Home** button always lands on a chat: the DM you had open, else the orglet you last wrote to.
 
@@ -53,16 +53,16 @@ A schedule's run has a calendar before its name. Hover a row to see whose chat i
 
 **Open.** A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top of Home. With nothing like that open, there is no **Open** section. To take a chat off **Open**, hover it and click **×**, or click it with the middle mouse button. This only takes it off the list. The chat and its messages stay, and it comes back when you open it again. When you close the chat you are in, the chat you used before it opens. A chat you archive or delete leaves the list. Orglet keeps the list when it restarts.
 
-**The tabs at the top of a chat.** Beside the chat's name, a few tabs show the parts of that chat. When the chat is narrow, for example with **Details** open, they move to a line under the name. **Chat** is always first and is where every chat opens. The others appear only when the chat has something for them, with a count:
+**A chat's other views.** A chat opens on its messages. Its menu (⋮, top right) lists the other views the chat has something for, each with a count, and opens it in place of the messages; **Chat** with an arrow beside the menu brings the messages back:
 
-| Tab | What it shows |
+| View | What it shows |
 |---|---|
 | **Files** | The files attached to the chat. Click one to open it in the viewer. The data checks are here too ([Attach files](#attach-files)). |
 | **Changes** | Every turn whose orglet changed files in a working folder, newest first. Click a line to see the changes, and apply or discard them while they wait for you ([what the orglet changed](worker-actions.md)). |
 | **Schedules** | The schedules that run as this orglet or channel. Run one now, edit it or switch it off. |
 | **Memory** | What this orglet or channel remembered from its chats. Edit, pin or delete a memory. |
 
-With nothing but the messages, there are no tabs. Use the arrow keys to move between tabs once one has focus. Orglet remembers the tab each chat was on until it closes.
+With nothing but the messages, the menu lists none. Orglet remembers the view each chat was on until it closes.
 
 **Details** is remembered per chat while Orglet is open: a chat you had open with Details opens with Details again. The panel holds what is not a tab: who the chat is with, what it cost, its permissions, MCP, browser and desktop settings, and the working copies to recover. You can drag its edge. It never pushes the chat narrower than 480 px.
 
@@ -172,7 +172,7 @@ Ask for a report and it arrives as a card, not a wall of text. Open it to read i
 
 ## What the orglet did
 
-While an orglet works, a tab docks onto the message box: the faces of the orglets at work, one sentence for what they are doing now ("Researcher is reading invoice.xlsx…"), and above it the last step that finished. What the tab can say depends on how the orglet runs, because the chat only names what Orglet itself saw:
+While an orglet works, it may send a short line now and then about what it found or is doing next ("Read the file; Q3 looks lower, let me recompute"); these stay in the chat above its answer. A tab docks onto the message box: the faces of the orglets at work, one sentence for what they are doing now ("Researcher is reading invoice.xlsx…"), and above it the last step that finished. What the tab can say depends on how the orglet runs, because the chat only names what Orglet itself saw:
 
 | Connection | What the chat can name |
 |---|---|
@@ -186,6 +186,8 @@ Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searche
 While the orglet waits for you, for example on a card asking to click a button on a page, the line under its name in the chat says so ("Waiting for your OK…") and holds still, instead of the step it stopped on.
 
 The chat stays on its newest message while you are there: new text, a card, a window resize or opening **Details** keep the end in view. Scroll up and it stays where you left it; scroll back to the last lines and it follows again. A card that needs you (an approval, a question, a failure or a blocked hand-in) is brought into view once when it appears if you were less than a screen up. Further up, the tab on the message box tells you instead. Sending a message always goes back to the end.
+
+When an orglet stops to ask you something, the question and its choices sit in the tab on top of the message box, one row each. Pick one with a click or its number key, and add a note under it if you like; or type your own answer on the **Other** row or in the message box. **Send** (Ctrl+Enter) answers; **Skip** lets the orglet choose and say what it chose. The arrow folds the choices away while you read the chat. Either way the same turn goes on.
 
 A message that got no answer keeps what happened to it after newer messages, on one line under the orglet's name: "This turn didn’t finish: …" with the error, "This turn was stopped before it answered.", "This turn stopped while it waited for you." Hover the line for a long error in full.
 

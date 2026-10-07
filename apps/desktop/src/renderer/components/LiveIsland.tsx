@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { Eye, Gauge, Lightbulb, Undo2, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
+import { ChevronDown, Eye, Gauge, Lightbulb, Undo2, X } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
+import { Input } from '@codepawlhq/orglet-ui';
 import { Button } from './ui';
 import { usageResetLabel } from './PlanUsage';
 import { t } from '../i18n';
@@ -17,7 +18,8 @@ export type IslandState = 'thinking' | 'reading' | 'searching' | 'listing' | 'to
  * workers whose runs are really running, whose faces the island carries (COD-169). `named` is the label cut around
  * the one worker's name, when it names one (COD-250); the label stays the whole sentence.
  */
-export type IslandView = { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; actions?: readonly IslandAction[] };
+export type IslandView = { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; actions?: readonly IslandAction[];
+  /** When the run started (ms), so a long wait shows how long it has been (user, 2026-10-07). */ since?: number };
 
 /**
  * A control the island may carry while a run uses Orglet's browser (COD-261): watch it in the live view, or hand it
@@ -52,7 +54,7 @@ const NAME_FLOOR_EM = 6;
  * `receipt` is left out where the run reports no steps, and passed as an empty string while the first step is still
  * running; the line takes room only once it has something to say.
  */
-export function LiveIsland({ state, label, named, receipt, workers, actions = [], leaving }: { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; actions?: readonly IslandAction[]; leaving?: boolean }) {
+export function LiveIsland({ state, label, named, receipt, workers, actions = [], since, leaving }: { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; since?: number; actions?: readonly IslandAction[]; leaving?: boolean }) {
   const content = useRef<HTMLSpanElement>(null);
   const faces = useRef<HTMLSpanElement>(null);
   const width = useMeasuredWidth(content);
@@ -70,12 +72,37 @@ export function LiveIsland({ state, label, named, receipt, workers, actions = []
           <RosterAvatars workers={workers} size="sm" max={workers.length} />
         </span>
         <IslandSentence key={label} label={label} named={named} />
+        {since !== undefined && <IslandElapsed since={since} />}
         {actions.map(action => <Button key={action.kind} type="button" className="live-island-browser" onClick={action.onSelect}>
           {action.kind === 'watch' ? <Eye size={14} aria-hidden="true" /> : <Undo2 size={14} aria-hidden="true" />}{action.label}
         </Button>)}
       </span>
     </div>
   </div>;
+}
+
+/** How long a run goes before the island says how long it has been: a short answer never needs a clock. */
+export const ELAPSED_AFTER_SECONDS = 15;
+
+/** "42s", then "1:05" past a minute; the same in every language, like the clock it stands for. */
+export function islandElapsedLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/**
+ * The time a run has been going, after the sentence, once the wait is long enough to wonder about (user, 2026-10-07:
+ * a Cursor run sat 1–3 minutes on one sentence). It ticks each second and is quiet text, not a spinner.
+ */
+function IslandElapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  if (seconds < ELAPSED_AFTER_SECONDS) return null;
+  return <span className="live-island-elapsed" aria-hidden="true">{islandElapsedLabel(seconds)}</span>;
 }
 
 /**
@@ -110,13 +137,13 @@ function IslandSentence({ label, named }: { label: string; named?: NamedSentence
 export function KnowledgeIsland({ count, review, dismiss, leaving }: { count: number; review: () => void; dismiss: () => void; leaving?: boolean }) {
   const content = useRef<HTMLSpanElement>(null);
   const width = useMeasuredWidth(content);
-  const label = count === 1 ? t('1 gợi ý knowledge') : t('{0} gợi ý knowledge', [count]);
+  const label = count === 1 ? t('1 gợi ý kiến thức') : t('{0} gợi ý kiến thức', [count]);
   return <div role="status" className={leaving ? 'live-island live-island-knowledge leaving' : 'live-island live-island-knowledge'}>
     <div className="live-island-body" style={{ width }}>
       <span className="live-island-content" ref={content}>
         <Lightbulb size={16} aria-hidden="true" />
         <span className="live-island-label" key={label}>{label}</span>
-        <Button type="button" className="live-island-action" aria-label={t('Xem gợi ý knowledge')} onClick={review}>{t('Xem')}</Button>
+        <Button type="button" className="live-island-action" aria-label={t('Xem gợi ý kiến thức')} onClick={review}>{t('Xem')}</Button>
         <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
       </span>
     </div>
@@ -154,6 +181,89 @@ export function AccountIsland({ harnessName, target, resetsAt, switchAccount, di
           : resetsAt && <span className="live-island-meta">{usageResetLabel(resetsAt)}</span>}
         <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
       </span>
+    </div>
+  </div>;
+}
+
+/** What a decision island sends: a choice with the person's note under it, their own words, or that they skipped. */
+export type DecisionPick = { kind: 'option'; option: string; note: string } | { kind: 'other'; text: string } | { kind: 'skip' };
+
+/** The answer text the orglet reads for a pick; undefined while there is nothing to send yet. */
+export function decisionAnswer(pick: DecisionPick): string | undefined {
+  if (pick.kind === 'skip') return t('Bỏ qua câu hỏi này. Tự chọn cách hợp lý nhất và nói rõ đã chọn gì.');
+  if (pick.kind === 'other') return pick.text.trim() || undefined;
+  const note = pick.note.trim();
+  return note ? `${pick.option}\n\n${t('Ghi chú: {0}', [note])}` : pick.option;
+}
+
+/**
+ * A question an orglet stopped to ask, answered from the island on the prompt bar (user, 2026-10-07, after Claude's
+ * question box): the asker's face and the question, then one row per choice with its number key, and a last row for
+ * the person's own words. A picked choice can carry a note. Skip lets the orglet decide; Send (or Ctrl+Enter) answers.
+ * The chevron folds the choices away to read the chat behind. The chat keeps the question as the orglet's message, and
+ * the prompt bar under the island still sends a typed answer. `busy` holds everything while an answer is on its way.
+ */
+export function DecisionIsland({ question, options, workers, busy, answer, leaving }: {
+  question: string;
+  options: readonly string[];
+  workers: readonly Worker[];
+  busy: boolean;
+  answer: (text: string) => void;
+  leaving?: boolean;
+}) {
+  const [picked, setPicked] = useState<number>();
+  const [other, setOther] = useState('');
+  const [note, setNote] = useState('');
+  const [folded, setFolded] = useState(false);
+  const otherIndex = options.length;
+  const pick: DecisionPick | undefined = picked === undefined ? undefined
+    : picked === otherIndex ? { kind: 'other', text: other } : { kind: 'option', option: options[picked], note };
+  const ready = pick ? decisionAnswer(pick) : undefined;
+  const send = (text: string | undefined) => {
+    if (!busy && text) answer(text);
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      send(ready);
+      return;
+    }
+    // Number keys pick a row, except while typing in one of the island's fields.
+    if (event.target instanceof HTMLInputElement || event.ctrlKey || event.metaKey || event.altKey) return;
+    const index = Number(event.key) - 1;
+    if (Number.isInteger(index) && index >= 0 && index <= otherIndex) {
+      event.preventDefault();
+      setPicked(index);
+    }
+  };
+  return <div role="group" aria-label={t('Quyết định đang chờ')} className={leaving ? 'live-island live-island-decision leaving' : 'live-island live-island-decision'} data-state="waiting" data-folded={folded ? '' : undefined} onKeyDown={onKeyDown}>
+    <div className="live-island-body">
+      <div className="live-island-question">
+        <span className="live-island-faces" aria-hidden="true">
+          <RosterAvatars workers={workers} size="sm" max={workers.length} />
+        </span>
+        <p>{question}</p>
+        <Button type="button" size="icon" className="live-island-fold" aria-expanded={!folded} aria-label={folded ? t('Mở các lựa chọn') : t('Thu gọn các lựa chọn')} onClick={() => setFolded(value => !value)}>
+          <ChevronDown size={16} aria-hidden="true" />
+        </Button>
+      </div>
+      {!folded && <>
+        <div className="live-island-choices" role="radiogroup" aria-label={question}>
+          {options.map((option, index) => <Button key={option} type="button" role="radio" aria-checked={picked === index} className="live-island-choice" disabled={busy} onClick={() => setPicked(index)}>
+            <span className="live-island-choice-text">{option}</span><kbd>{index + 1}</kbd>
+          </Button>)}
+          <div className="live-island-choice live-island-other" data-checked={picked === otherIndex ? '' : undefined}>
+            <Input value={other} disabled={busy} maxLength={2000} placeholder={t('Khác: tự trả lời theo ý bạn')} aria-label={t('Câu trả lời của bạn')}
+              onFocus={() => setPicked(otherIndex)} onChange={event => { setOther(event.target.value); setPicked(otherIndex); }} />
+            <kbd>{otherIndex + 1}</kbd>
+          </div>
+        </div>
+        {pick?.kind === 'option' && <Input className="live-island-note" value={note} disabled={busy} maxLength={1000} placeholder={t('Thêm ghi chú cho lựa chọn này (không bắt buộc)')} aria-label={t('Ghi chú')} onChange={event => setNote(event.target.value)} />}
+        <div className="live-island-decision-actions">
+          <Button type="button" variant="outline" disabled={busy} onClick={() => send(decisionAnswer({ kind: 'skip' }))}>{t('Bỏ qua')}</Button>
+          <Button type="button" variant="primary" disabled={busy || !ready} onClick={() => send(ready)}>{t('Gửi')}<kbd>Ctrl ↵</kbd></Button>
+        </div>
+      </>}
     </div>
   </div>;
 }

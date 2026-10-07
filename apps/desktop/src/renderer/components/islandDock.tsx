@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from 'react';
-import { AccountIsland, KnowledgeIsland, LiveIsland, type IslandView } from './LiveIsland';
+import type { Worker } from '../../shared/contracts';
+import { AccountIsland, DecisionIsland, KnowledgeIsland, LiveIsland, type IslandView } from './LiveIsland';
 
 /**
  * The island docks on the prompt bar, not in the thread (COD-167): it sits on the bar's top edge and moves with
@@ -10,12 +11,14 @@ import { AccountIsland, KnowledgeIsland, LiveIsland, type IslandView } from './L
  * Two kinds of view take the tab (COD-208): a working run, and, once no run is on, the chat's knowledge suggestions
  * waiting for review. The thread picks which one is docked (`showsKnowledgeIsland`); the dock only shows it. A third,
  * a harness account that ran out of plan usage (COD-225), takes the tab before the suggestions: it blocks the chat.
+ * A question an orglet stopped to ask takes it before both (user, 2026-10-07): the turn waits on its answer.
  */
 export type DockedIsland =
   | ({ kind: 'run' } & IslandView)
   | { kind: 'knowledge'; /** The set of suggestions, so a new set is a new view. */ key: string; count: number; review: () => void; dismiss: () => void }
   | { kind: 'account'; /** The run that ran out, so a later one is a new view. */ key: string; harnessName: string; target?: { label: string; usedPercent: number }; resetsAt?: string; switchAccount: () => void; dismiss: () => void;
-    /** Switching also runs the stopped turn again; false for the plan running out before anything was sent. */ retries?: boolean };
+    /** Switching also runs the stopped turn again; false for the plan running out before anything was sent. */ retries?: boolean }
+  | { kind: 'decision'; /** The question's request id, so a new question is a new view. */ key: string; question: string; options: readonly string[]; workers: readonly Worker[]; busy: boolean; answer: (text: string) => void };
 
 /**
  * Which prompt bar a view belongs to. The main chat's bar is `MAIN_DOCK`; a side thread open in the right panel
@@ -38,9 +41,10 @@ export function dockIsland(view: DockedIsland | undefined, dock: string = MAIN_D
 function sameView(a: DockedIsland | undefined, b: DockedIsland | undefined) {
   if (!a || !b) return a === b;
   if (a.kind === 'knowledge') return b.kind === 'knowledge' && a.key === b.key && a.count === b.count;
+  if (a.kind === 'decision') return b.kind === 'decision' && a.key === b.key && a.busy === b.busy;
   if (a.kind === 'account') return b.kind === 'account' && a.key === b.key && a.target?.label === b.target?.label && a.target?.usedPercent === b.target?.usedPercent && a.resetsAt === b.resetsAt;
   if (b.kind !== 'run') return false;
-  return a.state === b.state && a.label === b.label && a.receipt === b.receipt && actionsKey(a) === actionsKey(b) && sameWorkers(a, b);
+  return a.state === b.state && a.label === b.label && a.receipt === b.receipt && a.since === b.since && actionsKey(a) === actionsKey(b) && sameWorkers(a, b);
 }
 
 function actionsKey(view: IslandView) {
@@ -99,8 +103,9 @@ export function IslandDock({ dock = MAIN_DOCK, fallback }: {
   const shown = lastView.current;
   if (!shown) return null;
   if (shown.kind === 'knowledge') return <KnowledgeIsland count={shown.count} review={shown.review} dismiss={shown.dismiss} leaving={leaving} />;
+  if (shown.kind === 'decision') return <DecisionIsland key={shown.key} question={shown.question} options={shown.options} workers={shown.workers} busy={shown.busy} answer={shown.answer} leaving={leaving} />;
   if (shown.kind === 'account') return <AccountIsland harnessName={shown.harnessName} target={shown.target} resetsAt={shown.resetsAt} switchAccount={shown.switchAccount} dismiss={shown.dismiss} retries={shown.retries ?? true} leaving={leaving} />;
-  return <LiveIsland state={shown.state} label={shown.label} named={shown.named} receipt={shown.receipt} workers={shown.workers} actions={shown.actions} leaving={leaving} />;
+  return <LiveIsland state={shown.state} label={shown.label} named={shown.named} receipt={shown.receipt} workers={shown.workers} actions={shown.actions} since={shown.since} leaving={leaving} />;
 }
 
 function prefersReducedMotion() {

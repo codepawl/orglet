@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
-import { Bookmark, BellRing, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus } from 'lucide-react';
+import { Bookmark, BellRing, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus, ArrowLeft, Brain, FileDiff, FileText } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { PanelPage } from './components/PanelPage';
@@ -104,7 +104,7 @@ import { restartIntoUpdate } from './updateRestart';
 import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestination, type OpenChatReads } from './openChat';
 import { swapScreen } from './screenTransition';
 import { OpenChatRow, type OpenChatItem } from './components/OpenChats';
-import { ChatHeader, ChatViewPanel, ChatViewTabs } from './components/ChatViews';
+import { ChatHeader, ChatViewPanel, chatViewLabel } from './components/ChatViews';
 import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
 import { AreaRail, type AreaRailEntry, type AreaRailFolder } from './components/AreaRail';
@@ -2197,6 +2197,13 @@ export function App() {
     memory: ownerMemories.length,
   });
   const chatView = chatViewToShow(chatViewKey ? chatViews[chatViewKey] : undefined, chatViewList);
+  // The chat's other views open from its menu, each with how many it holds, never the one already on screen.
+  const chatViewIcons = { chat: MessageSquareText, files: FileText, changes: FileDiff, schedules: LucideCalendarClock, memory: Brain } as const;
+  const chatViewMenuItems: RowMenuItem[] = chatViewList.filter(view => view.name !== 'chat' && view.name !== chatView).map(view => ({
+    label: view.count !== undefined ? `${chatViewLabel(view.name)} (${view.count})` : chatViewLabel(view.name),
+    icon: chatViewIcons[view.name],
+    onSelect: () => showChatView(view.name),
+  }));
   const openScheduleEditor = (view: RoutineView) => { setRoutineDraft(undefined); setRoutineView(view); setPanel('routines'); };
   const sourceDetail = viewingSource?.detail ?? detail;
   const chatViewContent = chatView === 'files' && viewDetail ? <SourcePanel detail={viewDetail} target={sourceTarget} refresh={() => void refresh()} openSource={id => setViewingSource({ id })} />
@@ -2600,8 +2607,7 @@ export function App() {
         <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />
       </Drawer>}
       </PanelPage> : page ?? <>
-      <ChatHeader contentKey={`${activeChatKey}:${chatViewList.map(view => `${view.name}${view.count ?? ''}`).join()}`}
-        views={chatViewList.length > 1 ? <ChatViewTabs views={chatViewList} current={chatView} onSelect={showChatView} /> : null}
+      <ChatHeader
         lead={<>
           <span className="topbar-title">
           {headerChannel && <span className="topbar-hash" aria-hidden="true">#</span>}
@@ -2624,7 +2630,9 @@ export function App() {
           {headerChannel && !sidePaneOpen && windowWidth > 1100 && <Button size="icon" className="topbar-members-toggle" aria-label={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')} title={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')} aria-pressed={membersOpen} onClick={toggleMembers}><Users size={18} /></Button>}
           {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
 
-          {(selected || team || worker || emptyChannel) && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[...(headerChannel ? [{ label: t('Thiết lập kênh'), icon: Settings2, onSelect: () => editChannel() }, { label: t('Thành viên'), icon: Users, onSelect: () => editChannel('members') }] : []), ...headerSettingsItems, ...(selected && openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => setPrivacyTaskId(selected) }] : []), ...(selected && !openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => { setEditingTask(selected); setPanel('task'); } }] : []), { label: t('Chi tiết'), icon: SlidersHorizontal, onSelect: () => setPanel('activity') }, ...(!selected && headerChannel && !headerChannel.taskId ? [{ label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEmptyChannel(headerChannel.id, headerChannel.name), confirm: { question: t('Xóa kênh này? Kênh chưa có tin nhắn nào.'), label: t('Xóa') } }] : []), ...(selected ? [detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: LucideArchive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: headerChannel ? t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.') : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }] : [])]} />}
+          {/* The chat is the screen; its files, changes, schedules and memory open from the menu, and a way back sits here (user, 2026-10-07). */}
+          {chatView !== 'chat' && <Button className="topbar-back-to-chat" onClick={() => showChatView('chat')}><ArrowLeft size={16} aria-hidden="true" />{t('Trò chuyện')}</Button>}
+          {(selected || team || worker || emptyChannel) && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[...chatViewMenuItems, ...(headerChannel ? [{ label: t('Thiết lập kênh'), icon: Settings2, onSelect: () => editChannel() }, { label: t('Thành viên'), icon: Users, onSelect: () => editChannel('members') }] : []), ...headerSettingsItems, ...(selected && openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => setPrivacyTaskId(selected) }] : []), ...(selected && !openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => { setEditingTask(selected); setPanel('task'); } }] : []), { label: t('Chi tiết'), icon: SlidersHorizontal, onSelect: () => setPanel('activity') }, ...(!selected && headerChannel && !headerChannel.taskId ? [{ label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEmptyChannel(headerChannel.id, headerChannel.name), confirm: { question: t('Xóa kênh này? Kênh chưa có tin nhắn nào.'), label: t('Xóa') } }] : []), ...(selected ? [detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: LucideArchive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: headerChannel ? t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.') : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }] : [])]} />}
         </>} />
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><LucideCalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã lỡ một lần chạy khi app tắt. Có thể chạy bù một lần.', [singleCatchUp.name]) : t('{0} lịch đã lỡ lần chạy khi app tắt. Mỗi lịch chạy bù được một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}

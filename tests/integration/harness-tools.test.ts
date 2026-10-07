@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { harnessToolAdapter, harnessToolSchema, STEP_NOTES_CHARACTERS } from '../../apps/desktop/src/core/harness/tool-adapter';
+import { harnessToolAdapter, harnessToolSchema, STEP_NOTES_CHARACTERS, toolResponseOf } from '../../apps/desktop/src/core/harness/tool-adapter';
 import { toolCallProblem, toolDefinitions } from '../../apps/desktop/src/core/tools/catalog';
 import type { Run, Task } from '../../apps/desktop/src/shared/contracts';
-import { prepareHarnessToolPolicy } from '../../apps/desktop/src/core/harness/exec';
+import { prepareHarnessToolPolicy, trailingJsonObject } from '../../apps/desktop/src/core/harness/exec';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,6 +20,23 @@ it('writes Cursor native-tool denials in the private call directory and refuses 
     await expect(prepareHarnessToolPolicy(request)).rejects.toThrow();
     expect(await readFile(path, 'utf8')).toBe('existing configuration');
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+it('denies Cursor its own shell, writes, web and MCP on every Windows run, where its sandbox does not exist', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orglet-cursor-windows-'));
+  const linuxDirectory = await mkdtemp(join(tmpdir(), 'orglet-cursor-linux-'));
+  try {
+    await prepareHarnessToolPolicy({ harness: 'cursor', cwd: directory, coreToolsOnly: false }, 'win32');
+    expect(JSON.parse(await readFile(join(directory, '.cursor', 'cli.json'), 'utf8'))).toEqual({ permissions: {
+      allow: [], deny: ['Shell(*)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)'],
+    } });
+    // Where the sandbox exists, a one-shot answer keeps relying on it and no file is written.
+    await prepareHarnessToolPolicy({ harness: 'cursor', cwd: linuxDirectory, coreToolsOnly: false }, 'linux');
+    await expect(readFile(join(linuxDirectory, '.cursor', 'cli.json'), 'utf8')).rejects.toThrow();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+    await rm(linuxDirectory, { recursive: true, force: true });
+  }
 });
 
 it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('translates a %s structured request without executing its requested operation', async harness => {
@@ -89,7 +106,7 @@ it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('lets %s keep not
   const schema = harnessToolSchema(tools, harness) as { required: string[]; properties: { notes: { type: string } } };
   expect(schema.properties.notes).toEqual({ type: 'string' });
   // Codex's strict schema needs every property listed; the others leave notes optional.
-  expect(schema.required).toEqual(harness === 'codex' ? ['call', 'notes'] : ['call']);
+  expect(schema.required).toEqual(harness === 'codex' ? ['call', 'notes', 'update'] : ['call']);
   const longNotes = `Zoho Invoice: free, 500 invoices a year. ${'x'.repeat(STEP_NOTES_CHARACTERS)}`;
   const adapter = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
     execute: async request => {
@@ -107,4 +124,26 @@ it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('lets %s keep not
     onResult: () => {},
   });
   expect((await quiet.request([], tools, new AbortController().signal, () => {})).notes).toBeUndefined();
+});
+
+it('reads a step however a CLI wraps it, and still checks the call itself (2026-10-07)', () => {
+  const call = { name: 'read_source', arguments: { sourceId: 'a' } };
+  expect(toolResponseOf({ call, notes: null }, 'cursor')).toEqual({ call });
+  expect(toolResponseOf({ call, notes: 'kept', reasoning: 'extra key' }, 'cursor')).toEqual({ call, notes: 'kept' });
+  expect(toolResponseOf(call, 'cursor')).toEqual({ call });
+  expect(toolResponseOf({ call: { name: 'list_sources' } }, 'cursor')).toEqual({ call: { name: 'list_sources', arguments: {} } });
+  expect(() => toolResponseOf({ answer: 'no call at all' }, 'cursor')).toThrow(/Cursor Agent .*answer/);
+  expect(() => toolResponseOf({ call: { name: '', arguments: {} } }, 'cursor')).toThrow();
+});
+
+it('takes the JSON object an answer ends with, fenced or after narration', () => {
+  expect(trailingJsonObject('Here it is:\n```json\n{"call":{"name":"reply","arguments":{}}}\n```')).toEqual({ call: { name: 'reply', arguments: {} } });
+  expect(trailingJsonObject('Checking {first}. {"a":{"b":1}}')).toEqual({ a: { b: 1 } });
+  expect(trailingJsonObject('{"a":1} trailing words')).toBeUndefined();
+});
+
+it('keeps a step\'s update for the person apart from its notes', () => {
+  const call = { name: 'read_source', arguments: { sourceId: 'a' } };
+  expect(toolResponseOf({ call, notes: 'Q2 42%', update: 'Đọc xong rồi, để mình tính tiếp.' }, 'claude-code')).toEqual({ call, notes: 'Q2 42%', update: 'Đọc xong rồi, để mình tính tiếp.' });
+  expect(JSON.stringify(harnessToolSchema([toolDefinitions.read_source.model], 'codex'))).toContain('"required":["call","notes","update"]');
 });

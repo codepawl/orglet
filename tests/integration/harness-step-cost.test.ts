@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { Store, now } from '../../apps/desktop/src/core/storage/database';
 import { Checkpoints } from '../../apps/desktop/src/core/storage/checkpoints';
@@ -136,7 +139,11 @@ describe('web research on the Claude Code tool bridge', () => {
     expect(Math.max(...requestBytes) - requestBytes[0]).toBeLessThan(FULL_WEB_PAGES_KEPT * pageBytes + READS * (excerptBytes + 512));
     const before = previousBytes.reduce((sum, bytes) => sum + bytes, 0);
     const after = requestBytes.reduce((sum, bytes) => sum + bytes, 0);
-    expect(Math.max(...requestBytes)).toBeLessThan(Math.max(...previousBytes) * 0.5);
+    // The old policy grew each step by a page until the request limit cut it, so its peak is the limit, less up to one
+    // page depending on where the cut falls; a few hundred bytes more of platform policy moved that cut a step earlier
+    // (2026-10-07). Half the limit is the bound the old peak always approached, so the new peak is held to it.
+    expect(Math.max(...previousBytes)).toBeGreaterThan(MAX_REQUEST_BYTES - 2 * pageBytes);
+    expect(Math.max(...requestBytes)).toBeLessThan(MAX_REQUEST_BYTES * 0.5);
     expect(after).toBeLessThan(before * 0.75);
     // Claude Code's working directory is part of the fixed prompt it sends, so every step of a run uses the same one.
     expect(new Set(requests.map(request => request.cwd)).size).toBe(1);
@@ -205,5 +212,74 @@ describe('web research on the Claude Code tool bridge', () => {
     // The first page has been cut by now, and its note points at the notes instead of reading it again.
     const firstPage = final.find(message => message.role === 'tool' && String(message.content).includes('https://example.com/1'));
     expect(JSON.parse(String(firstPage!.content)).trimmedForContext).toContain('Use what your notes kept from it');
+  });
+});
+
+describe('attached sources on a CLI tool loop', () => {
+  it('reads small text sources before the first step, so the first call can already answer', async () => {
+    const store = new Store(':memory:');
+    const requests: HarnessRequest[] = [];
+    const core = new CoreService(store, () => {}, async () => { throw new Error('Native adapter must not be used'); }, undefined, undefined, {
+      detect: async () => [{ ...missingHarness('cursor', 'win32'), executable: 'agent.cmd', version: '2026.10.01', auth: 'logged_in', status: 'signed_in', authDetail: 'Đăng nhập Cursor' }],
+      execute: async request => {
+        requests.push(request);
+        return { output: { call: { name: 'reply', arguments: { message: 'Q3 margin fell to 38%.' } } }, costUsd: null };
+      },
+    });
+    try {
+      const directory = await mkdtemp(join(tmpdir(), 'orglet-preload-'));
+      const file = join(directory, 'income.csv');
+      await writeFile(file, 'quarter,revenue,cogs\nQ2,138,80\nQ3,151,93.6\n');
+      const [source] = await core.sources.import([file]);
+      const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'cursor' }) as Worker;
+      // dataset.check sends a CLI run through the tool loop rather than one opaque step.
+      const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Did Q3 margin rise?', sourceIds: [source.id], consent: true, providerScopes: ['cursor'], budgetMicros: 1_000_000, toolCapabilities: ['source.read', 'dataset.check'] }) as string;
+      await idle(store, core);
+      const detail = store.detail(taskId);
+      expect(detail.task.status).toBe('completed');
+      // One CLI call, not a read step and then an answer (measured 2026-10-07: about 20 s per Cursor call).
+      expect(requests).toHaveLength(1);
+      expect(requests[0].prompt).toContain('Q3,151,93.6');
+      // The read is recorded as a read, so the work log shows it.
+      expect(detail.events.filter(event => event.message === 'Đã đọc income.csv')).toHaveLength(1);
+      await rm(directory, { recursive: true, force: true });
+    } finally {
+      store.close();
+    }
+  });
+});
+
+describe('progress notes on a CLI tool loop', () => {
+  it('keeps the heads-up a working step sends and shows it before the answer', async () => {
+    const { ProgressNotes } = await import('../../apps/desktop/src/renderer/components/LiveRun');
+    const { createElement } = await import('react');
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const store = new Store(':memory:');
+    let calls = 0;
+    const core = new CoreService(store, () => {}, async () => { throw new Error('Native adapter must not be used'); }, undefined, undefined, {
+      detect: async () => [{ ...missingHarness('claude-code', 'win32'), executable: 'claude.exe', version: '2.1.289', auth: 'logged_in', status: 'signed_in', authDetail: 'Đăng nhập qua claude.ai' }],
+      execute: async () => {
+        calls++;
+        if (calls === 1) return { output: { call: { name: 'web_search', arguments: { query: 'PEP 701' } }, update: 'Để mình tra nguồn chính thức đã.' }, costUsd: null };
+        return { output: { call: { name: 'reply', arguments: { message: 'PEP 701.' } }, update: 'Xong rồi.' }, costUsd: null };
+      },
+    });
+    vi.spyOn(WebTools.prototype, 'search').mockImplementation(async () => ({ query: 'PEP 701', results: [], trust: 'Untrusted web data.', source: { provider: 'Exa', url: 'https://exa.ai' } }) as never);
+    try {
+      const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'claude-code' }) as Worker;
+      const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Which PEP?', sourceIds: [], consent: true, providerScopes: ['claude-code'], budgetMicros: 1_000_000, toolCapabilities: ['network.web'] }) as string;
+      await idle(store, core);
+      const detail = store.detail(taskId);
+      expect(detail.task.status).toBe('completed');
+      const notes = detail.events.filter(event => event.message.startsWith('Tin nhắn giữa chừng: '));
+      // The step that searched sent one; the answer's own heads-up is not kept beside the answer.
+      expect(notes.map(event => event.message)).toEqual(['Tin nhắn giữa chừng: Để mình tra nguồn chính thức đã.']);
+      const html = renderToStaticMarkup(createElement(ProgressNotes, { events: detail.events, runs: detail.runs }));
+      expect(html).toContain('class="progress-note"');
+      expect(html).toContain('Để mình tra nguồn chính thức đã.');
+    } finally {
+      vi.restoreAllMocks();
+      store.close();
+    }
   });
 });

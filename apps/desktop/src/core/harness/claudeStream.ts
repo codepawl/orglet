@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { emptyProgress, type ActivityKind, type HarnessProgress } from '../../shared/progress';
+import { ANSWER_TOOLS, emptyProgress, structuredOutputShape, type ActivityKind, type HarnessProgress } from '../../shared/progress';
 import type { ClaudeRateLimitInfo } from '../usageLimits';
 
 /** The tool Claude Code uses to return output that matches --json-schema. */
@@ -132,9 +132,8 @@ export class ClaudeStreamParser {
     }
 
     if (contentBlock.type === 'tool_use' && contentBlock.name === STRUCTURED_OUTPUT_TOOL) {
+      // Whether this is the answer or a tool-loop step choosing its next tool shows once its JSON starts to arrive.
       this.blocks.set(index, { type: 'answer', json: '' });
-      this.progress.writing = true;
-      this.emit();
       return;
     }
 
@@ -167,6 +166,7 @@ export class ClaudeStreamParser {
 
     if (block.type === 'answer') {
       block.json += delta.partial_json;
+      if (applyOutputShape(this.progress, block.json)) this.emit();
       const message = partialStringField(block.json, 'message');
       if (message !== null && message !== this.progress.answer) {
         this.progress.answer = message;
@@ -249,6 +249,23 @@ function partialCompleteStringField(json: string, field: string): string | null 
   if (!opening) return null;
   const decoded = decodeJsonString(json, opening.valueStart);
   return decoded.closed ? decoded.value : null;
+}
+
+/**
+ * Marks what a CLI's structured output turned out to be, as far as it has streamed: the answer (or a tool-loop step
+ * whose call is the answer) is writing; a step that picks another tool is `choosing` it, so the island can name it
+ * instead of claiming a reply is being written. Returns whether anything changed.
+ */
+export function applyOutputShape(progress: HarnessProgress, json: string): boolean {
+  const shape = structuredOutputShape(json);
+  if (!shape) return false;
+  const writing = shape.kind === 'answer' || (shape.name !== undefined && ANSWER_TOOLS.includes(shape.name));
+  const choosing = shape.kind === 'call' && shape.name !== undefined && !writing ? shape.name : undefined;
+  if (writing === progress.writing && choosing === progress.choosing) return false;
+  progress.writing = writing;
+  if (choosing) progress.choosing = choosing;
+  else delete progress.choosing;
+  return true;
 }
 
 /**

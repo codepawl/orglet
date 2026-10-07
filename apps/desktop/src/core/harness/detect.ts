@@ -68,7 +68,14 @@ export async function candidates(id: HarnessCatalogId, env: NodeJS.ProcessEnv = 
     for (const entry of await children(join(local, 'Packages'))) if (entry.startsWith('Claude_')) bundles.push(join(local, 'Packages', entry, 'LocalCache', 'Roaming', 'Claude', 'claude-code'));
     bundles.push(join(roaming, 'Claude', 'claude-code'));
     if (platform === 'darwin') bundles.push(join(home, 'Library', 'Application Support', 'Claude', 'claude-code'));
-    for (const bundle of bundles) for (const version of (await children(bundle)).sort(byVersionDesc)) paths.push(join(bundle, version, windows ? 'claude.exe' : 'claude'));
+    // Newer builds sit one folder deeper, under a content hash: claude-code\2.1.289\e1f0154146bb\claude.exe (2026-10-07).
+    const executable = windows ? 'claude.exe' : 'claude';
+    for (const bundle of bundles) {
+      for (const version of (await children(bundle)).sort(byVersionDesc)) {
+        paths.push(join(bundle, version, executable));
+        for (const build of await children(join(bundle, version))) paths.push(join(bundle, version, build, executable));
+      }
+    }
   } else if (id === 'codex') {
     // The Codex desktop app installs its CLI under a content-hashed folder.
     const bin = join(local, 'OpenAI', 'Codex', 'bin');
@@ -108,9 +115,16 @@ export function commandLine(executable: string, args: string[]): { file: string;
   return { file: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/s', '/c', `"${line}"`], verbatim: true };
 }
 
+/**
+ * Runs a CLI's status or version command. Cursor Agent's `status` alone takes about 3 s on an idle Windows machine
+ * (measured 2026-10-07); with four harnesses probed at app start beside other work it ran past the old 10 s, the probe
+ * read nothing, and a signed-in Cursor showed as needing repair. 30 s is only a ceiling: a quick answer returns at once.
+ */
+export const PROBE_TIMEOUT_MS = 30_000;
+
 export const probe: Probe = (executable, args, overrides) => new Promise(resolve => {
   const command = commandLine(executable, args);
-  execFile(command.file, command.args, { timeout: 10_000, windowsHide: true, windowsVerbatimArguments: command.verbatim, maxBuffer: 256 * 1024, env: { ...cleanEnv(process.env), ...overrides } }, (error, stdout, stderr) => {
+  execFile(command.file, command.args, { timeout: PROBE_TIMEOUT_MS, windowsHide: true, windowsVerbatimArguments: command.verbatim, maxBuffer: 256 * 1024, env: { ...cleanEnv(process.env), ...overrides } }, (error, stdout, stderr) => {
     resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout: String(stdout), stderr: String(stderr) });
   });
 });
@@ -228,7 +242,7 @@ function describeGeminiSignIn(signIn: GeminiSignIn, describe: Describe, signedOu
  * which the app's next update replaces.
  */
 export const isDesktopAppBuild = (path: string) =>
-  /[\\/]Claude[\\/]claude-code[\\/][^\\/]+[\\/]claude(\.exe)?$/i.test(path) || /[\\/]OpenAI[\\/]Codex[\\/]bin[\\/][^\\/]+[\\/]codex\.exe$/i.test(path);
+  /[\\/]Claude[\\/]claude-code[\\/][^\\/]+([\\/][^\\/]+)?[\\/]claude(\.exe)?$/i.test(path) || /[\\/]OpenAI[\\/]Codex[\\/]bin[\\/][^\\/]+[\\/]codex\.exe$/i.test(path);
 
 /**
  * The install a login command should name. Runs prefer the desktop app's build, which starts without a shell; a

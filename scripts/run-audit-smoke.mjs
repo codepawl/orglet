@@ -30,8 +30,10 @@ try {
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   // The checker tools live with the chat's files, its Files view (COD-355); a file card opens the file itself.
-  await page.getByRole('tab', { name: /^Tệp/ }).click();
-  await page.getByRole('tabpanel', { name: /^Tệp/ }).waitFor();
+  // The chat's other views open from its menu (user, 2026-10-07).
+  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).first().click();
+  await page.getByRole('menuitem', { name: /^Tệp/ }).click();
+  await page.getByRole('region', { name: /^Tệp/ }).waitFor();
   // The run-log check sits under "Kiểm tra khác" since COD-292; the files are still ticked in the data check above it.
   const moreChecks = page.locator('details.more-checks');
   assert.equal(await moreChecks.evaluate(element => element.open), false);

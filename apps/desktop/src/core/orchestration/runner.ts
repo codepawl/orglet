@@ -57,7 +57,7 @@ import type { AccountUsageRead } from '../harness/usage';
 import type { HarnessSignInRuntime } from '../harness/sign-in';
 import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor, type HarnessResult } from '../harness/exec';
 import { ProgressSender } from './progress';
-import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
+import { ANSWER_TOOLS, PROGRESS_NOTE_CHARACTERS, PROGRESS_NOTE_PREFIX, type HarnessProgress, type RunProgressUpdate } from '../../shared/progress';
 import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
 import { assertTeamPlan, defaultTeamPlan, foldCombiningAssignment } from './plan';
 import { mentionedPeople } from '../../shared/mentions';
@@ -370,6 +370,9 @@ function finishingTools<Tool extends { type: string; function?: { name: string }
 }
 
 const MAX_REQUEST_BYTES = 200_000;
+/** Attached text a CLI run gets read before its first step: per source and in all (see `preloadedReads`). */
+const PRELOAD_SOURCE_BYTES = 64 * 1024;
+const PRELOAD_TOTAL_BYTES = 128 * 1024;
 const TRIMMED_PAGE_CHARACTERS = 1_500;
 /**
  * How many of the latest web pages keep their full text in every request. Each model step resends the whole
@@ -1210,6 +1213,19 @@ export class Runner {
         checkpoint = { ...checkpoint, untrustedInputs: [...untrustedInputs] };
       };
       if (untrustedInputs.size) checkpoint = { ...checkpoint, untrustedInputs: [...untrustedInputs] };
+      // A CLI pays a fresh process for every step: Cursor Agent about 14 s before it starts and 6 s of model, Claude Code
+      // about 3 s (measured 2026-10-07). A run that would first read each small attached text source gets them read
+      // here instead, as the same read_source steps, so its first call can already answer.
+      if (isHarness(run.snapshot.worker.provider) && checkpoint.step === 0) {
+        for (const read of await this.preloadedReads(run, task, readIds, signal)) {
+          readIds.add(read.sourceId);
+          noteUntrusted('attached sources');
+          this.event(run.id, `Đã đọc ${read.name}`);
+          messages.push({ role: 'assistant', tool_calls: [{ id: read.callId, type: 'function', function: { name: 'read_source', arguments: JSON.stringify({ sourceId: read.sourceId }) } }] });
+          messages.push({ role: 'tool', tool_call_id: read.callId, content: JSON.stringify({ sourceId: read.sourceId, content: read.content, coverage: 'Full text, maximum 256 KB; no code execution or semantic guarantees.' }) });
+        }
+        checkpoint = { ...checkpoint, messages, readIds: [...readIds] };
+      }
       // The run stopped to ask whether an MCP call may run; the answer is on the chat now, so the call runs or is refused.
       const pendingApproval = checkpoint.pendingApproval;
       if (pendingApproval) {
@@ -1358,6 +1374,11 @@ export class Runner {
         }
         signal.throwIfAborted();
         reply = sanitizeReportReply(run, reply);
+        // A heads-up the orglet wrote for the person beside a working step shows in the chat as it works; beside the
+        // answer it would only repeat it.
+        if (reply.update && !reply.calls.some(call => ANSWER_TOOLS.includes(call.name))) {
+          this.event(run.id, `${PROGRESS_NOTE_PREFIX}${reply.update.slice(0, PROGRESS_NOTE_CHARACTERS)}`);
+        }
         if (reply.validationFailure) {
           const diagnostic = reportValidationMessage(reply.validationFailure);
           this.event(run.id, diagnostic);
@@ -1817,6 +1838,32 @@ export class Runner {
   private apiContextUse(run: Run, promptTokens: number): RunContextUse {
     const windowTokens = modelContextTokens(readModelListCache(this.store), run.snapshot.worker.provider, run.snapshot.model);
     return { usedTokens: Math.max(0, Math.round(promptTokens)), ...(windowTokens ? { windowTokens } : {}) };
+  }
+
+  /**
+   * The small text sources a CLI run would read first: attached to the chat, not read yet, plain text (no image, PDF or
+   * Parquet), up to 64 KB each and 128 KB in all, and only when the chat may read sources. Each is read through the same
+   * guarded reader as a read_source call; one that fails to read is left for the run to ask for.
+   */
+  private async preloadedReads(run: Run, task: Task, alreadyRead: ReadonlySet<string>, signal: AbortSignal) {
+    try {
+      assertCapability(run, this.store.get<Task>('tasks', task.id), 'source.read');
+    } catch {
+      return [];
+    }
+    const reads: { callId: string; sourceId: string; name: string; content: string }[] = [];
+    let total = 0;
+    for (const sourceId of task.sourceIds) {
+      if (alreadyRead.has(sourceId)) continue;
+      const source = this.store.get<Source>('sources', sourceId);
+      if (source.revoked || source.media || source.format === 'parquet' || source.bytes > PRELOAD_SOURCE_BYTES || total + source.bytes > PRELOAD_TOTAL_BYTES) continue;
+      signal.throwIfAborted();
+      const content = await this.sources.read(sourceId, task.sourceIds).catch(() => undefined);
+      if (content === undefined) continue;
+      total += source.bytes;
+      reads.push({ callId: `preload-${sourceId}`, sourceId, name: source.name, content });
+    }
+    return reads;
   }
 
   /**

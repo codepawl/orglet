@@ -182,3 +182,24 @@ it('keeps a backed-up pending question but does not pretend its absent checkpoin
     restored.close();
   }
 });
+
+it('asks from the island on the prompt bar: the question, a row per choice, the person\'s own words, a note (2026-10-07)', async () => {
+  const { DecisionIsland, decisionAnswer } = await import('../../apps/desktop/src/renderer/components/LiveIsland');
+  const asker = { id: '00000000-0000-4000-8000-000000000010', name: 'Release planner' } as Worker;
+  const html = renderToStaticMarkup(createElement(DecisionIsland, {
+    question: 'Gửi cho người đọc sớm trước hay cho mọi người thứ Sáu?', options: ['Người đọc sớm trước', 'Mọi người thứ Sáu'],
+    workers: [asker], busy: false, answer: () => {},
+  }));
+  expect(html).toContain('role="group"');
+  expect(html).toContain('Gửi cho người đọc sớm trước hay cho mọi người thứ Sáu?');
+  expect(html.match(/role="radio"/g)).toHaveLength(2);
+  expect(html).toContain('<kbd>3</kbd>');
+  expect(html).toContain('Other: answer in your own words');
+  // Nothing picked yet: Send waits, Skip does not.
+  expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Send/);
+  expect(decisionAnswer({ kind: 'option', option: 'Mọi người thứ Sáu', note: '  ' })).toBe('Mọi người thứ Sáu');
+  expect(decisionAnswer({ kind: 'option', option: 'Mọi người thứ Sáu', note: 'nhớ gửi trước 9 giờ' })).toBe('Mọi người thứ Sáu\n\nNote: nhớ gửi trước 9 giờ');
+  expect(decisionAnswer({ kind: 'other', text: '   ' })).toBeUndefined();
+  expect(decisionAnswer({ kind: 'other', text: 'Gửi cả hai' })).toBe('Gửi cả hai');
+  expect(decisionAnswer({ kind: 'skip' })).toContain('Skipping this question');
+});

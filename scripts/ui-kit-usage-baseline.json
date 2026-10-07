@@ -90,13 +90,6 @@
     "titleAttribute": 1,
     "hexColour": 0
   },
-  "components/ChatViews.tsx": {
-    "rawButton": 1,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 0,
-    "hexColour": 0
-  },
   "components/Composer.tsx": {
     "rawButton": 4,
     "rawSelect": 0,

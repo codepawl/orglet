@@ -12,7 +12,7 @@ export type Box = { left: number; top: number; right: number; bottom: number };
 
 export type FindingKind =
   | 'centre-line' | 'column-start' | 'icon-slot' | 'uneven-gap' | 'wrap' | 'clip' | 'overflow' | 'heading-action' | 'heading-wrap'
-  | 'family-heading' | 'family-edge' | 'family-lead' | 'island-seam' | 'near-miss';
+  | 'family-heading' | 'family-edge' | 'family-lead' | 'island-seam' | 'near-miss' | 'baseline' | 'stranded';
 
 export type Finding = {
   kind: FindingKind;
@@ -262,6 +262,40 @@ export function familyFindings(screens: { screen: string; metrics: ScreenMetrics
   return findings;
 }
 
+/** Letters a whole pixel off their neighbours' line already read as uneven, so baselines get half the centre tolerance. */
+export const BASELINE_TOLERANCE = 0.5;
+
+/**
+ * Pieces of text side by side on one line read as one line only when their letters stand on the same baseline. Each
+ * piece is measured against the first (the row's lead, usually a name), and returned with how far it sits below it
+ * when that is more than the tolerance. Centring text of two sizes left the smaller ones a pixel above the name's
+ * line (user, 2026-10-07: a chat header's connection and time next to the orglet's name).
+ */
+export function baselineOffsets(baselines: number[], tolerance: number): { index: number; offset: number }[] {
+  if (baselines.length < 2) return [];
+  const lead = baselines[0];
+  return baselines.flatMap((baseline, index) => {
+    const offset = round(baseline - lead);
+    return index > 0 && Math.abs(offset) > tolerance ? [{ index, offset }] : [];
+  });
+}
+
+/** How far past the nearest text's end a picture-only piece may sit before it reads as left behind on its own. */
+export const STRANDED_GAP = 64;
+
+/**
+ * How far a picture-only piece (a row of read faces, a lone icon) sits to the right of the text above it: the gap from
+ * the end of the widest of those lines to its left edge, or undefined when there is no text above or it is within
+ * `STRANDED_GAP`. A face pushed to the end of an 80-character box under a one-line message floated in empty space
+ * (user, 2026-10-07).
+ */
+export function strandedGap(piece: Box, linesAbove: Box[]): number | undefined {
+  if (linesAbove.length === 0) return undefined;
+  const textEnd = Math.max(...linesAbove.map(line => line.right));
+  const gap = round(piece.left - textEnd);
+  return gap > STRANDED_GAP ? gap : undefined;
+}
+
 /* ---------- In the window: reading the DOM ---------- */
 
 export const MARK_TAGS = ['svg', 'img', 'canvas', 'video'];
@@ -409,6 +443,71 @@ export function checkCentreLines(row: Element, tolerances: Tolerances): Finding[
       offset,
       boxes: [markBox, union(shape.all)],
     });
+  }
+  return findings;
+}
+
+/** Whether the element is one piece of plain text: only inline content, at least some text, and on one line. */
+export function isPlainTextPiece(element: Element): boolean {
+  if (isMark(element) || element.matches('button, input, select, textarea, [role=button]')) return false;
+  const display = getComputedStyle(element).display;
+  if (display.includes('flex') || display.includes('grid')) return false;
+  if ([...element.querySelectorAll('*')].some(child => getComputedStyle(child).display !== 'inline' || isMark(child))) return false;
+  const shape = textShape(element);
+  return shape !== undefined && shape.all.length === 1;
+}
+
+/** Where the element's letters stand: a zero-size probe at the end of its text sits on its baseline. */
+export function baselineOf(element: Element): number {
+  const probe = document.createElement('span');
+  probe.style.cssText = 'display:inline-block;width:0;height:0;margin:0;padding:0;border:0;vertical-align:baseline';
+  element.append(probe);
+  const baseline = probe.getBoundingClientRect().top;
+  probe.remove();
+  return baseline;
+}
+
+/** Pieces of text side by side in a flex row, each against the first one's baseline. */
+export function checkBaselines(row: Element, tolerances: Tolerances): Finding[] {
+  if (ignoredFor(row, 'baseline') || inHiddenLayer(row)) return [];
+  const pieces = inFlowChildren(row).filter(isPlainTextPiece);
+  if (pieces.length < 2) return [];
+  // Only pieces on the same line: a row that wraps measures each line on its own terms elsewhere.
+  const lead = toBox(pieces[0].getBoundingClientRect());
+  const sameLine = pieces.filter(piece => overlapsVertically(toBox(piece.getBoundingClientRect()), lead));
+  return baselineOffsets(sameLine.map(baselineOf), Math.min(tolerances.centre, BASELINE_TOLERANCE)).map(({ index, offset }) => ({
+    kind: 'baseline',
+    selector: describe(sameLine[index]),
+    text: snippet(sameLine[index]),
+    message: `text stands ${offset > 0 ? 'below' : 'above'} the baseline of "${snippet(sameLine[0])}" by ${Math.abs(offset)}px`,
+    offset,
+    boxes: [toBox(sameLine[index].getBoundingClientRect()), lead],
+  }));
+}
+
+/** A chat turn: what a person said and the answers under it, read top to bottom as one column. */
+export const TURN_SELECTOR = '.chat-turn';
+
+/**
+ * Picture-only pieces in a turn (the outermost element with a mark and no text) that sit far to the right of every line
+ * of text above them in the same turn.
+ */
+export function checkStranded(turn: Element): Finding[] {
+  if (ignoredFor(turn, 'stranded')) return [];
+  const textLinesInTurn = textNodesIn(turn).flatMap(textLines);
+  const findings: Finding[] = [];
+  for (const element of turn.querySelectorAll('*')) {
+    if (isMark(element) || element.closest('svg') || !isRendered(element) || ignoredFor(element, 'stranded')) continue;
+    if ((element.textContent ?? '').trim() !== '' || !element.querySelector(MARK_TAGS.join(','))) continue;
+    if (element.matches('button, [role=button]') || element.closest('button, [role=button], .message-gutter, .message-actions')) continue;
+    // Only the outermost such wrapper: its parent carries text or is the turn.
+    const parent = element.parentElement;
+    if (parent && parent !== turn && (parent.textContent ?? '').trim() === '') continue;
+    // The pictures themselves: a wrapper may stretch across the column with them pushed to its end.
+    const piece = union([...element.querySelectorAll(MARK_TAGS.join(','))].filter(isRendered).map(mark => toBox(mark.getBoundingClientRect())));
+    const gap = strandedGap(piece, textLinesInTurn.filter(line => line.bottom <= piece.top + 1));
+    if (gap === undefined) continue;
+    findings.push({ kind: 'stranded', selector: describe(element), text: snippet(element.querySelector('[aria-label]') ?? element), message: `sits alone ${gap}px past the end of the text above it`, offset: gap, boxes: [piece] });
   }
   return findings;
 }
@@ -934,7 +1033,7 @@ export function measurePage(tolerances: Tolerances): Finding[] {
     if (element.closest('svg') && element.tagName.toLowerCase() !== 'svg') continue;
     if (element.closest('[data-align-overlay]') || !isRendered(element)) continue;
     const style = getComputedStyle(element);
-    if (isFlexRow(style)) findings.push(...checkCentreLines(element, tolerances));
+    if (isFlexRow(style)) findings.push(...checkCentreLines(element, tolerances), ...checkBaselines(element, tolerances));
     const isList = element.matches(LIST_SELECTOR);
     const isGrid = style.display === 'grid' || style.display === 'inline-grid';
     const isFlexColumn = (style.display === 'flex' || style.display === 'inline-flex') && style.flexDirection.startsWith('column');
@@ -944,6 +1043,7 @@ export function measurePage(tolerances: Tolerances): Finding[] {
     findings.push(...checkOverflow(element));
     if (element.matches(PANEL_HEADING_SELECTOR)) findings.push(...checkHeadingAction(element, tolerances), ...checkHeadingWrap(element));
     if (element.matches(READING_BLOCK_SELECTOR)) findings.push(...checkNearMisses(element, tolerances));
+    if (element.matches(TURN_SELECTOR)) findings.push(...checkStranded(element));
   }
   findings.push(...checkColumns(columns, tolerances));
   findings.push(...checkIslandSeam());

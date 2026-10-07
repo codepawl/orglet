@@ -9,6 +9,7 @@ import { ClaudeStreamParser } from './claudeStream';
 import { claudeContextUse } from './context-use';
 import type { RunContextUse } from '../../shared/contracts';
 import { CodexStreamParser } from './codexStream';
+import { CursorStreamParser } from './cursorStream';
 import { geminiArgs, geminiPrompt, geminiRunEnvironment, unescapeAtSigns, writeGeminiLockdown } from './gemini';
 import { GeminiStreamParser, geminiTokens, type GeminiStreamOutcome } from './geminiStream';
 import { claudeLimitWarning, claudeRejection, detectUsageLimit, usageLimitMessage, type ClaudeRateLimitInfo, type UsageLimit } from '../usageLimits';
@@ -112,7 +113,17 @@ function codexImageFlags(images: string[] | undefined) {
   return (images ?? []).map(path => `--image=${path}`);
 }
 
-export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images' | 'effort'>): string[] {
+/**
+ * Cursor Agent's sandbox exists only on macOS and Linux: on Windows `--sandbox enabled` ends every run with "Sandbox
+ * mode is enabled but not available on this system" (measured on the Windows CLI, 2026-10-07). There the run keeps
+ * `--mode=ask`, which refused a shell command (even `curl` and `type`) and a file write in the same measurement, plus
+ * the deny rules `prepareHarnessToolPolicy` writes for every Windows run. Never `--force` or `--yolo`.
+ */
+export function cursorSandbox(platform: NodeJS.Platform = process.platform) {
+  return platform === 'win32' ? 'disabled' : 'enabled';
+}
+
+export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images' | 'effort'>, platform: NodeJS.Platform = process.platform): string[] {
   if (request.harness === 'gemini') return geminiArgs(request.model);
   const model = modelFlag(request.harness, request.model);
   const effort = request.effort?.transport === request.harness ? request.effort.level : undefined;
@@ -120,7 +131,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
     return ['-p', ...model, ...(effort ? ['--effort', effort] : []), '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', ...claudeBudgetArgs(request.maxBudgetUsd)];
   }
   if (request.harness === 'cursor') {
-    return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
+    return ['-p', ...model, '--mode=ask', '--sandbox', cursorSandbox(platform), '--trust', '--workspace', request.cwd, '--output-format', 'stream-json', '--stream-partial-output'];
   }
   return ['exec', ...model, ...(effort ? ['-c', 'model_reasoning_effort=' + effort] : []), '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
 }
@@ -134,6 +145,30 @@ const authHint = (harness: HarnessId) => {
  * temporary network issue, please try again" for a dropped connection; that one is not about the sign-in (COD-301).
  */
 const looksLikeAuth = (text: string) => !/temporary network issue/i.test(text) && /not logged in|not authenticated|please run \/login|please run.*login|token_expired|401 unauthorized|invalid api key|authentication|unauthenticated/i.test(text);
+
+/**
+ * The JSON object an answer ends with. Cursor Agent writes what it is doing before the object even when told to return
+ * only the object ("Looking for the attached invoice…{"call":…}", measured 2026-10-07), so the whole text is tried
+ * first, then the longest tail that starts at a `{` and parses. Anything after the object means there is none.
+ */
+export function trailingJsonObject(text: string): unknown {
+  // An object in a closing ```json fence reads the same as one written bare.
+  const fenced = /```(?:json)?\s*([\s\S]*?)\s*```\s*$/i.exec(text.trim());
+  const trimmed = fenced ? fenced[1].trim() : text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    if (!trimmed.endsWith('}')) return undefined;
+    for (let start = trimmed.indexOf('{'); start >= 0; start = trimmed.indexOf('{', start + 1)) {
+      try {
+        return JSON.parse(trimmed.slice(start));
+      } catch {
+        // A brace inside the narration, or an inner object; the next one may start the answer.
+      }
+    }
+    return undefined;
+  }
+}
 
 export function parseCursorOutput(stdout: string): HarnessResult {
   let data: unknown;
@@ -154,11 +189,9 @@ export function parseCursorOutput(stdout: string): HarnessResult {
     if ('result' in record) {
       const result = record.result;
       if (typeof result === 'string') {
-        try {
-          return { output: JSON.parse(result), costUsd: null };
-        } catch {
-          throw new HarnessError('Cursor Agent không trả về báo cáo đúng schema.');
-        }
+        const output = trailingJsonObject(result);
+        if (output === undefined) throw new HarnessError('Cursor Agent không trả về báo cáo đúng schema.');
+        return { output, costUsd: null };
       }
       if (result && typeof result === 'object') return { output: result, costUsd: null };
     }
@@ -330,19 +363,21 @@ export async function killTree(pid: number | undefined): Promise<void> {
   }
 }
 
-export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly' | 'model' | 'effort'>) {
+export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly' | 'model' | 'effort'>, platform: NodeJS.Platform = process.platform) {
   // Gemini CLI gets no tools of its own on any run, so its lockdown is written for one-shot answers too.
   if (request.harness === 'gemini') {
     await writeGeminiLockdown(request.cwd, request.model, request.effort);
     return;
   }
-  if (request.harness !== 'cursor' || !request.coreToolsOnly) return;
+  if (request.harness !== 'cursor') return;
+  // A one-shot answer reads the copied sources itself; without the sandbox (Windows) nothing else is allowed either.
+  const deny = request.coreToolsOnly ? ['Shell(*)', 'Read(**)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)']
+    : cursorSandbox(platform) === 'disabled' ? ['Shell(*)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)'] : undefined;
+  if (!deny) return;
   // This directory is a fresh core-owned call directory, never the user's workspace.
   const configurationDirectory = join(request.cwd, '.cursor');
   await mkdir(configurationDirectory, { recursive: true });
-  await writeFile(join(configurationDirectory, 'cli.json'), JSON.stringify({ permissions: {
-    allow: [], deny: ['Shell(*)', 'Read(**)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)'],
-  } }), { flag: 'wx' });
+  await writeFile(join(configurationDirectory, 'cli.json'), JSON.stringify({ permissions: { allow: [], deny } }), { flag: 'wx' });
 }
 
 export async function stopHarnessProcess(pid: number | undefined, closed: Promise<void>, terminate = killTree, timeoutMs = 15_000): Promise<void> {
@@ -368,6 +403,7 @@ export const executeHarness: HarnessExecutor = async request => {
   // Both harnesses print events as they work; each parser turns them into live progress for the window.
   const claudeStream = request.harness === 'claude-code' ? new ClaudeStreamParser(request.onProgress) : null;
   const codexStream = request.harness === 'codex' ? new CodexStreamParser(request.onProgress) : null;
+  const cursorStream = request.harness === 'cursor' ? new CursorStreamParser(request.onProgress) : null;
   // Set once the process is running: a tool request from Gemini CLI stops it before the CLI can act on it.
   let stopForNativeTool: (toolName: string) => void = () => {};
   const geminiStream = request.harness === 'gemini' ? new GeminiStreamParser(request.onProgress, toolName => stopForNativeTool(toolName)) : null;
@@ -420,6 +456,7 @@ export const executeHarness: HarnessExecutor = async request => {
       if (claudeStream) claudeStream.push(chunk);
       else if (codexStream) codexStream.push(chunk);
       else if (geminiStream) geminiStream.push(chunk);
+      else if (cursorStream) cursorStream.push(chunk);
       else collected += chunk;
     });
     child.stderr.on('data', chunk => {
@@ -457,6 +494,7 @@ export const executeHarness: HarnessExecutor = async request => {
         resolve('');
         return;
       }
+      if (cursorStream) collected = cursorStream.finish();
       if (code !== 0 && !collected.trim()) {
         if (looksLikeAuth(errorOutput)) reject(new HarnessError(authHint('cursor')));
         else reject(exitError('Cursor Agent', code, errorOutput));

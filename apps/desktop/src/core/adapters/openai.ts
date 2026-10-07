@@ -24,6 +24,8 @@ export type AnthropicTurn = { blocks: AnthropicReplayBlock[]; boundTo: string };
 export type ModelReply = { calls: { id: string; name: string; arguments: string }[]; usage?: ModelUsage;
   /** Text the model wrote beside its call, kept for later steps (COD-264). */
   notes?: string;
+  /** A sentence for the person while the run works, shown in the chat as a progress note (a CLI's `update`). */
+  update?: string;
   stopped?: ModelStop;
   anthropicTurn?: AnthropicTurn;
   validationFailure?: { toolName: 'submit_report'; issues: { path: string; code: string; expected?: string }[] } };
