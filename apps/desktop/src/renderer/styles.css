@@ -1314,14 +1314,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    one as a compact outline button on the same centre line. */
 .plan-resets { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:2px 0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .plan-resets .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
-/* Tacet's enable block (COD-303): a settings row whose text column carries the size or the state, and while bytes
-   arrive a slim bar in the plan-usage bar's shape. The error takes the error colour, never a coloured border. */
-.tacet-setup-meta { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-.tacet-setup-error { color:var(--error); line-height:1.45; }
-.tacet-setup .status-pill { align-self:flex-start; }
-.tacet-setup-bar { position:relative; display:block; height:6px; margin-top:4px; overflow:hidden; border-radius:999px; background:color-mix(in srgb, var(--text) 10%, transparent); }
-.tacet-setup-bar>span { position:absolute; inset:0 auto 0 0; border-radius:inherit; background:var(--accent); transition:width .25s var(--ease-out); }
-@media (prefers-reduced-motion: reduce) { .tacet-setup-bar>span { transition:none; } }
+/* Tacet's connection block (COD-303): the model field shares the column width of the selects above it. */
+.setting-control .tacet-model-input { width:210px; }
 /* Settings → Giới thiệu (COD-176): the face and the name lead, then the same rows as every other section. The links
    are one row of compact outline chips, each mark left of its name; the changelog is the version, the date and what
    changed, one release at a time. */
@@ -3303,7 +3297,6 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .org-drawer:has(.add-orglet) { width:min(560px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
 .activity-link { display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:10px; background:var(--surface); }
 .activity-link > span { flex:1; min-width:0; }
-.activity-link .activity-link-error { flex-shrink:0; color:var(--error); }
 .saved-empty { display:flex; align-items:center; gap:8px; }
 .saved-row { display:flex; align-items:flex-start; gap:6px; }
 .saved-body { display:flex; flex-direction:column; flex:1; min-width:0; gap:4px; padding:8px 10px; border:0; border-radius:10px; background:transparent; color:inherit; font:inherit; text-align:left; }

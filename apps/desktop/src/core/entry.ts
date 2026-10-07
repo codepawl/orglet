@@ -21,9 +21,6 @@ import { pdfTextInWorker } from './tools/pdf-text';
 import type { WebSearchKeyProvider } from '../shared/web-tools';
 import type { BrowserHost } from '../shared/browser-host';
 import { DesktopHelperProcess } from './tools/desktop-helper';
-import { Decisions } from './decisions/service';
-import { decisionsDirectory, filesFrom } from './decisions/manifest';
-import { workerRuntime } from './decisions/worker-runtime';
 import { runFinishedEvent, TURN_COMMANDS, turnSentEvent, turnTaskId } from './analytics-events';
 import { MarketPublishing } from './market/publishing';
 import { MarketModerationJournal } from './market/moderation-journal';
@@ -198,18 +195,10 @@ store.onRunStatus = (taskId, runId, status, errorCode) => {
 process.on('uncaughtExceptionMonitor', error => {
   port.postMessage({ type: 'analyticsError', kind: 'core', message: error.message, stack: error.stack });
 });
-// Tacet (COD-303): downloaded only when the person asks, and run in its own worker thread built next to this file.
-core.decisions = new Decisions({
-  directory: decisionsDirectory(process.argv[2]),
-  files: filesFrom(process.env.ORGLET_TACET_SOURCE),
-  runtime: workerRuntime(join(__dirname, 'decisions.js')),
-});
-core.decisions.onState = state => port.postMessage({ type: 'decisionModel', state });
-/** What quitting stops besides this process: the MCP servers, the desktop helper, Tacet's worker and a harness sign-in. */
+/** What quitting stops besides this process: the MCP servers, the desktop helper and a harness sign-in. */
 async function shutdownHelpers() {
   desktopHelper?.stop();
   core.harnessSignIns.cancelAll();
-  await core.decisions.shutdown();
   await core.mcp.shutdown();
 }
 port.on('message', async ({ data }) => {

@@ -17,7 +17,7 @@ const proxy = readFileSync(resolve(__dirname, '../../apps/desktop/src/renderer/a
 describe('bridge subscriptions', () => {
   it('reach the renderer unwrapped, so their unsubscribe is a function', () => {
     const subscriptions = [...preload.matchAll(/^\s+(on[A-Z]\w*):/gm)].map(match => match[1]);
-    expect(subscriptions).toContain('onDecisionModel');
+    expect(subscriptions).toContain('onProgress');
     const wrapped = subscriptions.filter(name => !proxy.includes(`key === '${name}'`));
     expect(wrapped).toEqual([]);
   });

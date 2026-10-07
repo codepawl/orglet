@@ -7,7 +7,7 @@ import type { Decisions } from '../decisions/service';
 
 /**
  * A second look at quiet runs (COD-303). An hourly schedule's run that simply finished says nothing (COD-288), which
- * also silenced the run that found something. When Tacet is on this computer, each such run is asked how much its
+ * also silenced the run that found something. When Tacet is on, each such run is asked how much its
  * answer needs the person; a clear "high" records `attention` on the run's chat and the window then announces it. No
  * Tacet, a failed load or a middling answer announces nothing, which is today's behaviour.
  */
@@ -26,6 +26,8 @@ export const NOTEWORTHY_QUESTION: DecisionQuestions = {
 const HIGHEST_LEVEL = 2;
 /** The request and the answer, cut to this many tokens: about 0.6 s on a desktop CPU, where 1536 takes seconds. */
 export const QUIET_RUN_MAX_LENGTH = 512;
+/** How many times one run is put to Tacet when it gives no answer, before the run is left quiet. */
+export const MAX_REVIEW_ATTEMPTS = 3;
 /** A run that finished longer ago than this is history by the time Tacet could look: it is left alone. */
 export const QUIET_RUN_WINDOW_MS = 15 * 60_000;
 
@@ -38,6 +40,7 @@ export class QuietRunReview {
   private reviewing = false;
   /** Runs already past their window, so a long history of hourly runs is not read again on every tick. */
   private tooOld = new Set<string>();
+  private attempts = new Map<string, number>();
 
   constructor(private store: Store, private decisions: () => Decisions, private notify: () => void, private clock: () => Date = () => new Date()) {}
 
@@ -62,12 +65,16 @@ export class QuietRunReview {
     return found;
   }
 
-  /** Called on the core's tick; one pass at a time, and nothing at all while Tacet is not installed. */
+  /** Called on the core's tick; one pass at a time, and nothing at all while Tacet is off. */
   async review(): Promise<void> {
-    if (this.reviewing || !this.decisions().isInstalled()) return;
+    if (this.reviewing || !this.decisions().isEnabled()) return;
     this.reviewing = true;
     try {
       for (const { task, answer } of this.candidates()) {
+        // Each question is a paid request, so a run whose review keeps failing is given up on after a few tries.
+        const attempts = this.attempts.get(task.id) ?? 0;
+        if (attempts >= MAX_REVIEW_ATTEMPTS) continue;
+        this.attempts.set(task.id, attempts + 1);
         const attention = await this.ask(task, answer);
         if (!attention) continue;
         const latest = this.store.get<Task>('tasks', task.id);

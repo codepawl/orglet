@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { PermissionState } from '../shared/capability-status';
 import { hintKind, missingNeed, PERMISSION_NEEDS_MIN_CHARS, type PermissionHintKind, type PermissionNeed } from '../shared/permission-needs';
 import { orglet } from './api';
-import { useDecisionModel } from './components/TacetSetup';
+import { useTacetSetting } from './tacetSetting';
 import { PermissionHint } from './components/PermissionHint';
 
 /**
- * The composer's reading of what a message needs (COD-305). It asks the core only while Tacet is on this computer, and
+ * The composer's reading of what a message needs (COD-305). It asks the core only while Tacet has a connection, and
  * only once typing has paused, so a sentence being written is read once rather than at every key. While the person
  * keeps typing, the last answer stays until the next one arrives, so the line does not blink at every word; an emptied
  * box (the message was sent) clears it at once. The core answers `null` when a newer request is already waiting.
@@ -16,8 +16,8 @@ import { PermissionHint } from './components/PermissionHint';
 export const PERMISSION_HINT_DEBOUNCE_MS = 450;
 
 export function usePermissionNeeds(text: string, enabled: boolean): PermissionNeed[] {
-  const model = useDecisionModel();
-  const ready = enabled && model?.status === 'ready';
+  const tacet = useTacetSetting();
+  const ready = enabled && tacet !== undefined && tacet.setting !== 'off';
   const [needs, setNeeds] = useState<PermissionNeed[]>([]);
   const message = text.trim();
   const readable = ready && message.length >= PERMISSION_NEEDS_MIN_CHARS;

@@ -28,24 +28,7 @@ const included = [
   '/node_modules/detect-libc',
   // The browser host drives Chrome or Edge through it (COD-261). It has no dependencies of its own and no telemetry.
   '/node_modules/playwright-core',
-  // Tacet's runtime (COD-303): ONNX Runtime's addon and the JavaScript API it implements. Its install-time helpers
-  // (adm-zip, global-agent) only fetch the Linux CUDA provider and are not needed to run.
-  '/node_modules/onnxruntime-node',
-  '/node_modules/onnxruntime-common',
 ];
-
-// onnxruntime-node ships every platform's binaries (about 300 MB); a build keeps only its own platform and architecture.
-// Tacet runs on the CPU provider, which loads without DirectML (measured, COD-303), so the 38 MB of DirectML and its
-// shader compiler stay out too.
-const onnxBinaries = '/node_modules/onnxruntime-node/bin/napi-v6/';
-const directMlFiles = ['DirectML.dll', 'dxcompiler.dll', 'dxil.dll'];
-function unusedOnnxBinary(path: string): boolean {
-  if (!path.startsWith(onnxBinaries)) return false;
-  const [platform, arch, file] = path.slice(onnxBinaries.length).split('/');
-  if (platform !== process.platform) return true;
-  if (arch !== undefined && arch !== process.arch) return true;
-  return file !== undefined && directMlFiles.includes(file);
-}
 
 /** `ORGLET_UPDATE_TEST_BUILD=1` makes a build that proves the updater end to end; see docs/windows-release-gates.md. */
 const updateTestBuild = process.env.ORGLET_UPDATE_TEST_BUILD === '1';
@@ -90,7 +73,6 @@ const config: ForgeConfig = {
     // Vite's default ignores all node_modules, including external native dependencies.
     ignore: path => {
       const normalized = path.replaceAll('\\', '/');
-      if (unusedOnnxBinary(normalized)) return true;
       return normalized !== '' && !included.some(root => normalized === root || normalized.startsWith(`${root}/`) || root.startsWith(`${normalized}/`));
     },
   },
@@ -107,7 +89,6 @@ const config: ForgeConfig = {
       { entry: 'apps/desktop/src/preload/index.ts', config: 'vite.preload.config.ts', target: 'preload' },
       { entry: 'apps/desktop/src/core/entry.ts', config: 'vite.core.config.ts' },
       { entry: 'apps/desktop/src/core/tools/pdf-text-worker.ts', config: 'vite.pdf-text.config.ts' },
-      { entry: 'apps/desktop/src/core/decisions/worker.ts', config: 'vite.decisions.config.ts' },
       { entry: 'apps/desktop/src/profiler/entry.ts', config: 'vite.profiler.config.ts' },
       { entry: 'apps/desktop/src/browser/entry.ts', config: 'vite.browser.config.ts' },
       { entry: 'apps/desktop/src/core/tools/workspace-helper.ts', config: 'vite.workspace.config.ts' },

@@ -11,7 +11,7 @@ import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDir
 import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView, type WorkspacePermission } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { z } from 'zod';
-import { commands, Id, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
+import { commands, CredentialProvider, Id, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { BudgetLedger } from './budgets/ledger';
 import { Checkpoints } from './storage/checkpoints';
@@ -89,7 +89,7 @@ import { neverDesktopProgram } from '../shared/desktop';
 import type { BrowserHost } from '../shared/browser-host';
 import { runBy } from '../shared/schedule-runs';
 import { Decisions } from './decisions/service';
-import { decisionsDirectory } from './decisions/manifest';
+import { TacetSetting } from '../shared/decisions';
 import { QuietRunReview } from './orchestration/quiet-runs';
 import { ScheduleDelivery } from './orchestration/schedule-delivery';
 import { askKnowledgeFit } from './decisions/knowledge-fit';
@@ -257,7 +257,19 @@ export class CoreService {
     const dataDirectory = store.databasePath && store.databasePath !== ':memory:' ? dirname(resolve(store.databasePath)) : undefined;
     // New items from an app are kept as files next to the database, since a source points at the file it was read from.
     this.appTriggers = new AppTriggers(store, this.mcp, this.routines, this.sources, join(dataDirectory ?? join(tmpdir(), 'orglet'), 'app-items'), clock);
-    this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
+    // Tacet answers through the connection the person chose in Settings, reached the way a chat reaches it (COD-303).
+    this.decisions = new Decisions({
+      saved: () => {
+        const stored = TacetSetting.safeParse(store.setting<unknown>('tacet', undefined));
+        return stored.success ? stored.data : undefined;
+      },
+      save: setting => store.setSetting('tacet', setting),
+      readKey: async provider => {
+        const credential = CredentialProvider.safeParse(provider);
+        return credential.success ? (await this.modelListRuntime.readKey?.(credential.data)) ?? null : null;
+      },
+      adapter: (provider, model) => adapter(provider, model),
+    });
     this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
     this.scheduleDelivery = new ScheduleDelivery(store, this.notify);
     // COD-306: Tacet adds notes the keywords missed and asks about browser and desktop steps the rules let through.
@@ -632,10 +644,9 @@ export class CoreService {
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
       case 'runRoutineNow': return this.routines.runCalled((args as { id: string }).id, []);
       case 'deleteRoutine': return this.deleteRoutine(commands.deleteRoutine.parse(args).id);
-      case 'decisionModel': return this.decisions.state();
-      case 'installDecisionModel': return this.decisions.install();
-      case 'cancelDecisionModel': return this.decisions.cancel();
-      case 'removeDecisionModel': return this.decisions.remove();
+      case 'tacetSetting': return this.decisions.view();
+      case 'saveTacetSetting': return this.decisions.save(commands.saveTacetSetting.parse(args));
+      case 'testTacet': return this.decisions.test();
       case 'suggestPermissions': return this.permissionSuggestions.suggest(commands.suggestPermissions.parse(args).text);
       case 'cancel': {
         const taskId = (args as { id: string }).id;
@@ -1302,8 +1313,6 @@ export class CoreService {
       // Settings went with the tables, so the model lists cached in memory no longer have a row behind them.
       this.modelListMemory = emptyModelListCache();
       this.modelListLoaded = false;
-      // Tacet's files are Orglet's own download, so a full erase deletes them too (COD-303).
-      await this.decisions.remove();
     }
     this.notify();
     return summary;

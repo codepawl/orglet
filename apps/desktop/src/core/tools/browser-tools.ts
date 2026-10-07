@@ -358,8 +358,6 @@ export class BrowserTools {
       this.usingRuns.set(run.taskId, runs);
     }
     runs.add(run.id);
-    // A run using the browser will likely act soon: the model starts loading now, so the first step does not wait for it.
-    this.secondOpinion?.warm();
   }
 
   /**

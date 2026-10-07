@@ -5,8 +5,8 @@ import { decideWithin, type Decider } from './budget';
  * Tacet's second opinion on a step in Orglet's browser or a desktop app (COD-306): does it send, pay, delete or
  * publish something? The word rules (`browser-risk.ts`, `desktop-risk.ts`) stay the authority. This is asked only
  * about a step they let through, in a chat where the person can answer, and a yes can only add the approval card the
- * rules did not ask for; nothing here removes or skips an ask. Measured in `scripts/tacet/eval_uses.ts` on
- * `scripts/tacet/action_cases.json`.
+ * rules did not ask for; nothing here removes or skips an ask. The wording was chosen on `scripts/tacet/action_cases.json`
+ * with the on-device model Tacet used before it moved to an API; it has not been re-measured against a hosted model.
  */
 
 /** A step Orglet's browser or a desktop app is about to take, in the words Tacet reads. */
@@ -83,15 +83,14 @@ export const ACTION_RISK_QUESTIONS: DecisionQuestions = {
 export const ACTION_RISK_THRESHOLD = 0.35;
 
 /**
- * How long a step waits for Tacet. A warm model answers one step in a fraction of this; past it the step goes ahead on
- * the rules alone. The model is warmed when a run first uses the browser or a desktop app, so the first step that acts
- * rarely meets a cold one.
+ * How long a step waits for Tacet. An API answers one short step in well under a second; past this the step goes ahead
+ * on the rules alone.
  */
-export const ACTION_RISK_BUDGET_MS = 1_000;
+export const ACTION_RISK_BUDGET_MS = 3_000;
 
 export type RiskOpinion = { risky: boolean; score: number };
 
-/** Tacet's second opinion on one step, or undefined when it is not installed, fails or is late. */
+/** Tacet's second opinion on one step, or undefined when it is off, fails or is late. */
 export async function askActionRisk(decider: Decider, action: ActionToJudge, budgetMs = ACTION_RISK_BUDGET_MS): Promise<RiskOpinion | undefined> {
   const response = await decideWithin(decider, budgetMs, actionFields(action), ACTION_RISK_QUESTIONS, ACTION_RISK_MAX_LENGTH);
   if (!response) return undefined;
@@ -101,20 +100,16 @@ export async function askActionRisk(decider: Decider, action: ActionToJudge, bud
 }
 
 /**
- * What Orglet's browser and desktop tools hold (COD-306): a way to ask about one step, and a way to start loading the
- * model early. Both do nothing while Tacet is not on this computer.
+ * What Orglet's browser and desktop tools hold (COD-306): a way to ask about one step. It does nothing while Tacet is
+ * off.
  */
 export type SecondOpinion = {
   judge(action: ActionToJudge): Promise<RiskOpinion | undefined>;
-  warm(): void;
 };
 
 /** The second opinion over the app's Tacet service, read afresh on every call since the service can be replaced. */
-export function actionRiskOpinion(decider: () => Decider & { warm(): void }): SecondOpinion {
-  return {
-    judge: action => askActionRisk(decider(), action),
-    warm: () => decider().warm(),
-  };
+export function actionRiskOpinion(decider: () => Decider): SecondOpinion {
+  return { judge: action => askActionRisk(decider(), action) };
 }
 
 /** How likely the step sends, pays, deletes or publishes, from 0 to 1; undefined when the answers are not the expected ones. */

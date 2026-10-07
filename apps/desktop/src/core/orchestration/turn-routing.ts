@@ -8,13 +8,13 @@ import { ROUTING_MAX_LENGTH, routableGroup, routedOrglet, routingQuestion } from
 
 /**
  * Who answers a group-chat message that tags nobody (COD-305). Without Tacet every orglet in the group answers in turn.
- * With Tacet on this computer, a message the person wrote themselves, that tags nobody and replies to no one, is read
+ * With Tacet on, a message the person wrote themselves, that tags nobody and replies to no one, is read
  * against each orglet's name, description and instructions; a clear pick answers alone and the pick is kept on the chat
  * (`routedTurns`), which the thread shows under the message. Anything short of a clear pick, a failed load or a slow
  * answer keeps everyone. Crews are never asked: their lead plans the turn.
  */
 
-/** Past this the turn starts with everyone; the first question also loads the model, which takes about two seconds. */
+/** Past this the turn starts with everyone; an API answers a routing question in about a second. */
 export const ROUTING_TIMEOUT_MS = 4000;
 
 export class TurnRouting {
@@ -44,7 +44,7 @@ export class TurnRouting {
     if (!words || parseMentions(words, group).length > 0) return false;
     if (routeOfTurn(task.routedTurns, task.inputRevision ?? 0)) return false;
     if (!routableGroup(group)) return false;
-    return this.decisions().isInstalled();
+    return this.decisions().isEnabled();
   }
 
   private async route(task: Task, group: Worker[]): Promise<Worker[]> {

@@ -623,10 +623,6 @@ async function start() {
         analytics.recordError(kind, String(message.message ?? ''), typeof message.stack === 'string' ? message.stack : undefined);
         return;
       }
-      if (message.type === 'decisionModel') {
-        if (window && !window.isDestroyed()) window.webContents.send('orglet:decision-model', message.state);
-        return;
-      }
       if (message.type === 'key') {
         const provider = CredentialProvider.safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;

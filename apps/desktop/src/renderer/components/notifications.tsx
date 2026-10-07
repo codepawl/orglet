@@ -48,8 +48,6 @@ export type Notice = {
   update?: true;
   /** Something was archived (COD-375): the row carries a way to Settings → Lưu trữ, where it can be restored. */
   archive?: true;
-  /** A newer Tacet is pinned than the one on disk (2026-10-07): the row carries Update while that is still so. */
-  tacetUpdate?: true;
 };
 
 export const noticeKindNames: Record<NoticeKind, string> = translated({ error: 'Lỗi', done: 'Đã xong', info: 'Thông tin' });
@@ -81,7 +79,7 @@ const save = () => {
   try { localStorage.setItem(storageKey, JSON.stringify(notices)); } catch { /* a blocked store costs the note, not the app */ }
 };
 
-export type NoticeDetails = { confirmation?: boolean; taskId?: string; messageId?: string; group?: string; groupSize?: number; update?: boolean; archive?: boolean; tacetUpdate?: boolean };
+export type NoticeDetails = { confirmation?: boolean; taskId?: string; messageId?: string; group?: string; groupSize?: number; update?: boolean; archive?: boolean };
 
 /** Records one message. Called by `toast`, so nothing has to remember to do both. */
 export function recordNotice(text: string, kind: NoticeKind, about?: string, details: NoticeDetails = {}) {
@@ -99,7 +97,6 @@ export function recordNotice(text: string, kind: NoticeKind, about?: string, det
     ...(details.group && details.groupSize && details.groupSize > 1 ? { groupSize: details.groupSize } : {}),
     ...(details.update ? { update: true as const } : {}),
     ...(details.archive ? { archive: true as const } : {}),
-    ...(details.tacetUpdate ? { tacetUpdate: true as const } : {}),
   };
   const next = withNotice(notices, seenAt, notice);
   if (next === notices) return;
@@ -224,10 +221,4 @@ export function noticeGroupLabels(rows: NoticeRow[], newSince: number | null, ne
 export function restartNoticeId(list: readonly Notice[], updateReady: boolean): number | undefined {
   if (!updateReady) return undefined;
   return list.findLast(notice => notice.update)?.id;
-}
-
-/** The one notice that carries Update for Tacet: the newest announcement, and only while the earlier Tacet is still on disk. */
-export function tacetUpdateNoticeId(list: readonly Notice[], outdated: boolean): number | undefined {
-  if (!outdated) return undefined;
-  return list.findLast(notice => notice.tacetUpdate)?.id;
 }

@@ -1,117 +1,132 @@
 import { useEffect, useState } from 'react';
-import { Download, RotateCw, Trash2, X } from 'lucide-react';
-import { Skeleton } from '@codepawlhq/orglet-ui';
-import type { DecisionModelState } from '../../shared/decisions';
+import { FlaskConical, PowerOff } from 'lucide-react';
+import { Input, Skeleton } from '@codepawlhq/orglet-ui';
+import { CredentialProvider, type Args, type Connections } from '../../shared/contracts';
+import { tacetModelHint, type TacetSettingView } from '../../shared/decisions';
+import { isHarness } from '../../shared/harness';
+import type { CustomConnection } from '../../shared/custom-connections';
 import { Button } from './ui';
+import { Select, type SelectOption } from './Select';
 import { StatusMark } from './StatusMark';
-import { fileSize } from './Attachment';
-import { confirmAction } from './confirm';
+import { readiness } from './providers';
+import { workerProviderOptions } from './WorkerDialog';
 import { toast } from './toast';
+import { publishTacetSetting, useTacetSetting } from '../tacetSetting';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 
-/**
- * Where Tacet's download stands, kept current by the core's pushes (COD-303). Undefined until the first answer, so the
- * block can draw its shape without guessing a state.
- */
-export function useDecisionModel(): DecisionModelState | undefined {
-  const [state, setState] = useState<DecisionModelState>();
-  useEffect(() => {
-    let live = true;
-    void orglet.call('decisionModel', {}).then(next => { if (live) setState(next); }, () => undefined);
-    const stop = orglet.onDecisionModel?.(next => setState(next));
-    return () => {
-      live = false;
-      stop?.();
-    };
-  }, []);
-  return state;
+const OFF = 'off';
+
+type Outcome = { tone: 'success' | 'error'; text: string };
+
+/** The connections a chat offers that are APIs: a harness CLI is not one, and sample replies are no connection. */
+export function tacetConnectionOptions(connections: Connections, customConnections: readonly CustomConnection[]): SelectOption[] {
+  const offered = workerProviderOptions(readiness(connections, [], customConnections), [], customConnections)
+    .filter(option => option.value !== 'demo' && !isHarness(option.value));
+  return [{ value: OFF, label: t('Tắt'), icon: <PowerOff size={16} /> }, ...offered];
 }
 
-type Actions = { onDownload: () => void; onCancel: () => void; onRemove: () => void };
-
-/** "120 MB of 319 MB", in the interface language's number format. */
-function progressLabel(state: DecisionModelState): string {
-  return t('{0} trên {1}', [fileSize(state.receivedBytes), fileSize(state.totalBytes)]);
-}
-
-/** The line under the sentence: the size before anything happens, then where it stands. */
-function statusLine(state: DecisionModelState) {
-  if (state.status === 'ready') {
-    return <span className="status-pill logged_in"><StatusMark variant="filled" tone="success" label={t('Đã sẵn sàng')} decorative />{t('Đã sẵn sàng · {0} trên máy', [fileSize(state.totalBytes)])}</span>;
-  }
-  if (state.status === 'outdated') {
-    return <span className="status-pill"><StatusMark variant="asking" tone="accent" label={t('Có bản mới')} decorative />{t('Có bản mới · {0}. Tacet tạm nghỉ đến khi cập nhật.', [fileSize(state.totalBytes)])}</span>;
-  }
-  if (state.status === 'downloading') return <span className="tacet-setup-meta">{t('Đang tải {0}', [progressLabel(state)])}</span>;
-  if (state.status === 'verifying') return <span className="tacet-setup-meta">{t('Đang kiểm tra tệp…')}</span>;
-  if (state.status === 'failed') {
-    const kept = state.receivedBytes > 0 ? ` ${t('Đã có {0}, lần sau tải tiếp từ đó.', [fileSize(state.receivedBytes)])}` : '';
-    return <span className="tacet-setup-meta tacet-setup-error" role="alert">{tMessage(state.error ?? 'Không tải được Tacet.')}{kept}</span>;
-  }
-  return <span className="tacet-setup-meta">{t('{0}, tải một lần', [fileSize(state.totalBytes)])}</span>;
+function costNote(connection: string): string {
+  if (connection === OFF) return t('Không có kết nối nào: các việc nhỏ này chạy theo quy tắc như trước.');
+  if (connection === 'openai') return t('Dùng Decisions API của OpenAI (bản beta công khai), $0,10 cho mỗi triệu token đầu vào.');
+  return t('Tacet hỏi qua kết nối này như một câu hỏi ngắn trong chat, tính phí theo bảng giá của nhà cung cấp.');
 }
 
 /**
- * Tacet's enable block, with no product logic: the title, one sentence on what it does and that it stays on this
- * computer, the size, then Download, the progress with Cancel, or Remove, and Update when a newer Tacet is pinned than
- * the one on disk. Settings shows it today; an onboarding step can render the same block (`TacetSetup`) as it is.
+ * Settings → Chat → Tacet (COD-303): which of the chat's own connections answers Tacet's small questions, or none.
+ * The model is a field prefilled for the connection; Test sends one sample question and shows the answer and how long
+ * it took. The one sentence under the title says where the text goes, because that is the choice being made.
  */
-export function TacetSetupView({ state, busy = false, onDownload, onCancel, onRemove }: { state: DecisionModelState | undefined; busy?: boolean } & Actions) {
-  const titleId = 'tacet-setup-title';
-  const moving = state?.status === 'downloading' || state?.status === 'verifying';
-  const percent = state && state.totalBytes > 0 ? Math.min(100, Math.round(state.receivedBytes / state.totalBytes * 100)) : 0;
-  return <section className="tacet-setup" aria-labelledby={titleId} aria-busy={moving || undefined}>
-    <div className="setting-row">
-      <div className="setting-text">
-        <span id={titleId} className="setting-title">{t('Tacet trên máy')}</span>
-        <span className="setting-description">{t('Báo khi lịch chạy hằng giờ có điều mới, gợi ý quyền, chọn Tí trả lời trong nhóm, nạp ghi chú hợp với tin nhắn và hỏi trước những bước trông dễ gây hậu quả. Chạy trên máy này, không gửi gì ra ngoài.')}</span>
-        {state ? statusLine(state) : <Skeleton width="30%" />}
-        {moving && <span className="tacet-setup-bar" role="progressbar" aria-labelledby={titleId} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={state ? progressLabel(state) : undefined}>
-          <span style={{ width: `${percent}%` }} />
-        </span>}
-      </div>
-      <div className="setting-control">
-        {state && (state.status === 'absent' || state.status === 'failed') && <Button variant="outline" disabled={busy} onClick={onDownload}>
-          {state.status === 'failed' ? <RotateCw size={14} /> : <Download size={14} />}{state.status === 'failed' ? t('Thử lại') : t('Tải về')}
-        </Button>}
-        {state?.status === 'outdated' && <Button variant="outline" disabled={busy} onClick={onDownload}><Download size={14} />{t('Cập nhật')}</Button>}
-        {moving && <Button variant="ghost" disabled={busy} onClick={onCancel}><X size={14} />{t('Hủy')}</Button>}
-        {state?.status === 'ready' && <Button variant="outline" className="danger" disabled={busy} onClick={onRemove}><Trash2 size={14} />{t('Gỡ')}</Button>}
-      </div>
-    </div>
-  </section>;
-}
-
-/** The block wired to the core: it reads the state itself, so any screen can drop it in. */
-export function TacetSetup() {
-  const state = useDecisionModel();
-  const [override, setOverride] = useState<DecisionModelState>();
+export function TacetSetup({ connections, customConnections }: { connections: Connections; customConnections: readonly CustomConnection[] }) {
+  const view = useTacetSetting();
+  const [connection, setConnection] = useState(OFF);
+  const [model, setModel] = useState('');
   const [busy, setBusy] = useState(false);
-  // A command's own answer shows at once; the next push from the core takes over from it.
-  useEffect(() => setOverride(undefined), [state]);
-  const run = async (command: () => Promise<DecisionModelState>, done?: string) => {
+  const [testing, setTesting] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome>();
+  // The setting in force fills the fields; a draft the person is still typing (a custom connection with no model yet) is kept.
+  useEffect(() => {
+    if (!view) return;
+    setConnection(view.setting === OFF ? OFF : view.setting.connection);
+    setModel(view.setting === OFF ? '' : view.setting.model);
+  }, [view]);
+  useEffect(() => setOutcome(undefined), [connection, model]);
+
+  const save = async (next: Args<'saveTacetSetting'>) => {
     setBusy(true);
     try {
-      setOverride(await command());
-      if (done) toast(done, 'success', t('Tacet trên máy'));
+      const saved: TacetSettingView = await orglet.call('saveTacetSetting', next);
+      publishTacetSetting(saved);
     } catch (error) {
-      toast(tMessage((error as Error).message), 'error', t('Tacet trên máy'));
+      toast(tMessage((error as Error).message), 'error', t('Tacet'));
     } finally {
       setBusy(false);
     }
   };
-  const remove = async () => {
-    const confirmed = await confirmAction({
-      title: t('Gỡ Tacet khỏi máy?'),
-      description: t('Tệp của mô hình bị xóa và mọi thứ như trước: lịch chạy hằng giờ im lặng khi xong, không có gợi ý quyền, cả nhóm cùng trả lời, ghi chú chỉ nạp khi khớp từ khóa, và chỉ các quy tắc quyết định khi nào hỏi bạn. Bạn có thể tải lại bất cứ lúc nào.'),
-      confirmLabel: t('Gỡ'),
-      tone: 'danger',
-    });
-    if (confirmed) await run(() => orglet.call('removeDecisionModel', {}), t('Đã gỡ Tacet'));
+  /** Saves the connection and model typed so far; a model still empty, or the setting already in force, saves nothing. */
+  const commit = async (nextConnection: string, nextModel: string, force = false) => {
+    if (nextConnection === OFF) return save(OFF);
+    const trimmed = nextModel.trim();
+    if (!trimmed) return;
+    const inForce = view?.setting;
+    const unchanged = inForce !== undefined && inForce !== OFF && inForce.connection === nextConnection && inForce.model === trimmed;
+    if (unchanged && !force) return;
+    await save({ connection: CredentialProvider.parse(nextConnection), model: trimmed });
   };
-  return <TacetSetupView state={override ?? state} busy={busy}
-    onDownload={() => void run(() => orglet.call('installDecisionModel', {}))}
-    onCancel={() => void run(() => orglet.call('cancelDecisionModel', {}))}
-    onRemove={() => void remove()} />;
+  const pick = (next: string) => {
+    const nextModel = next === OFF ? '' : tacetModelHint(next);
+    setConnection(next);
+    setModel(nextModel);
+    void commit(next, nextModel, true);
+  };
+  const test = async () => {
+    setOutcome(undefined);
+    setTesting(true);
+    try {
+      await commit(connection, model);
+      const result = await orglet.call('testTacet', {});
+      setOutcome({ tone: 'success', text: t('Tacet chọn “{0}” ({1}%) sau {2} ms.', [result.choice, Math.round(result.probability * 100), result.milliseconds]) });
+    } catch (error) {
+      setOutcome({ tone: 'error', text: tMessage((error as Error).message) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const titleId = 'tacet-setup-title';
+  const active = connection !== OFF;
+  return <section className="tacet-setup" aria-labelledby={titleId}>
+    <div className="setting-row">
+      <div className="setting-text">
+        <span id={titleId} className="setting-title">{t('Tacet')}</span>
+        <span className="setting-description">{t('Giúp các việc nhỏ như gợi ý quyền hay chọn Tí trả lời. Câu hỏi và một đoạn ngắn ngữ cảnh được gửi tới nhà cung cấp bạn chọn.')}</span>
+      </div>
+      <div className="setting-control">
+        {view ? <Select ariaLabel={t('Kết nối của Tacet')} className="setting-select" value={connection} disabled={busy} showDetail={false}
+          onChange={pick} options={tacetConnectionOptions(connections, customConnections)} menuMinWidth={240} /> : <Skeleton width={210} height={34} />}
+      </div>
+    </div>
+    {active && <div className="setting-row">
+      <div className="setting-text">
+        <label htmlFor="tacet-model" className="setting-title">{t('Model')}</label>
+        <span className="setting-description">{costNote(connection)}</span>
+      </div>
+      <form className="setting-control" onSubmit={event => { event.preventDefault(); void commit(connection, model); }}>
+        <Input id="tacet-model" className="tacet-model-input" value={model} maxLength={200} disabled={busy} spellCheck={false} autoComplete="off"
+          placeholder={t('ID model')} onChange={event => setModel(event.target.value)} onBlur={() => void commit(connection, model)} />
+      </form>
+    </div>}
+    {active && <div className="setting-row">
+      <div className="setting-text">
+        <span className="setting-title">{t('Thử Tacet')}</span>
+        <span className={`setting-description web-search-outcome${outcome ? ` ${outcome.tone}` : ''}`} aria-live="polite">
+          {outcome && !testing && <StatusMark variant="filled" tone={outcome.tone} label={outcome.tone === 'success' ? t('Trả lời được') : t('Lỗi')} decorative />}
+          <span>{testing ? t('Đang hỏi…') : outcome ? outcome.text : t('Gửi một câu hỏi mẫu tới kết nối này và hiện câu trả lời.')}</span>
+        </span>
+      </div>
+      <div className="setting-control">
+        <Button variant="outline" disabled={busy || testing || !model.trim()} onClick={() => void test()}><FlaskConical size={13} />{t('Chạy thử')}</Button>
+      </div>
+    </div>}
+  </section>;
 }
