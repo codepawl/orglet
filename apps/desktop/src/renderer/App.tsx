@@ -563,9 +563,13 @@ export function App() {
     if (selectedRef.current !== goneChat.taskId) return;
     replaceNextView.current = true;
     const destination = goneChat.destination;
+    // Leaving a chat that went away is not the person opening one: a sidebar they laid over a narrow window stays open
+    // (opening a chat folds it there). The window learns of the deletion late when it is busy, often after that click.
+    const sidebarWasOpen = sidebar;
     if (destination?.kind === 'team') openTeam(destination.id);
     else if (destination) openWorker(destination.id);
     else leaveThread();
+    if (sidebarWasOpen) setSidebar(true);
   }, [goneChat]);
   useEffect(() => {
     if (!window.orglet) { setError(t('Mở Orglet bằng pnpm dev để dùng desktop core. Bản web không có quyền truy cập dữ liệu.')); return; }
