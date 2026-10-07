@@ -24,8 +24,9 @@ const changed = (taskId: string, brief: string) => ({
 beforeEach(() => { store = new Store(':memory:'); });
 afterEach(async () => { await core?.runner.shutdown(); store.close(); });
 
-it('saves a changed request before stopping an active worker, then starts one new revision', async () => {
+it('saves a changed request before stopping an active worker, then starts one new revision for every message sent meanwhile', async () => {
   let firstStarted = false;
+  let answered = '';
   core = new CoreService(store, () => {}, async () => ({
     async request(messages, _tools, signal) {
       const current = messages.findLast(message => message.role === 'user' && typeof message.content === 'string' && message.content.includes('"brief"'))?.content;
@@ -36,6 +37,7 @@ it('saves a changed request before stopping an active worker, then starts one ne
           else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
         });
       }
+      answered = JSON.stringify(messages);
       return response('reply', { message: 'Chỉ desktop đã xong.', title: null, knowledgeProposals: [] });
     },
   }));
@@ -51,13 +53,18 @@ it('saves a changed request before stopping an active worker, then starts one ne
   expect(pending.task.inputRevision).toBe(1);
   expect(pending.task.currentInput?.brief).toBe('chỉ desktop');
   expect(pending.task.pendingStart).toBe(true);
-  await expect(core.command('reviseTask', changed(taskId, 'đổi nữa'))).rejects.toThrow('Đã lưu tin nhắn mới');
+  // A second message while the first stop settles is its own turn now, not refused (2026-10-07).
+  await core.command('reviseTask', changed(taskId, 'đổi nữa'));
+  expect(store.detail(taskId).task).toMatchObject({ inputRevision: 2, pendingStart: true });
   await until(() => !core.runner.isActive(taskId));
   await core.tick();
   await until(() => store.detail(taskId).task.status === 'completed');
   const detail = store.detail(taskId);
   expect(detail.task.pendingStart).toBeUndefined();
-  expect(detail.runs.map(run => [run.snapshot.inputRevision, run.status])).toEqual([[0, 'cancelled'], [1, 'completed']]);
+  expect(detail.runs.map(run => [run.snapshot.inputRevision, run.status])).toEqual([[0, 'cancelled'], [2, 'completed']]);
+  // The one run that answers reads both messages.
+  expect(answered).toContain('chỉ desktop');
+  expect(answered).toContain('đổi nữa');
   expect(detail.artifacts).toHaveLength(1);
   expect(detail.artifacts[0].report.summary).toBe('Chỉ desktop đã xong.');
 });

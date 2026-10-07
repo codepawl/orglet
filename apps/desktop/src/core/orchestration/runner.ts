@@ -46,7 +46,7 @@ import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, frozenTacetFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
-import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
+import { applyThreadManifest, compactThread, fitThread, historyBudgetFor, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
 import { ProviderSlots, type SlotWait } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -81,6 +81,7 @@ import { isBrowserActTool, isBrowserTool, NOT_ASKED_HERE, trimOlderBrowserSnapsh
 import { MODEL_NOT_CONNECTED, demoRepliesEnabled } from '../../shared/demo-replies';
 import { CLEAN_BROWSER_PROFILE } from '../../shared/browser';
 import { DESKTOP_BORROW_NOT_ASKED_HERE, DESKTOP_BORROW_TOOL, DESKTOP_NOT_ASKED_HERE, isDesktopActTool, isDesktopTool, trimOlderDesktopSnapshots, type DesktopAsking, type DesktopReadToolName, type DesktopStep, type DesktopTools } from '../tools/desktop-tools';
+import { withTransientRetry } from './transient';
 
 /**
  * A report the citation, checker, line-range or process gates refused (COD-162). The run fails as before; the code
@@ -744,6 +745,13 @@ export class Runner {
   }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
 
+  /** A request the provider turned away before working on it (busy, rate limit, no network) is tried again shortly. */
+  private retryRefused<Result>(run: Run, signal: AbortSignal, request: () => Promise<Result>): Promise<Result> {
+    return withTransientRetry(request, signal, (waitMs, attempt, attempts) => {
+      this.event(run.id, `Nhà cung cấp đang bận hoặc mất mạng; thử lại sau ${Math.max(1, Math.round(waitMs / 1000))} giây (${attempt}/${attempts}).`);
+    });
+  }
+
   private async modelActivity<Result>(run: Run, requestId: string, signal: AbortSignal, perform: () => Promise<Result>): Promise<Result> {
     const startedAt = now();
     const activity = { id: `model:${requestId}:${startedAt}`, runId: run.id, taskId: run.taskId, kind: 'model' as const, label: 'model', startedAt };
@@ -816,11 +824,14 @@ export class Runner {
    * main chat deleted since leaves the first turn without it.
    */
   private threadExtras(task: Task, run: Run): ThreadExtras {
-    if (!task.sideOf || run.stage || (run.snapshot.inputRevision ?? 0) > 0) return {};
+    const provider = run.snapshot.worker.provider;
+    // How much of the past goes in word for word follows the model's window (user, 2026-10-07).
+    const budget = historyBudgetFor(modelContextTokens(readModelListCache(this.store), provider, run.snapshot.model), isHarness(provider));
+    if (!task.sideOf || run.stage || (run.snapshot.inputRevision ?? 0) > 0) return { budget };
     const row = this.store.db.prepare('SELECT data FROM tasks WHERE id=?').get(task.sideOf.taskId);
-    if (!row || (JSON.parse(String(row.data)) as Task).deletedAt) return {};
+    if (!row || (JSON.parse(String(row.data)) as Task).deletedAt) return { budget };
     const main = this.store.detail(task.sideOf.taskId);
-    return { mainChat: mainChatTurns(main, task.sideOf.throughRevision, run.snapshot.worker.id) };
+    return { budget, mainChat: mainChatTurns(main, task.sideOf.throughRevision, run.snapshot.worker.id) };
   }
   /**
    * What a Continue turn starts from (COD-257): the calls and results of the run it continues, when that run belongs
@@ -1315,7 +1326,7 @@ export class Runner {
             } else if (isLocalApi(provider)) {
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
+                reply = await this.modelActivity(run, String(step), signal, () => this.retryRefused(run, signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'))));
                 reply = sanitizeReportReply(run, reply);
                 this.checkpoints.received(checkpoint, reply);
               } catch {
@@ -1326,7 +1337,7 @@ export class Runner {
               // verified price to reserve against, so a multi-call task and a retry run straight through.
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
+                reply = await this.modelActivity(run, String(step), signal, () => this.retryRefused(run, signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'))));
                 reply = sanitizeReportReply(run, reply);
                 this.checkpoints.received(checkpoint, reply);
               } catch (error) {
@@ -1352,7 +1363,7 @@ export class Runner {
                 : ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, journal);
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation, outputCap));
+                reply = await this.modelActivity(run, String(step), signal, () => this.retryRefused(run, signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation, outputCap)));
                 reply = sanitizeReportReply(run, reply);
                 if (reply.usage && !isHarness(run.snapshot.worker.provider) && run.snapshot.worker.provider !== 'demo') run = { ...run, contextUse: this.apiContextUse(run, reply.usage.input) };
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates, { read: reply.usage.cacheRead ?? 0, write: reply.usage.cacheWrite ?? 0 });

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { compactThread, ContextRefuseError, fitThread, promptBytes, threadMessages } from '../../apps/desktop/src/core/context/thread';
+import { compactThread, ContextRefuseError, DEFAULT_HISTORY_BUDGET, fitThread, historyBudgetFor, LARGEST_HISTORY_CHARS, promptBytes, threadMessages } from '../../apps/desktop/src/core/context/thread';
 import type { Artifact, Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import { earlierTurns } from './earlier-turns';
@@ -61,6 +61,47 @@ it('summarizes the 11th older turn instead of inlining it', () => {
   expect(compacted.snippets.some(item => item.text.includes('ALPHAUNIQUE'))).toBe(true);
   const earlier = earlierTurns(threadMessages(compacted));
   expect(earlier.some(turn => turn.text.includes('ALPHAUNIQUE'))).toBe(false);
+});
+
+it('keeps the turns that just left the window when the older lines no longer fit, not the first ones (2026-10-07)', () => {
+  // 400 turns, each line long enough that the 8 KB of older lines holds only some of them.
+  const briefs = Array.from({ length: 400 }, (_, index) => `TURN${String(index).padStart(3, '0')} ${'detail '.repeat(6)}`);
+  const { task, current } = seedTurns(briefs);
+  const compacted = compactThread(store.detail(task.id), current, 'Scoring follow-up');
+  const lines = compacted.summary!.split('\n');
+  const newestOlder = lines.at(-1)!;
+  // The newest of the older turns is there and the very first is not; the lines still read oldest first.
+  // Turns 390-399 are the ten kept word for word, so 389 is the newest of the older ones.
+  expect(newestOlder).toContain('TURN389');
+  expect(compacted.summary).not.toContain('TURN000');
+  const numbers = lines.flatMap(line => /TURN(\d{3})/.exec(line)?.[1] ?? []).map(Number);
+  expect(numbers).toEqual([...numbers].sort((first, second) => first - second));
+  expect(compacted.omitted.some(item => item.reason === 'truncated' && item.revision === 1)).toBe(true);
+});
+
+it('sizes the past sent word for word to the model, and keeps a CLI step at the default (2026-10-07)', () => {
+  expect(historyBudgetFor(undefined, false)).toEqual(DEFAULT_HISTORY_BUDGET);
+  expect(historyBudgetFor(1_000_000, true)).toEqual(DEFAULT_HISTORY_BUDGET);
+  // A 32k window would get less than the default; it keeps the default.
+  expect(historyBudgetFor(32_000, false)).toEqual(DEFAULT_HISTORY_BUDGET);
+  expect(historyBudgetFor(128_000, false)).toEqual({ turns: 16, chars: 38_400 });
+  expect(historyBudgetFor(1_000_000, false)).toEqual({ turns: 25, chars: LARGEST_HISTORY_CHARS });
+
+  const briefs = Array.from({ length: 60 }, (_, index) => `Turn ${index} ${'note '.repeat(150)}`);
+  const { task, current } = seedTurns(briefs);
+  const narrow = compactThread(store.detail(task.id), current, 'Scoring follow-up');
+  const wide = compactThread(store.detail(task.id), current, 'Scoring follow-up', 0, { budget: historyBudgetFor(1_000_000, false) });
+  expect(wide.verbatim.length).toBeGreaterThan(narrow.verbatim.length);
+  expect(wide.verbatim.reduce((sum, turn) => sum + turn.text.length, 0)).toBeLessThanOrEqual(LARGEST_HISTORY_CHARS);
+});
+
+it('brings a fact from far back into a long API chat when the new message asks about it', () => {
+  const briefs = Array.from({ length: 60 }, (_, index) => index === 15 ? 'The office wifi password is CAMTIM42, write it down' : `Turn ${index} about the quarterly plan`);
+  const { task, current } = seedTurns(briefs);
+  const compacted = compactThread(store.detail(task.id), current, 'What was the office wifi password again?', 0, { budget: historyBudgetFor(200_000, false) });
+  const sent = [...compacted.verbatim, ...compacted.snippets].map(turn => turn.text).join('\n') + (compacted.summary ?? '');
+  expect(compacted.verbatim.some(turn => turn.text.includes('CAMTIM42'))).toBe(false);
+  expect(sent).toContain('CAMTIM42');
 });
 
 it('retrieves older notes from this thread only', () => {

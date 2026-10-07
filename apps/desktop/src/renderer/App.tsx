@@ -386,7 +386,7 @@ export function App() {
   useAppChangeNotices(workspace?.recentAppChanges);
   // A side thread or a schedule's run that finishes while the person is elsewhere says so, with Open (COD-247,
   // COD-258); any chat that stops while the window is in the background also raises a system notification.
-  useChatNotices(workspace, selected, taskId => openTask(taskId), () => openRoutines());
+  useChatNotices(workspace, selected, (taskId, messageId) => messageId ? openChatAt(taskId, messageId) : openTask(taskId), () => openRoutines());
   // Everything in the sidebar footer that waits for you reads the same way: a dot on the icon and a count (user, 2026-09-23).
   // A schedule that did not run (its folder gone, files that could not start) waits for you as much as a missed one (COD-294).
   const pendingRoutines = workspace?.routines.filter(item => item.pending || item.notice).length ?? 0;
@@ -1403,15 +1403,17 @@ export function App() {
   };
   useEffect(() => window.orglet?.onOpenChat?.(target => openChatFromCli.current(target)), []);
   // A click on a system notification (COD-258): main brings the window forward, the window opens that chat.
-  const openTaskFromNotification = useRef<(taskId: string) => void>(() => undefined);
-  openTaskFromNotification.current = taskId => {
+  const openTaskFromNotification = useRef<(taskId: string, messageId?: string) => void>(() => undefined);
+  openTaskFromNotification.current = (taskId, messageId) => {
     if (!workspace?.tasks.some(task => task.id === taskId && !task.deletedAt)) return;
     setPanel(null);
     setNoticesOpen(false);
     setRunningOpen(false);
-    openTask(taskId);
+    // An answer opens at its first line rather than at the chat's end (user, 2026-10-07).
+    if (messageId) openChatAt(taskId, messageId);
+    else openTask(taskId);
   };
-  useEffect(() => window.orglet?.onOpenTask?.(taskId => openTaskFromNotification.current(taskId)), []);
+  useEffect(() => window.orglet?.onOpenTask?.((taskId, messageId) => openTaskFromNotification.current(taskId, messageId)), []);
   // Send to and orglet:// links (COD-246). Main queues them; the window takes the queue when it mounts and whenever
   // main says more arrived, and handles it once the workspace is there to open chats in.
   useEffect(() => {

@@ -1716,18 +1716,20 @@ export class CoreService {
     this.assertChatOpen(task);
     if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
     if (input.continueFrom) this.assertContinuable(task, input.continueFrom);
-    if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
     if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
     const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
+    // A message sent while an earlier one waits for the stopped turn to settle becomes its own turn, and the run that
+    // starts next reads both (user, 2026-10-07; it used to be refused). The earlier turn keeps no run of its own.
+    const waiting = Boolean(task.pendingStart);
     // A terminal correction must not interrupt work submitted since main read the chat.
-    if (input.onlyWhenIdle && (active || ['queued', 'running', 'pausing'].includes(task.status))) throw new Error('Đợi lượt đang chạy dừng trước khi sửa tin nhắn.');
-    if (!active && ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Task chưa dừng ở ranh giới an toàn.');
+    if (input.onlyWhenIdle && (active || waiting || ['queued', 'running', 'pausing'].includes(task.status))) throw new Error('Đợi lượt đang chạy dừng trước khi sửa tin nhắn.');
+    if (!active && !waiting && ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Task chưa dừng ở ranh giới an toàn.');
     const prepared = this.prepareTask({ ...input, workerId: task.workerId, ...(task.teamId ? { teamId: task.teamId } : {}), ...(task.assignees ? { assignees: task.assignees } : {}) });
     const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
     if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
     this.policy.assertStart(task.teamId, task.id);
     const planFirst = input.planFirst ?? this.continuesPlanFirst(task, input.continueFrom);
-    const revised: Task = { ...task, currentTurnId: id(), currentTurnCreatedAt: this.store.sync.turns.nextCreatedAt(task.id), sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}), ...(planFirst ? { planFirst } : {}) }, inputRevision: Math.max(task.inputRevision ?? 0, ...this.store.sync.turns.list(task.id).map(turn => turn.localRevision)) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+    const revised: Task = { ...task, currentTurnId: id(), currentTurnCreatedAt: this.store.sync.turns.nextCreatedAt(task.id), sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}), ...(planFirst ? { planFirst } : {}) }, inputRevision: Math.max(task.inputRevision ?? 0, ...this.store.sync.turns.list(task.id).map(turn => turn.localRevision)) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : waiting ? task.status : 'queued', pendingStart: active || waiting || undefined, pauseReason: undefined, handoff: undefined,
       decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
         ? { ...request, interruptedAt: now() } : request) };
     this.store.transaction(() => {
@@ -1738,6 +1740,8 @@ export class CoreService {
       this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, revised.currentInput!, now());
     });
     if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
+    // The stopped turn is still settling; the pending start dispatches this latest message once it has.
+    if (waiting) { this.notify(); return; }
     this.start(revised, true);
   }
   /**

@@ -19,6 +19,30 @@ export const MAIN_CHAT_TURNS = 6;
 /** The most main-chat text a side thread's first turn carries; the oldest of those turns go first when it is over. */
 export const MAIN_CHAT_CHARS = 12_000;
 
+/** How much of a chat's past goes in word for word: at most `turns` turns and `chars` characters of them. */
+export type HistoryBudget = { turns: number; chars: number };
+/** What every chat sent before the window was sized to the model, and what a CLI step still gets. */
+export const DEFAULT_HISTORY_BUDGET: HistoryBudget = { turns: HISTORY_TURNS, chars: HISTORY_CHARS };
+/** The most past an API chat sends word for word, whatever the model's window: each message pays for it again. */
+export const LARGEST_HISTORY_CHARS = 60_000;
+/** The share of the model's window, in tokens, the past may take; about three characters make a token. */
+const HISTORY_WINDOW_SHARE = 0.1;
+const CHARACTERS_PER_TOKEN = 3;
+
+/**
+ * The past one message sends word for word, sized to the model (user, 2026-10-07: one chat per orglet that never ends,
+ * and no model-written summary). A CLI step keeps the default, since every step of its tool loop sends the whole prompt
+ * again and does not read it from a cache (measured 2026-10-07 on Claude Code 2.1.289: two identical 26,000-token
+ * prompts, fresh or resumed, each wrote the cache again). An API chat with a known window gets a tenth of it, between the
+ * default and `LARGEST_HISTORY_CHARS`; with no known window it keeps the default.
+ */
+export function historyBudgetFor(windowTokens: number | undefined, sendsWholePromptEachStep: boolean): HistoryBudget {
+  if (sendsWholePromptEachStep || !windowTokens || windowTokens <= 0) return DEFAULT_HISTORY_BUDGET;
+  const chars = Math.min(LARGEST_HISTORY_CHARS, Math.max(HISTORY_CHARS, Math.floor(windowTokens * HISTORY_WINDOW_SHARE * CHARACTERS_PER_TOKEN)));
+  // Turns follow the characters: a long chat of short messages keeps as many as fit.
+  return { turns: Math.round(HISTORY_TURNS * chars / HISTORY_CHARS), chars };
+}
+
 const bytes = (text: string) => Buffer.byteLength(text, 'utf8');
 
 export class ContextRefuseError extends Error {
@@ -139,23 +163,26 @@ export function mainChatTurns(main: TaskDetail, throughRevision: number, readerW
 function extractive(turns: ThreadTurn[]): { summary: string | null; omitted: Omitted[] } {
   const omitted: Omitted[] = [];
   if (!turns.length) return { summary: null, omitted };
-  const parts: string[] = [];
+  const kept: string[] = [];
   let used = 0;
-  for (const turn of turns) {
+  // Newest first, so a long chat keeps the turns that just left the window and lets the oldest go, not the other way
+  // round (user, 2026-10-07: the first week's lines stayed while last hour's were cut). The lines read oldest first.
+  for (const turn of [...turns].reverse()) {
     const line = `${turn.from}: ${turn.text.split('\n')[0] ?? ''}`.trim();
     const chunk = `${line}\n`;
     const size = bytes(chunk);
     const revision = Math.max(1, turn.revision);
     if (used + size > SUMMARY_BYTES) {
-      omitted.push({ kind: 'turn', revision, reason: 'truncated' });
+      omitted.unshift({ kind: 'turn', revision, reason: 'truncated' });
       continue;
     }
-    parts.push(line);
+    kept.unshift(line);
     used += size;
-    omitted.push({ kind: 'turn', revision, reason: 'summarized' });
-    if (turn.truncated) omitted.push({ kind: 'turn', revision, reason: 'truncated' });
+    const marks: Omitted[] = [{ kind: 'turn', revision, reason: 'summarized' }];
+    if (turn.truncated) marks.push({ kind: 'turn', revision, reason: 'truncated' });
+    omitted.unshift(...marks);
   }
-  const summary = parts.join('\n').trim();
+  const summary = kept.join('\n').trim();
   return { summary: summary || null, omitted };
 }
 
@@ -163,7 +190,11 @@ function extractive(turns: ThreadTurn[]): { summary: string | null; omitted: Omi
  * Older turns that share words with this message, best first. Stop words do not count and rarer shared words weigh
  * more, the same way unpinned notes are matched (COD-335, after COD-307).
  */
-function retrieve(turns: ThreadTurn[], brief: string): ThreadMemory[] {
+function retrieve(turns: ThreadTurn[], brief: string, budget: HistoryBudget): ThreadMemory[] {
+  // A chat that sends more of its past word for word also brings back more of its older turns, in the same proportion.
+  const scale = Math.max(1, budget.chars / HISTORY_CHARS);
+  const most = Math.round(MEMORY_SNIPPETS * scale);
+  const room = Math.round(MEMORY_BYTES * scale);
   const scores = rarityScores(meaningfulKeywordsOf(brief), turns.map(turn => meaningfulKeywordsOf(turn.text)));
   const ranked = turns
     .map((turn, index) => ({ turn, index, score: scores[index] }))
@@ -172,22 +203,22 @@ function retrieve(turns: ThreadTurn[], brief: string): ThreadMemory[] {
   const snippets: ThreadMemory[] = [];
   let used = 0;
   for (const { turn } of ranked) {
-    if (snippets.length >= MEMORY_SNIPPETS) break;
+    if (snippets.length >= most) break;
     const size = bytes(turn.text);
-    if (used + size > MEMORY_BYTES) continue;
+    if (used + size > room) continue;
     snippets.push({ id: turn.id, from: turn.from, text: turn.text, revision: turn.revision });
     used += size;
   }
   return snippets;
 }
 
-function build(past: ThreadTurn[], sidecar: ThreadTurn[], brief: string, fold: number, mainChat: ThreadTurn[]): CompactedThread {
+function build(past: ThreadTurn[], sidecar: ThreadTurn[], brief: string, fold: number, mainChat: ThreadTurn[], budget: HistoryBudget): CompactedThread {
   const revisions = [...new Set(past.map(turn => turn.revision))];
-  const window = new Set(revisions.slice(-HISTORY_TURNS));
+  const window = new Set(revisions.slice(-budget.turns));
   let verbatimPast = past.filter(turn => window.has(turn.revision));
   const dropped = past.filter(turn => !window.has(turn.revision));
   let size = verbatimPast.reduce((sum, turn) => sum + turn.text.length, 0);
-  while (size > HISTORY_CHARS && verbatimPast.length) {
+  while (size > budget.chars && verbatimPast.length) {
     const first = verbatimPast.shift()!;
     dropped.push(first);
     size -= first.text.length;
@@ -203,18 +234,19 @@ function build(past: ThreadTurn[], sidecar: ThreadTurn[], brief: string, fold: n
     verbatim: [...verbatimPast, ...sidecar],
     foldable: verbatimPast,
     summary,
-    snippets: retrieve(dropped, brief),
+    snippets: retrieve(dropped, brief, budget),
     omitted,
   };
 }
 
 /** An extra layer a thread can carry: a side thread's first turn reads its main chat's latest turns (COD-247). */
-export type ThreadExtras = { mainChat?: ThreadTurn[] };
+export type ThreadExtras = { mainChat?: ThreadTurn[];
+  /** How much of the past goes in word for word (`historyBudgetFor`); the default when left out. */ budget?: HistoryBudget };
 
 export function compactThread(detail: TaskDetail, run: Run, brief: string, fold = 0, extras: ThreadExtras = {}): CompactedThread {
   try {
     const { past, sidecar } = collectTurns(detail, run);
-    return build(past, sidecar, brief, fold, extras.mainChat ?? []);
+    return build(past, sidecar, brief, fold, extras.mainChat ?? [], extras.budget ?? DEFAULT_HISTORY_BUDGET);
   } catch (error) {
     if (error instanceof ContextRefuseError) throw error;
     throw new ContextRefuseError('Không dựng được tóm tắt hoặc bộ nhớ hội thoại. Không gửi model và không giữ ngân sách.');
