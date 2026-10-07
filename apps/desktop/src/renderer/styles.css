@@ -1570,6 +1570,15 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .preview-table-scroll tbody tr:hover>* { background:var(--row-hover); }
 /* Numbers line up on their right edge, header included, in tabular figures. */
 .preview-table-scroll .cell-number { text-align:right; }
+/* A header is its column's sort button and has a grip on its right edge to drag the width. */
+.preview-table-scroll thead th { position:sticky; padding:0; }
+.preview-table-scroll .column-sort { display:flex; align-items:center; justify-content:flex-start; gap:4px; width:100%; min-height:0; padding:7px 12px; border-radius:0; font:inherit; font-weight:600; color:var(--text); background:transparent; }
+.preview-table-scroll th.cell-number .column-sort { justify-content:flex-end; }
+.preview-table-scroll .column-sort:hover { background:var(--row-hover); }
+.preview-table-scroll .column-sort .column-name { overflow:hidden; text-overflow:ellipsis; }
+.preview-table-scroll .column-sort svg { flex-shrink:0; color:var(--muted); }
+.preview-table-scroll .column-resize { position:absolute; top:0; right:0; bottom:0; width:6px; cursor:col-resize; touch-action:none; }
+.preview-table-scroll .column-resize:hover { background:color-mix(in srgb, var(--accent) 35%, transparent); }
 /* The row-number gutter stays at the left edge while a wide table scrolls sideways. */
 .preview-table-scroll .row-number { position:sticky; left:0; z-index:1; min-width:4ch; padding:7px 10px; text-align:right; font-weight:400; color:var(--muted); user-select:none; }
 .preview-table-scroll thead .row-number { z-index:3; }

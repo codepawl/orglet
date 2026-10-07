@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { columnKinds, filterRows, looksNumeric, parseDelimited } from '../../apps/desktop/src/renderer/components/TablePreview';
+import { columnKinds, filterRows, looksNumeric, nextSort, parseDelimited, sortRows } from '../../apps/desktop/src/renderer/components/TablePreview';
 
 // The table view decides a column's alignment from its cells and filters rows by any cell (file viewer revamp).
 it('reads numbers with signs, thousands commas, decimals, percents and currency marks', () => {
@@ -23,4 +23,22 @@ it('filters rows by any cell, ignoring case, and keeps each row\'s place in the 
   expect(filterRows(body, ' north ').map(match => match.position)).toEqual([1, 3]);
   expect(filterRows(body, 'BETA').map(match => match.row[0])).toEqual(['2']);
   expect(filterRows(body, 'zzz')).toEqual([]);
+});
+
+it('sorts a number column by value and a text column with numbers inside words, empty cells last', () => {
+  const rows = filterRows([['b', '1,204'], ['a', ''], ['item 10', '-8.3'], ['item 2', '12%']], '');
+  const kinds = ['text', 'number'] as const;
+  expect(sortRows(rows, { column: 1, direction: 'ascending' }, kinds).map(item => item.row[1])).toEqual(['-8.3', '12%', '1,204', '']);
+  expect(sortRows(rows, { column: 1, direction: 'descending' }, kinds).map(item => item.row[1])).toEqual(['1,204', '12%', '-8.3', '']);
+  expect(sortRows(rows, { column: 0, direction: 'ascending' }, kinds).map(item => item.row[0])).toEqual(['a', 'b', 'item 2', 'item 10']);
+  // The rows keep their place in the file for the row-number gutter.
+  expect(sortRows(rows, { column: 1, direction: 'ascending' }, kinds).map(item => item.position)).toEqual([3, 4, 1, 2]);
+  expect(sortRows(rows, undefined, kinds)).toBe(rows);
+});
+
+it('cycles a column header through ascending, descending and the file order', () => {
+  expect(nextSort(undefined, 2)).toEqual({ column: 2, direction: 'ascending' });
+  expect(nextSort({ column: 2, direction: 'ascending' }, 2)).toEqual({ column: 2, direction: 'descending' });
+  expect(nextSort({ column: 2, direction: 'descending' }, 2)).toBeUndefined();
+  expect(nextSort({ column: 2, direction: 'descending' }, 0)).toEqual({ column: 0, direction: 'ascending' });
 });

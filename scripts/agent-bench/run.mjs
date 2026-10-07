@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packagedExecutable } from '../packaged-executable.mjs';
-import { openChannels, openHome, useVietnamese } from '../smoke-language.mjs';
+import { label, openChannels, openHome, useEnglish } from '../smoke-language.mjs';
 import { channelRoles, principalRole, tasks } from './tasks.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -106,7 +106,7 @@ async function openChat(page, target) {
     await openHome(page);
     await page.locator('.sidebar').getByText(target.label, { exact: true }).first().click();
   }
-  await page.getByRole('textbox', { name: /Tin nhắn|Nhắn/ }).first().waitFor();
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).first().waitFor();
 }
 
 async function attachFiles(app, page, task, workDir) {
@@ -119,16 +119,16 @@ async function attachFiles(app, page, task, workDir) {
     copies.push(copy);
   }
   await answerNextDialog(app, copies);
-  await page.getByRole('button', { name: 'Thêm nguồn' }).first().click();
-  await page.getByRole('menuitem', { name: /Tệp/ }).click();
+  await page.getByRole('button', { name: label('Thêm nguồn') }).first().click();
+  await page.getByRole('menuitem', { name: new RegExp(label('Tệp')) }).click();
   await page.waitForTimeout(1500);
 }
 
 /** Types the message the way a person does, then sends it and answers a consent prompt if one appears. */
 async function send(page, message, problems) {
   // The connection's sign-in is read when the app starts; sending waits until the bar no longer asks to connect.
-  await page.getByText('Cần kết nối trước khi gửi.').waitFor({ state: 'detached', timeout: 90_000 }).catch(() => problems.push('composer still asked to connect after 90 s'));
-  const box = page.getByRole('textbox', { name: /Tin nhắn|Nhắn/ }).first();
+  await page.getByText(label('Cần kết nối trước khi gửi.')).waitFor({ state: 'detached', timeout: 90_000 }).catch(() => problems.push('composer still asked to connect after 90 s'));
+  const box = page.getByRole('textbox', { name: label('Tin nhắn') }).first();
   await box.click();
   const typingStarted = Date.now();
   await box.pressSequentially(message, { delay: 8, timeout: 180_000 });
@@ -193,7 +193,7 @@ for (const task of selected) {
   let detail;
   let timedOut = false;
   try {
-    await useVietnamese(page);
+    await useEnglish(page);
     const settings = await callCore(page, 'workspace', {});
     await callCore(page, 'settings', { theme: settings.theme, connectionLimitMicros: settings.connectionLimitMicros, showWork: true });
     const target = await setUp(app, page, task, taskDir);

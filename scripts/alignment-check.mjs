@@ -442,6 +442,19 @@ const SCREENS = [
   }, close: stopOrgletTurn },
   // The file viewer's previews (user, 2026-10-07: "file viewers look ugly"): a table, JSON, code, Markdown, a picture and a PDF.
   { name: 'viewer-table', open: page => openViewerFile(page, 'customers.csv', '.preview-table-scroll tbody tr') },
+  // Sorted by revenue, largest first (a header click goes ascending, then descending), and Ctrl+F lands on the filter.
+  { name: 'viewer-table-sorted', open: async page => {
+    await openViewerFile(page, 'customers.csv', '.preview-table-scroll tbody tr');
+    const sortRevenue = page.getByRole('button', { name: label('Sắp xếp theo {0}', ['revenue']), exact: true });
+    await sortRevenue.click();
+    await sortRevenue.click();
+    await page.locator('#source-viewer th[aria-sort="descending"]').waitFor();
+    const revenues = await page.locator('#source-viewer .preview-table-scroll tbody tr').evaluateAll(rows => rows.map(row => Number(row.children[4]?.textContent)));
+    if (revenues[0] !== Math.max(...revenues.filter(Number.isFinite))) throw new Error(`Sorted descending, the first revenue is ${revenues[0]}`);
+    await page.keyboard.press('Control+f');
+    const focused = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+    if (focused !== label('Lọc dòng')) throw new Error(`Ctrl+F focused ${focused}`);
+  } },
   { name: 'viewer-table-filtered', open: async page => {
     await openViewerFile(page, 'customers.csv', '.preview-table-scroll tbody tr');
     await page.getByRole('searchbox', { name: label('Lọc dòng'), exact: true }).fill('north');

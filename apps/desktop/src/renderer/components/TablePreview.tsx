@@ -1,6 +1,6 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Button, Input, Tooltip } from '@codepawlhq/orglet-ui';
-import { Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, Search } from 'lucide-react';
 import { currentLocale, t } from '../i18n';
 import { PreviewBar } from './PreviewBar';
 
@@ -14,6 +14,8 @@ const LONG_CELL_LENGTH = 40;
 const NUMERIC_SHARE = 0.9;
 /** How many rows are sampled to decide a column's kind, so a huge file is not scanned twice. */
 const KIND_SAMPLE_ROWS = 500;
+/** The narrowest a column can be dragged to, and the widest. */
+const COLUMN_WIDTH = { least: 48, most: 900 } as const;
 
 export type ColumnKind = 'number' | 'text';
 
@@ -83,11 +85,52 @@ export function filterRows(body: string[][], query: string): Array<{ row: string
   return all.filter(({ row }) => row.some(cell => cell.toLowerCase().includes(needle)));
 }
 
-function Cell({ value, kind }: { value: string; kind: ColumnKind }) {
+/** A column the rows are sorted by, and which way; none keeps the file's order. */
+export type TableSort = { column: number; direction: 'ascending' | 'descending' } | undefined;
+
+/** A number cell's value for sorting: signs, thousands commas, a currency mark and a percent are read; anything else is not a number. */
+function numericValue(cell: string): number | undefined {
+  if (!looksNumeric(cell)) return undefined;
+  const plain = cell.trim().replace(/^[$€£¥₫]\s?/, '').replace(/,/g, '').replace(/%$/, '').replace('−', '-');
+  const value = Number(plain);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * The rows in the order of one column: numbers by value in a number column, text in the language's order with numbers
+ * inside words read as numbers ("item 2" before "item 10"). Empty cells always go last, whichever way.
+ */
+export function sortRows<Row extends { row: string[] }>(rows: Row[], sort: TableSort, kinds: readonly ColumnKind[]): Row[] {
+  if (!sort) return rows;
+  const collator = new Intl.Collator(currentLocale(), { numeric: true, sensitivity: 'base' });
+  const sign = sort.direction === 'ascending' ? 1 : -1;
+  const kind = kinds[sort.column];
+  return [...rows].sort((first, second) => {
+    const left = first.row[sort.column] ?? '';
+    const right = second.row[sort.column] ?? '';
+    if (left.trim() === '' || right.trim() === '') return (left.trim() === '' ? 1 : 0) - (right.trim() === '' ? 1 : 0);
+    if (kind === 'number') {
+      const leftNumber = numericValue(left);
+      const rightNumber = numericValue(right);
+      if (leftNumber !== undefined && rightNumber !== undefined) return (leftNumber - rightNumber) * sign;
+    }
+    return collator.compare(left, right) * sign;
+  });
+}
+
+/** The next sort after clicking a column's header: ascending, then descending, then the file's order again. */
+export function nextSort(current: TableSort, column: number): TableSort {
+  if (current?.column !== column) return { column, direction: 'ascending' };
+  if (current.direction === 'ascending') return { column, direction: 'descending' };
+  return undefined;
+}
+
+function Cell({ value, kind, width }: { value: string; kind: ColumnKind; width?: number }) {
   const className = kind === 'number' ? 'cell-number' : undefined;
-  if (value === '') return <td className={className}><span className="cell-empty" role="img" aria-label={t('Ô này trống')}>–</span></td>;
-  if (value.length <= LONG_CELL_LENGTH) return <td className={className}>{value}</td>;
-  return <td className={className}><Tooltip label={value}><span className="cell-long">{value}</span></Tooltip></td>;
+  const style = width ? { maxWidth: width } : undefined;
+  if (value === '') return <td className={className} style={style}><span className="cell-empty" role="img" aria-label={t('Ô này trống')}>–</span></td>;
+  if (value.length <= LONG_CELL_LENGTH && !width) return <td className={className}>{value}</td>;
+  return <td className={className} style={style}><Tooltip label={value}><span className="cell-long">{value}</span></Tooltip></td>;
 }
 
 /** What the bar says: how big the file is, how much of it is drawn, or how many rows match the filter. */
@@ -108,9 +151,47 @@ export function TablePreview({ text, delimiter }: { text: string; delimiter: ','
   const [header, ...body] = rows;
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(ROW_PAGE);
+  const [sort, setSort] = useState<TableSort>();
+  // Widths the person dragged a column to; a column not dragged fits its content as before.
+  const [widths, setWidths] = useState<Record<number, number>>({});
+  const filterInput = useRef<HTMLInputElement>(null);
   const deferredQuery = useDeferredValue(query);
   const kinds = useMemo(() => columnKinds(header?.length ?? 0, body), [header, body]);
-  const matches = useMemo(() => filterRows(body, deferredQuery), [body, deferredQuery]);
+  const filtered = useMemo(() => filterRows(body, deferredQuery), [body, deferredQuery]);
+  const matches = useMemo(() => sortRows(filtered, sort, kinds), [filtered, sort, kinds]);
+  // Ctrl+F (Cmd+F on a Mac) goes to the filter while a table is open, the way a find bar would.
+  useEffect(() => {
+    const findInTable = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'f' || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      filterInput.current?.focus();
+      filterInput.current?.select();
+    };
+    window.addEventListener('keydown', findInTable);
+    return () => window.removeEventListener('keydown', findInTable);
+  }, []);
+  const resizeColumn = (column: number, event: ReactPointerEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const headerCell = event.currentTarget.parentElement;
+    if (!headerCell) return;
+    const startX = event.clientX;
+    const startWidth = headerCell.getBoundingClientRect().width;
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent) => {
+      const width = Math.round(Math.min(COLUMN_WIDTH.most, Math.max(COLUMN_WIDTH.least, startWidth + moveEvent.clientX - startX)));
+      setWidths(current => ({ ...current, [column]: width }));
+    };
+    const stop = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', stop);
+      handle.removeEventListener('pointercancel', stop);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+  };
   if (!header) return <p className="preview-state">{t('Tệp trống.')}</p>;
   const filtering = deferredQuery.trim() !== '';
   const drawn = matches.slice(0, limit);
@@ -121,7 +202,7 @@ export function TablePreview({ text, delimiter }: { text: string; delimiter: ','
     <PreviewBar summary={summaryLabel(body.length, header.length, matches.length, drawn.length, filtering)}>
       <div className="preview-search">
         <Search size={14} aria-hidden="true" />
-        <Input type="search" aria-label={t('Lọc dòng')} placeholder={t('Lọc dòng…')} value={query}
+        <Input ref={filterInput} type="search" aria-label={t('Lọc dòng')} placeholder={t('Lọc dòng…')} value={query}
           onChange={event => { setQuery(event.target.value); setLimit(ROW_PAGE); }}
           onKeyDown={event => { if (event.key === 'Escape' && query) { event.stopPropagation(); setQuery(''); } }} />
       </div>
@@ -132,13 +213,27 @@ export function TablePreview({ text, delimiter }: { text: string; delimiter: ','
         <thead>
           <tr>
             <th scope="col" className="row-number" aria-label={t('Số dòng')} />
-            {header.map((cell, index) => <th key={index} scope="col" className={kinds[index] === 'number' ? 'cell-number' : undefined}>{cell}</th>)}
+            {header.map((cell, index) => {
+              const sorted = sort?.column === index ? sort.direction : undefined;
+              const width = widths[index];
+              return <th key={index} scope="col" aria-sort={sorted ?? 'none'} className={kinds[index] === 'number' ? 'cell-number' : undefined}
+                style={width ? { width, minWidth: width, maxWidth: width } : undefined}>
+                {/* The header sorts its column: ascending, descending, then the file's order. */}
+                <Button variant="ghost" className="column-sort" onClick={() => setSort(current => nextSort(current, index))}
+                  aria-label={t('Sắp xếp theo {0}', [cell || t('cột {0}', [index + 1])])}>
+                  <span className="column-name">{cell}</span>
+                  {sorted === 'ascending' && <ArrowUp size={12} aria-hidden="true" />}
+                  {sorted === 'descending' && <ArrowDown size={12} aria-hidden="true" />}
+                </Button>
+                <span className="column-resize" role="separator" aria-orientation="vertical" aria-label={t('Kéo để đổi độ rộng cột')} onPointerDown={event => resizeColumn(index, event)} />
+              </th>;
+            })}
           </tr>
         </thead>
         <tbody>
           {drawn.map(({ row, position }) => <tr key={position}>
             <th scope="row" className="row-number">{position.toLocaleString(currentLocale())}</th>
-            {header.map((_, column) => <Cell key={column} value={row[column] ?? ''} kind={kinds[column]} />)}
+            {header.map((_, column) => <Cell key={column} value={row[column] ?? ''} kind={kinds[column]} width={widths[column]} />)}
           </tr>)}
         </tbody>
       </table>
