@@ -64,9 +64,11 @@ export type DecisionResponse = { model: string; answers: Record<string, Decision
 
 /**
  * Where the on-device model stands, for the Settings block. `absent` until the person downloads it; `failed` keeps the
- * reason (a cut connection, a file that did not match) and the bytes already kept, so trying again resumes.
+ * reason (a cut connection, a file that did not match) and the bytes already kept, so trying again resumes. `outdated`
+ * means a Tacet from an earlier Orglet is on disk while this one pins another: Tacet rests until the person updates,
+ * and `totalBytes` is what the new one weighs.
  */
-export type DecisionModelStatus = 'absent' | 'downloading' | 'verifying' | 'ready' | 'failed';
+export type DecisionModelStatus = 'absent' | 'downloading' | 'verifying' | 'ready' | 'failed' | 'outdated';
 export type DecisionModelState = {
   status: DecisionModelStatus;
   /** Bytes on disk so far, across every file of the model. */
@@ -74,4 +76,11 @@ export type DecisionModelState = {
   /** What the whole download weighs, known before it starts. */
   totalBytes: number;
   error?: string;
+  /** Set on `failed` when what failed was an update: the earlier Tacet is still on disk and still waits for it. */
+  update?: true;
 };
+
+/** Whether the person still has an update of Tacet to make: one is offered, or the last try at it failed. */
+export function tacetUpdateWaiting(state: DecisionModelState | undefined): boolean {
+  return state?.status === 'outdated' || (state?.status === 'failed' && state.update === true);
+}

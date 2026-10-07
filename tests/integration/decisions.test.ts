@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { Decisions, type DecisionRuntime } from '../../apps/desktop/src/core/decisions/service';
+import { Decisions, INSTALLED_RECORD, type DecisionRuntime } from '../../apps/desktop/src/core/decisions/service';
 import { decisionsDirectory, filesFrom, TACET_FILES, type DecisionFiles } from '../../apps/desktop/src/core/decisions/manifest';
 import { downloadFile } from '../../apps/desktop/src/core/decisions/download';
 import { NOTEWORTHY_QUESTION, quietRunState } from '../../apps/desktop/src/core/orchestration/quiet-runs';
@@ -222,6 +222,75 @@ describe('downloading Tacet (COD-303)', () => {
     expect(closed).toBe(1);
   });
 
+  it('sees a Tacet from an earlier Orglet, rests until the person updates, then swaps it and clears the old files (2026-10-07)', async () => {
+    const files = pinned();
+    // An earlier release pinned another model of the same name, and kept an older file beside it.
+    const earlierModel = Buffer.alloc(modelBytes.length, 3);
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, files.model.name), earlierModel);
+    await writeFile(join(directory, files.tokenizer.name), tokenizerBytes);
+    await writeFile(join(directory, 'tacet-sonata-old.onnx'), Buffer.from('old'));
+    await writeFile(join(directory, INSTALLED_RECORD), JSON.stringify({
+      model: { name: files.model.name, sha256: sha256(earlierModel), bytes: earlierModel.length },
+      tokenizer: { name: files.tokenizer.name, sha256: files.tokenizer.sha256, bytes: files.tokenizer.bytes },
+    }));
+    let asked = 0;
+    const decisions = new Decisions({ directory, files, runtime: async () => ({ decide: async () => { asked++; return { model: 'stub', answers: {}, usage: { inputTokens: 1 } }; }, close: async () => {} }) });
+    // Same size as the pinned file, but the record says it is another Tacet: not ready, and nothing is asked of it.
+    expect(decisions.state()).toEqual({ status: 'outdated', receivedBytes: 0, totalBytes: modelBytes.length + tokenizerBytes.length });
+    expect(await decisions.decide('text', NOTEWORTHY_QUESTION)).toBeUndefined();
+    expect(asked).toBe(0);
+    decisions.install();
+    expect((await settled(decisions)).status).toBe('ready');
+    expect(readFileSync(join(directory, files.model.name)).equals(modelBytes)).toBe(true);
+    expect(existsSync(join(directory, 'tacet-sonata-old.onnx'))).toBe(false);
+    expect(JSON.parse(readFileSync(join(directory, INSTALLED_RECORD), 'utf8')).model.sha256).toBe(files.model.sha256);
+    expect(ranges).toHaveLength(1);
+  });
+
+  it('keeps a cut update marked as an update, so Needs you keeps offering it (2026-10-07)', async () => {
+    const { tacetUpdateWaiting } = await import('../../apps/desktop/src/shared/decisions');
+    const files = pinned();
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, files.model.name), Buffer.alloc(10, 3));
+    await writeFile(join(directory, files.tokenizer.name), tokenizerBytes);
+    const decisions = new Decisions({ directory, files });
+    expect(tacetUpdateWaiting(decisions.state())).toBe(true);
+    mode.cutModelAfter = 1000;
+    decisions.install();
+    const cut = await settled(decisions);
+    expect(cut).toMatchObject({ status: 'failed', update: true });
+    expect(tacetUpdateWaiting(cut)).toBe(true);
+    // A first download that fails is not an update.
+    const fresh = await mkdtemp(join(tmpdir(), 'orglet-decisions-fresh-'));
+    try {
+      const first = new Decisions({ directory: fresh, files });
+      first.install();
+      const failed = await settled(first);
+      expect(failed.status).toBe('failed');
+      expect(failed.update).toBeUndefined();
+      expect(tacetUpdateWaiting(failed)).toBe(false);
+    } finally {
+      await rm(fresh, { recursive: true, force: true });
+    }
+  });
+
+  it('takes a folder from before the record at its word, records it once it loads, and sees an earlier one by its size', async () => {
+    const files = pinned();
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, files.model.name), modelBytes);
+    await writeFile(join(directory, files.tokenizer.name), tokenizerBytes);
+    const decisions = new Decisions({ directory, files, runtime: async () => ({ decide: async () => ({ model: 'stub', answers: {}, usage: { inputTokens: 1 } }), close: async () => {} }) });
+    expect(decisions.state().status).toBe('ready');
+    await decisions.decide('text', NOTEWORTHY_QUESTION);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(existsSync(join(directory, INSTALLED_RECORD))).toBe(true);
+    // A folder from before the record whose model has another size than this Orglet pins is an earlier Tacet.
+    await rm(join(directory, INSTALLED_RECORD));
+    await writeFile(join(directory, files.model.name), Buffer.alloc(10, 1));
+    expect(new Decisions({ directory, files }).state().status).toBe('outdated');
+  });
+
   it('takes only a loopback address as the test source, and keeps the pinned hashes', () => {
     expect(filesFrom('http://127.0.0.1:48340/').model.url).toBe(`http://127.0.0.1:48340/${TACET_FILES.model.name}`);
     expect(filesFrom('http://127.0.0.1:48340/').model.sha256).toBe(TACET_FILES.model.sha256);
@@ -386,5 +455,27 @@ describe('announcing a run Tacet flagged (COD-303)', () => {
     expect(flaggedWhen('2026-09-26T09:12:00Z', 'UTC', now)).toMatch(/^9\/26\/26, 9:12\sAM$/);
     // 23:30 in Ho Chi Minh City on the 26th is not today there, though it is in UTC.
     expect(flaggedWhen('2026-09-26T16:30:00Z', 'Asia/Ho_Chi_Minh', new Date('2026-09-26T17:30:00Z'))).toMatch(/^9\/26\/26/);
+  });
+});
+
+describe('telling the person about a newer Tacet (2026-10-07)', () => {
+  it('offers Update in Settings, and keeps Update on the newest notice only while the earlier Tacet is on disk', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { createElement } = await import('react');
+    const { TacetSetupView } = await import('../../apps/desktop/src/renderer/components/TacetSetup');
+    const { tacetUpdateNoticeId } = await import('../../apps/desktop/src/renderer/components/notifications');
+    setLanguage('en');
+    const html = renderToStaticMarkup(createElement(TacetSetupView, { state: { status: 'outdated', receivedBytes: 0, totalBytes: 319_000_000 }, onDownload: () => {}, onCancel: () => {}, onRemove: () => {} }));
+    expect(html).toContain('Update available');
+    expect(html).toContain('Tacet is paused until you update.');
+    expect(html).toMatch(/<button[^>]*>.*Update<\/button>/);
+    expect(html).not.toContain('Remove');
+    const notices = [
+      { id: 1, at: '2026-10-07T08:00:00.000Z', kind: 'info' as const, text: 'A', tacetUpdate: true as const },
+      { id: 2, at: '2026-10-07T09:00:00.000Z', kind: 'done' as const, text: 'B' },
+      { id: 3, at: '2026-10-08T08:00:00.000Z', kind: 'info' as const, text: 'A', tacetUpdate: true as const },
+    ];
+    expect(tacetUpdateNoticeId(notices, true)).toBe(3);
+    expect(tacetUpdateNoticeId(notices, false)).toBeUndefined();
   });
 });

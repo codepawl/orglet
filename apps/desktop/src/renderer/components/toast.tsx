@@ -21,6 +21,8 @@ export type ToastOptions = {
   update?: boolean;
   /** The toast archived something: its notice in Notifications opens Settings → Lưu trữ, where it can be restored (COD-375). */
   archive?: boolean;
+  /** The toast says a newer Tacet is pinned: its notice updates Tacet while the one on disk is still the earlier one. */
+  tacetUpdate?: boolean;
 };
 
 /**
@@ -31,7 +33,7 @@ export type ToastOptions = {
 export function toast(text: string, tone: ToastTone = 'success', about?: string, options: ToastOptions = {}) {
   const confirmation = tone === 'success' && !options.unread;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, noticeKindOf(tone), about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size, update: options.update, archive: options.archive });
+  recordNotice(text, noticeKindOf(tone), about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size, update: options.update, archive: options.archive, tacetUpdate: options.tacetUpdate });
   showToast(text, tone, options.action);
 }
 

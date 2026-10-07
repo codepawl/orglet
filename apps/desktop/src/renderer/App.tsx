@@ -11,6 +11,8 @@ import { SkillEditor } from './components/Editors';
 import { WorkerDialog, workerProviderOptions } from './components/WorkerDialog';
 import { chatSettingsTarget, connectModelStep, demoWorkerToConnect } from './chatSettings';
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog';
+import { useDecisionModel } from './components/TacetSetup';
+import { tacetUpdateWaiting } from '../shared/decisions';
 import { TaskThread, ThreadSkeleton, type ThreadStartInfo } from './components/TaskThread';
 import { SideThreadPanel } from './components/SideThreadPanel';
 import { focusMessage } from './components/messageMarks';
@@ -81,7 +83,7 @@ import { workerModelLabel, providerName } from './components/workerModel';
 import { customProviderId } from '../shared/custom-connections';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
-import { t, setLanguage, useLanguage } from './i18n';
+import { t, tMessage, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
 import { useAppChangeNotices } from './appChangeNotices';
 import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
@@ -401,6 +403,21 @@ export function App() {
   };
   const update = useCached(updateStates, window.orglet ? APP_KEY : undefined);
   const updateMark = updateIndicator(update);
+  // A newer Tacet pinned by this Orglet than the one on disk (user, 2026-10-07): said once a launch as a note kept in
+  // Notifications, offered in Needs you and in Settings until the person updates. The download starts only on a click.
+  const decisionModel = useDecisionModel();
+  // Still waiting after a cut update too, so Needs you keeps it (with Retry) until it is done.
+  const tacetOutdated = tacetUpdateWaiting(decisionModel);
+  const tacetUpdateError = decisionModel?.status === 'failed' ? decisionModel.error : undefined;
+  const updateTacet = () => {
+    void orglet.call('installDecisionModel', {}).catch(failure => toast(tMessage((failure as Error).message), 'error', t('Tacet trên máy')));
+  };
+  const tacetAnnounced = useRef(false);
+  useEffect(() => {
+    if (!tacetOutdated || tacetAnnounced.current) return;
+    tacetAnnounced.current = true;
+    toast(t('Có bản Tacet mới. Tacet tạm nghỉ đến khi cập nhật.'), 'info', t('Tacet trên máy'), { unread: true, tacetUpdate: true, action: { label: t('Cập nhật'), onSelect: updateTacet } });
+  }, [tacetOutdated]);
   // Full sidebar or the rail (COD-340): the stored mode, written back when the person folds or opens it, never when a
   // narrow window folds it for them.
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => readSidebarMode() === 'full' && innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
@@ -2268,7 +2285,8 @@ export function App() {
     ? <ActivityPage tab={activityTab} running={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} saved={savedMessages}
       pendingSchedules={pendingRoutines} notesToReview={knowledgeToReview} onOpenChat={taskId => { setPanel(null); openTask(taskId); }} onOpenMessage={(taskId, messageId) => { setPanel(null); openChatAt(taskId, messageId); }}
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
-      onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
+      onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate}
+      tacetOutdated={tacetOutdated} tacetUpdateError={tacetUpdateError} onUpdateTacet={updateTacet} />
     : area === 'home' && friendsOpen
       ? <MarketplacePage onMarketAdded={async result => {
           await refresh();
