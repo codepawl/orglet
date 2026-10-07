@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
-import { useVietnamese, openHome, openThreadByBrief } from './smoke-language.mjs';
+import { label, useEnglish, openHome, openThreadByBrief } from './smoke-language.mjs';
 
 // Real packaged renderer → preload → core → SQLite. The throwaway profile uses Demo only.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-local-sync-ui-'));
@@ -37,8 +36,8 @@ async function capture(page, name) {
   await page.screenshot({ path: `${output}/${name}.png`, animations: 'disabled' });
 }
 async function chatSettings(page) {
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Thiết lập chat', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Thiết lập chat'), exact: true }).click();
 }
 let app = await launch();
 let page;
@@ -52,18 +51,18 @@ try {
   });
   page.setDefaultTimeout(30_000);
   await page.setViewportSize({ width: 1200, height: 820 });
-  await useVietnamese(page);
+  await useEnglish(page);
   const worker = (await workspace(page)).workers.find(worker => worker.provider === 'demo');
   assert.ok(worker);
   await openHome(page);
-  await page.locator('.sidebar').getByRole('button', { name: `Tùy chọn ${worker.name}`, exact: true }).first().click();
-  await page.getByRole('menuitem', { name: 'Chỉnh sửa', exact: true }).click();
-  const privacy = page.getByRole('switch', { name: 'Chỉ trên máy này', exact: true });
+  await page.locator('.sidebar').getByRole('button', { name: label('Tùy chọn {0}', [worker.name]), exact: true }).first().click();
+  await page.getByRole('menuitem', { name: label('Chỉnh sửa'), exact: true }).click();
+  const privacy = page.getByRole('switch', { name: label('Chỉ trên máy này'), exact: true });
   await privacy.focus();
   await page.keyboard.press('Space');
   assert.equal(await privacy.getAttribute('aria-checked'), 'true');
   await capture(page, 'worker-private-vi-light-wide');
-  await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
+  await page.getByRole('button', { name: label('Lưu Tí'), exact: true }).click();
   await page.waitForFunction(async id => (await window.orglet.call('workspace', {})).syncLocalOnly.workers.includes(id), worker.id);
   await call(page, 'setSyncLocalOnly', { kind: 'worker', id: worker.id, localOnly: false });
   const brief = 'Privacy smoke main chat';
@@ -74,19 +73,19 @@ try {
   await privacy.focus();
   await page.keyboard.press('Space');
   await capture(page, 'chat-private-vi-light-wide');
-  await page.getByRole('button', { name: 'Lưu chat', exact: true }).click();
+  await page.getByRole('button', { name: label('Lưu chat'), exact: true }).click();
   await page.waitForFunction(async id => (await window.orglet.call('workspace', {})).syncLocalOnly.tasks.includes(id), taskId);
   const sideId = await call(page, 'startSideThread', { taskId, brief: 'Privacy smoke side chat', sourceIds: [], consent: false, providerScopes: [], budgetMicros: 1000 });
   await waitFinished(page, sideId);
   await openThreadByBrief(page, 'Privacy smoke side chat');
   // Wide windows open the side thread beside its main chat; narrow windows use the main pane.
-  const sideSettings = page.locator('.thread-pane').getByRole('button', { name: 'Thiết lập chat', exact: true });
+  const sideSettings = page.locator('.thread-pane').getByRole('button', { name: label('Thiết lập chat'), exact: true });
   if (await sideSettings.isVisible()) await sideSettings.click();
   else await chatSettings(page);
   assert.equal(await privacy.isDisabled(), true);
   assert.equal(await privacy.getAttribute('aria-checked'), 'true');
   assert.equal(await page.locator('.thread-pane').count(), 1, 'the settings dialog keeps one side-thread panel');
-  await capture(page, 'side-inherited-vi-light-wide');
+  await capture(page, 'side-inherited-en-light-wide');
   for (const language of ['vi', 'en']) {
     for (const theme of ['light', 'dark']) {
       for (const [size, viewport] of [['wide', { width: 1200, height: 820 }], ['narrow', { width: 740, height: 600 }]]) {
@@ -94,8 +93,8 @@ try {
         console.log(`Appearance: ${language}/${theme}/${size}`);
         await call(page, 'settings', { language, theme, connectionLimitMicros: state.connectionLimitMicros });
         await page.setViewportSize(viewport);
-        const label = language === 'vi' ? 'Chỉ trên máy này' : en['Chỉ trên máy này'];
-        await page.getByRole('switch', { name: label, exact: true }).waitFor();
+        const switchLabel = language === 'vi' ? 'Chỉ trên máy này' : label('Chỉ trên máy này');
+        await page.getByRole('switch', { name: switchLabel, exact: true }).waitFor();
         await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, theme);
         assert.equal(await page.locator('.thread-pane').count(), 1, 'appearance refresh does not duplicate the side-thread panel');
         await capture(page, `side-inherited-${language}-${theme}-${size}`);
@@ -106,7 +105,7 @@ try {
   app = await launch();
   page = await app.firstWindow();
   page.setDefaultTimeout(30_000);
-  await useVietnamese(page);
+  await useEnglish(page);
   const restored = await workspace(page);
   assert.ok(restored.syncLocalOnly.tasks.includes(taskId), 'chat privacy persists after restart');
   assert.ok(restored.syncLocalOnly.inheritedTasks.includes(sideId), 'side thread still inherits its parent privacy');
@@ -126,21 +125,21 @@ try {
   await page.waitForFunction(async id => (await window.orglet.call('workspace', {})).syncLocalOnly.permanentTasks.includes(id), taskId);
   await openThreadByBrief(page, brief);
   await chatSettings(page);
-  const recoveredPrivacy = page.getByRole('switch', { name: 'Chỉ trên máy này', exact: true });
+  const recoveredPrivacy = page.getByRole('switch', { name: label('Chỉ trên máy này'), exact: true });
   assert.equal(await recoveredPrivacy.isDisabled(), true, 'explicit local recovery cannot reopen the permanently deleted public scope');
   assert.equal(await recoveredPrivacy.getAttribute('aria-checked'), 'true');
   await page.setViewportSize({ width: 740, height: 600 });
-  await capture(page, 'permanent-private-vi-dark-narrow');
+  await capture(page, 'permanent-private-en-dark-narrow');
   await call(page, 'settings', { language: 'en', theme: 'light', connectionLimitMicros: restored.connectionLimitMicros });
   await page.setViewportSize({ width: 1200, height: 820 });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
-  await page.getByRole('switch', { name: en['Chỉ trên máy này'], exact: true }).waitFor();
+  await page.getByRole('switch', { name: label('Chỉ trên máy này'), exact: true }).waitFor();
   await capture(page, 'permanent-private-en-light-wide');
   await app.close();
   app = await launch();
   page = await app.firstWindow();
   page.setDefaultTimeout(30_000);
-  await useVietnamese(page);
+  await useEnglish(page);
   assert.ok((await workspace(page)).syncLocalOnly.permanentTasks.includes(taskId), 'the public deletion fence persists after local recovery and restart');
   console.log('Local sync privacy: keyboard save, side-thread inheritance, restart, eight appearance layouts and two permanent-recovery layouts passed.');
 } catch (error) {

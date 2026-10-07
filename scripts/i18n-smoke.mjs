@@ -3,10 +3,10 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openHome, openSettings } from './smoke-language.mjs';
+import { useEnglish, openHome, openSettings } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
-// Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
+// Language setting: a new install starts in English; check UI text, a translated core error and persistence, switch to UK English, then to Vietnamese on purpose.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-i18n-'));
 const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 const launch = () => electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
@@ -21,13 +21,10 @@ let app = await launch();
 try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
   page.on('pageerror', error => errors.push(error.message));
-  assert.equal(await useVietnamese(page), 'en', 'a new install starts in US English');
-  assert.equal(await page.evaluate(() => document.documentElement.lang), 'vi');
+  assert.equal(await useEnglish(page), 'en', 'a new install starts in US English');
+  assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
 
   await openSettings(page);
-  await page.getByRole('combobox', { name: 'Ngôn ngữ', exact: true }).click();
-  await page.getByRole('option', { name: 'English (US)', exact: true }).click();
-  // The dialog re-renders in English once the dictionary chunk has loaded.
   await page.getByRole('combobox', { name: 'Language', exact: true }).waitFor();
   await page.getByRole('tab', { name: 'API connections', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
@@ -85,6 +82,7 @@ try {
   await openSettings(page);
   await page.getByRole('combobox', { name: 'Language', exact: true }).click();
   await page.getByRole('option', { name: 'Tiếng Việt', exact: true }).click();
+  // Switched on purpose: the dialog and the chat now read in Vietnamese.
   await page.getByRole('combobox', { name: 'Ngôn ngữ', exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('heading', { name: 'Đang nhắn với Researcher' }).waitFor();

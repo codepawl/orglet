@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { packagedExecutable } from './packaged-executable.mjs';
-import { useVietnamese, openChannels } from './smoke-language.mjs';
+import { label, useEnglish, openChannels } from './smoke-language.mjs';
 
 // COD-372: measure the actual packaged shell every frame, including the column that must interpolate.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-sidebar-motion-'));
@@ -13,7 +13,7 @@ delete environment.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env: environment });
 
 async function measureMove(page, opening) {
-  return page.evaluate(async shouldOpen => {
+  return page.evaluate(async ([shouldOpen, collapseLabel]) => {
     const shell = document.querySelector('.app');
     const sidebar = document.querySelector('.sidebar');
     const main = document.querySelector('.main-pane');
@@ -29,7 +29,7 @@ async function measureMove(page, opening) {
     };
     sample();
     // A folded sidebar opens from the rail: the tile of the area on screen.
-    const button = shouldOpen ? document.querySelector('.area-tile.active') : document.querySelector('[aria-label="Thu gọn sidebar"]');
+    const button = shouldOpen ? document.querySelector('.area-tile.active') : document.querySelector(`[aria-label="${collapseLabel}"]`);
     button.click();
     const started = performance.now();
     await new Promise(resolve => {
@@ -41,7 +41,7 @@ async function measureMove(page, opening) {
       requestAnimationFrame(frame);
     });
     return frames;
-  }, opening);
+  }, [opening, label('Thu gọn sidebar')]);
 }
 
 function checkMove(frames, opening, overlay) {
@@ -77,13 +77,13 @@ function checkMove(frames, opening, overlay) {
 try {
   const page = await app.firstWindow();
   await page.setViewportSize({ width: 1200, height: 820 });
-  await useVietnamese(page);
+  await useEnglish(page);
   await page.waitForTimeout(250);
   await page.evaluate(() => document.documentElement.style.setProperty('--motion-base', '600ms'));
   for (const theme of ['light', 'dark']) {
     await page.evaluate(async value => {
       const workspace = await window.orglet.call('workspace', {});
-      await window.orglet.call('settings', { language: 'vi', theme: value, connectionLimitMicros: workspace.connectionLimitMicros });
+      await window.orglet.call('settings', { language: 'en', theme: value, connectionLimitMicros: workspace.connectionLimitMicros });
     }, theme);
     checkMove(await measureMove(page, false), false, false);
     checkMove(await measureMove(page, true), true, false);
@@ -91,27 +91,27 @@ try {
 
   // A folded sidebar's look lists the tile under the pointer, not only the area on screen, and opening it for good
   // from the tile of the area on screen lists that area again.
-  await page.getByRole('button', { name: 'Thu gọn sidebar', exact: true }).click();
+  await page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true }).click();
   await page.waitForTimeout(800);
   const sidebarTitle = () => page.locator('.sidebar-title').textContent();
   await page.locator('.area-tile.active').hover();
   await page.locator('.sidebar.peek').waitFor();
   const openAreaTitle = await sidebarTitle();
-  await page.locator('.area-tile[data-name="Hoạt động"]').hover();
+  await page.locator(`.area-tile[data-name="${label('Hoạt động')}"]`).hover();
   await page.waitForTimeout(100);
-  assert.equal(await sidebarTitle(), 'Hoạt động', 'the look follows the pointer to another tile');
-  await page.locator('.area-tile[aria-label="Lịch chạy"]').hover();
+  assert.equal(await sidebarTitle(), label('Hoạt động'), 'the look follows the pointer to another tile');
+  await page.locator(`.area-tile[aria-label="${label('Lịch chạy')}"]`).hover();
   await page.waitForTimeout(100);
-  assert.equal(await sidebarTitle(), 'Lịch chạy', 'the look lists a page tile too');
+  assert.equal(await sidebarTitle(), label('Lịch chạy'), 'the look lists a page tile too');
   await page.locator('.sidebar-title').hover();
   await page.waitForTimeout(400);
-  assert.equal(await sidebarTitle(), 'Lịch chạy', 'the list stays while the pointer is on it');
+  assert.equal(await sidebarTitle(), label('Lịch chạy'), 'the list stays while the pointer is on it');
   await page.locator('.area-tile.active').click();
   await page.waitForTimeout(800);
   assert.equal(await sidebarTitle(), openAreaTitle, 'the opened sidebar lists the area on screen');
 
-  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
   await page.waitForTimeout(800);
   checkMove(await measureMove(page, false), false, false);
   checkMove(await measureMove(page, true), true, false);
@@ -125,7 +125,7 @@ try {
   checkMove(await measureMove(page, true), true, false);
 
   // Interrupt a fold with reopening; the native transition reverses and the rows stay available afterward.
-  await page.getByRole('button', { name: 'Thu gọn sidebar', exact: true }).click();
+  await page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true }).click();
   await page.waitForTimeout(100);
   await page.locator('.area-tile.active').click();
   await page.waitForTimeout(800);
@@ -140,7 +140,7 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.locator('.area-tile.active').focus();
   await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Thu gọn sidebar', exact: true }).focus();
+  await page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true }).focus();
   await page.keyboard.press('Enter');
   assert.equal(await page.locator('.sidebar').evaluate(element => getComputedStyle(element).visibility), 'hidden', 'reduced motion hides the sidebar immediately');
   assert.equal(await page.locator('.sidebar').evaluate(element => getComputedStyle(element).transitionDuration), '0s', 'reduced motion also disables the collapsed selector');

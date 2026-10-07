@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
-import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
+import { label, labelBefore, startsWith, useEnglish, openThreadByBrief, openChannels } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
@@ -17,20 +17,20 @@ const launch = async () => {
 };
 let app = await launch();
 try {
-  let page = await app.firstWindow(); await useVietnamese(page);
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Routine smoke: scheduled demo');
-  await page.getByRole('button', { name: 'Lên lịch cho tin này', exact: true }).click();
+  let page = await app.firstWindow(); await useEnglish(page);
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Routine smoke: scheduled demo');
+  await page.getByRole('button', { name: label('Lên lịch cho tin này'), exact: true }).click();
   // A new schedule starts at its name, not on the button beside the title (COD-283).
-  await page.getByLabel('Tên lịch', { exact: true }).waitFor();
-  assert.equal(await page.getByLabel('Tên lịch', { exact: true }).evaluate(input => input === document.activeElement), true);
-  await page.getByLabel('Tên lịch', { exact: true }).fill('Morning routine');
+  await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor();
+  assert.equal(await page.getByLabel(label('Tên lịch'), { exact: true }).evaluate(input => input === document.activeElement), true);
+  await page.getByLabel(label('Tên lịch'), { exact: true }).fill('Morning routine');
   // The time zone is picked from the list, never typed (COD-283).
-  await page.getByRole('combobox', { name: 'Múi giờ', exact: true }).click();
+  await page.getByRole('combobox', { name: label('Múi giờ'), exact: true }).click();
   await page.getByRole('option', { name: 'UTC', exact: true }).click();
   const due = new Date(Date.now() + 20_000); due.setUTCMinutes(due.getUTCMinutes() + 1, 0, 0);
-  await page.getByLabel('Giờ chạy', { exact: true }).fill(due.toISOString().slice(11, 16));
-  await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
-  const region = page.getByRole('region', { name: 'Lịch Morning routine', exact: true }); await region.waitFor();
+  await page.getByLabel(label('Giờ chạy'), { exact: true }).fill(due.toISOString().slice(11, 16));
+  await page.getByRole('button', { name: label('Lưu lịch'), exact: true }).click();
+  const region = page.getByRole('region', { name: label('Lịch {0}', ['Morning routine']), exact: true }); await region.waitFor();
   const routine = (await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0];
   assert.equal(routine.nextDueAt, due.toISOString());
   // Saving is the permission: the routine carries the setup it was approved with. Demo needs no provider scope.
@@ -39,22 +39,22 @@ try {
   assert.equal(routine.task.consent, false);
   console.log(JSON.stringify({ waitingForScheduledDemo: routine.nextDueAt, directory }));
   // The card says what became of the newest run beside the button that opens it (COD-294).
-  const latestRun = region.getByRole('button', { name: /^Mở lần chạy gần nhất/ });
+  const latestRun = region.getByRole('button', { name: startsWith('Mở lần chạy gần nhất') });
   await latestRun.waitFor({ timeout: 100_000 });
-  await region.getByRole('button', { name: /^Mở lần chạy gần nhất.*Đã xong$/ }).waitFor({ timeout: 100_000 });
+  await region.getByRole('button', { name: new RegExp(`^${label('Mở lần chạy gần nhất')}.*${label('Đã xong')}$`) }).waitFor({ timeout: 100_000 });
   await latestRun.click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const completed = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks;
   assert.equal(completed.length, 1); assert.equal(completed[0].routineId, routine.id);
-  await page.getByRole('button', { name: /Lịch chạy/ }).click();
-  await region.getByRole('switch', { name: 'Bật lịch', exact: true }).click();
-  await region.getByText(/Đã tắt/).waitFor();
+  await page.getByRole('button', { name: label('Lịch chạy') }).click();
+  await region.getByRole('switch', { name: label('Bật lịch'), exact: true }).click();
+  await region.getByText(label('Đã tắt')).waitFor();
   // Turning one off must leave a way to turn it back on: the card used to drop the control entirely.
-  await region.getByRole('switch', { name: 'Bật lịch', exact: true }).click();
-  await region.getByText(/Đang bật/).waitFor();
+  await region.getByRole('switch', { name: label('Bật lịch'), exact: true }).click();
+  await region.getByText(label('Đang bật')).waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0].enabled, true);
-  await region.getByRole('switch', { name: 'Bật lịch', exact: true }).click();
-  await region.getByText(/Đã tắt/).waitFor();
+  await region.getByRole('switch', { name: label('Bật lịch'), exact: true }).click();
+  await region.getByText(label('Đã tắt')).waitFor();
   await page.screenshot({ path: join(output, 'routine-completed.png') });
   await app.close();
   // Only modify isolated fixture state while the app/core are closed. No production test hook.
@@ -62,22 +62,22 @@ try {
   const saved = JSON.parse(db.prepare('SELECT data FROM routines WHERE id=?').get(routine.id).data);
   const overdueAt = new Date(Date.now() - 30 * 86_400_000).toISOString();
   db.prepare('UPDATE routines SET data=? WHERE id=?').run(JSON.stringify({ ...saved, enabled: true, pending: null, nextDueAt: overdueAt }), routine.id); db.close();
-  app = await launch(); page = await app.firstWindow(); await useVietnamese(page);
-  const notice = page.getByRole('status').filter({ hasText: 'khi app tắt' });
+  app = await launch(); page = await app.firstWindow(); await useEnglish(page);
+  const notice = page.getByRole('status').filter({ hasText: label('{0} đã lỡ một lần chạy khi app tắt. Có thể chạy bù một lần.', ['Morning routine']) });
   await notice.waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 1);
   await page.screenshot({ path: join(output, 'routine-reopen-notice.png') });
-  await notice.getByRole('button', { name: 'Xem lịch chạy', exact: true }).click();
-  const missedCard = page.getByRole('region', { name: 'Lịch Morning routine', exact: true });
-  await missedCard.getByRole('heading', { name: /^Lỡ lần chạy lúc / }).waitFor();
-  await missedCard.getByText(/Lúc đó Orglet không mở hoặc máy đang ngủ/).waitFor();
-  await missedCard.getByText(/Chạy bù chạy lịch một lần, dù lỡ bao nhiêu lần/).waitFor();
+  await notice.getByRole('button', { name: label('Xem lịch chạy'), exact: true }).click();
+  const missedCard = page.getByRole('region', { name: label('Lịch {0}', ['Morning routine']), exact: true });
+  await missedCard.getByRole('heading', { name: startsWith('Lỡ lần chạy lúc {0}', ['']) }).waitFor();
+  await missedCard.getByText(label('Lúc đó Orglet không mở hoặc máy đang ngủ, nên lịch chưa chạy.')).waitFor();
+  await missedCard.getByText(labelBefore('Chạy bù chạy lịch một lần, dù lỡ bao nhiêu lần. Lần tới vẫn lúc {0}.')).waitFor();
   const missed = (await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0];
   assert.equal(missed.pending.dueAt, overdueAt);
   assert.equal(missed.pending.reason.includes('không hoạt động'), true);
   assert.ok(new Date(missed.nextDueAt).getTime() > Date.now());
   await page.screenshot({ path: join(output, 'routine-missed.png') });
-  await missedCard.getByRole('button', { name: 'Chạy bù một lần', exact: true }).click();
+  await missedCard.getByRole('button', { name: label('Chạy bù một lần'), exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(state.tasks.length, 2); assert.equal(state.routines[0].pending, null);
@@ -85,14 +85,14 @@ try {
   // Work-hour configuration uses ordinary native form controls.
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   await openChannels(page);
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Research Review', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn kênh #Research Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
-  await page.getByRole('tab', { name: 'Giới hạn & ca', exact: true }).click();
-  await page.getByLabel('Số công việc chạy đồng thời', { exact: true }).fill('1');
-  await page.getByRole('switch', { name: 'Giới hạn khung giờ làm việc', exact: true }).click();
-  await page.getByLabel('Timezone của ca', { exact: true }).fill('UTC');
-  await page.getByLabel('Bắt đầu ca', { exact: true }).fill('09:00'); await page.getByLabel('Kết thúc ca', { exact: true }).fill('17:00');
-  await page.getByRole('button', { name: 'Lưu kênh', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Research Review']), exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Research Review']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Thiết lập kênh') }).click();
+  await page.getByRole('tab', { name: label('Giới hạn & ca'), exact: true }).click();
+  await page.getByLabel(label('Số công việc chạy đồng thời'), { exact: true }).fill('1');
+  await page.getByRole('switch', { name: label('Giới hạn khung giờ làm việc'), exact: true }).click();
+  await page.getByLabel(label('Timezone của ca'), { exact: true }).fill('UTC');
+  await page.getByLabel(label('Bắt đầu ca'), { exact: true }).fill('09:00'); await page.getByLabel(label('Kết thúc ca'), { exact: true }).fill('17:00');
+  await page.getByRole('button', { name: label('Lưu kênh'), exact: true }).click();
   const team = (await page.evaluate(() => window.orglet.call('workspace', {}))).teams[0];
   assert.equal(team.maxConcurrentTasks, 1); assert.deepEqual(team.workHours, { timeZone: 'UTC', start: '09:00', end: '17:00', days: [1, 2, 3, 4, 5] });
   const handoffTaskId = await page.evaluate(async team => {
@@ -105,27 +105,27 @@ try {
     return taskId;
   }, team);
   await openThreadByBrief(page, 'Routine smoke: shift handoff');
-  await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).waitFor();
-  await page.locator('summary').filter({ hasText: 'Bàn giao cuối ca' }).click();
-  await page.getByRole('heading', { name: 'Bước tiếp theo', exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tiếp tục từ checkpoint'), exact: true }).waitFor();
+  await page.locator('summary').filter({ hasText: label('Bàn giao cuối ca') }).click();
+  await page.getByRole('heading', { name: label('Bước tiếp theo'), exact: true }).waitFor();
   const handoff = await page.evaluate(id => window.orglet.call('task', { id }), handoffTaskId);
   assert.equal(handoff.task.pauseReason, 'shift'); assert.ok(handoff.task.handoff);
-  await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'Kênh đang ngoài khung giờ' }).waitFor();
+  await page.getByRole('button', { name: label('Tiếp tục từ checkpoint'), exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: labelBefore('Kênh đang ngoài khung giờ làm việc. Tiếp tục trong ca hoặc sửa khung giờ trong Thiết lập kênh.') }).waitFor();
   await page.screenshot({ path: join(output, 'shift-handoff.png') });
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 640));
-  await page.getByRole('button', { name: /Lịch chạy/ }).click();
-  await page.getByRole('button', { name: 'Sửa lịch Morning routine', exact: true }).click();
+  await page.getByRole('button', { name: label('Lịch chạy') }).click();
+  await page.getByRole('button', { name: label('Sửa lịch {0}', ['Morning routine']), exact: true }).click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.screenshot({ path: join(output, 'routine-narrow.png') });
   await page.keyboard.press('Escape');
   // Deleting asks inside the card's menu and keeps the runs as chats that name the schedule (COD-283).
-  const doomed = page.getByRole('region', { name: 'Lịch Morning routine', exact: true });
-  if (!(await doomed.isVisible())) await page.getByRole('button', { name: /Lịch chạy/ }).click();
-  await doomed.getByRole('button', { name: 'Tùy chọn lịch Morning routine', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Xóa lịch', exact: true }).click();
-  await page.getByText(/Các lần chạy trước vẫn là chat/).waitFor();
-  await page.getByRole('menuitem', { name: 'Xóa', exact: true }).click();
+  const doomed = page.getByRole('region', { name: label('Lịch {0}', ['Morning routine']), exact: true });
+  if (!(await doomed.isVisible())) await page.getByRole('button', { name: label('Lịch chạy') }).click();
+  await doomed.getByRole('button', { name: label('Tùy chọn lịch {0}', ['Morning routine']), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Xóa lịch'), exact: true }).click();
+  await page.getByText(label('Xóa lịch {0}? Các lần chạy trước vẫn là chat, tìm lại được trong Tìm kiếm.', ['Morning routine'])).waitFor();
+  await page.getByRole('menuitem', { name: label('Xóa'), exact: true }).click();
   await doomed.waitFor({ state: 'detached' });
   const afterDelete = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(afterDelete.routines.length, 0);

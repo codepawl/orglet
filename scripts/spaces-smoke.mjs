@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { packagedExecutable } from './packaged-executable.mjs';
-import { useVietnamese } from './smoke-language.mjs';
+import { label, useEnglish } from './smoke-language.mjs';
 
 // Spaces (docs/spaces-design.md) in the packaged app: make a space with a category, add a channel, send a message and
 // see only the space's orglets answer, give the channel its own list, add an orglet back, then delete the space.
@@ -19,7 +19,7 @@ const shot = (page, name) => page.screenshot({ path: join('test-results', `space
 try {
   const page = await app.firstWindow();
   await page.setViewportSize({ width: 1200, height: 820 });
-  await useVietnamese(page);
+  await useEnglish(page);
   // Three more Demo orglets, and the channel their template makes outside every space, which the window puts into
   // the space kept for such channels.
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
@@ -30,18 +30,18 @@ try {
   // A new space from the rail's +, with two orglets and one category.
   await page.locator('.area-create').click();
   const spaceDialog = page.getByRole('dialog');
-  await spaceDialog.getByRole('textbox', { name: 'Tên không gian' }).fill('Launch');
-  await spaceDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
+  await spaceDialog.getByRole('textbox', { name: label('Tên không gian') }).fill('Launch');
+  await spaceDialog.getByRole('tab', { name: label('Thành viên'), exact: true }).click();
   await spaceDialog.getByRole('checkbox', { name: first, exact: true }).check();
   await spaceDialog.getByRole('checkbox', { name: second, exact: true }).check();
-  await spaceDialog.getByRole('tab', { name: 'Nhóm', exact: true }).click();
-  await spaceDialog.getByRole('button', { name: 'Thêm nhóm', exact: true }).click();
-  await spaceDialog.getByRole('textbox', { name: 'Tên nhóm' }).fill('Copy');
+  await spaceDialog.getByRole('tab', { name: label('Nhóm'), exact: true }).click();
+  await spaceDialog.getByRole('button', { name: label('Thêm nhóm'), exact: true }).click();
+  await spaceDialog.getByRole('textbox', { name: label('Tên nhóm') }).fill('Copy');
   // What a new channel in the space starts with: reading the web is off in the app's own defaults.
-  await spaceDialog.getByRole('tab', { name: 'Quyền', exact: true }).click();
-  await spaceDialog.getByRole('switch', { name: 'Đọc và tìm kiếm web' }).click();
+  await spaceDialog.getByRole('tab', { name: label('Quyền'), exact: true }).click();
+  await spaceDialog.getByRole('switch', { name: label('Đọc và tìm kiếm web') }).click();
   await shot(page, 'space-dialog');
-  await spaceDialog.getByRole('button', { name: 'Tạo không gian', exact: true }).click();
+  await spaceDialog.getByRole('button', { name: label('Tạo không gian'), exact: true }).click();
   await spaceDialog.waitFor({ state: 'detached' });
   await page.locator('.area-tile.active[data-name="Launch"]').waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch', 'the sidebar lists the new space');
@@ -74,31 +74,31 @@ try {
   assert.deepEqual([...made.defaults.capabilities].sort(), ['dataset.check', 'network.web', 'source.read']);
 
   // A channel in the space takes every orglet of the space, and only they answer.
-  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo trong không gian Launch', exact: true }).click();
-  assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Tạo kênh', 'Tạo nhóm'], 'the space\'s + makes a channel or a category');
+  await page.locator('.sidebar-head').getByRole('button', { name: label('Tạo trong không gian {0}', ['Launch']), exact: true }).click();
+  assert.deepEqual(await page.getByRole('menuitem').allTextContents(), [label('Tạo kênh'), label('Tạo nhóm')], 'the space\'s + makes a channel or a category');
   // Create category opens a dialog of its own, which adds the category to the space.
-  await page.getByRole('menuitem', { name: 'Tạo nhóm', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Tạo nhóm'), exact: true }).click();
   const categoryDialog = page.getByRole('dialog');
-  await categoryDialog.getByRole('heading', { name: 'Nhóm mới', exact: true }).waitFor();
-  await categoryDialog.getByRole('textbox', { name: 'Tên nhóm' }).fill('Review');
-  await categoryDialog.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
+  await categoryDialog.getByRole('heading', { name: label('Nhóm mới'), exact: true }).waitFor();
+  await categoryDialog.getByRole('textbox', { name: label('Tên nhóm') }).fill('Review');
+  await categoryDialog.getByRole('button', { name: label('Tạo nhóm'), exact: true }).click();
   await categoryDialog.waitFor({ state: 'detached' });
   assert.deepEqual((await workspace(page)).spaces.find(space => space.name === 'Launch').categories.map(category => category.name), ['Copy', 'Review']);
-  await page.locator('.sidebar-head').getByRole('button', { name: 'Tạo trong không gian Launch', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Tạo kênh', exact: true }).click();
+  await page.locator('.sidebar-head').getByRole('button', { name: label('Tạo trong không gian {0}', ['Launch']), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Tạo kênh'), exact: true }).click();
   const channelDialog = page.getByRole('dialog');
-  await channelDialog.getByRole('textbox', { name: 'Tên kênh' }).fill('general');
-  await channelDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
+  await channelDialog.getByRole('textbox', { name: label('Tên kênh') }).fill('general');
+  await channelDialog.getByRole('tab', { name: label('Thành viên'), exact: true }).click();
   assert.equal(await channelDialog.locator('.channel-scope li').count(), 2, 'the channel shows the two orglets of its space');
   await shot(page, 'channel-dialog');
   // New channels have a lead now; this one takes turns, so both orglets answer the greeting.
-  await channelDialog.getByRole('tab', { name: 'Cách làm việc', exact: true }).click();
-  await channelDialog.getByRole('combobox', { name: 'Cách làm việc' }).click();
-  await page.getByRole('option', { name: 'Lần lượt trả lời' }).click();
-  await channelDialog.getByRole('button', { name: 'Tạo kênh', exact: true }).click();
+  await channelDialog.getByRole('tab', { name: label('Cách làm việc'), exact: true }).click();
+  await channelDialog.getByRole('combobox', { name: label('Cách làm việc') }).click();
+  await page.getByRole('option', { name: label('Lần lượt trả lời') }).click();
+  await channelDialog.getByRole('button', { name: label('Tạo kênh'), exact: true }).click();
   await channelDialog.waitFor({ state: 'detached' });
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Say hello in one word.');
-  await page.getByRole('textbox', { name: 'Tin nhắn' }).press('Enter');
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Say hello in one word.');
+  await page.getByRole('textbox', { name: label('Tin nhắn') }).press('Enter');
   await page.locator('.chat-reply').nth(1).waitFor();
   await page.waitForTimeout(1500);
   const row = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
@@ -113,8 +113,8 @@ try {
 
   // The channel gets its own list: a lock in the sidebar, and the orglet left out is offered in the member column.
   await page.locator('.members-pane .member-item').filter({ hasText: second }).locator('.member-row').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Xóa khỏi kênh', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Xóa khỏi kênh', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Xóa khỏi kênh'), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Xóa khỏi kênh'), exact: true }).click();
   await page.locator('.members-others .member-item').waitFor();
   await page.locator('.sidebar .channel-hash .lucide-lock').waitFor();
   let listed = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
@@ -122,7 +122,7 @@ try {
   assert.equal(listed.assignees.length, 1);
   await shot(page, 'listed-channel');
   await page.locator('.members-others .member-item').first().locator('.member-row').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Thêm vào kênh này', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Thêm vào kênh này'), exact: true }).click();
   await page.locator('.members-others').waitFor({ state: 'detached' });
   listed = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
   assert.equal(listed.assignees.length, 2, 'the orglet is back in the channel');
@@ -134,13 +134,13 @@ try {
   // The template's channel was made outside every space: it is in the space kept for such channels, the space's
   // tile lists only its own, and Home lists direct messages only.
   assert.equal(await page.locator('.sidebar .channel-row').count(), 1, 'the space lists its one channel');
-  await page.locator('.area-tile[data-name="Kênh"]').click();
+  await page.locator(`.area-tile[data-name="${label('Kênh')}"]`).click();
   await page.locator('.sidebar .channel-row').first().waitFor();
-  assert.equal(await page.locator('.sidebar-title').textContent(), 'Kênh');
+  assert.equal(await page.locator('.sidebar-title').textContent(), label('Kênh'));
   assert.ok(!(await page.locator('.sidebar .channel-row').allTextContents()).some(text => text.includes('general')), 'a space\'s channel is not listed in another space');
-  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
+  await page.locator(`.area-tile[data-name="${label('Trò chuyện')}"]`).click();
   await page.locator('.sidebar .tree-item').first().waitFor();
-  assert.equal(await page.locator('.sidebar-title').textContent(), 'Trò chuyện');
+  assert.equal(await page.locator('.sidebar-title').textContent(), label('Trò chuyện'));
   assert.equal(await page.locator('.sidebar .channel-row').count(), 0, 'Home lists direct messages only');
   void third;
 
@@ -159,7 +159,7 @@ try {
   assert.equal(await columnGround('.members-pane'), await columnGround('.app > .sidebar'), 'the member column has the sidebar\'s ground');
   const columnWidth = () => page.locator('.members-pane').evaluate(element => Math.round(element.getBoundingClientRect().width));
   const widthBefore = await columnWidth();
-  const columnEdge = page.getByRole('separator', { name: 'Kéo để đổi độ rộng cột thành viên', exact: true });
+  const columnEdge = page.getByRole('separator', { name: label('Kéo để đổi độ rộng cột thành viên'), exact: true });
   await columnEdge.focus();
   // A step from the keyboard eases to its width, so wait for it to arrive.
   const columnReaches = expected => page.waitForFunction(width => Math.round(document.querySelector('.members-pane').getBoundingClientRect().width) === width, expected);
@@ -187,28 +187,28 @@ try {
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   await page.waitForTimeout(400);
-  await page.getByRole('button', { name: 'Ẩn danh sách thành viên', exact: true }).click();
+  await page.getByRole('button', { name: label('Ẩn danh sách thành viên'), exact: true }).click();
   await page.locator('.members-pane').waitFor({ state: 'detached' });
-  await page.getByRole('button', { name: 'Hiện danh sách thành viên', exact: true }).click();
+  await page.getByRole('button', { name: label('Hiện danh sách thành viên'), exact: true }).click();
   await page.locator('.members-pane').waitFor();
   assert.ok((await rightColumnMotion()).includes('pane-in'), 'the column still folds in when the person asks for it');
   await page.waitForTimeout(300);
 
   // Deleting the space keeps its channel, outside every space.
   await page.locator('.area-tile[data-name="Launch"]').click();
-  await page.getByRole('button', { name: 'Tùy chọn không gian Launch', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Xóa không gian', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn không gian {0}', ['Launch']), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Xóa không gian'), exact: true }).click();
   await shot(page, 'delete-space');
-  await page.getByRole('menuitem', { name: 'Xóa không gian', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Xóa không gian'), exact: true }).click();
   await page.locator('.area-tile[data-name="Launch"]').waitFor({ state: 'detached' });
   // The channel it leaves is taken into the space kept for channels outside the spaces.
-  await page.waitForFunction(async () => {
+  await page.waitForFunction(async channelsName => {
     const state = await window.orglet.call('workspace', {});
-    const home = state.spaces.find(space => space.name === 'Kênh');
+    const home = state.spaces.find(space => space.name === channelsName);
     return Boolean(home) && state.tasks.some(task => task.channel?.name === 'general' && task.channel.spaceId === home.id);
-  });
+  }, label('Kênh'));
   const after = await workspace(page);
-  assert.deepEqual(after.spaces.map(space => space.name), ['Kênh']);
+  assert.deepEqual(after.spaces.map(space => space.name), [label('Kênh')]);
   const kept = after.tasks.find(task => task.channel?.name === 'general');
   assert.equal(kept.assignees.length, 2, 'the channel keeps the orglets it had');
   // A space from the marketplace: its orglets, its categories and its channels arrive together, and nothing else.
@@ -228,13 +228,13 @@ try {
 
   // Publishing the space: its menu opens the form, and the preview lists every channel with its category and who is
   // in it. Nothing is sent: the smoke stops at the preview.
-  await page.getByRole('button', { name: 'Tùy chọn không gian Launch', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Xuất bản lên marketplace', exact: true }).click();
+  await page.getByRole('button', { name: label('Tùy chọn không gian {0}', ['Launch']), exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Xuất bản lên marketplace'), exact: true }).click();
   const publishing = page.locator('.market-publishing');
-  await publishing.getByLabel('Tên công khai').fill('Launch space of mine');
-  await publishing.getByLabel('Mô tả ngắn').fill('Three friends plan a launch.');
+  await publishing.getByLabel(label('Tên công khai')).fill('Launch space of mine');
+  await publishing.getByLabel(label('Mô tả ngắn')).fill('Three friends plan a launch.');
   await shot(page, 'publish-space-form');
-  await publishing.getByRole('button', { name: /Xem trước nội dung/ }).click();
+  await publishing.getByRole('button', { name: label('Xem trước nội dung công khai') }).click();
   await publishing.locator('.market-space-channels li').nth(2).waitFor();
   assert.deepEqual(await publishing.locator('.market-space-channel').allTextContents(), ['#general', '#sources', '#drafts']);
   const previewed = await publishing.locator('.market-exact-request pre').textContent();
@@ -247,10 +247,10 @@ try {
   // A folder on the rail: a right click on the space's tile puts it in a new one, the folder's tile closes and opens
   // it, and removing the folder leaves the space on the rail.
   await page.locator('.area-tile[data-name="Launch"]').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Chuyển vào thư mục mới', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Chuyển vào thư mục mới'), exact: true }).click();
   const folder = page.locator('.area-folder');
   await folder.locator('.area-tile[data-name="Launch"]').waitFor();
-  assert.equal((await workspace(page)).spaces.find(space => space.name === 'Launch').folder, 'Thư mục 1');
+  assert.equal((await workspace(page)).spaces.find(space => space.name === 'Launch').folder, label('Thư mục {0}', [1]));
   assert.equal(await folder.locator('.area-folder-tile').getAttribute('aria-expanded'), 'true');
   await shot(page, 'folder-open');
   await folder.locator('.area-folder-tile').click();
@@ -260,7 +260,7 @@ try {
   await folder.locator('.area-folder-tile').click();
   await page.locator('.area-tile[data-name="Launch"]').waitFor();
   await folder.locator('.area-folder-tile').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Bỏ thư mục', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Bỏ thư mục'), exact: true }).click();
   await folder.waitFor({ state: 'detached' });
   await page.locator('.area-tile[data-name="Launch"]').waitFor();
   assert.equal((await workspace(page)).spaces.find(space => space.name === 'Launch').folder, undefined);
@@ -269,7 +269,7 @@ try {
   const firstOrgletId = (await workspace(page)).workers[0].id;
   for (const name of ['Ra mắt', 'Khách hàng', 'Nghiên cứu']) await page.evaluate(fields => window.orglet.call('createSpace', fields), { name, orgletIds: [firstOrgletId], categories: [] });
   await page.locator('.area-tile > .space-mark').nth(4).waitFor();
-  assert.deepEqual(await page.locator('.area-tile:has(> .space-mark)').evaluateAll(tiles => tiles.map(tile => tile.dataset.name)), ['Kênh', 'Launch', 'Ra mắt', 'Khách hàng', 'Nghiên cứu']);
+  assert.deepEqual(await page.locator('.area-tile:has(> .space-mark)').evaluateAll(tiles => tiles.map(tile => tile.dataset.name)), [label('Kênh'), 'Launch', 'Ra mắt', 'Khách hàng', 'Nghiên cứu']);
   // The pointer on a tile shows its name beside it, and it goes when the pointer leaves.
   await page.locator('.area-tile[data-name="Khách hàng"]').hover();
   assert.equal(await page.locator('.area-tip').textContent(), 'Khách hàng');
@@ -307,16 +307,16 @@ try {
   assert.ok(movedSources.order.indexOf(movedSources.id) < movedSources.order.indexOf(drafts.id), 'and the place before that row');
   await shot(page, 'space-dragged');
   // Back and forward, at the top of the rail, travel along the places the window has shown.
-  const back = page.getByRole('button', { name: 'Quay lại', exact: true });
-  const forward = page.getByRole('button', { name: 'Tiến tới', exact: true });
-  await page.locator('.area-tile[data-name="Trò chuyện"]').click();
-  await page.locator('.area-tile.active[data-name="Trò chuyện"]').waitFor();
+  const back = page.getByRole('button', { name: label('Quay lại'), exact: true });
+  const forward = page.getByRole('button', { name: label('Tiến tới'), exact: true });
+  await page.locator(`.area-tile[data-name="${label('Trò chuyện')}"]`).click();
+  await page.locator(`.area-tile.active[data-name="${label('Trò chuyện')}"]`).waitFor();
   assert.equal(await forward.isDisabled(), true, 'nothing lies ahead of the newest place');
   await back.click();
   await page.locator('.area-tile.active[data-name="Launch"]').waitFor();
   assert.equal(await page.locator('.sidebar-title').textContent(), 'Launch');
   await forward.click();
-  await page.locator('.area-tile.active[data-name="Trò chuyện"]').waitFor();
+  await page.locator(`.area-tile.active[data-name="${label('Trò chuyện')}"]`).waitFor();
   await shot(page, 'trail');
   console.log('Packaged spaces smoke passed: create a space, a channel in it, only its orglets answer with the space\'s permissions, own list and lock, add back, drag to a category, delete the space, add a space from the marketplace, preview publishing it, put it in a folder and take it out.');
 } finally {

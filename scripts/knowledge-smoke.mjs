@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
+import { label, labelBefore, startsWith, useEnglish, openThreadByBrief, openChannels } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-knowledge-'));
@@ -13,25 +13,25 @@ let closed = false; app.once('close', () => { closed = true; });
 const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}));
 try {
   const page = await app.firstWindow();
-  await useVietnamese(page);
+  await useEnglish(page);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).first().waitFor();
   const team = (await workspace(page)).teams.find(item => item.name === 'Research Review');
 
   // Author a team note through the library UI.
-  await page.getByRole('button', { name: /^Thư viện/ }).click();
+  await page.getByRole('button', { name: startsWith('Thư viện') }).click();
   // Skills or Knowledge is chosen in the sidebar; the page has no tabs of its own.
   await page.locator('.sidebar .sidebar-nav-item', { hasText: 'Knowledge' }).click();
-  await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Tiêu đề', exact: true }).fill('Evidence limits');
-  await page.getByRole('textbox', { name: 'Nội dung', exact: true }).fill('State which claims lack a cited source before summarizing.');
-  await page.getByRole('textbox', { name: 'Thẻ', exact: true }).fill('evidence, review');
-  await page.getByRole('combobox', { name: 'Phạm vi', exact: true }).click(); await page.getByRole('option', { name: `#${team.name}`, exact: true }).click();
-  await page.getByRole('switch', { name: /Luôn nạp/ }).click();
-  await page.getByRole('button', { name: 'Lưu knowledge', exact: true }).click();
+  await page.getByRole('button', { name: label('Tạo knowledge'), exact: true }).click();
+  await page.getByRole('textbox', { name: label('Tiêu đề'), exact: true }).fill('Evidence limits');
+  await page.getByRole('textbox', { name: label('Nội dung'), exact: true }).fill('State which claims lack a cited source before summarizing.');
+  await page.getByRole('textbox', { name: label('Thẻ'), exact: true }).fill('evidence, review');
+  await page.getByRole('combobox', { name: label('Phạm vi'), exact: true }).click(); await page.getByRole('option', { name: `#${team.name}`, exact: true }).click();
+  await page.getByRole('switch', { name: label('Luôn nạp') }).click();
+  await page.getByRole('button', { name: label('Lưu knowledge'), exact: true }).click();
   // Opened from the Library, the editor leads back there on its own; the sidebar assertions below need it closed.
-  await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).waitFor();
+  await page.getByRole('button', { name: label('Tạo knowledge'), exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const [note] = (await workspace(page)).knowledge;
@@ -42,27 +42,27 @@ try {
   await app.evaluate(({ dialog }, path) => { globalThis.originalSave = dialog.showSaveDialog; globalThis.originalOpen = dialog.showOpenDialog; dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
   assert.equal(await page.evaluate(id => window.orglet.exportTemplate(id), team.id), true);
   const imported = await page.evaluate(() => window.orglet.importTemplate());
-  await page.getByRole('button', { name: /^Thư viện, \d+ cần duyệt$/ }).waitFor();
-  await page.getByRole('button', { name: /Thư viện/ }).click();
-  await page.getByRole('region', { name: 'Chờ duyệt' }).getByRole('button', { name: /Evidence limits/ }).click();
+  await page.getByRole('button', { name: new RegExp(`^${label('Thư viện, {0} cần duyệt', ['\\d+'])}$`) }).waitFor();
+  await page.getByRole('button', { name: label('Thư viện') }).click();
+  await page.getByRole('region', { name: label('Chờ duyệt') }).getByRole('button', { name: /Evidence limits/ }).click();
   // The header names where the note came from and still waits for review (COD-203).
-  await page.locator('.knowledge-author').filter({ hasText: 'Template kênh' }).filter({ hasText: 'nhập từ template · v1' }).filter({ hasText: 'Chờ duyệt' }).waitFor();
-  await page.getByRole('button', { name: 'Duyệt', exact: true }).click();
-  await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).waitFor();
+  await page.locator('.knowledge-author').filter({ hasText: label('Template kênh') }).filter({ hasText: `${label('nhập từ template')} · v1` }).filter({ hasText: label('Chờ duyệt') }).waitFor();
+  await page.getByRole('button', { name: label('Duyệt'), exact: true }).click();
+  await page.getByRole('button', { name: label('Tạo knowledge'), exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const approved = (await workspace(page)).knowledge.find(item => item.scope.type === 'team' && item.scope.id === imported.id);
   assert.equal(approved.status, 'approved'); assert.equal(approved.revision, 2);
-  assert.equal(await page.getByRole('button', { name: /^Thư viện, \d+ cần duyệt$/ }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: new RegExp(`^${label('Thư viện, {0} cần duyệt', ['\\d+'])}$`) }).count(), 0);
 
   // Keyword search reaches FTS in core.
-  await page.getByRole('button', { name: /Thư viện/ }).click();
+  await page.getByRole('button', { name: label('Thư viện') }).click();
   // Skills or Knowledge is chosen in the sidebar; the page has no tabs of its own.
   await page.locator('.sidebar .sidebar-nav-item', { hasText: 'Knowledge' }).click();
-  await page.getByRole('searchbox', { name: 'Tìm knowledge' }).fill('summariz');
-  await page.getByRole('region', { name: 'Đã duyệt' }).getByText('Đã duyệt (2)').waitFor();
-  await page.getByRole('searchbox', { name: 'Tìm knowledge' }).fill('nothingmatches');
-  await page.getByText('Không có mục khớp.').waitFor();
+  await page.getByRole('searchbox', { name: label('Tìm knowledge') }).fill('summariz');
+  await page.getByRole('region', { name: label('Đã duyệt') }).getByText(label('Đã duyệt ({0})', [2])).waitFor();
+  await page.getByRole('searchbox', { name: label('Tìm knowledge') }).fill('nothingmatches');
+  await page.getByText(label('Không có mục khớp.')).waitFor();
   await page.keyboard.press('Escape');
 
   // A run in the imported team freezes and shows which note it loaded.
@@ -77,14 +77,14 @@ try {
   for (const run of detail.runs) assert.deepEqual(run.snapshot.context.knowledge.map(item => [item.id, item.revision]), [[approved.id, 2]]);
   await openThreadByBrief(page, 'Knowledge context fixture');
   await page.locator('.topbar-actions .thread-menu').click();
-  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
+  await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
   // The context manifest sits in the technical dialog now.
-  await page.getByRole('button', { name: 'Chi tiết kỹ thuật', exact: true }).click();
-  await page.getByText(/Context đã nạp/).first().click();
+  await page.getByRole('button', { name: label('Chi tiết kỹ thuật'), exact: true }).click();
+  await page.getByText(labelBefore('Context đã nạp · {0} phần')).first().click();
   // The row says why the note loaded (COD-306): it is pinned.
-  await page.getByText('Knowledge: Evidence limits · luôn nạp · v2', { exact: false }).first().waitFor();
+  await page.getByText(`Knowledge: Evidence limits · ${label('luôn nạp')} · v2`, { exact: false }).first().waitFor();
   // Templates reuse the same text for team instructions and the skill; the manifest shows the duplicate was dropped.
-  await page.getByText('Kỹ năng · v1 · trùng nội dung đã nạp').first().waitFor();
+  await page.getByText(`${label('Kỹ năng')} · v1 · ${label('trùng nội dung đã nạp')}`).first().waitFor();
 
   await page.setViewportSize({ width: 760, height: 700 });
   const overflow = await page.evaluate(() => { const pageScroll = document.querySelector('.page-scroll'); return pageScroll ? pageScroll.scrollWidth - pageScroll.clientWidth : 0; });
