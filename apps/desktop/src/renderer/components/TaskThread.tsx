@@ -890,16 +890,16 @@ function forwardedAuthor(forwarded: ForwardedMessage): string {
  * were are this turn's files and follow the message like any attachment.
  */
 /**
- * Who answers a group-chat message that tagged nobody, when Tacet picked one orglet for it (COD-305). It sits where a
+ * Who answers a group-chat message that tagged nobody, when the decision model picked one orglet for it (COD-305). It sits where a
  * reply names the message it answers, so a narrower turn is never silent; the tooltip says why and how to ask everyone.
  */
 export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (workerId: string) => string | undefined }) {
   if (!route) return null;
   const names = route.workerIds.map(workerId => nameOf(workerId)).filter((name): name is string => Boolean(name));
   if (!names.length) return null;
-  const why = t('Tin nhắn không gắn thẻ ai, nên Tacet chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)]);
+  const why = t('Tin nhắn không gắn thẻ ai, nên model quyết định chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)]);
   return <p className="message-reply-context message-routed" title={why}>
-    <Route size={13} aria-hidden="true" />{t('Tacet chọn {0} trả lời', [names.join(', ')])}
+    <Route size={13} aria-hidden="true" />{t('Model quyết định chọn {0} trả lời', [names.join(', ')])}
   </p>;
 }
 

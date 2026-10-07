@@ -43,7 +43,7 @@ import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedAnswerChecks, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
-import { compileContext, frozenTacetFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
+import { compileContext, frozenDecisionModelFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, historyBudgetFor, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
@@ -591,25 +591,25 @@ export class Runner {
   /** Tool-loop progress has no desktop answer stream; only authenticated CLI waits observe it. */
   onCliProgress: (update: RunProgressUpdate) => void = () => {};
   /**
-   * Asks Tacet which notes fit a message their words do not match (COD-306), or answers undefined when Tacet is off,
+   * Asks the decision model which notes fit a message their words do not match (COD-306), or answers undefined when the decision model is off,
    * fails or is late. Unset in tests that do not need it.
    */
-  knowledgeFit?: (message: string, notes: NoteCandidate[]) => Promise<Map<string, number> | undefined>;
+  knowledgeFit?: (message: string, notes: NoteCandidate[], taskId?: string) => Promise<Map<string, number> | undefined>;
   /** Refresh native effort metadata only before a new run freezes its model and settings. */
   prepareEffort?: (worker: Worker) => Promise<void>;
   constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string, effort?: NativeEffortSetting) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() }), private browser?: BrowserTools, private desktop?: DesktopTools) {
     this.slots.onChange = () => this.notify();
   }
   /**
-   * Tacet's picks among the notes that would not load today: unpinned, and sharing no keyword with the message. Pinned and
-   * matching notes load as before, so Tacet can only add to them (COD-306).
+   * The decision model's picks among the notes that would not load today: unpinned, and sharing no keyword with the message. Pinned and
+   * matching notes load as before, so the decision model can only add to them (COD-306).
    */
-  private async fitUnmatchedKnowledge(brief: string, candidates: readonly { id: string; title: string; content: string; tags: string[]; pinned: boolean }[]): Promise<Map<string, number> | undefined> {
+  private async fitUnmatchedKnowledge(brief: string, candidates: readonly { id: string; title: string; content: string; tags: string[]; pinned: boolean }[], taskId?: string): Promise<Map<string, number> | undefined> {
     if (!this.knowledgeFit) return undefined;
     const unmatched = candidates.filter(item => !item.pinned && keywordScore(brief, item) === 0);
     if (!unmatched.length) return undefined;
     try {
-      return await this.knowledgeFit(brief, unmatched.map(item => ({ id: item.id, title: item.title, tags: item.tags })));
+      return await this.knowledgeFit(brief, unmatched.map(item => ({ id: item.id, title: item.title, tags: item.tags })), taskId);
     } catch {
       return undefined;
     }
@@ -934,8 +934,8 @@ export class Runner {
       let context = run.snapshot.context;
       if (!context) {
         const candidates = knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id);
-        const tacetFits = await this.fitUnmatchedKnowledge(input.brief, candidates);
-        context = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates, memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate), tacetFits }).context;
+        const decisionModelFits = await this.fitUnmatchedKnowledge(input.brief, candidates, task.id);
+        context = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates, memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate), decisionModelFits }).context;
       }
       run = { ...run, snapshot: { ...run.snapshot, context } };
       // Repeated feedback on this worker's earlier work, frozen with the context so a resume sees the same evidence and
@@ -943,7 +943,7 @@ export class Runner {
       if (this.appProposals && run.snapshot.improvement === undefined && !task.routineId && (run.stage === undefined || run.stage === 'group') && run.snapshot.worker.provider !== 'demo') {
         run = { ...run, snapshot: { ...run.snapshot, improvement: this.appProposals.improvementSignals(run) } };
       }
-      const recompiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, tacetFits: frozenTacetFits(context) });
+      const recompiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, decisionModelFits: frozenDecisionModelFits(context) });
       const compiled = keepFrozenOmissions(recompiled, context);
       run = { ...run, status: 'running' };
       this.store.update('runs', run);

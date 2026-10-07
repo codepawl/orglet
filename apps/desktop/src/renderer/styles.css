@@ -621,7 +621,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes reaction-row-in-end { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
 .message-reply-context { display:flex; align-items:center; gap:6px; max-width:100%; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
 .message-reply-context:hover { color:var(--text); }
-/* Who Tacet picked to answer (RoutedLine, COD-305): the same quiet line, but a statement, not a link. */
+/* Who the decision model picked to answer (RoutedLine, COD-305): the same quiet line, but a statement, not a link. */
 .message-routed { margin:0; cursor:default; }
 .message-routed:hover { color:var(--muted); }
 /* The quoted message under a reaction is one clamped line (COD-221), never the whole message. */
@@ -1321,8 +1321,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    one as a compact outline button on the same centre line. */
 .plan-resets { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:2px 0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .plan-resets .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
-/* Tacet's connection block (COD-303): the model field shares the column width of the selects above it. */
-.setting-control .tacet-model-input { width:210px; }
+/* The decision model's connection block (COD-303): the model field shares the column width of the selects above it. */
+.setting-control .decision-model-input { width:210px; }
 /* Settings → Giới thiệu (COD-176): the face and the name lead, then the same rows as every other section. The links
    are one row of compact outline chips, each mark left of its name; the changelog is the version, the date and what
    changed, one release at a time. */

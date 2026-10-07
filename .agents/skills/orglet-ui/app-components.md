@@ -153,7 +153,7 @@ Run facts:
 | Font samples in Settings | `InterfaceFontSample`, `CodeFontPreview` | `components/FontPreview.tsx` |
 | Command to paste | kit `CommandBlock` (`command`, `label`, `toolbar`, `copyLabel`, `onCopy`); the app wraps it as `CommandCopy` / `LoginCommandCopy` | `components/SettingsDialog.tsx` (kit: `packages/orglet-ui/src/components/CommandBlock.tsx`) |
 | Settings dialog, connections, harnesses | `SettingsDialog`, `ModelPicker`, `ConnectWays`, `CustomConnections`, `McpSettings`, `BrowserSettings`, `WebSearchSettings`, `AboutSettings`, `AccountSettings` | `components/SettingsDialog.tsx` and neighbours |
-| Orglet, task, crew dialogs | `WorkerDialog`, `TaskDialog`, `TacetSetup`, `LocalOnlyDialog` | `components/WorkerDialog.tsx` and neighbours |
+| Orglet, task, crew dialogs | `WorkerDialog`, `TaskDialog`, `DecisionModelSetup`, `LocalOnlyDialog` | `components/WorkerDialog.tsx` and neighbours |
 
 Settings and identity facts:
 

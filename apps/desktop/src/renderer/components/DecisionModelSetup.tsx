@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FlaskConical, PowerOff } from 'lucide-react';
 import { Input, Skeleton } from '@codepawlhq/orglet-ui';
 import { CredentialProvider, type Args, type Connections } from '../../shared/contracts';
-import { tacetModelHint, type TacetSettingView } from '../../shared/decisions';
+import { decisionModelHint, type DecisionModelSettingView } from '../../shared/decisions';
 import { isHarness } from '../../shared/harness';
 import type { CustomConnection } from '../../shared/custom-connections';
 import { Button } from './ui';
@@ -11,7 +11,7 @@ import { StatusMark } from './StatusMark';
 import { readiness } from './providers';
 import { workerProviderOptions } from './WorkerDialog';
 import { toast } from './toast';
-import { publishTacetSetting, useTacetSetting } from '../tacetSetting';
+import { publishDecisionModelSetting, useDecisionModelSetting } from '../decisionModelSetting';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 
@@ -20,7 +20,7 @@ const OFF = 'off';
 type Outcome = { tone: 'success' | 'error'; text: string };
 
 /** The connections a chat offers that are APIs: a harness CLI is not one, and sample replies are no connection. */
-export function tacetConnectionOptions(connections: Connections, customConnections: readonly CustomConnection[]): SelectOption[] {
+export function decisionModelConnectionOptions(connections: Connections, customConnections: readonly CustomConnection[]): SelectOption[] {
   const offered = workerProviderOptions(readiness(connections, [], customConnections), [], customConnections)
     .filter(option => option.value !== 'demo' && !isHarness(option.value));
   return [{ value: OFF, label: t('Tắt'), icon: <PowerOff size={16} /> }, ...offered];
@@ -29,16 +29,16 @@ export function tacetConnectionOptions(connections: Connections, customConnectio
 function costNote(connection: string): string {
   if (connection === OFF) return t('Không có kết nối nào: các việc nhỏ này chạy theo quy tắc như trước.');
   if (connection === 'openai') return t('Dùng Decisions API của OpenAI (bản beta công khai), $0,10 cho mỗi triệu token đầu vào.');
-  return t('Tacet hỏi qua kết nối này như một câu hỏi ngắn trong chat, tính phí theo bảng giá của nhà cung cấp.');
+  return t('Model quyết định hỏi qua kết nối này như một câu hỏi ngắn trong chat, tính phí theo bảng giá của nhà cung cấp.');
 }
 
 /**
- * Settings → Chat → Tacet (COD-303): which of the chat's own connections answers Tacet's small questions, or none.
+ * Settings → Chat → the decision model (COD-303): which of the chat's own connections answers the decision model's small questions, or none.
  * The model is a field prefilled for the connection; Test sends one sample question and shows the answer and how long
  * it took. The one sentence under the title says where the text goes, because that is the choice being made.
  */
-export function TacetSetup({ connections, customConnections }: { connections: Connections; customConnections: readonly CustomConnection[] }) {
-  const view = useTacetSetting();
+export function DecisionModelSetup({ connections, customConnections }: { connections: Connections; customConnections: readonly CustomConnection[] }) {
+  const view = useDecisionModelSetting();
   const [connection, setConnection] = useState(OFF);
   const [model, setModel] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,13 +52,13 @@ export function TacetSetup({ connections, customConnections }: { connections: Co
   }, [view]);
   useEffect(() => setOutcome(undefined), [connection, model]);
 
-  const save = async (next: Args<'saveTacetSetting'>) => {
+  const save = async (next: Args<'saveDecisionModelSetting'>) => {
     setBusy(true);
     try {
-      const saved: TacetSettingView = await orglet.call('saveTacetSetting', next);
-      publishTacetSetting(saved);
+      const saved: DecisionModelSettingView = await orglet.call('saveDecisionModelSetting', next);
+      publishDecisionModelSetting(saved);
     } catch (error) {
-      toast(tMessage((error as Error).message), 'error', t('Tacet'));
+      toast(tMessage((error as Error).message), 'error', t('Model quyết định'));
     } finally {
       setBusy(false);
     }
@@ -74,7 +74,7 @@ export function TacetSetup({ connections, customConnections }: { connections: Co
     await save({ connection: CredentialProvider.parse(nextConnection), model: trimmed });
   };
   const pick = (next: string) => {
-    const nextModel = next === OFF ? '' : tacetModelHint(next);
+    const nextModel = next === OFF ? '' : decisionModelHint(next);
     setConnection(next);
     setModel(nextModel);
     void commit(next, nextModel, true);
@@ -84,8 +84,8 @@ export function TacetSetup({ connections, customConnections }: { connections: Co
     setTesting(true);
     try {
       await commit(connection, model);
-      const result = await orglet.call('testTacet', {});
-      setOutcome({ tone: 'success', text: t('Tacet chọn “{0}” ({1}%) sau {2} ms.', [result.choice, Math.round(result.probability * 100), result.milliseconds]) });
+      const result = await orglet.call('testDecisionModel', {});
+      setOutcome({ tone: 'success', text: t('Model quyết định chọn “{0}” ({1}%) sau {2} ms.', [result.choice, Math.round(result.probability * 100), result.milliseconds]) });
     } catch (error) {
       setOutcome({ tone: 'error', text: tMessage((error as Error).message) });
     } finally {
@@ -93,32 +93,32 @@ export function TacetSetup({ connections, customConnections }: { connections: Co
     }
   };
 
-  const titleId = 'tacet-setup-title';
+  const titleId = 'decision-model-setup-title';
   const active = connection !== OFF;
-  return <section className="tacet-setup" aria-labelledby={titleId}>
+  return <section className="decision-model-setup" aria-labelledby={titleId}>
     <div className="setting-row">
       <div className="setting-text">
-        <span id={titleId} className="setting-title">{t('Tacet')}</span>
-        <span className="setting-description">{t('Giúp các việc nhỏ như gợi ý quyền hay chọn Tí trả lời. Câu hỏi và một đoạn ngắn ngữ cảnh được gửi tới nhà cung cấp bạn chọn.')}</span>
+        <span id={titleId} className="setting-title">{t('Model quyết định')}</span>
+        <span className="setting-description">{t('Trả lời nhanh các câu hỏi nhỏ ở nền: ai trả lời trong kênh, ghi chú nào hợp, một bước có vẻ rủi ro không. Câu hỏi và một đoạn ngắn ngữ cảnh được gửi tới nhà cung cấp bạn chọn.')}</span>
       </div>
       <div className="setting-control">
-        {view ? <Select ariaLabel={t('Kết nối của Tacet')} className="setting-select" value={connection} disabled={busy} showDetail={false}
-          onChange={pick} options={tacetConnectionOptions(connections, customConnections)} menuMinWidth={240} /> : <Skeleton width={210} height={34} />}
+        {view ? <Select ariaLabel={t('Kết nối của model quyết định')} className="setting-select" value={connection} disabled={busy} showDetail={false}
+          onChange={pick} options={decisionModelConnectionOptions(connections, customConnections)} menuMinWidth={240} /> : <Skeleton width={210} height={34} />}
       </div>
     </div>
     {active && <div className="setting-row">
       <div className="setting-text">
-        <label htmlFor="tacet-model" className="setting-title">{t('Model')}</label>
+        <label htmlFor="decision-model-id" className="setting-title">{t('Model')}</label>
         <span className="setting-description">{costNote(connection)}</span>
       </div>
       <form className="setting-control" onSubmit={event => { event.preventDefault(); void commit(connection, model); }}>
-        <Input id="tacet-model" className="tacet-model-input" value={model} maxLength={200} disabled={busy} spellCheck={false} autoComplete="off"
+        <Input id="decision-model-id" className="decision-model-input" value={model} maxLength={200} disabled={busy} spellCheck={false} autoComplete="off"
           placeholder={t('ID model')} onChange={event => setModel(event.target.value)} onBlur={() => void commit(connection, model)} />
       </form>
     </div>}
     {active && <div className="setting-row">
       <div className="setting-text">
-        <span className="setting-title">{t('Thử Tacet')}</span>
+        <span className="setting-title">{t('Thử model quyết định')}</span>
         <span className={`setting-description web-search-outcome${outcome ? ` ${outcome.tone}` : ''}`} aria-live="polite">
           {outcome && !testing && <StatusMark variant="filled" tone={outcome.tone} label={outcome.tone === 'success' ? t('Trả lời được') : t('Lỗi')} decorative />}
           <span>{testing ? t('Đang hỏi…') : outcome ? outcome.text : t('Gửi một câu hỏi mẫu tới kết nối này và hiện câu trả lời.')}</span>

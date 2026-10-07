@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import type { DecisionAnswer, DecisionQuestion, DecisionQuestions, DecisionResponse, JsonValue } from '../../shared/decisions';
+import type { DecisionAnswer, DecisionQuestion, DecisionQuestions, DecisionResponse, DecisionUsage, JsonValue } from '../../shared/decisions';
 import { answerFromProbabilities, criterionText, noulFromProbability } from './answers';
 
 /**
  * OpenAI's Decisions API (public beta, read 2026-10-07 from developers.openai.com/api/docs/guides/decisions): one
- * request carries a text and typed questions, and the answer carries a probability for every option. Tacet's three
+ * request carries a text and typed questions, and the answer carries a probability for every option. The decision model's three
  * question types map onto the API's three:
  *
  *   noul   -> predicate  (criteria.true / criteria.false are folded into the instructions)
@@ -83,7 +83,7 @@ function scoreProbabilities(question: Extract<DecisionQuestion, { type: 'score' 
   return given.map(entry => entry.probability);
 }
 
-/** One API answer as Tacet's, or undefined for a refusal, an unknown option set or an impossible distribution. */
+/** One API answer as the decision model's, or undefined for a refusal, an unknown option set or an impossible distribution. */
 function convert(question: DecisionQuestion, raw: unknown): DecisionAnswer | undefined {
   const parsed = ApiAnswer.safeParse(raw);
   if (!parsed.success) return undefined;
@@ -140,6 +140,7 @@ export async function askOpenAiDecisions(request: OpenAiDecisionRequest): Promis
   const reply: unknown = await response.json().catch(() => undefined);
   const parsed = ApiReply.safeParse(reply);
   if (!parsed.success) throw new Error('OpenAI Decisions API trả lời không đúng dạng.');
-  const inputTokens = parsed.data.usage?.input_tokens ?? parsed.data.usage?.prompt_tokens ?? Math.ceil(request.input.length / 4);
-  return { model: request.model, answers: answersFromReply(reply, request.questions, ids), usage: { inputTokens } };
+  const reported = parsed.data.usage?.input_tokens ?? parsed.data.usage?.prompt_tokens;
+  const usage: DecisionUsage = reported === undefined ? { inputTokens: Math.ceil(request.input.length / 4), estimated: true } : { inputTokens: reported };
+  return { model: request.model, answers: answersFromReply(reply, request.questions, ids), usage };
 }

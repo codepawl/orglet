@@ -247,7 +247,7 @@ function judge(step: BrowserActStep, inspected: BrowserInspectResult): BrowserVe
 }
 
 /**
- * A step that carries something out, as Tacet reads it: a click, Enter, or typing that ends with Enter. Typing alone,
+ * A step that carries something out, as the decision model reads it: a click, Enter, or typing that ends with Enter. Typing alone,
  * choosing in a list and the other keys only fill in or move around, so they are not asked about.
  */
 function browserActionToJudge(step: BrowserActStep, inspected: BrowserInspectResult, site: string): ActionToJudge | undefined {
@@ -297,7 +297,7 @@ export class BrowserTools {
   private endedWhileHeld = new Map<string, Set<string>>();
   /** Answers to consequential steps and the take-over, kept while the app runs. */
   readonly person: BrowserPerson;
-  /** Tacet's second opinion on steps the rules let through (COD-306); unset in tests and where Tacet cannot run. */
+  /** The decision model's second opinion on steps the rules let through (COD-306); unset in tests and where the decision model cannot run. */
   secondOpinion?: SecondOpinion;
 
   constructor(private store: Store, private host?: BrowserHost, notify: () => void = () => {}, personWaitMs?: number) {
@@ -580,16 +580,16 @@ export class BrowserTools {
   }
 
   /**
-   * Tacet's second opinion (COD-306) on a step the rules let through, in a chat where the person can answer: a step
-   * Tacet reads as sending, paying, deleting or publishing asks the person too. The rules' verdict is returned as it is
+   * The decision model's second opinion (COD-306) on a step the rules let through, in a chat where the person can answer: a step
+   * the decision model reads as sending, paying, deleting or publishing asks the person too. The rules' verdict is returned as it is
    * whenever they already ask or refuse, the step only fills in or moves around (typing without Enter, choosing in a
-   * list), nobody could answer a card, or Tacet is absent, unsure or late.
+   * list), nobody could answer a card, or the decision model is absent, unsure or late.
    */
   private async withSecondOpinion(verdict: BrowserVerdict, step: BrowserActStep, inspected: BrowserInspectResult, site: string, asking: BrowserAsking): Promise<BrowserVerdict> {
     if (verdict.risk !== 'input' || asking.kind !== 'ask' || !this.secondOpinion) return verdict;
     const action = browserActionToJudge(step, inspected, site);
     if (!action) return verdict;
-    const opinion = await this.secondOpinion.judge(action);
+    const opinion = await this.secondOpinion.judge(action, { taskId: asking.taskId });
     if (!opinion?.risky) return verdict;
     return { risk: 'consequential', reasons: [riskReasons.secondOpinion] };
   }

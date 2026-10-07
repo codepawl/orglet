@@ -7,8 +7,8 @@ import type { Decisions } from '../decisions/service';
 import { ROUTING_MAX_LENGTH, routableGroup, routedOrglet, routingQuestion } from '../decisions/group-routing';
 
 /**
- * Who answers a group-chat message that tags nobody (COD-305). Without Tacet every orglet in the group answers in turn.
- * With Tacet on, a message the person wrote themselves, that tags nobody and replies to no one, is read
+ * Who answers a group-chat message that tags nobody (COD-305). Without the decision model every orglet in the group answers in turn.
+ * With the decision model on, a message the person wrote themselves, that tags nobody and replies to no one, is read
  * against each orglet's name, description and instructions; a clear pick answers alone and the pick is kept on the chat
  * (`routedTurns`), which the thread shows under the message. Anything short of a clear pick, a failed load or a slow
  * answer keeps everyone. Crews are never asked: their lead plans the turn.
@@ -30,7 +30,7 @@ export class TurnRouting {
 
   /**
    * The step that picks this turn's answerers, run by the team runner once the turn is running (so Stop and Pause
-   * reach it), or undefined when Tacet is not asked and everyone answers as before.
+   * reach it), or undefined when the decision model is not asked and everyone answers as before.
    */
   router(task: Task, group: Worker[]): (() => Promise<Worker[]>) | undefined {
     if (!this.shouldAsk(task, group)) return undefined;
@@ -52,7 +52,7 @@ export class TurnRouting {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), this.timeoutMs); });
     try {
-      const asked = this.decisions().decide(words, routingQuestion(group), ROUTING_MAX_LENGTH).catch(() => undefined);
+      const asked = this.decisions().decide(words, routingQuestion(group), ROUTING_MAX_LENGTH, { taskId: task.id }).catch(() => undefined);
       const response = await Promise.race([asked, timeout]);
       const pick = routedOrglet(response, group);
       if (!pick) return group;

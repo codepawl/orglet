@@ -260,7 +260,7 @@ export class DesktopTools {
   readonly overlay: DesktopOverlayDirector;
   /** Where the glow's states go: main, which draws them and says when they are on screen. Unset where nothing draws it. */
   private overlaySink?: (state: DesktopOverlayState) => Promise<boolean> | void;
-  /** Tacet's second opinion on steps the rules let through (COD-306); unset in tests and where Tacet cannot run. */
+  /** The decision model's second opinion on steps the rules let through (COD-306); unset in tests and where the decision model cannot run. */
   secondOpinion?: SecondOpinion;
 
   /**
@@ -512,17 +512,17 @@ export class DesktopTools {
   }
 
   /**
-   * Tacet's second opinion (COD-306) on pressing or toggling something the rules let through, in a chat where the
-   * person can answer: a step Tacet reads as sending, paying, deleting or publishing asks the person too. The rules'
+   * The decision model's second opinion (COD-306) on pressing or toggling something the rules let through, in a chat where the
+   * person can answer: a step the decision model reads as sending, paying, deleting or publishing asks the person too. The rules'
    * verdict is returned as it is whenever they already ask or refuse, the step enters text, nobody could answer a
-   * card, or Tacet is absent, unsure or late.
+   * card, or the decision model is absent, unsure or late.
    */
   private async withSecondOpinion(verdict: DesktopVerdict, kind: DesktopActKind, target: DesktopTargetFacts, program: string, asking: DesktopAsking): Promise<DesktopVerdict> {
     if (verdict.risk !== 'input' || asking.kind !== 'ask' || !this.secondOpinion) return verdict;
     if (kind !== 'invoke' && kind !== 'toggle') return verdict;
     const opinion = await this.secondOpinion.judge({
       surface: 'desktop', kind, element: elementLabel(target), controlType: target.controlType, program, window: target.windowName, inDialog: target.inDialog,
-    });
+    }, { taskId: asking.taskId });
     if (!opinion?.risky) return verdict;
     return { risk: 'consequential', reasons: [desktopRiskReasons.secondOpinion] };
   }

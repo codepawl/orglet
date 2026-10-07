@@ -61,7 +61,7 @@ it('posts a schedule run once into the orglet\'s DM, under the schedule, and the
   expect(sent).toContain('Three new emails from the bank.');
 });
 
-it('keeps an hourly run with nothing new out of the chat, and posts it once Tacet finds it noteworthy', () => {
+it('keeps an hourly run with nothing new out of the chat, and posts it once the decision model finds it noteworthy', () => {
   delivery.deliver();
   const dm = chat('Hi', 'Hello!');
   const hourly = routine('hours');

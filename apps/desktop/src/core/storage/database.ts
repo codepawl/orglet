@@ -282,6 +282,17 @@ export class Store {
           ledger_id TEXT PRIMARY KEY REFERENCES ledger(id), cache_read_tokens INTEGER NOT NULL CHECK(cache_read_tokens>=0),
           cache_write_tokens INTEGER NOT NULL CHECK(cache_write_tokens>=0)
         );`);
+      // What the decision model's small requests used, on the connection they went through (core/budgets/decision-usage.ts).
+      // A table of its own because such a request has no run to reserve against. `amount` is null when no price is verified
+      // or the provider reported no usage. Local only: a backup carries no rows from it.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS decision_usage (
+          id TEXT PRIMARY KEY, task_id TEXT, provider TEXT NOT NULL, model TEXT NOT NULL, month TEXT NOT NULL,
+          amount INTEGER CHECK(amount IS NULL OR amount>=0), input_tokens INTEGER NOT NULL CHECK(input_tokens>=0),
+          output_tokens INTEGER NOT NULL CHECK(output_tokens>=0), cache_read_tokens INTEGER NOT NULL CHECK(cache_read_tokens>=0),
+          cache_write_tokens INTEGER NOT NULL CHECK(cache_write_tokens>=0), estimated INTEGER NOT NULL CHECK(estimated IN (0,1)),
+          pricing_version TEXT, created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS decision_usage_provider_month ON decision_usage(provider,month);`);
       // Which accounts this computer has joined and how far it has read each one (COD-329 phase 3). Local only: a
       // backup carries neither. New tables and no schema version, so an older build can still open the workspace.
       this.db.exec(`CREATE TABLE IF NOT EXISTS sync_accounts (
@@ -414,8 +425,17 @@ export class Store {
     const row = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state!='settled' THEN r.amount ELSE 0 END),0) AS reserved, COALESCE(SUM(l.amount),0) AS charged, COALESCE(SUM(CASE WHEN r.state='unknown' THEN 1 ELSE 0 END),0) AS uncertain, COALESCE(SUM(l.input_tokens),0) AS input_tokens, COALESCE(SUM(l.output_tokens),0) AS output_tokens,
       COALESCE(SUM(c.cache_read_tokens),0) AS cache_read_tokens, COALESCE(SUM(c.cache_write_tokens),0) AS cache_write_tokens
       FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id LEFT JOIN ledger_cache c ON c.ledger_id=l.id ${where}`).get(...(taskId ? [taskId] : []))!;
-    return { reservedMicros: Number(row.reserved), chargedMicros: Number(row.charged), uncertainCount: Number(row.uncertain), inputTokens: Number(row.input_tokens), outputTokens: Number(row.output_tokens),
-      cacheReadTokens: Number(row.cache_read_tokens), cacheWriteTokens: Number(row.cache_write_tokens) };
+    // The decision model's small requests count like chat requests: their cost, their tokens, and, while a call's cost is
+    // unknown, a count of such calls that stays visible.
+    const decisionWhere = taskId ? 'WHERE task_id=?' : '';
+    const decisions = this.db.prepare(`SELECT COALESCE(SUM(amount),0) AS charged, COALESCE(SUM(CASE WHEN amount IS NULL THEN 1 ELSE 0 END),0) AS unpriced, COALESCE(SUM(input_tokens),0) AS input_tokens,
+      COALESCE(SUM(output_tokens),0) AS output_tokens, COALESCE(SUM(cache_read_tokens),0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens),0) AS cache_write_tokens
+      FROM decision_usage ${decisionWhere}`).get(...(taskId ? [taskId] : []))!;
+    const unpricedDecisionCalls = Number(decisions.unpriced);
+    return { reservedMicros: Number(row.reserved), chargedMicros: Number(row.charged) + Number(decisions.charged), uncertainCount: Number(row.uncertain),
+      inputTokens: Number(row.input_tokens) + Number(decisions.input_tokens), outputTokens: Number(row.output_tokens) + Number(decisions.output_tokens),
+      cacheReadTokens: Number(row.cache_read_tokens) + Number(decisions.cache_read_tokens), cacheWriteTokens: Number(row.cache_write_tokens) + Number(decisions.cache_write_tokens),
+      ...(unpricedDecisionCalls > 0 ? { unpricedDecisionCalls } : {}) };
   }
   budgetReservations(): BudgetReservationView[] {
     const rows = this.db.prepare(`SELECT r.id,r.task_id,r.run_id,r.provider,r.month,r.amount,

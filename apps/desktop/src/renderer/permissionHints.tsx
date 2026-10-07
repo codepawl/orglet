@@ -2,42 +2,56 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { PermissionState } from '../shared/capability-status';
 import { hintKind, missingNeed, PERMISSION_NEEDS_MIN_CHARS, type PermissionHintKind, type PermissionNeed } from '../shared/permission-needs';
 import { orglet } from './api';
-import { useTacetSetting } from './tacetSetting';
 import { PermissionHint } from './components/PermissionHint';
 
 /**
- * The composer's reading of what a message needs (COD-305). It asks the core only while Tacet has a connection, and
- * only once typing has paused, so a sentence being written is read once rather than at every key. While the person
- * keeps typing, the last answer stays until the next one arrives, so the line does not blink at every word; an emptied
- * box (the message was sent) clears it at once. The core answers `null` when a newer request is already waiting.
+ * The composer's reading of what a message needs (COD-305). The decision model reads a message when the person sends
+ * it, never while it is still being typed, so an unsent draft does not leave the computer. The send does not wait for
+ * the answer: the line appears under the message bar a moment after, about the message that was just sent, and goes
+ * away when the person starts the next one, grants the permission, or waves it off. The core answers `null` when it has
+ * nothing to say (the decision model is off, the message is too short, a newer request is already waiting).
  */
 
-/** Typing pauses about this long between words; a longer wait makes the line arrive after the person looked away. */
-export const PERMISSION_HINT_DEBOUNCE_MS = 450;
+/** The needs found for the last message sent in each chat, kept until that chat's next message starts or a newer one is sent. */
+const needsByChat = new Map<string, PermissionNeed[]>();
+const latestRequest = new Map<string, number>();
+const watchers = new Set<() => void>();
 
-export function usePermissionNeeds(text: string, enabled: boolean): PermissionNeed[] {
-  const tacet = useTacetSetting();
-  const ready = enabled && tacet !== undefined && tacet.setting !== 'off';
-  const [needs, setNeeds] = useState<PermissionNeed[]>([]);
-  const message = text.trim();
-  const readable = ready && message.length >= PERMISSION_NEEDS_MIN_CHARS;
+function announce(): void {
+  for (const watcher of watchers) watcher();
+}
+
+/**
+ * Reads the message that was just sent to the chat `taskId`, when `enabled` (the chat could act on a hint). The answer
+ * lands in `needsByChat`; a failure shows nothing, as before the decision model.
+ */
+export function readSentMessage(taskId: string, message: string, enabled: boolean): void {
+  const text = message.trim();
+  const request = (latestRequest.get(taskId) ?? 0) + 1;
+  latestRequest.set(taskId, request);
+  if (needsByChat.delete(taskId)) announce();
+  if (!enabled || text.length < PERMISSION_NEEDS_MIN_CHARS) return;
+  void orglet.call('suggestPermissions', { text, taskId }).then(result => {
+    if (!result || latestRequest.get(taskId) !== request) return;
+    needsByChat.set(taskId, result.needs);
+    announce();
+  }, () => undefined);
+}
+
+/** What the last sent message in this chat needs, hidden while a new message is being typed. */
+export function useSentMessageNeeds(taskId: string, typing: boolean): PermissionNeed[] {
+  const [needs, setNeeds] = useState<PermissionNeed[]>(() => needsByChat.get(taskId) ?? []);
   useEffect(() => {
-    if (!readable) {
-      setNeeds([]);
-      return;
-    }
-    let current = true;
-    const timer = setTimeout(() => {
-      void orglet.call('suggestPermissions', { text: message }).then(result => {
-        if (current && result) setNeeds(result.needs);
-      }, () => undefined);
-    }, PERMISSION_HINT_DEBOUNCE_MS);
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [readable, message]);
-  return readable ? needs : [];
+    const update = () => setNeeds(needsByChat.get(taskId) ?? []);
+    update();
+    watchers.add(update);
+    return () => void watchers.delete(update);
+  }, [taskId]);
+  useEffect(() => {
+    // The next message has begun, so the line about the last one is done.
+    if (typing && needsByChat.delete(taskId)) announce();
+  }, [typing, taskId]);
+  return typing ? [] : needs;
 }
 
 /**
@@ -74,13 +88,14 @@ export type PermissionHintControls = {
 };
 
 /**
- * The hint line for the text in a message box, or `fallback` when there is no hint: a line that matters less than a
- * permission the message is about to need, such as a plan nearly used up (COD-326).
+ * The hint line about the last message sent from this box, or `fallback` when there is none: a line that matters less than
+ * a permission the message needed, such as a plan nearly used up (COD-326). It stays out of the way while the next
+ * message is typed.
  */
 export function ComposerPermissionHint({ text, controls, fallback }: { text: string; controls: PermissionHintControls; fallback?: ReactNode }) {
-  const needs = usePermissionNeeds(text, controls.enabled);
+  const needs = useSentMessageNeeds(controls.chatKey, text.trim().length > 0);
   const [dismissed, dismiss] = useDismissedHints(controls.chatKey);
-  const need = missingNeed(needs, controls.permissions, dismissed);
+  const need = controls.enabled ? missingNeed(needs, controls.permissions, dismissed) : undefined;
   if (!need) return fallback ?? null;
   return <PermissionHint need={need} folder={controls.permissions.workspace} disabled={controls.busy}
     onApply={() => controls.onApply(need)} onDismiss={() => dismiss(hintKind(need))} />;

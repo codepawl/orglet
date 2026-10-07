@@ -327,7 +327,7 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, inChrome: false, using: false, waiting: false });
   }, 120_000);
 
-  it('asks about a click the rules let through when Tacet reads it as risky, and never asks Tacet about one they ask about', async () => {
+  it('asks about a click the rules let through when the decision model reads it as risky, and never asks the decision model about one they ask about', async () => {
     const judged: ActionToJudge[] = [];
     const script: Script = [
       () => call('browser_open', { url: `${base}/shop`, tabId: null }),
@@ -347,13 +347,13 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
       },
     };
 
-    // The Search click is input to the rules; Tacet's yes adds the card, with its own reason.
+    // The Search click is input to the rules; the decision model's yes adds the card, with its own reason.
     await until(() => core!.browser.live(chat.taskId).approval !== undefined);
     const first = core!.browser.live(chat.taskId).approval!;
     expect(first).toMatchObject({ kind: 'click', element: 'Search', reasons: [riskReasons.secondOpinion] });
     await core!.command('answerBrowserApproval', { taskId: chat.taskId, requestId: first.id, answer: 'decline' });
 
-    // Place order is the rules' own ask: Tacet is not consulted and its reason does not appear.
+    // Place order is the rules' own ask: the decision model is not consulted and its reason does not appear.
     await until(() => core!.browser.live(chat.taskId).approval !== undefined && core!.browser.live(chat.taskId).approval!.id !== first.id);
     const second = core!.browser.live(chat.taskId).approval!;
     expect(second.element).toBe('Place order');
@@ -363,7 +363,7 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
 
     expect(searches).toEqual([]);
     expect(orders).toBe(0);
-    // Typing without Enter only fills in, so the one step Tacet was asked about is the Search click.
+    // Typing without Enter only fills in, so the one step the decision model was asked about is the Search click.
     expect(judged).toEqual([{ surface: 'browser', kind: 'click', element: 'Search', role: 'button', site, page: 'Test shop' }]);
     expect(actions(chat.taskId)).toEqual([
       'open:read:done', 'snapshot:read:done', 'type:input:done', 'click:consequential:declined',

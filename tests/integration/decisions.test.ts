@@ -26,7 +26,7 @@ const connectedDependencies = {
   adapter: async () => { throw new Error('Not used by these tests.'); },
 };
 
-/** A Tacet with a connection that records every question and answers from `respond`; a throw is a provider failing. */
+/** A decision model with a connection that records every question and answers from `respond`; a throw is a provider failing. */
 class AnsweringDecisions extends Decisions {
   constructor(private respond: (asked: Asked) => DecisionResponse | undefined) {
     super(connectedDependencies);
@@ -36,14 +36,14 @@ class AnsweringDecisions extends Decisions {
   }
 }
 
-describe('a quiet schedule run that Tacet finds noteworthy (COD-303)', () => {
+describe('a quiet schedule run that the decision model finds noteworthy (COD-303)', () => {
   let directory: string;
   let store: Store;
   let core: CoreService;
   let answer: string;
   let level: number;
   let asked: Asked[];
-  /** How far the core's clock runs ahead of the real one, to age a run past Tacet's window. */
+  /** How far the core's clock runs ahead of the real one, to age a run past the decision model's window. */
   let clockAhead: number;
 
   beforeEach(async () => {
@@ -64,7 +64,7 @@ describe('a quiet schedule run that Tacet finds noteworthy (COD-303)', () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  /** Tacet rates every answer `level` out of 2. */
+  /** The decision model rates every answer `level` out of 2. */
   function connectStub() {
     core.decisions = new AnsweringDecisions(request => {
       asked.push(request);
@@ -106,7 +106,7 @@ describe('a quiet schedule run that Tacet finds noteworthy (COD-303)', () => {
     expect(store.get<Task>('tasks', task.id).attention).toMatchObject({ score: 0.3, notified: false });
   });
 
-  it('leaves a run alone once its answer is older than the window, so turning Tacet on never announces history', async () => {
+  it('leaves a run alone once its answer is older than the window, so turning the decision model on never announces history', async () => {
     turnOff();
     const task = await run(hourly);
     clockAhead = 16 * 60_000;
@@ -116,7 +116,7 @@ describe('a quiet schedule run that Tacet finds noteworthy (COD-303)', () => {
     expect(store.get<Task>('tasks', task.id).attention).toBeUndefined();
   });
 
-  it('changes nothing while Tacet is off', async () => {
+  it('changes nothing while the decision model is off', async () => {
     turnOff();
     const task = await run(hourly);
     await core.tick();
@@ -129,7 +129,7 @@ describe('a quiet schedule run that Tacet finds noteworthy (COD-303)', () => {
     expect(store.get<Task>('tasks', task.id).attention).toBeUndefined();
   });
 
-  it('keeps today\'s behaviour when the provider fails to answer, and gives up on a run after a few tries', async () => {
+  it('keeps today\'s behaviour when the provider fails to answer, and retries a run once and then gives up on it', async () => {
     core.decisions = new AnsweringDecisions(request => {
       asked.push(request);
       throw new Error('Nhà cung cấp lỗi.');
@@ -137,7 +137,8 @@ describe('a quiet schedule run that Tacet finds noteworthy (COD-303)', () => {
     const task = await run(hourly);
     for (let tick = 0; tick < MAX_REVIEW_ATTEMPTS + 3; tick++) await core.tick();
     expect(store.get<Task>('tasks', task.id).attention).toBeUndefined();
-    expect(asked).toHaveLength(MAX_REVIEW_ATTEMPTS);
+    expect(MAX_REVIEW_ATTEMPTS).toBe(2);
+    expect(asked).toHaveLength(2);
   });
 
   it('leaves a daily schedule\'s run alone: it is announced anyway', async () => {
@@ -158,14 +159,14 @@ describe('a quiet schedule run that Tacet finds noteworthy (COD-303)', () => {
 
   it('forgets the chosen connection with Erase everything', async () => {
     const real = new CoreService(store, () => {}, async () => { throw new Error('unused'); });
-    await real.command('saveTacetSetting', { connection: 'anthropic', model: 'claude-sonnet-5-5' });
-    expect(await real.command('tacetSetting', {})).toEqual({ setting: { connection: 'anthropic', model: 'claude-sonnet-5-5' }, chosen: true });
+    await real.command('saveDecisionModelSetting', { connection: 'anthropic', model: 'claude-sonnet-5-5' });
+    expect(await real.command('decisionModelSetting', {})).toEqual({ setting: { connection: 'anthropic', model: 'claude-sonnet-5-5' }, chosen: true });
     await real.command('eraseData', { scope: 'everything', confirm: ERASE_CONFIRMATION });
-    expect(await real.command('tacetSetting', {})).toEqual({ setting: 'off', chosen: false });
+    expect(await real.command('decisionModelSetting', {})).toEqual({ setting: 'off', chosen: false });
   });
 });
 
-describe('announcing a run Tacet flagged (COD-303)', () => {
+describe('announcing a run the decision model flagged (COD-303)', () => {
   const routine = { id: 'office', name: 'Backup check', schedule: hourly } as Routine;
   const names: ChatNames = { workers: [{ id: 'researcher', name: 'Researcher' } as never], teams: [], routines: [routine] };
   const run = (id: string, attention?: Task['attention']): Task => ({

@@ -20,9 +20,9 @@ export type BrowserStepToJudge =
   | { kind: 'select'; target: BrowserTargetFacts; page: BrowserPageFacts }
   | { kind: 'press'; key: BrowserKey; target: BrowserTargetFacts | null; page: BrowserPageFacts };
 
-/** Why the core asks, as the card shows it; the window translates each one. `secondOpinion` is Tacet's (COD-306). */
+/** Why the core asks, as the card shows it; the window translates each one. `secondOpinion` is the decision model's (COD-306). */
 export const riskReasons = {
-  secondOpinion: 'Tacet đoán bước này có thể gửi, trả tiền, xóa hoặc đăng một thứ gì đó',
+  secondOpinion: 'Model quyết định đoán bước này có thể gửi, trả tiền, xóa hoặc đăng một thứ gì đó',
   submitsForm: 'Gửi một biểu mẫu',
   maySend: 'Có thể gửi nội dung vừa nhập',
   wording: 'Tên của nó giống một việc khó rút lại: gửi, trả tiền, mua, xóa, đăng hoặc đồng ý',

@@ -87,7 +87,7 @@ import { useAppChangeNotices } from './appChangeNotices';
 import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
 import { snapshotCapabilities, withCapability, type ToolCapability } from '../shared/tool-policy';
 import { permissionsForLevel, permissionState, type WorkspaceLevel } from '../shared/capability-status';
-import { ComposerPermissionHint, type PermissionHintControls } from './permissionHints';
+import { ComposerPermissionHint, readSentMessage, type PermissionHintControls } from './permissionHints';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 import { noSelection, pruneSelection, selectRange, toggleSelection, type SelectionPickMode, type SidebarSelection, type SidebarSelectionSection } from './sidebarSelection';
 import { channelFromRecipient, channelNameOf, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from './channelChat';
@@ -1230,6 +1230,8 @@ export function App() {
       } else {
         chatId = await orglet.call('createTask', { ...firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }), ...planFirstInput(emptyDraftKey) });
       }
+      // The decision model reads the message once it is sent, for a permission the chat lacks; the new chat's bar shows it.
+      readSentMessage(chatId, sentBrief, emptyChatHint?.enabled ?? false);
       // Plan first stays chosen on the chat the message went to, until the person picks another mode or follows the plan.
       movePlanFirst(emptyDraftKey, taskDraftKey(chatId));
       // The chat's bar exists only once its detail is on screen. Loading it before switching keeps this box, and the

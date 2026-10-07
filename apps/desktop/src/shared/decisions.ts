@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Typed decisions Tacet answers through an API (COD-303): a choice among named options, a place on an ordered score, or
+ * Typed decisions the decision model answers through an API (COD-303): a choice among named options, a place on an ordered score, or
  * a yes/no ("noul"), each with a probability for every option. OpenAI's Decisions API answers them directly; any other
  * connection answers through its chat adapter (core/decisions/emulated.ts). The shapes below are the ones every caller
  * already uses, so a caller never learns which of the two answered.
@@ -60,36 +60,40 @@ export type ScoreAnswer = { type: 'score'; score: number; probabilities: Record<
 /** `noul` is the probability of true; `confidence` is the larger of it and its complement. */
 export type NoulAnswer = { type: 'noul'; noul: number; confidence: number };
 export type DecisionAnswer = ChoiceAnswer | ScoreAnswer | NoulAnswer;
-/** `inputTokens` is the provider's own count when it reports one, otherwise about a quarter of the characters sent. */
-export type DecisionUsage = { inputTokens: number; stateTruncated?: true };
+/**
+ * What one request used. `inputTokens` is the provider's own count when it reports one; when it reports none,
+ * `estimated` is set and `inputTokens` is about a quarter of the characters sent. Output and prompt-cache tokens are
+ * the provider's counts, left out where it gives none (OpenAI's Decisions API answers without output tokens).
+ */
+export type DecisionUsage = { inputTokens: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number; estimated?: true; stateTruncated?: true };
 export type DecisionResponse = { model: string; answers: Record<string, DecisionAnswer>; usage: DecisionUsage };
 
-/** Tacet's connection: one of the chat's own connections and the model that answers it, or off. */
-export const TacetConnection = z.object({
+/** The decision model's connection: one of the chat's own connections and the model that answers it, or off. */
+export const DecisionModelConnection = z.object({
   connection: z.string().min(1).max(200),
   model: z.string().trim().min(1).max(200),
 }).strict();
-export type TacetConnection = z.infer<typeof TacetConnection>;
-export const TacetSetting = z.union([z.literal('off'), TacetConnection]);
-export type TacetSetting = z.infer<typeof TacetSetting>;
+export type DecisionModelConnection = z.infer<typeof DecisionModelConnection>;
+export const DecisionModelSetting = z.union([z.literal('off'), DecisionModelConnection]);
+export type DecisionModelSetting = z.infer<typeof DecisionModelSetting>;
 
 /** The default when an OpenAI key is saved and the person has not chosen: OpenAI's Decisions API on its small model. */
-export const DEFAULT_TACET_CONNECTION: TacetConnection = { connection: 'openai', model: 'gpt-6-luna' };
+export const DEFAULT_DECISION_MODEL_CONNECTION: DecisionModelConnection = { connection: 'openai', model: 'gpt-6-luna' };
 
 /** What Settings shows: the setting in force, and whether the person chose it or it is the default. */
-export type TacetSettingView = { setting: TacetSetting; chosen: boolean };
+export type DecisionModelSettingView = { setting: DecisionModelSetting; chosen: boolean };
 
 /** What one sample decision from Settings → Test came back with. */
-export type TacetTestResult = { connection: string; model: string; milliseconds: number; choice: string; probability: number };
+export type DecisionModelTestResult = { connection: string; model: string; milliseconds: number; choice: string; probability: number };
 
 /** The setting in force: the saved one, else OpenAI's default when a key is saved, else off. */
-export function effectiveTacetSetting(saved: TacetSetting | undefined, openAiKeySaved: boolean): TacetSetting {
+export function effectiveDecisionModelSetting(saved: DecisionModelSetting | undefined, openAiKeySaved: boolean): DecisionModelSetting {
   if (saved !== undefined) return saved;
-  return openAiKeySaved ? DEFAULT_TACET_CONNECTION : 'off';
+  return openAiKeySaved ? DEFAULT_DECISION_MODEL_CONNECTION : 'off';
 }
 
 const MODEL_HINTS: Record<string, string> = {
-  openai: DEFAULT_TACET_CONNECTION.model,
+  openai: DEFAULT_DECISION_MODEL_CONNECTION.model,
   anthropic: 'claude-sonnet-5-5',
   xai: 'grok-3-mini',
   openrouter: 'openai/gpt-4.1-mini',
@@ -97,6 +101,6 @@ const MODEL_HINTS: Record<string, string> = {
 };
 
 /** A model to prefill when a connection is picked; empty when only the person knows (a custom connection). */
-export function tacetModelHint(connection: string): string {
+export function decisionModelHint(connection: string): string {
   return MODEL_HINTS[connection] ?? '';
 }

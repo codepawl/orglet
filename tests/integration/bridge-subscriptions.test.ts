@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
  * The renderer's `orglet` proxy wraps every bridge method as async so it can translate errors, except the
  * subscriptions, which must hand back their unsubscribe function at once. A subscription missing from that list
  * returns a Promise instead, and the component that calls it on unmount throws: closing Settings blanked the window
- * this way while Tacet's block (COD-303) was being built.
+ * this way while the decision model's block (COD-303) was being built.
  */
 const preloadSource = readFileSync(resolve(__dirname, '../../apps/desktop/src/preload/index.ts'), 'utf8');
 // Only the `orglet` bridge goes through that proxy. The desktop glow's `orgletOverlay` bridge (COD-261), exposed after

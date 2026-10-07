@@ -1,16 +1,16 @@
 import type { DecisionAnswer, DecisionQuestions, DecisionState } from '../../shared/decisions';
-import { decideWithin, type Decider } from './budget';
+import { decideWithin, type Decider, type DecisionContext } from './budget';
 
 /**
- * Which approved notes fit a message whose words do not match them (COD-306). Tacet is asked the way it routes a
+ * Which approved notes fit a message whose words do not match them (COD-306). The decision model is asked the way it routes a
  * ticket to a team: the message is the text, and each note is an option named by its title, described by its tags,
  * beside "other". The same options go in twice, in opposite orders, within one request, and each note's two
  * probabilities are averaged: on the measured cases where a note sat in the list moved its probability a lot, and
  * the two orders together steadied it. The numbers below were measured on `scripts/tacet/knowledge_cases.json` with the
- * on-device model Tacet used before it moved to an API; they have not been re-measured against a hosted model.
+ * on-device model the decision model used before it moved to an API; they have not been re-measured against a hosted model.
  */
 
-/** A note Tacet may fit to a message. */
+/** A note the decision model may fit to a message. */
 export type NoteCandidate = { id: string; title: string; tags: string[] };
 
 /** Notes offered in one request. Each shows twice, so this keeps the request well under a thousand tokens. */
@@ -31,7 +31,7 @@ const INSTRUCTIONS = 'What is this message about?';
 export const KNOWLEDGE_FIT_LIFT = 4.2;
 const MOST_A_NOTE_NEEDS = 0.75;
 /**
- * How long a run waits for Tacet before its context is frozen without it. An API answers twenty notes in about a
+ * How long a run waits for the decision model before its context is frozen without it. An API answers twenty notes in about a
  * second; a slower answer is dropped and the run starts with the notes the keywords found.
  */
 export const KNOWLEDGE_FIT_BUDGET_MS = 3_000;
@@ -89,13 +89,13 @@ export function fittingNotes(answers: Record<string, DecisionAnswer>, noteOf: Re
 }
 
 /**
- * Asks Tacet which of `notes` fit `message`, within the budget. Undefined when Tacet is off, fails or
+ * Asks the decision model which of `notes` fit `message`, within the budget. Undefined when the decision model is off, fails or
  * is late: the run then loads what the keywords matched, as it did before COD-306.
  */
-export async function askKnowledgeFit(decider: Decider, message: string, notes: readonly NoteCandidate[], budgetMs = KNOWLEDGE_FIT_BUDGET_MS): Promise<Map<string, number> | undefined> {
+export async function askKnowledgeFit(decider: Decider, message: string, notes: readonly NoteCandidate[], budgetMs = KNOWLEDGE_FIT_BUDGET_MS, context?: DecisionContext): Promise<Map<string, number> | undefined> {
   if (!notes.length || !message.trim()) return undefined;
   const { questions, noteOf } = noteRouting(notes);
-  const response = await decideWithin(decider, budgetMs, routingState(message), questions, KNOWLEDGE_MAX_LENGTH);
+  const response = await decideWithin(decider, budgetMs, routingState(message), questions, KNOWLEDGE_MAX_LENGTH, context);
   if (!response) return undefined;
   return fittingNotes(response.answers, noteOf);
 }

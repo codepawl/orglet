@@ -7,11 +7,11 @@ import { askOpenAiDecisions, OPENAI_DECISIONS_URL, openAiQuestions } from '../..
 import { askThroughAdapter, emulationMessages, REPORT_TOOL } from '../../apps/desktop/src/core/decisions/emulated';
 import { answerFromProbabilities, confidenceFromProbabilities } from '../../apps/desktop/src/core/decisions/answers';
 import type { ModelAdapter, ModelReply, RunMessage } from '../../apps/desktop/src/core/adapters/openai';
-import { DEFAULT_TACET_CONNECTION, effectiveTacetSetting, tacetModelHint, type DecisionQuestions, type TacetSetting } from '../../apps/desktop/src/shared/decisions';
+import { DEFAULT_DECISION_MODEL_CONNECTION, effectiveDecisionModelSetting, decisionModelHint, type DecisionQuestions, type DecisionModelSetting } from '../../apps/desktop/src/shared/decisions';
 import { commands } from '../../apps/desktop/src/shared/contracts';
 
 /**
- * Tacet through an API (COD-303, owner's decision 2026-10-07): the mapping to and from OpenAI's Decisions API with a
+ * The decision model through an API (COD-303, owner's decision 2026-10-07): the mapping to and from OpenAI's Decisions API with a
  * fake `fetch`, the same questions answered through a fake chat adapter, and the setting that picks between them. No
  * test here calls a real provider.
  */
@@ -62,7 +62,7 @@ describe('asking OpenAI\'s Decisions API', () => {
     expect(list[0]).toMatchObject({ levels: [{ label: '1. ok' }, { label: 'good' }, { label: '3. ok' }] });
   });
 
-  it('posts the model, the text and the questions with the key, and returns Tacet\'s answers', async () => {
+  it('posts the model, the text and the questions with the key, and returns the decision model\'s answers', async () => {
     const { fetcher, seen } = fakeFetch(wellFormedReply);
     const response = await askOpenAiDecisions({ fetcher, key: 'sk-test', model: 'gpt-6-luna', input: 'Please pay the invoice soon?', questions, signal: AbortSignal.timeout(1000) });
     expect(seen).toHaveLength(1);
@@ -174,7 +174,7 @@ describe('answering through a chat connection', () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].tools.map(tool => tool.type === 'function' ? tool.function.name : '')).toEqual([REPORT_TOOL]);
     expect(requests[0].maxOutputTokens).toBeGreaterThan(0);
-    expect(response.usage).toEqual({ inputTokens: 321 });
+    expect(response.usage).toEqual({ inputTokens: 321, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 });
     expect(response.answers.topic).toMatchObject({ type: 'choice', choice: 'billing', probabilities: { billing: 0.7, travel: 0.2, other: 0.1 } });
     expect(response.answers.urgency).toMatchObject({ type: 'score', score: 1.2 });
     expect(response.answers['is it a question?']).toEqual({ type: 'noul', noul: 0.8, confidence: 0.8 });
@@ -202,22 +202,22 @@ describe('answering through a chat connection', () => {
 
 describe('the setting', () => {
   it('defaults to OpenAI\'s small model when an OpenAI key is saved, and to off otherwise', () => {
-    expect(effectiveTacetSetting(undefined, true)).toEqual(DEFAULT_TACET_CONNECTION);
-    expect(DEFAULT_TACET_CONNECTION).toEqual({ connection: 'openai', model: 'gpt-6-luna' });
-    expect(effectiveTacetSetting(undefined, false)).toBe('off');
+    expect(effectiveDecisionModelSetting(undefined, true)).toEqual(DEFAULT_DECISION_MODEL_CONNECTION);
+    expect(DEFAULT_DECISION_MODEL_CONNECTION).toEqual({ connection: 'openai', model: 'gpt-6-luna' });
+    expect(effectiveDecisionModelSetting(undefined, false)).toBe('off');
     // What the person chose wins over the default, including off with a key saved.
-    expect(effectiveTacetSetting('off', true)).toBe('off');
-    expect(effectiveTacetSetting({ connection: 'ollama', model: 'llama3.2' }, false)).toEqual({ connection: 'ollama', model: 'llama3.2' });
+    expect(effectiveDecisionModelSetting('off', true)).toBe('off');
+    expect(effectiveDecisionModelSetting({ connection: 'ollama', model: 'llama3.2' }, false)).toEqual({ connection: 'ollama', model: 'llama3.2' });
   });
 
   it('prefills a model per connection and leaves a custom one for the person', () => {
-    expect(tacetModelHint('openai')).toBe('gpt-6-luna');
-    expect(tacetModelHint('anthropic')).not.toBe('');
-    expect(tacetModelHint('custom:2f9b0f5e-5d0b-4d4b-9d57-2b8b1f2b6a11')).toBe('');
+    expect(decisionModelHint('openai')).toBe('gpt-6-luna');
+    expect(decisionModelHint('anthropic')).not.toBe('');
+    expect(decisionModelHint('custom:2f9b0f5e-5d0b-4d4b-9d57-2b8b1f2b6a11')).toBe('');
   });
 
   it('is saved by the command only for a connection the chat has, never a harness', () => {
-    const save = commands.saveTacetSetting;
+    const save = commands.saveDecisionModelSetting;
     expect(save.safeParse('off').success).toBe(true);
     expect(save.safeParse({ connection: 'openai', model: 'gpt-6-luna' }).success).toBe(true);
     expect(save.safeParse({ connection: 'ollama', model: ' llama3.2 ' }).success).toBe(true);
@@ -228,8 +228,8 @@ describe('the setting', () => {
   });
 });
 
-/** Tacet over fakes: a stored setting, the keys the person has, a fetch for OpenAI and an adapter for the rest. */
-function service(options: { saved?: TacetSetting; keys?: Record<string, string>; fetcher?: DecisionsDependencies['fetcher']; adapter?: ModelAdapter; timeoutMs?: number } = {}) {
+/** The decision model over fakes: a stored setting, the keys the person has, a fetch for OpenAI and an adapter for the rest. */
+function service(options: { saved?: DecisionModelSetting; keys?: Record<string, string>; fetcher?: DecisionsDependencies['fetcher']; adapter?: ModelAdapter; timeoutMs?: number } = {}) {
   let saved = options.saved;
   const adapterRequests: { provider: string; model: string }[] = [];
   const decisions = new Decisions({
@@ -249,10 +249,10 @@ function service(options: { saved?: TacetSetting; keys?: Record<string, string>;
 const oneQuestion: DecisionQuestions = { yes: { type: 'noul', instructions: 'Is it a greeting?' } };
 const yesReply = { answers: [{ type: 'predicate', name: 'yes', probability: 0.9 }] };
 
-describe('Tacet\'s service', () => {
+describe('The decision model\'s service', () => {
   it('shows the default only while nothing is chosen and a key is saved', async () => {
     expect(await service().decisions.view()).toEqual({ setting: 'off', chosen: false });
-    expect(await service({ keys: { openai: 'sk-test' } }).decisions.view()).toEqual({ setting: DEFAULT_TACET_CONNECTION, chosen: false });
+    expect(await service({ keys: { openai: 'sk-test' } }).decisions.view()).toEqual({ setting: DEFAULT_DECISION_MODEL_CONNECTION, chosen: false });
     expect(await service({ keys: { openai: 'sk-test' }, saved: 'off' }).decisions.view()).toEqual({ setting: 'off', chosen: true });
   });
 
@@ -278,7 +278,7 @@ describe('Tacet\'s service', () => {
     const { fetcher, seen } = fakeFetch(yesReply);
     expect(await service({ saved: 'off', keys: { openai: 'sk-test' }, fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(await service({ fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
-    expect(await service({ saved: DEFAULT_TACET_CONNECTION, fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
+    expect(await service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(seen).toEqual([]);
   });
 
@@ -305,7 +305,7 @@ describe('Tacet\'s service', () => {
     const failing = service({ saved: { connection: 'anthropic', model: 'm' }, adapter: fakeAdapter(new Error('Chưa kết nối Anthropic.')).adapter, keys: { openai: 'sk-test' }, fetcher });
     expect(await failing.decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(seen).toEqual([]);
-    const rejected = service({ saved: DEFAULT_TACET_CONNECTION, keys: { openai: 'sk-test' }, fetcher: fakeFetch({}, 500).fetcher });
+    const rejected = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher: fakeFetch({}, 500).fetcher });
     expect(await rejected.decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(rejected.adapterRequests).toEqual([]);
   });
@@ -316,14 +316,14 @@ describe('Tacet\'s service', () => {
       init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
     });
     const started = Date.now();
-    const { decisions } = service({ saved: DEFAULT_TACET_CONNECTION, keys: { openai: 'sk-test' }, fetcher: hangs, timeoutMs: 40 });
+    const { decisions } = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher: hangs, timeoutMs: 40 });
     expect(await decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
   it('cuts a long text to the caller\'s room, about four characters to a token, and says so', async () => {
     const { fetcher, seen } = fakeFetch(yesReply);
-    const { decisions } = service({ saved: DEFAULT_TACET_CONNECTION, keys: { openai: 'sk-test' }, fetcher });
+    const { decisions } = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher });
     const response = await decisions.decide('x'.repeat(1000), oneQuestion, 100);
     expect(String(seen[0].body.input)).toHaveLength(400);
     expect(response?.usage.stateTruncated).toBe(true);
@@ -333,25 +333,25 @@ describe('Tacet\'s service', () => {
 
   it('reads structured state as compact JSON text', async () => {
     const { fetcher, seen } = fakeFetch(yesReply);
-    const { decisions } = service({ saved: DEFAULT_TACET_CONNECTION, keys: { openai: 'sk-test' }, fetcher });
+    const { decisions } = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher });
     await decisions.decide({ action: 'click', element: 'Empty trash' }, oneQuestion);
     expect(seen[0].body.input).toBe('{"action":"click","element":"Empty trash"}');
   });
 
   it('tests the connection with one sample question and reports the answer and the time, or why it failed', async () => {
     const { fetcher } = fakeFetch({ answers: [{ type: 'choice', name: 'kind', choice: 'request', probabilities: [{ value: 'greeting', probability: 0.05 }, { value: 'question', probability: 0.15 }, { value: 'request', probability: 0.8 }] }] });
-    const tested = await service({ saved: DEFAULT_TACET_CONNECTION, keys: { openai: 'sk-test' }, fetcher }).decisions.test();
+    const tested = await service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher }).decisions.test();
     expect(tested).toMatchObject({ connection: 'openai', model: 'gpt-6-luna', choice: 'request', probability: 0.8 });
     expect(tested.milliseconds).toBeGreaterThanOrEqual(0);
-    await expect(service({ saved: 'off' }).decisions.test()).rejects.toThrow('Tacet đang tắt');
-    await expect(service({ saved: DEFAULT_TACET_CONNECTION }).decisions.test()).rejects.toThrow('Chưa kết nối OpenAI');
-    await expect(service({ saved: DEFAULT_TACET_CONNECTION, keys: { openai: 'k' }, fetcher: fakeFetch({}, 429).fetcher }).decisions.test()).rejects.toThrow('429');
+    await expect(service({ saved: 'off' }).decisions.test()).rejects.toThrow('Model quyết định đang tắt');
+    await expect(service({ saved: DEFAULT_DECISION_MODEL_CONNECTION }).decisions.test()).rejects.toThrow('Chưa kết nối OpenAI');
+    await expect(service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'k' }, fetcher: fakeFetch({}, 429).fetcher }).decisions.test()).rejects.toThrow('429');
     const unreadable = fakeAdapter(report([{ question: 'kind', probabilities: [1, 2] }]));
     await expect(service({ saved: { connection: 'xai', model: 'grok' }, adapter: unreadable.adapter }).decisions.test()).rejects.toThrow('không đọc được');
   });
 });
 
-describe('Tacet in the core', () => {
+describe('The decision model in the core', () => {
   function core(keys: Record<string, string> = {}) {
     const store = new Store(':memory:');
     const service = new CoreService(store, () => {}, async () => { throw new Error('unused'); }, undefined, undefined, undefined, undefined, { readKey: async provider => keys[provider] ?? null });
@@ -361,10 +361,10 @@ describe('Tacet in the core', () => {
   it('starts on OpenAI when a key is saved and the person has not chosen, then keeps what they choose', async () => {
     const { store, service: withKey } = core({ openai: 'sk-test' });
     try {
-      expect(await withKey.command('tacetSetting', {})).toEqual({ setting: DEFAULT_TACET_CONNECTION, chosen: false });
-      expect(await withKey.command('saveTacetSetting', 'off')).toEqual({ setting: 'off', chosen: true });
-      expect(store.setting('tacet', undefined)).toBe('off');
-      expect(await withKey.command('saveTacetSetting', { connection: 'openrouter', model: 'openai/gpt-4.1-mini' })).toEqual({ setting: { connection: 'openrouter', model: 'openai/gpt-4.1-mini' }, chosen: true });
+      expect(await withKey.command('decisionModelSetting', {})).toEqual({ setting: DEFAULT_DECISION_MODEL_CONNECTION, chosen: false });
+      expect(await withKey.command('saveDecisionModelSetting', 'off')).toEqual({ setting: 'off', chosen: true });
+      expect(store.setting('decisionModel', undefined)).toBe('off');
+      expect(await withKey.command('saveDecisionModelSetting', { connection: 'openrouter', model: 'openai/gpt-4.1-mini' })).toEqual({ setting: { connection: 'openrouter', model: 'openai/gpt-4.1-mini' }, chosen: true });
     } finally {
       store.close();
     }
@@ -373,9 +373,9 @@ describe('Tacet in the core', () => {
   it('starts off without a key, and refuses a connection the chat does not have', async () => {
     const { store, service: noKey } = core();
     try {
-      expect(await noKey.command('tacetSetting', {})).toEqual({ setting: 'off', chosen: false });
-      await expect(noKey.command('saveTacetSetting', { connection: 'codex', model: 'x' })).rejects.toThrow();
-      expect(store.setting('tacet', undefined)).toBeUndefined();
+      expect(await noKey.command('decisionModelSetting', {})).toEqual({ setting: 'off', chosen: false });
+      await expect(noKey.command('saveDecisionModelSetting', { connection: 'codex', model: 'x' })).rejects.toThrow();
+      expect(store.setting('decisionModel', undefined)).toBeUndefined();
     } finally {
       store.close();
     }

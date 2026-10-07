@@ -7,9 +7,9 @@ import type { Decisions } from '../decisions/service';
 
 /**
  * A second look at quiet runs (COD-303). An hourly schedule's run that simply finished says nothing (COD-288), which
- * also silenced the run that found something. When Tacet is on, each such run is asked how much its
- * answer needs the person; a clear "high" records `attention` on the run's chat and the window then announces it. No
- * Tacet, a failed load or a middling answer announces nothing, which is today's behaviour.
+ * also silenced the run that found something. When the decision model is on, each such run is asked how much its
+ * answer needs the person; a clear "high" records `attention` on the run's chat and the window then announces it. With no
+ * decision model, a failed load or a middling answer announces nothing, which is today's behaviour.
  */
 
 /**
@@ -26,12 +26,12 @@ export const NOTEWORTHY_QUESTION: DecisionQuestions = {
 const HIGHEST_LEVEL = 2;
 /** The request and the answer, cut to this many tokens: about 0.6 s on a desktop CPU, where 1536 takes seconds. */
 export const QUIET_RUN_MAX_LENGTH = 512;
-/** How many times one run is put to Tacet when it gives no answer, before the run is left quiet. */
-export const MAX_REVIEW_ATTEMPTS = 3;
-/** A run that finished longer ago than this is history by the time Tacet could look: it is left alone. */
+/** How many times one run is put to the decision model before it is left quiet when it gives no answer: one try and one retry. */
+export const MAX_REVIEW_ATTEMPTS = 2;
+/** A run that finished longer ago than this is history by the time the decision model could look: it is left alone. */
 export const QUIET_RUN_WINDOW_MS = 15 * 60_000;
 
-/** The text Tacet reads: what the schedule asks each time, then what this run answered. */
+/** The text the decision model reads: what the schedule asks each time, then what this run answered. */
 export function quietRunState(task: Pick<Task, 'brief'>, answer: string): string {
   return `Scheduled request: ${task.brief}\n\nAnswer:\n${answer}`;
 }
@@ -44,7 +44,7 @@ export class QuietRunReview {
 
   constructor(private store: Store, private decisions: () => Decisions, private notify: () => void, private clock: () => Date = () => new Date()) {}
 
-  /** The finished quiet runs of the last few minutes that Tacet has not looked at yet, with their answers. */
+  /** The finished quiet runs of the last few minutes that the decision model has not looked at yet, with their answers. */
   private candidates(): { task: Task; answer: Artifact }[] {
     const routines = new Map(this.store.all<Routine>('routines').map(routine => [routine.id, routine]));
     const held = new Set(this.store.heldForReview());
@@ -65,13 +65,13 @@ export class QuietRunReview {
     return found;
   }
 
-  /** Called on the core's tick; one pass at a time, and nothing at all while Tacet is off. */
+  /** Called on the core's tick; one pass at a time, and nothing at all while the decision model is off. */
   async review(): Promise<void> {
     if (this.reviewing || !this.decisions().isEnabled()) return;
     this.reviewing = true;
     try {
       for (const { task, answer } of this.candidates()) {
-        // Each question is a paid request, so a run whose review keeps failing is given up on after a few tries.
+        // Each question is a paid request, so a run the decision model could not answer is retried once and then left quiet.
         const attempts = this.attempts.get(task.id) ?? 0;
         if (attempts >= MAX_REVIEW_ATTEMPTS) continue;
         this.attempts.set(task.id, attempts + 1);
@@ -87,10 +87,10 @@ export class QuietRunReview {
     }
   }
 
-  /** Tacet's verdict on one run, or undefined when it could not give one; the run then stays quiet as before. */
+  /** The decision model's verdict on one run, or undefined when it could not give one; the run then stays quiet as before. */
   private async ask(task: Task, answer: Artifact): Promise<RunAttention | undefined> {
     try {
-      const response = await this.decisions().decide(quietRunState(task, answer.report.summary), NOTEWORTHY_QUESTION, QUIET_RUN_MAX_LENGTH);
+      const response = await this.decisions().decide(quietRunState(task, answer.report.summary), NOTEWORTHY_QUESTION, QUIET_RUN_MAX_LENGTH, { taskId: task.id });
       const verdict = response?.answers.attention;
       if (!verdict || verdict.type !== 'score') return undefined;
       // The expected level, 0 to 2, as a share of the highest.

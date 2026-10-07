@@ -15,7 +15,7 @@ const DELIVERY_SINCE = 'scheduleDeliverySince';
  * the post with the next message there, the way it reads an answer brought in from a side thread.
  *
  * An hourly run with nothing new is not posted, so the chat does not fill with "all as usual" (COD-288); it is marked
- * quiet and stays on the schedule's card. If Tacet later finds it noteworthy (COD-303), it is posted then. A run whose
+ * quiet and stays on the schedule's card. If the decision model later finds it noteworthy (COD-303), it is posted then. A run whose
  * orglet or channel has no chat yet keeps its own row in the sidebar, so nothing is lost.
  */
 export class ScheduleDelivery {

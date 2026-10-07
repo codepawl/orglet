@@ -40,7 +40,7 @@ import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
 import { chatHeadline } from '../../shared/forward';
 import { forgetAllDrafts } from '../drafts';
-import { TacetSetup } from './TacetSetup';
+import { DecisionModelSetup } from './DecisionModelSetup';
 import { AccountSettings } from './AccountSettings';
 import { ArchiveGroups, type ArchiveSection } from './ArchiveSettings';
 import type { AccountState } from '../../shared/account';
@@ -715,8 +715,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row id="show-work-label" title={t('Hiện cách Tí làm việc')} description={t('Suy nghĩ, các bước đã làm và thay đổi, ngay trên mỗi câu trả lời.')}>
                 <Switch checked={workspace.showWork} disabled={busy} labelledBy="show-work-label" onChange={value => void save({ showWork: value })} />
               </Row>
-              {/* Which connection answers Tacet's small questions (COD-303), beside the other rule for notices. */}
-              <TacetSetup connections={connections} customConnections={workspace.customConnections ?? []} />
+              {/* Which connection answers the decision model's small questions (COD-303), beside the other rule for notices. */}
+              <DecisionModelSetup connections={connections} customConnections={workspace.customConnections ?? []} />
               <Row title={t('Định dạng khi sao chép')} description={t('Bấm là sao chép, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi sao chép')} className="setting-select" value={workspace.copyFormat} disabled={busy} onChange={value => void save({ copyFormat: value as Workspace['copyFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản thuần') }, { value: 'markdown', label: 'Markdown' }]} />
               </Row>
@@ -899,6 +899,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             {tab === 'usage' && <>
               <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
               <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{workspace.usage.uncertainCount === 1 ? t('1 yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.') : t('{0} yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Yêu cầu đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
+              {(workspace.usage.unpricedDecisionCalls ?? 0) > 0 && <Row title={t('Câu hỏi nền chưa rõ chi phí')} description={<span className="error">{t('Model quyết định hỏi qua kết nối chưa có giá đã xác minh, hoặc nhà cung cấp không báo số token. Số token vẫn được tính.')}</span>}><span className="setting-value">{workspace.usage.unpricedDecisionCalls}</span></Row>}
               <Row id="limit-label" title={t('Giới hạn mỗi kết nối / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng kết nối API.')}>
                 <span className={`org-money-input ${limitError ? 'org-money-input-invalid' : ''}`}><span aria-hidden>{moneySymbol()}</span><input aria-labelledby="limit-label" aria-invalid={Boolean(limitError)} aria-describedby={limitError ? 'limit-error' : undefined} inputMode="decimal" value={limit} disabled={busy} onChange={event => setLimit(event.target.value)} onBlur={commitLimit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLimit(); } }} /></span>
               </Row>

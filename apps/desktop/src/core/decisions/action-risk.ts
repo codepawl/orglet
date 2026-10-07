@@ -1,15 +1,15 @@
 import type { DecisionAnswer, DecisionQuestions, DecisionState } from '../../shared/decisions';
-import { decideWithin, type Decider } from './budget';
+import { decideWithin, type Decider, type DecisionContext } from './budget';
 
 /**
- * Tacet's second opinion on a step in Orglet's browser or a desktop app (COD-306): does it send, pay, delete or
+ * The decision model's second opinion on a step in Orglet's browser or a desktop app (COD-306): does it send, pay, delete or
  * publish something? The word rules (`browser-risk.ts`, `desktop-risk.ts`) stay the authority. This is asked only
  * about a step they let through, in a chat where the person can answer, and a yes can only add the approval card the
  * rules did not ask for; nothing here removes or skips an ask. The wording was chosen on `scripts/tacet/action_cases.json`
- * with the on-device model Tacet used before it moved to an API; it has not been re-measured against a hosted model.
+ * with the on-device model the decision model used before it moved to an API; it has not been re-measured against a hosted model.
  */
 
-/** A step Orglet's browser or a desktop app is about to take, in the words Tacet reads. */
+/** A step Orglet's browser or a desktop app is about to take, in the words the decision model reads. */
 export type ActionToJudge =
   | { surface: 'browser'; kind: 'click'; element: string; role: string; site: string; page: string }
   | { surface: 'browser'; kind: 'press'; key: string; element: string; role: string; site: string; page: string }
@@ -83,16 +83,16 @@ export const ACTION_RISK_QUESTIONS: DecisionQuestions = {
 export const ACTION_RISK_THRESHOLD = 0.35;
 
 /**
- * How long a step waits for Tacet. An API answers one short step in well under a second; past this the step goes ahead
+ * How long a step waits for the decision model. An API answers one short step in well under a second; past this the step goes ahead
  * on the rules alone.
  */
 export const ACTION_RISK_BUDGET_MS = 3_000;
 
 export type RiskOpinion = { risky: boolean; score: number };
 
-/** Tacet's second opinion on one step, or undefined when it is off, fails or is late. */
-export async function askActionRisk(decider: Decider, action: ActionToJudge, budgetMs = ACTION_RISK_BUDGET_MS): Promise<RiskOpinion | undefined> {
-  const response = await decideWithin(decider, budgetMs, actionFields(action), ACTION_RISK_QUESTIONS, ACTION_RISK_MAX_LENGTH);
+/** The decision model's second opinion on one step, or undefined when it is off, fails or is late. */
+export async function askActionRisk(decider: Decider, action: ActionToJudge, budgetMs = ACTION_RISK_BUDGET_MS, context?: DecisionContext): Promise<RiskOpinion | undefined> {
+  const response = await decideWithin(decider, budgetMs, actionFields(action), ACTION_RISK_QUESTIONS, ACTION_RISK_MAX_LENGTH, context);
   if (!response) return undefined;
   const score = riskShare(response.answers);
   if (score === undefined) return undefined;
@@ -100,16 +100,16 @@ export async function askActionRisk(decider: Decider, action: ActionToJudge, bud
 }
 
 /**
- * What Orglet's browser and desktop tools hold (COD-306): a way to ask about one step. It does nothing while Tacet is
+ * What Orglet's browser and desktop tools hold (COD-306): a way to ask about one step. It does nothing while the decision model is
  * off.
  */
 export type SecondOpinion = {
-  judge(action: ActionToJudge): Promise<RiskOpinion | undefined>;
+  judge(action: ActionToJudge, context?: DecisionContext): Promise<RiskOpinion | undefined>;
 };
 
-/** The second opinion over the app's Tacet service, read afresh on every call since the service can be replaced. */
+/** The second opinion over the app's the decision model service, read afresh on every call since the service can be replaced. */
 export function actionRiskOpinion(decider: () => Decider): SecondOpinion {
-  return { judge: action => askActionRisk(decider(), action) };
+  return { judge: (action, context) => askActionRisk(decider(), action, undefined, context) };
 }
 
 /** How likely the step sends, pays, deletes or publishes, from 0 to 1; undefined when the answers are not the expected ones. */

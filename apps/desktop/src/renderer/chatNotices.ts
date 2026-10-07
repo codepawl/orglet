@@ -156,13 +156,13 @@ export function quietRun(chat: FinishedChat, names: ChatNames): boolean {
   return isQuietScheduleRun(routine.schedule.frequency, triggerOf(routine).kind, heldForReview(chat.task, names));
 }
 
-/** The quiet runs Tacet has already looked at, to compare against on the next workspace (COD-303). */
+/** The quiet runs the decision model has already looked at, to compare against on the next workspace (COD-303). */
 export function attendedRuns(tasks: readonly Task[]): Set<string> {
   return new Set(tasks.filter(task => task.attention).map(task => task.id));
 }
 
 /**
- * Quiet runs Tacet judged worth announcing since `previous` was taken (COD-303). Its verdict lands a few seconds after
+ * Quiet runs the decision model judged worth announcing since `previous` was taken (COD-303). Its verdict lands a few seconds after
  * the run finished, so this is its own moment rather than part of `finishedChats`: the run was already quiet then. A
  * verdict older than `lookedAt` came with a restored backup or an earlier session and is history.
  */
@@ -173,7 +173,7 @@ export function noteworthyRuns(previous: ReadonlySet<string>, tasks: readonly Ta
   });
 }
 
-/** The toast for a quiet run Tacet flagged: the schedule found something, about its orglet or crew. */
+/** The toast for a quiet run the decision model flagged: the schedule found something, about its orglet or crew. */
 export function noteworthyNotice(task: Task, names: ChatNames): InAppNotice {
   return { taskId: task.id, text: t('{0} có điều mới', [scheduleName(task, names)]), tone: 'success', about: ownerName(task, names), ...answerToOpen(task, 'done') };
 }
@@ -283,7 +283,7 @@ export function useChatNotices(workspace: Workspace | undefined, openChat: strin
     // A run started while the last workspace was on its way here is still news, hence the margin.
     const lookedAt = new Date(known.at - LOOK_MARGIN_MS).toISOString();
     const openTask = openChat ? workspace.tasks.find(task => task.id === openChat) : undefined;
-    // A quiet run Tacet flagged says so now, the way a finished schedule run would have (COD-303).
+    // A quiet run the decision model flagged says so now, the way a finished schedule run would have (COD-303).
     for (const task of noteworthyRuns(known.attended, workspace.tasks, lookedAt)) {
       if (task.id !== openTask?.id) {
         const notice = noteworthyNotice(task, workspace);

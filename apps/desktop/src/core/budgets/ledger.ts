@@ -84,7 +84,11 @@ export class BudgetLedger {
     return this.store.transaction(() => {
       const month = new Date().toISOString().slice(0, 7);
       const used = (clause: string, args: string[]) => Number(this.store.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state='settled' THEN COALESCE(l.amount,0) ELSE r.amount END),0) AS total FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id WHERE ${clause}`).get(...args)!.total);
-      if (used('r.task_id=?', [taskId]) + amount > taskLimit || used('r.provider=? AND (r.month=? OR r.state!=\'settled\')', [provider, month]) + amount > connectionLimit) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
+      // The decision model's small requests spend from the same task and connection allowance (decision-usage.ts).
+      const decided = (clause: string, args: string[]) => Number(this.store.db.prepare(`SELECT COALESCE(SUM(amount),0) AS total FROM decision_usage WHERE ${clause}`).get(...args)!.total);
+      const taskSpent = used('r.task_id=?', [taskId]) + decided('task_id=?', [taskId]);
+      const connectionSpent = used('r.provider=? AND (r.month=? OR r.state!=\'settled\')', [provider, month]) + decided('provider=? AND month=?', [provider, month]);
+      if (taskSpent + amount > taskLimit || connectionSpent + amount > connectionLimit) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
       const scheduleCap = dailyCapOfTask(this.store, taskId);
       if (scheduleCap && spentOnDay(this.store, scheduleCap.routineId, scheduleCap.day) + amount > scheduleCap.capMicros) throw new DailyCapReached(DAILY_CAP_REACHED_IN_RUN);
       if (team && used("r.task_id IN (SELECT id FROM tasks WHERE json_extract(data,'$.teamId')=?) AND (r.month=? OR r.state!='settled')", [team.id, month]) + amount > team.limit) throw new BudgetError('Kênh đã chạm giới hạn ngân sách tháng.');

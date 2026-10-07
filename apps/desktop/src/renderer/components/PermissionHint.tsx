@@ -4,7 +4,7 @@ import type { PermissionNeed } from '../../shared/permission-needs';
 import { t } from '../i18n';
 
 /**
- * The one quiet line under a message box when Tacet reads the message as needing a permission the chat does not have
+ * The one quiet line under a message box when the decision model reads the message as needing a permission the chat does not have
  * (COD-305). Its link does what the permission's own control in Details would do (turn the web on, pick a folder, let
  * the folder be edited or run commands) or opens that control (the browser, whose level is the person's call). It
  * never turns anything on by itself, never stops a message from being sent, and ✕ puts it away for this chat.

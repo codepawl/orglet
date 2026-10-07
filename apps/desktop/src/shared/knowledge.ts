@@ -71,8 +71,9 @@ export type RememberArgs = z.infer<typeof RememberArgs>;
 export const AnswerMemories = z.array(RememberModelArgs).max(MAX_ANSWER_MEMORIES);
 
 /**
- * Why a note reached a run (COD-306): pinned, its words matched the request, or Tacet on this computer said it fits
- * the request, with the probability it gave. Runs frozen before COD-306 carry no reason.
+ * Why a note reached a run (COD-306): pinned, its words matched the request, or the decision model said it fits the
+ * request, with the probability it gave. The last is stored as `tacet`, its name before the rename: runs already frozen
+ * with that word keep reading it. Runs frozen before COD-306 carry no reason.
  */
 export const KnowledgeLoadReason = z.enum(['pinned', 'keywords', 'tacet']);
 export type KnowledgeLoadReason = z.infer<typeof KnowledgeLoadReason>;

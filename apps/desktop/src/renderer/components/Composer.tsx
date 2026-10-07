@@ -23,7 +23,7 @@ import { canStartSideThread } from '../../shared/side-threads';
 import { keepDraft, readDraft, taskDraftKey } from '../drafts';
 import { planFirstChosen, setPlanFirst } from '../planFirst';
 import { overflowAttributes, useStripOverflow } from '../stripOverflow';
-import { ComposerPermissionHint, type PermissionHintControls } from '../permissionHints';
+import { ComposerPermissionHint, readSentMessage, type PermissionHintControls } from '../permissionHints';
 import type { HarnessInfo } from '../../shared/harness';
 import { useComposerUsage } from '../planUsage';
 import { PlanUsageNote, UsageRing, harnessAccountLabel } from './PlanUsage';
@@ -449,7 +449,7 @@ export function ComposerFoot({ children }: { children?: ReactNode }) {
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
  * across restarts (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
-export function FollowUpComposer({ detail, workspace, harnesses, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint, modePicker, islandDock }: { detail: TaskDetail; /** Where this bar's island is docked: the main chat's bar by default, a side thread's in the right panel (COD-365). */ islandDock?: string; workspace: Workspace; /** Which account each harness runs, for the plan usage by the bar (COD-326). */ harnesses?: readonly HarnessInfo[]; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls; /** The approval mode beside the add button (COD-367, `ChatModePicker`). */ modePicker?: ReactNode }) {
+export function FollowUpComposer({ detail, workspace, harnesses, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint, modePicker, islandDock }: { detail: TaskDetail; /** Where this bar's island is docked: the main chat's bar by default, a side thread's in the right panel (COD-365). */ islandDock?: string; workspace: Workspace; /** Which account each harness runs, for the plan usage by the bar (COD-326). */ harnesses?: readonly HarnessInfo[]; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when the decision model is on this computer. */ permissionHint?: PermissionHintControls; /** The approval mode beside the add button (COD-367, `ChatModePicker`). */ modePicker?: ReactNode }) {
   const draftKey = taskDraftKey(detail.task.id);
   const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
@@ -525,6 +525,7 @@ ${extra}` : extra;
     action(async () => {
       try {
         await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros, ...planFirstInput(draftKey) });
+        readSentMessage(detail.task.id, extra, permissionHint?.enabled ?? false);
         clearSentFiles(sent);
         clearReplyTarget();
       } catch (error) {

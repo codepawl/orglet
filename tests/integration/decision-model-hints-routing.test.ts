@@ -21,11 +21,11 @@ function choice(probabilities: Record<string, number>): DecisionResponse['answer
   const pick = Object.entries(probabilities).sort((left, right) => right[1] - left[1])[0][0];
   return { type: 'choice', choice: pick, probabilities, confidence: 0.5 };
 }
-const response = (answers: DecisionResponse['answers']): DecisionResponse => ({ model: 'tacet-sonata', answers, usage: { inputTokens: 40 } });
+const response = (answers: DecisionResponse['answers']): DecisionResponse => ({ model: 'decision-sonata', answers, usage: { inputTokens: 40 } });
 
 type Asked = { state: DecisionState; questions: DecisionQuestions; maxLength: number };
 
-/** Dependencies of a Tacet that has a connection; the stubs below answer instead of any provider. */
+/** Dependencies of a decision model that has a connection; the stubs below answer instead of any provider. */
 const connectedDependencies = {
   saved: () => ({ connection: 'openai', model: 'gpt-6-luna' }),
   save: () => {},
@@ -33,7 +33,7 @@ const connectedDependencies = {
   adapter: async () => { throw new Error('Not used by these tests.'); },
 };
 
-/** A Tacet that records every question and answers from `answer`; a throw is a provider failing. */
+/** A decision model that records every question and answers from `answer`; a throw is a provider failing. */
 class AnsweringDecisions extends Decisions {
   constructor(private respond: (asked: Asked) => Promise<DecisionResponse> | DecisionResponse, private log: Asked[]) {
     super(connectedDependencies);
@@ -45,11 +45,11 @@ class AnsweringDecisions extends Decisions {
   }
 }
 const answering = (answer: (asked: Asked) => Promise<DecisionResponse> | DecisionResponse, asked: Asked[] = []): Decisions => new AnsweringDecisions(answer, asked);
-/** A Tacet the person turned off. */
+/** A decision model the person turned off. */
 const turnedOff = (): Decisions => new Decisions({ ...connectedDependencies, saved: () => 'off' });
 
 let directory: string;
-beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-tacet-305-')); });
+beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-decision-model-305-')); });
 afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
 
 describe('reading the permissions a message needs (COD-305)', () => {
@@ -96,7 +96,7 @@ describe('reading the permissions a message needs (COD-305)', () => {
 });
 
 describe('PermissionSuggestions (COD-305)', () => {
-  it('says nothing, and asks nothing, while Tacet is off', async () => {
+  it('says nothing, and asks nothing, while the decision model is off', async () => {
     const suggestions = new PermissionSuggestions(() => turnedOff());
     expect(await suggestions.suggest('What is the weather in Hanoi today?')).toBeNull();
   });
@@ -218,7 +218,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
     return taskId;
   }
 
-  it('lets the orglet Tacet picks answer alone, and keeps the pick on the chat', async () => {
+  it('lets the orglet the decision model picks answer alone, and keeps the pick on the chat', async () => {
     replies.push(answer('VAT is 10%.'));
     const taskId = await groupChat('How much VAT do we owe this month?');
     expect(answeredBy(taskId, 0)).toEqual(['Accountant']);
@@ -231,7 +231,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
     expect(() => core.backups.preview(core.backups.export())).not.toThrow();
   });
 
-  it('keeps everyone when Tacet is unsure', async () => {
+  it('keeps everyone when the decision model is unsure', async () => {
     routeAnswer = { Researcher: 0.45, Accountant: 0.35, everyone: 0.2 };
     replies.push(answer('Researcher here.'), answer('Accountant here.'));
     const taskId = await groupChat('What do you both think of the plan?');
@@ -254,7 +254,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
     expect(asked).toHaveLength(0);
   });
 
-  it('keeps today\'s behaviour when Tacet is off or fails', async () => {
+  it('keeps today\'s behaviour when the decision model is off or fails', async () => {
     core.decisions = turnedOff();
     replies.push(answer('1'), answer('2'));
     const absent = await groupChat('How much VAT do we owe?');
@@ -296,7 +296,7 @@ describe('a group-chat message that tags nobody (COD-305)', () => {
 });
 
 describe('a crew message that tags nobody (COD-305)', () => {
-  it('is planned by the crew\'s lead, never routed by Tacet', async () => {
+  it('is planned by the crew\'s lead, never routed by the decision model', async () => {
     const store = new Store(join(directory, 'crew.sqlite'));
     const core = new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
       if (isPlanRequest(tools)) return planReply(messages);

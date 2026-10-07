@@ -83,7 +83,7 @@ export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestar
  * A notice about a chat that still exists opens that chat instead (COD-258): that is what the person came for, and
  * its repeats are the same chat, so the count still reads without the list of times.
  */
-function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string, messageId?: string) => void; onRestart?: () => void; onOpenArchive?: () => void; onUpdateTacet?: () => void }) {
+function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string, messageId?: string) => void; onRestart?: () => void; onOpenArchive?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.notice.kind];
   const repeated = row.count > 1;
