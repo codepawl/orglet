@@ -25,7 +25,7 @@ import { isPlanRequest, planReply } from './team-plan';
  */
 
 const MEMBER_IDENTITY = 'This turn you answer only the brief the team gave you.';
-const SYNTHESIS_IDENTITY = 'This turn you combine your teammates\' answers';
+const SYNTHESIS_IDENTITY = 'This turn you check your teammates\' work';
 const FINDINGS = 'Zoho Invoice: free up to 500 invoices a year. Invoice Ninja: Pro $14/month. invoicely: Basic $9.99/month.';
 
 type MemberBehaviour = 'readUntilWrapUp' | 'blockAtOnce';

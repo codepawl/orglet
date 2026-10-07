@@ -12,7 +12,7 @@ export function unfinishedWork(detail: TaskDetail): { artifact: Artifact; limita
   const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
   // A group message is answered by each orglet's own reply, which keeps its own notes.
   if (runs.some(run => run.stage === 'group')) return undefined;
-  const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
+  const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis' || run.stage === 'plan')));
   if (!artifact || artifact.report.format !== 'chat' || artifact.report.limitations.length === 0) return undefined;
   return { artifact, limitations: artifact.report.limitations };
 }

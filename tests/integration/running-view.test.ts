@@ -189,7 +189,7 @@ describe('crew queue', () => {
     return { team, taskId };
   }
 
-  it('says who waits for the plan, for a member slot and for the members, then empties when the crew is done', async () => {
+  it('says who waits for the plan and for the members, then empties when the crew is done', async () => {
     const { team, taskId } = await crewOfThree();
     await until(() => itemsOf(taskId).some(item => item.stage === 'plan' && item.state === 'running'));
     const planning = itemsOf(taskId);
@@ -199,20 +199,17 @@ describe('crew queue', () => {
     expectSidebarAgrees();
 
     openPlan();
-    await until(() => gates.length === 2);
+    // Independent parts all start at once within the provider's limit of four (owner, 2026-10-07); only the check waits.
+    await until(() => gates.length === 3);
     const working = itemsOf(taskId);
-    expect(working.filter(item => item.state === 'running').map(item => item.stage)).toEqual(['member', 'member']);
+    expect(working.filter(item => item.state === 'running').map(item => item.stage)).toEqual(['member', 'member', 'member']);
     expect(working.filter(item => item.state === 'queued').map(item => [item.stage, item.wait])).toEqual([
-      ['member', { kind: 'crew_slot', ahead: 0 }],
       ['synthesis', { kind: 'members' }],
     ]);
-    const waitingMember = working.find(item => item.wait?.kind === 'crew_slot')!;
-    expect(team.memberIds).toContain(waitingMember.worker.id);
+    expect(working.filter(item => item.state === 'running').map(item => item.worker.id).sort()).toEqual([...team.memberIds].sort());
 
     openNextGate();
     openNextGate();
-    await until(() => gates.length === 1);
-    expect(itemsOf(taskId).filter(item => item.state === 'queued').map(item => item.wait)).toEqual([{ kind: 'members' }]);
     openNextGate();
     await until(() => gates.length === 1 && itemsOf(taskId).some(item => item.stage === 'synthesis' && item.state === 'running'));
     openNextGate();
@@ -269,7 +266,7 @@ describe('crew queue', () => {
   it('cancels a crew turn whose members are still queued', async () => {
     const { taskId } = await crewOfThree();
     openPlan();
-    await until(() => gates.length === 2);
+    await until(() => gates.length === 3);
     await core.command('cancel', { id: taskId });
     await until(() => !core.teams.isActive(taskId));
     expect(statusOf(taskId)).toBe('cancelled');

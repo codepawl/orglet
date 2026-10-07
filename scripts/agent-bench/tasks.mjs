@@ -9,6 +9,8 @@
 //   colleague   MT-Bench / tau-bench: a friendly ask between coworkers.
 //   writing     WritingBench: a short email in English.
 //   crew        A channel where a lead splits the work (Research Review template).
+//   po-*        A channel with a principal orglet (its lead) and --crew-size orglets in all, most of them unrelated to
+//               the message (owner, 2026-10-07): does the lead answer alone, or hand the work to the one that fits?
 
 export const tasks = [
   {
@@ -125,4 +127,49 @@ export const tasks = [
       corrects: /quý 3|Q3|không tăng đều|giảm/i,
     },
   },
+  {
+    id: 'po-simple',
+    benchmark: 'Principal: answers alone',
+    channel: { routes: 'self' },
+    language: 'vi',
+    capabilities: [],
+    files: [],
+    message: 'Chào cả nhóm! Kênh này giúp được mình những việc gì? Trả lời ngắn thôi nhé.',
+    expects: { language: 'vi', tools: [], routes: 'self', maxWords: 160 },
+  },
+  {
+    id: 'po-data',
+    benchmark: 'Principal: hands data work to the analyst',
+    channel: { routes: 'Data analyst' },
+    language: 'vi',
+    capabilities: ['source.read', 'dataset.check'],
+    files: ['finance/income-statement-2025.csv'],
+    message: 'Lợi nhuận hoạt động năm 2025 tăng đều qua từng quý, đúng không? Mình định viết vậy trong báo cáo.',
+    expects: { language: 'vi', tools: ['read'], routes: 'Data analyst', mentions: [/24[.,]4/, /26[.,]8/], corrects: /quý 3|Q3|không tăng đều|giảm/i },
+  },
+  {
+    id: 'po-writing',
+    benchmark: 'Principal: hands a draft to the writer',
+    channel: { routes: 'Writer' },
+    language: 'en',
+    capabilities: [],
+    files: [],
+    message: 'Please draft a short, friendly reply to a client who asked to meet this Friday. I cannot make Friday; offer Monday or Tuesday morning instead. Keep it under 80 words.',
+    expects: { language: 'en', tools: [], routes: 'Writer', maxWords: 160 },
+  },
 ];
+
+/**
+ * The orglets a principal's channel is made of, in the order they join (owner, 2026-10-07). The one the message needs is
+ * always there; the rest are colleagues with unrelated jobs, so a bigger channel tests whether the lead still picks right.
+ */
+export const channelRoles = [
+  { name: 'Researcher', description: 'Finds and reads sources on the web and in files, and reports what they say with links' },
+  { name: 'Writer', description: 'Drafts emails, posts and replies in a clear, friendly voice' },
+  { name: 'Data analyst', description: 'Checks spreadsheets and CSV files, recomputes figures and explains the numbers' },
+  { name: 'Designer', description: 'Gives feedback on layouts, colours and visual hierarchy' },
+  { name: 'Translator', description: 'Translates text between Vietnamese, English and Japanese' },
+  { name: 'Legal reviewer', description: 'Reads contracts and points out risky clauses' },
+  { name: 'Travel planner', description: 'Plans trips, routes and bookings' },
+];
+export const principalRole = { name: 'Coordinator', description: 'Takes the channel\'s messages, answers what it can and hands the rest to the orglet that fits' };

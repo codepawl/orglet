@@ -91,6 +91,10 @@ try {
   await channelDialog.getByRole('tab', { name: 'Thành viên', exact: true }).click();
   assert.equal(await channelDialog.locator('.channel-scope li').count(), 2, 'the channel shows the two orglets of its space');
   await shot(page, 'channel-dialog');
+  // New channels have a lead now; this one takes turns, so both orglets answer the greeting.
+  await channelDialog.getByRole('tab', { name: 'Cách làm việc', exact: true }).click();
+  await channelDialog.getByRole('combobox', { name: 'Cách làm việc' }).click();
+  await page.getByRole('option', { name: 'Lần lượt trả lời' }).click();
   await channelDialog.getByRole('button', { name: 'Tạo kênh', exact: true }).click();
   await channelDialog.waitFor({ state: 'detached' });
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Say hello in one word.');

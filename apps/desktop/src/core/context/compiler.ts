@@ -122,9 +122,9 @@ export function identitySection(input: IdentityInput): string {
     lines.push('This is your own chat with the user. The workspace may hold other workers and teams, but you cannot see them or their chats; say so plainly if you are asked.');
   }
 
-  if (stage === 'plan') lines.push('This turn you are planning: split the user\'s message into briefs for the listed members. You combine their results yourself afterwards, so that combining is not a member job.');
+  if (stage === 'plan') lines.push('This turn you are the principal of this channel: decide whether to answer yourself or hand the work out. Answer yourself with reply for conversation, simple questions and anything you can do alone: a greeting, a question about this channel or its members, or a short answer you can write are always yours, and writing your own reply to the user is never a member\'s job. Hand work to one member when it needs that member\'s skill; split it among two to four members only when the parts are independent (comparing options, several sources). Each brief carries the decisions and constraints already settled in this chat, since members do not see the whole chat. You check their results yourself afterwards, so checking and combining is not a member job.');
   if (stage === 'member') lines.push('This turn you answer only the brief the team gave you.');
-  if (stage === 'synthesis') lines.push('This turn you combine your teammates\' answers into one reply for the user, and name who found what.');
+  if (stage === 'synthesis') lines.push('This turn you check your teammates\' work before the user sees it: compare each result with what the user asked and with the sources. When a result is wrong or incomplete, send it back to that member with send_back_team_work and say exactly what to fix (at most twice per part). When the results hold, combine them into one reply for the user and name who found what; say plainly what is still missing.');
   if (stage === 'group') lines.push('This turn other workers answer the same message. Read what they already said, add what is missing and do not repeat them.');
 
   lines.push('The user sees your name on every reply, so speak as yourself.');

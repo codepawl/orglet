@@ -655,7 +655,10 @@ export class CoreService {
         if (task.teamSnapshot) {
           this.teams.assertResumable(task.id);
           task.pauseReason = undefined; task.handoff = undefined; this.store.update('tasks', task);
-          void this.teams.run(task, task.teamSnapshot, true);
+          // A turn the tagged orglets answered directly resumes the same way; the rest go back to the principal.
+          const addressed = this.addressedInPrincipalChannel(task);
+          if (addressed) void this.teams.chat(task, addressed, true);
+          else void this.teams.run(task, task.teamSnapshot, true);
         }
         else if (this.groupWorkers(task)) {
           this.teams.assertResumable(task.id);
@@ -2053,6 +2056,25 @@ export class CoreService {
     // Tacet's pick for this turn (COD-305), so a resumed or retried turn keeps the orglet it picked.
     return this.turnRouting.recorded(task, group) ?? group;
   }
+  /**
+   * In a channel with a principal orglet (its lead), a message that tags orglets, or replies to one orglet's answer, goes
+   * to them directly; anything else goes to the principal, who answers or hands the work out (owner, 2026-10-07). `@all`
+   * is left to the principal too.
+   */
+  private addressedInPrincipalChannel(task: Task): Worker[] | undefined {
+    const team = task.teamSnapshot;
+    if (!team) return undefined;
+    const workers = this.store.workspace().workers;
+    const crew = [team.synthesizerId, ...team.memberIds].flatMap(workerId => workers.filter(worker => worker.id === workerId));
+    const brief = ownWords(task.currentInput ?? task);
+    // Tagging or replying to the principal alone is talking to the principal, who may still hand the work out.
+    const toPrincipal = (addressed: Worker[]) => addressed.length === 1 && addressed[0].id === team.synthesizerId ? undefined : addressed;
+    const tagged = mentionedPeople(brief, crew);
+    if (tagged) return toPrincipal(tagged);
+    if (parseMentions(brief, crew).length > 0) return undefined;
+    const repliedTo = this.repliedOrglet(task, crew);
+    return repliedTo ? toPrincipal([repliedTo]) : undefined;
+  }
   /** The group member who wrote the answer this turn replies to, if the turn replies to one. */
   private repliedOrglet(task: Task, group: Worker[]): Worker | undefined {
     const replyTo = task.currentInput?.replyTo;
@@ -2220,7 +2242,12 @@ export class CoreService {
     if (!startChecked) this.policy.assertStart(task.teamId, task.id);
     task = { ...task, pauseReason: undefined, handoff: undefined };
     this.store.update('tasks', task);
-    if (task.teamSnapshot) { void this.teams.run(task, task.teamSnapshot); return; }
+    if (task.teamSnapshot) {
+      const addressed = this.addressedInPrincipalChannel(task);
+      if (addressed) { void this.teams.chat(task, addressed); return; }
+      void this.teams.run(task, task.teamSnapshot);
+      return;
+    }
     const group = this.groupTurnWorkers(task);
     if (group) { void this.teams.chat(task, group, false, this.turnRouting.router(task, group)); return; }
     const worker = this.store.get<Worker>('workers', task.workerId);
