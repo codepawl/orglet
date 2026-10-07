@@ -6,3 +6,5 @@ allowBuilds:
 overrides:
   # Security fix for a build-tool dependency (Dependabot alerts); undici comes in through miniflare and wrangler only.
   undici: '7.29.1'
+  # GHSA-wq5f-xc86-pv6w: sharp before 0.35.5; it comes in through miniflare only, to serve images in local dev.
+  sharp: '0.35.5'
