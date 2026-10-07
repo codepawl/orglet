@@ -601,6 +601,9 @@ export interface Bridge {
   /** Saves an MCP server; main keeps its secret values and the window never reads them back (COD-241). */
   saveMcpServer(draft: import('./mcp').McpServerDraft): Promise<McpServerView>;
   removeMcpServer(id: string): Promise<void>;
+  /** Signs in to a remote server in the system browser; resolves once it is back, with the server's new state. */
+  signInMcpServer(id: string): Promise<McpServerView>;
+  cancelMcpSignIn(id: string): Promise<void>;
   /** Imports servers from a file the person picks in a native dialog; nothing is read without that pick. */
   importMcpServers(): Promise<{ imported: string[]; skipped: { name: string; reason: string }[] } | null>;
   /** Saves a web search key (COD-266), encrypted in main like the API keys; the window never reads it back. */

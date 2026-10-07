@@ -9,15 +9,19 @@ import { CallToolResultSchema, type CallToolResult } from '@modelcontextprotocol
 import { Store, now } from '../storage/database';
 import { killTree } from '../harness/exec';
 import { StartTimeReader, type ProcessIdentity, type StartTimeLookup } from './process-identity';
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { McpSignInNeeded, SavedSignIn } from './mcp-oauth';
 import {
   emptyMcpSecrets, McpSecrets, McpServer, McpServerConfig, mcpToolNames,
   MCP_CALL_TIMEOUT_MS, MCP_CONNECT_TIMEOUT_MS, MCP_RESULT_CHARACTERS, MCP_SERVER_LIMIT, MCP_TOOLS_PER_SERVER,
-  type McpRunTool, type McpServerView, type McpToolSummary,
+  type McpOAuthState, type McpRunTool, type McpServerView, type McpToolSummary,
 } from '../../shared/mcp';
 
 /** How the core reaches main for a server's secret values and tells it which server processes are running. */
 export type McpRuntime = {
   readSecrets?: (serverId: string) => Promise<McpSecrets>;
+  /** Keeps a remote server's sign-in after the SDK refreshed or dropped its tokens; main owns the stored copy. */
+  saveSignIn?: (serverId: string, state: McpOAuthState) => void | Promise<void>;
   /**
    * The stdio servers running now, each with its creation time, so main can stop them if the core itself cannot and
    * never mistakes a reused process id for one of them.
@@ -34,7 +38,7 @@ type ListedTool = { name: string; description: string; inputSchema: Record<strin
 
 type Connection = {
   revision: number;
-  status: 'connecting' | 'connected' | 'error';
+  status: 'connecting' | 'connected' | 'error' | 'signIn';
   error?: string;
   client?: Client;
   transport?: Transport;
@@ -89,6 +93,11 @@ function startFailure(error: unknown): unknown {
   const message = error instanceof Error ? error.message : String(error);
   if (/Connection closed/i.test(message)) return new Error('Máy chủ MCP đã thoát trước khi trả lời Orglet. Chạy thử đúng lệnh này trong terminal để xem nó báo lỗi gì.');
   return error;
+}
+
+/** Whether a start or call failed only because the service wants the person to sign in (again). */
+function needsSignIn(error: unknown) {
+  return error instanceof McpSignInNeeded || error instanceof UnauthorizedError;
 }
 
 /** The first line of a description, for the Settings list. */
@@ -245,7 +254,7 @@ export class McpServers {
         }
       } catch (error) {
         signal.throwIfAborted();
-        problems.push(`Không khởi động được máy chủ MCP ${server.name}: ${reasonOf(error)}`);
+        problems.push(`Không khởi động được máy chủ MCP ${server.name}: ${reasonOf(needsSignIn(error) ? new McpSignInNeeded() : error)}`);
       }
     }
     const names = mcpToolNames(entries);
@@ -301,8 +310,9 @@ export class McpServers {
       this.notify();
       return connection;
     } catch (error) {
-      connection.status = 'error';
-      connection.error = reasonOf(error);
+      const signIn = needsSignIn(error);
+      connection.status = signIn ? 'signIn' : 'error';
+      connection.error = reasonOf(signIn ? new McpSignInNeeded() : error);
       await this.close(connection);
       this.notify();
       throw error;
@@ -342,7 +352,8 @@ export class McpServers {
       headers.Authorization = `Bearer ${secrets.bearer}`;
     }
     const url = new URL(server.transport.url);
-    const streamable = new StreamableHTTPClientTransport(url, { requestInit: { headers } });
+    const authProvider = server.transport.oauth ? this.signInFor(server, secrets) : undefined;
+    const streamable = new StreamableHTTPClientTransport(url, { requestInit: { headers }, ...(authProvider ? { authProvider } : {}) });
     const client = this.newClient();
     try {
       await client.connect(streamable, options);
@@ -350,8 +361,10 @@ export class McpServers {
     } catch (streamableError) {
       await streamable.close().catch(() => undefined);
       signal?.throwIfAborted();
+      // A sign-in that is missing is missing for the older transport too.
+      if (needsSignIn(streamableError)) throw streamableError;
       // The SSE transport sends the same headers on its event stream and on every POST.
-      const sse = new SSEClientTransport(url, { requestInit: { headers } });
+      const sse = new SSEClientTransport(url, { requestInit: { headers }, ...(authProvider ? { authProvider } : {}) });
       const fallback = this.newClient();
       try {
         await fallback.connect(sse, options);
@@ -361,6 +374,16 @@ export class McpServers {
         throw streamableError;
       }
     }
+  }
+
+  /**
+   * The saved sign-in of a remote server, for the SDK to send and refresh. Without one the server is not even tried:
+   * it waits for the person to sign in from Settings.
+   */
+  private signInFor(server: McpServer, secrets: McpSecrets): SavedSignIn {
+    const state = secrets.oauth;
+    if (!state || state.serverUrl !== (server.transport.kind === 'http' ? server.transport.url : '') || !state.tokens) throw new McpSignInNeeded();
+    return new SavedSignIn(state, next => this.runtime.saveSignIn?.(server.id, next));
   }
 
   /** A connection stopped while it was starting (an edit, a disable, quit) must not come back to life. */

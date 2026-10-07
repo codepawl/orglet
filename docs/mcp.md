@@ -9,13 +9,22 @@ MCP (Model Context Protocol) is how many apps let an AI use other services: GitH
 
 Part of the [user guide](user-guide.md). Tool permissions in general are in [agent-tools.md](agent-tools.md).
 
+## Connect an app
+
+**Settings → MCP** lists apps Orglet can connect in one step under **Connect an app**: Linear, Notion and Atlassian (Jira and Confluence) sign in through your browser, and GitHub takes a token.
+
+- **Sign in**: Orglet adds the app's server and opens your browser at the service's sign-in page. Approve Orglet there and go back to the app; the row shows **Connected** with the app's tools. While the browser is open the row says **Waiting for the browser…** with **Cancel**. A sign-in you do not finish stops after five minutes.
+- **Add token** (GitHub): the form opens with the address filled in. Paste a token from the link it shows and choose **Save server**.
+
+Then let an orglet use it, as below. An app you already added leaves the list.
+
 ## Add a server
 
 1. Open **Settings → MCP** and choose **Add server**.
 2. Give it a **Name**, for example `GitHub`.
 3. Under **How to connect**, pick one:
    - **Run on this computer (stdio)**: the **Command** that starts the server (for example `npx`) and its **Arguments**, one per line (for example `-y` and `@modelcontextprotocol/server-github`). Add the **Environment variables** it needs, such as `GITHUB_TOKEN`.
-   - **Remote (HTTP)**: the server's **Address**, and a **Bearer token** or **Headers** if it needs them.
+   - **Remote (HTTP)**: the server's **Address**, and under **Authentication** either **Token or header** (a **Bearer token** or **Headers** if it needs them) or **Sign in with the browser** for a service that supports OAuth. A server that signs in shows **Sign-in needed** after you save it, with a **Sign in** button.
 4. Choose **Save server**. Orglet starts the server once to test it, and the row shows **Connected** with its tools, or **Connection error** with the reason: a command it cannot find is named (**Could not find the command …**), and a server that quits during the handshake says so and asks you to run the same command in a terminal to see its error. The server's own error output never reaches the window, since it can print tokens.
 
 Each row has a switch to turn the server off and a menu with **Test connection**, **Edit** and **Remove**. When you edit a server, a saved value shows as dots. Leave it empty to keep it, or type a new one to replace it.
@@ -62,7 +71,7 @@ Each call is a row in the trace above the answer, for example "Used MCP tool: se
 
 **Where servers run.** Stdio servers run as child processes of Orglet's core, the background process that also runs the tool loop, so a call and its cancel stay in one place. A server starts the first time something needs it: **Test connection**, or a chat whose orglet may use it. It stops when you turn it off, edit it, remove it, or quit Orglet. On quit, or if the core itself stops, the app also stops each server's process tree, but only a process whose id and creation time still match the server Orglet started; a process it cannot confirm is left alone rather than risk stopping another program that reused the id. If a server crashes, its row shows **Connection error** and the call comes back as a failed tool call; the rest of the app keeps working. Whatever a server writes to its error output is discarded; it never reaches the window.
 
-**Secrets.** Environment variable values, header values and the bearer token are encrypted with your system's secure storage (DPAPI on Windows, Keychain on macOS), next to the API keys and not in the database. The window never reads them back. The core asks for them only when it starts the server. Backups and crew templates never carry them. **Erase all data** in **Settings → Data** keeps your servers and their values, like it keeps API keys and custom connections; remove a server in **Settings → MCP**.
+**Secrets.** Environment variable values, header values, the bearer token and a browser sign-in's tokens are encrypted with your system's secure storage (DPAPI on Windows, Keychain on macOS), next to the API keys and not in the database. The window never reads them back. The core asks for them only when it starts the server. Backups and crew templates never carry them. **Erase all data** in **Settings → Data** keeps your servers and their values, like it keeps API keys and custom connections; remove a server in **Settings → MCP**.
 
 **Environment.** A stdio server gets only a small set of system variables (such as `PATH`, `TEMP` and `USERPROFILE`) plus the ones you add. It does not get Orglet's own environment.
 
@@ -72,9 +81,11 @@ Each call is a row in the trace above the answer, for example "Used MCP tool: se
 
 **Unknown outcomes.** A call that was running when the app closed has an unknown outcome. If the server marks the tool read-only, it may run again. Any other tool is treated like an interrupted file edit: the chat asks you to review it in **Details → Files and processes** before it continues.
 
+**Browser sign-in (OAuth).** Main runs it, following the MCP authorization spec: it reads the server's protected resource metadata and its authorization server's metadata, registers Orglet as a native app with no client secret when the service allows that (dynamic client registration), and asks for an authorization code with PKCE S256. The browser comes back to a listener on `127.0.0.1` that exists for that sign-in only, answers only its own address, and takes only a callback carrying that sign-in's `state`; when the service names itself (`iss`, RFC 9207) it must be the service the sign-in went to. The next sign-in reuses the registered client and its port when the port is free, and registers again otherwise. The client, the tokens and what discovery found are stored with the server's other secret values, tied to its address: changing the address drops them. The core sends the access token and, when the service refuses it, refreshes it once and hands the new tokens straight back to main to store, since a refresh token can be used only once. When the refresh is refused too, the row shows **Sign-in needed** and a chat that would use the server is told it needs a sign-in. GitHub does not let an app register itself, so it takes a token until CodePawl registers an app with GitHub. **Sign in again** in the row's menu replaces the sign-in; **Remove** deletes it with the server.
+
 ## What it cannot do
 
-- Servers that need a browser sign-in (OAuth) are not supported. Use a token instead.
+- An app that needs an OAuth client registered with it in advance (GitHub, Slack, Google) cannot use the browser sign-in yet; use a token where the service offers one.
 - Orglet offers servers nothing back: no sampling (using your model), no roots, no elicitation.
 - Resources and prompts from a server are not used; only tools are.
 - At most 20 servers and 64 tools per server. Tools beyond that, or with a schema over 16 KB, are left out and the row says how many.

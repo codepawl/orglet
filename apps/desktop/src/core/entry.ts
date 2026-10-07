@@ -158,6 +158,8 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   readKey: provider => requestKey(provider),
 }, workspaceRuntime, {
   readSecrets: requestMcpSecrets,
+  // A refreshed sign-in goes straight back to main, which stores it encrypted; the core keeps only what it is using.
+  saveSignIn: (serverId, state) => port.postMessage({ type: 'mcpSignInSave', serverId, state }),
   // Main keeps each running server's process id and creation time, so quitting or a crash of this process still
   // stops them, and a reused id is never taken for one of them.
   onProcesses: processes => port.postMessage({ type: 'mcpProcesses', processes }),
@@ -264,6 +266,7 @@ port.on('message', async ({ data }) => {
       // Only main sends these three: it has split the secret values off a server before saving it (COD-241).
       : command === 'saveMcpServer' ? await core.saveMcpServer(args)
       : command === 'removeMcpServer' ? await core.removeMcpServer(args)
+      : command === 'mcpSignInTarget' ? core.mcpSignInTarget(args)
       : command === 'shutdown' ? await shutdownHelpers()
       // Only main sends this: the person closed the Chrome window a run's tabs were in, which hands the browser back.
       : command === 'browserReleased' ? await core.browser.released(Id.parse(args))

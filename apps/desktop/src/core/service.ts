@@ -272,6 +272,13 @@ export class CoreService {
   removeMcpServer(raw: unknown) {
     return this.mcp.remove(Id.parse(raw));
   }
+  /** The address main signs in to for a remote server that uses the browser sign-in (stage 4). Only main calls this. */
+  mcpSignInTarget(raw: unknown): string {
+    const server = this.mcp.find(Id.parse(raw));
+    if (!server) throw new Error('Không tìm thấy máy chủ MCP.');
+    if (server.transport.kind !== 'http' || !server.transport.oauth) throw new Error('Máy chủ này không đăng nhập bằng trình duyệt.');
+    return server.transport.url;
+  }
   /** Path of a task's source for the main process to open in the default app; the renderer only ever sends ids. */
   sourcePath(raw: unknown): string {
     const input = commands.sourceBytes.parse(raw);

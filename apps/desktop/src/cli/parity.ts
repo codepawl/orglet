@@ -222,6 +222,8 @@ export const BRIDGE_PARITY: Record<keyof Bridge, Parity> = {
   setCliOnPath: held('changes the PATH of the person\'s account'),
   saveMcpServer: held(A_SECRET),
   removeMcpServer: held(A_GRANT),
+  signInMcpServer: held(A_SECRET),
+  cancelMcpSignIn: held(A_SECRET),
   importMcpServers: held(A_GRANT),
   saveWebSearchKey: held(A_SECRET),
   removeWebSearchKey: held(A_SECRET),

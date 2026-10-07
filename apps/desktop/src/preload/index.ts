@@ -91,6 +91,8 @@ const bridge: Bridge = {
   },
   saveMcpServer: draft => invoke('orglet:mcp-save', draft),
   removeMcpServer: id => invoke('orglet:mcp-remove', id),
+  signInMcpServer: id => invoke('orglet:mcp-sign-in', id),
+  cancelMcpSignIn: id => invoke('orglet:mcp-sign-in-cancel', id),
   importMcpServers: () => invoke('orglet:mcp-import'),
   saveWebSearchKey: (provider, key) => invoke('orglet:web-search-key', { provider, key }),
   removeWebSearchKey: provider => invoke('orglet:web-search-key-remove', provider),
