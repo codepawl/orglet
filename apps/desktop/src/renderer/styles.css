@@ -958,15 +958,20 @@ svg { flex-shrink:0; stroke-width:1.7; }
   80% { transform:translateY(0) scale(1.07, .91); animation-timing-function:ease-out; }
   100% { transform:none; }
 }
-.account-choice .welcome { margin:0 0 28px; text-wrap:balance; }
-.account-choice-options { width:100%; display:flex; flex-direction:column; gap:22px; }
-.account-choice-option { display:flex; flex-direction:column; gap:8px; }
-.account-choice-option .org-button { width:100%; min-height:40px; }
-.account-choice-option p, .account-choice-waiting p { margin:0; color:var(--muted); font-size:13px; line-height:1.45; text-align:center; text-wrap:balance; }
-.account-choice-option p.error { color:var(--error); }
-/* What signing in sends (COD-344): one quieter line under the sign-in sentence, links in the text colour. */
-.account-choice-option p.account-choice-disclosure { font-size:12px; }
-.account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:16px; }
+.account-choice .welcome { margin:0 0 24px; text-wrap:balance; }
+.account-choice-options { width:100%; display:flex; flex-direction:column; gap:10px; }
+/* A choice is one card: an icon tile, a label and one short line, left-aligned so the labels read down a column. */
+.account-choice-card { width:100%; min-height:64px; padding:12px 14px; justify-content:flex-start; gap:12px; text-align:left; }
+.account-choice-icon { flex:none; display:inline-grid; place-items:center; width:36px; height:36px; border-radius:10px; background:color-mix(in srgb, currentColor 12%, transparent); }
+.account-choice-text { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.account-choice-label { font-size:14px; font-weight:500; }
+.account-choice-hint { font-size:12px; font-weight:400; opacity:.78; }
+.account-choice-error { width:100%; margin:0 0 14px; font-size:13px; color:var(--error); }
+/* What signing in sends (COD-344): one quiet line under the cards, its mark leading, links in the text colour. */
+.account-choice-disclosure { display:flex; align-items:flex-start; gap:8px; margin:18px 0 0; color:var(--muted); font-size:12px; line-height:1.5; text-wrap:pretty; }
+.account-choice-disclosure > svg { flex:none; margin-top:2px; }
+.account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:12px; }
+.account-choice-waiting p { display:flex; align-items:center; gap:8px; margin:0; color:var(--muted); font-size:13px; }
 .row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
 .row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
@@ -1191,6 +1196,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 /* The same 26px mark slot and 12px gap as the other Settings lists (Connections, Harness, Browser), so the marks and
    the text of every tab line up; the alignment check compares them (family-lead). */
 .account-benefits li { display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.45; }
+/* The mark that leads an Account row: the same 26px slot as the other Settings lists, so text starts in one column. */
+.account-row-icon { flex:none; display:inline-grid; place-items:center; width:var(--setting-mark); height:20px; color:var(--muted); }
 .account-benefit-icon { flex:none; display:inline-grid; place-items:center; width:26px; height:20px; color:var(--muted); }
 .account-disclosure { margin:16px 0 0; font-size:12px; line-height:1.5; color:var(--muted); }
 .account-disclosure .org-info-tip { vertical-align:middle; margin-left:2px; }
@@ -1510,7 +1517,6 @@ button.notice-body { cursor:pointer; }
 .source-restored>p { margin:0; max-width:420px; text-wrap:pretty; }
 .source-restored-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
 /* Joining an account from a computer that holds data (GH-484): both sides' counts, then the choice. */
-.sync-title { display:inline-flex; align-items:center; gap:8px; }
 .outcome-line { display:flex; align-items:flex-start; gap:8px; margin:0; text-wrap:pretty; }
 .outcome-line > .org-status-mark { flex-shrink:0; margin-top:2px; }
 /* Two versions of one thing, side by side, each with its own choice under it (GH-484). */

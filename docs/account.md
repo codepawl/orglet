@@ -15,8 +15,10 @@ Part of the [user guide](user-guide.md). The design behind it is [account-sync-d
 
 A new install asks once, before the app opens:
 
-- **Sign in** opens your browser at `accounts.codepawl.com`. The line under it says that signing in sends usage statistics and error reports, which you can turn off, and links to the [privacy policy](https://codepawl.com/privacy) and [terms](https://codepawl.com/terms).
-- **Use without an account** opens Orglet the way it has always worked. You can sign in later from Settings.
+Two cards, each with an icon, a label and one short line. A single line under them says that signing in sends usage statistics and error reports, which you can turn off, with links to the [privacy policy](https://codepawl.com/privacy) and [terms](https://codepawl.com/terms).
+
+- **Sign in** (the filled card) opens your browser at `accounts.codepawl.com`.
+- **No account needed** opens Orglet the way it has always worked. You can sign in later from Settings.
 
 If you already used Orglet before this version, you are not asked. The app opens as it did.
 
@@ -28,11 +30,13 @@ The orglet on the screen reacts as you go. It looks aside while your browser is 
 2. Your browser opens the CodePawl sign-in page. Sign in there, or create an account.
 3. The browser asks to open Orglet. Allow it. Orglet comes forward, signed in.
 
-While the browser is open, Orglet shows **Continue in your browser** with **Cancel**. After 10 minutes without an answer the sign-in stops and you can try again. If the sign-in fails, the reason is shown with **Try again**.
+While the browser is open, Orglet shows **Continue in your browser** with a busy mark and **Cancel**. After 10 minutes without an answer the sign-in stops and you can try again. If the sign-in fails, the reason leads with an error mark and the card turns into **Try again**.
 
 The link back to the app uses the `com.codepawl.orglet:` scheme. Setup registers it for your user, next to [`orglet://` links](integrations.md). A ZIP copy and a development run do not register it, so signing in there cannot finish.
 
 ## Settings → Account
+
+Every row starts with an icon. **Sync** leads with its state: a tick when synced, a turning ring while it works, a dashed or filled mark when it cannot go on.
 
 - **Not signed in**: **Sign in**, what an account gives you (above), and one sentence on what signing in sends, with the privacy and terms links and an **i** that lists what is sent.
 - **Signing in**: while your browser is open, the orglet beside **Signing in** thinks, and **Cancel** stops the sign-in.

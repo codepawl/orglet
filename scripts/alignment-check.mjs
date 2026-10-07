@@ -657,6 +657,22 @@ async function measureFirstRun(page) {
   }
 }
 
+/** The same first-run panel while the browser sign-in is open: the orglet thinks, a busy mark and a quiet Cancel. */
+async function measureFirstRunWaiting(page) {
+  await startSignInThatWaits(page);
+  await page.getByRole('button', { name: label('Hủy'), exact: true }).waitFor();
+  for (const theme of THEMES) {
+    await setAppearance(page, theme);
+    for (const size of SIZES) {
+      await resize(page, size);
+      await settle(page);
+      await record(page, 'first-run-waiting', size, theme);
+    }
+  }
+  await page.evaluate(() => window.orglet.accountCancelSignIn());
+  await page.locator('.account-choice-card').first().waitFor();
+}
+
 async function measure(page) {
   const installed = await page.evaluate(() => window.__orgletAlignment !== undefined);
   if (!installed) await page.evaluate(measuringSource());
@@ -694,6 +710,7 @@ try {
   const page = await app.firstWindow();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   if (!options.only || options.only.includes('first-run')) await measureFirstRun(page);
+  if (!options.only || options.only.includes('first-run-waiting')) await measureFirstRunWaiting(page);
   const context = await seedWorkspace(page);
   const screens = SCREENS.filter(screen => (!options.only || options.only.includes(screen.name)) && (!screen.needs || context[screen.needs]));
   if (!heldModel) console.log('crew-chat-island skipped: port 11434 is taken, so the held model could not start');
