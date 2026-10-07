@@ -786,6 +786,8 @@ export const en: Dictionary = {
   'Thông điệp không khớp phần việc.': 'The message does not match its assignment.',
   'Thông điệp thiếu quyết định xử lý hợp lệ.': 'The message is missing a valid resolution.',
   'Đã giao lại phần việc cho {0}: {1}': 'Reassigned work to {0}: {1}',
+  'Lịch {0} của {1}': 'Schedule {0} by {1}',
+  'Lịch · {0}': 'Schedule · {0}',
   'Đã hết hai lần giao lại phần việc. Cần người dùng xử lý blocker.': 'The two reassignment attempts have been used. User input is needed to resolve the blocker.',
   'Không tìm thấy câu hỏi hoặc blocker trong lượt này.': 'No matching question or blocker was found in this turn.',
   'Thông điệp đã được xử lý bằng quyết định khác.': 'The message was already resolved with a different decision.',
