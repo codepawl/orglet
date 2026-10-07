@@ -54,7 +54,9 @@ try {
   await savedResult.waitFor();
   assert.equal(await savedResult.evaluate(element => element.open), true);
   await page.getByRole('heading', { name: `Run-log · ${label('Cần xem lại failure')}`, exact: true }).waitFor();
-  await page.getByText(/60 completed · 1 failed · 0 cancelled/).waitFor();
+  // The counts line, up to the number of scores left out, which this check does not pin.
+  const countsPrefix = label('{0} completed · {1} failed · {2} cancelled. {3} score của lần lỗi/hủy bị loại.', ['60', '1', '0', '\u0000']).split('\u0000')[0];
+  await page.getByText(new RegExp(`^${countsPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)).waitFor();
   await page.getByText(label('Mã lỗi và trạng thái không hoàn tất'), { exact: true }).click();
   await page.getByText('timeout: 1', { exact: true }).waitFor();
   await page.getByText(label('So sánh rank public/private'), { exact: true }).click();

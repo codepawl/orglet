@@ -472,6 +472,19 @@ const SCREENS = [
   { name: 'viewer-pdf', open: page => openViewerFile(page, 'report.pdf', '.pdf-page') },
   { name: 'sidebar-row-menu', open: async (page, context) => { await openArea(page, 'Trò chuyện'); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
+  // The app trigger (stage 4): a connected app, its read-only tool, arguments, how often and words. The app here was
+  // never reached, so the form says it has no read-only tool yet; nothing goes over the network.
+  { name: 'schedule-editor-app', open: async page => {
+    await page.evaluate(() => window.orglet.saveMcpServer({ name: 'Tracker', enabled: true, transport: { kind: 'http', url: 'https://tracker.example/mcp', headers: [], oauth: true } }));
+    await openSidebar(page);
+    await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click();
+    await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click();
+    await page.getByRole('combobox', { name: label('Bắt đầu') }).click();
+    await page.getByRole('option', { name: label('Khi có mục mới trong ứng dụng') }).click();
+    await page.locator('.routine-app textarea').waitFor();
+  }, close: page => page.evaluate(async () => {
+    for (const server of (await window.orglet.call('workspace', {})).mcpServers ?? []) await window.orglet.removeMcpServer(server.id);
+  }) },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
   // Channels (COD-361): one written in, its settings, a new one, and one still empty.
   { name: 'channel-chat', open: async (page, context) => { await openArea(page, 'Kênh'); await page.getByRole('button', { name: context.channels.launch, exact: true }).first().click(); await page.locator('.topbar-topic').waitFor(); } },
