@@ -8,7 +8,7 @@ import { tokenizeLines, type Language } from './highlight';
 const INITIAL_LINES = 2000;
 
 const LANGUAGE_NAMES: Record<Language, string> = {
-  javascript: 'JavaScript', python: 'Python', shell: 'Shell', powershell: 'PowerShell', sql: 'SQL', css: 'CSS', markup: 'HTML / XML', yaml: 'YAML',
+  javascript: 'JavaScript / TypeScript', python: 'Python', shell: 'Shell', powershell: 'PowerShell', sql: 'SQL', css: 'CSS', markup: 'HTML / XML', yaml: 'YAML',
   json: 'JSON', toml: 'TOML', 'c-family': 'C / C++ / Java', go: 'Go', rust: 'Rust', ruby: 'Ruby', text: '',
 };
 
