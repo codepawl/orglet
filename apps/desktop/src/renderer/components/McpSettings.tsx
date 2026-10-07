@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { ChevronRight, FileInput, Globe, KeyRound, ListTree, LogIn, Pencil, Plug, Plus, RefreshCw, Server, ShieldCheck, SquareTerminal, Tag, Trash2, Variable, X } from 'lucide-react';
+import { ChevronRight, FileInput, Globe, KeyRound, ListTree, LogIn, Pencil, Plus, RefreshCw, Server, ShieldCheck, SquareTerminal, Tag, Trash2, Variable, X } from 'lucide-react';
 import type { Workspace } from '../../shared/contracts';
 import type { McpServerDraft, McpServerStatus, McpServerView } from '../../shared/mcp';
-import { catalogDraft, MCP_CATALOG, type McpCatalogApp } from '../../shared/mcp-catalog';
+import { catalogAppOf, catalogDraft, MCP_CATALOG, type McpCatalogApp } from '../../shared/mcp-catalog';
+import { BrandMark } from './brandMarks';
 import { Button, Drawer, FieldLabel } from './ui';
 import { Select } from './Select';
 import { Switch } from './Switch';
@@ -24,6 +25,13 @@ function statusOf(status: McpServerStatus): { label: string; className: string; 
   if (status === 'signIn') return { label: t('Cần đăng nhập'), className: '', mark: { variant: 'asking', tone: 'accent' } };
   if (status === 'disabled') return { label: t('Đang tắt'), className: '', mark: { variant: 'empty', tone: 'muted' } };
   return { label: t('Chưa chạy'), className: '', mark: { variant: 'empty', tone: 'muted' } };
+}
+
+/** A real company's server shows that company's mark (owner, 2026-10-07); any other shows how it is reached. */
+function serverMark(server: McpServerView) {
+  if (server.transport.kind !== 'http') return <SquareTerminal size={18} />;
+  const app = catalogAppOf(server.transport.url);
+  return app ? <BrandMark brand={app} size={18} /> : <Globe size={18} />;
 }
 
 /** What the server runs or where it lives, on one line. */
@@ -140,7 +148,7 @@ function McpCatalogRow({ app, busy, act, onToken }: { app: McpCatalogApp; busy: 
     start(app.name, () => orglet.saveMcpServer(catalogDraft(app)));
   };
   return <div className="setting-row harness-row mcp-row">
-    <span className="mcp-mark" aria-hidden="true"><Plug size={18} /></span>
+    <span className="mcp-mark" aria-hidden="true"><BrandMark brand={app.id} size={18} /></span>
     <div className="setting-text">
       <span className="harness-head"><span id={titleId} className="setting-title">{app.name}</span></span>
       <span className="setting-description">{appDescription(app)}</span>
@@ -167,7 +175,7 @@ function McpServerRow({ server, busy, act, onEdit }: { server: McpServerView; bu
     return toolCount === 1 ? t('{0} có 1 công cụ', [server.name]) : t('{0} có {1} công cụ', [server.name, toolCount]);
   }, server.name);
   return <div className="setting-row harness-row mcp-row">
-    <span className="mcp-mark" aria-hidden="true">{server.transport.kind === 'http' ? <Globe size={18} /> : <SquareTerminal size={18} />}</span>
+    <span className="mcp-mark" aria-hidden="true">{serverMark(server)}</span>
     <div className="setting-text">
       <span className="harness-head">
         <span id={titleId} className="setting-title">{server.name}</span>

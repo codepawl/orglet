@@ -2,7 +2,8 @@ import {
   useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type CompositionEvent, type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
 } from 'react';
-import { AppWindow, ExternalLink, Hand, Info, Maximize2, MonitorSmartphone, Undo2, X } from 'lucide-react';
+import { AppWindow, Hand, Info, Maximize2, Undo2, X } from 'lucide-react';
+import { BrandMark } from './brandMarks';
 import { Skeleton, Viewer } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import {
@@ -332,9 +333,9 @@ export function BrowserLiveSurface({ runId, workerName, workerColor, site, contr
     : t('Trang {0}, {1} đang dùng.', [site ?? '', workerName]);
   if (inChrome) {
     return <div className="browser-live browser-live-away" data-large={large ? '' : undefined} style={{ aspectRatio: ratio, '--browser-live-ratio': page.width / page.height } as CSSProperties}>
-      <p><MonitorSmartphone size={18} aria-hidden="true" />{t('Trang đang mở trong cửa sổ Chrome.')}</p>
+      <p><BrandMark brand="chrome" size={18} />{t('Trang đang mở trong cửa sổ Chrome.')}</p>
       <div className="browser-live-away-actions">
-        <Button variant="outline" onClick={onOpenInChrome}><ExternalLink size={15} />{t('Hiện cửa sổ Chrome')}</Button>
+        <Button variant="outline" onClick={onOpenInChrome}><BrandMark brand="chrome" size={15} />{t('Hiện cửa sổ Chrome')}</Button>
         <Button variant="ghost" onClick={onBackToOrglet}><AppWindow size={15} />{t('Xem trong Orglet')}</Button>
       </div>
     </div>;
@@ -353,7 +354,7 @@ export function BrowserLiveSurface({ runId, workerName, workerColor, site, contr
     {live.suggestion && <div className="browser-live-suggestion" role="status">
       <Info size={15} aria-hidden="true" />
       <span>{suggestionText[live.suggestion]}</span>
-      <Button variant="outline" onClick={onOpenInChrome}><ExternalLink size={14} />{t('Mở trong Chrome')}</Button>
+      <Button variant="outline" onClick={onOpenInChrome}><BrandMark brand="chrome" size={14} />{t('Mở trong Chrome')}</Button>
       <Button size="icon" variant="ghost" aria-label={t('Bỏ qua gợi ý')} title={t('Bỏ qua gợi ý')} onClick={live.dismissSuggestion}><X size={14} /></Button>
     </div>}
   </div>;
@@ -386,7 +387,7 @@ function LiveActions({ detail }: { detail: TaskDetail }) {
     {live.takenOver
       ? <Button variant="primary" {...labelled(t('Trả lại trình duyệt'))} onClick={() => takeOverBrowser(taskId, false)}><Undo2 size={15} /><span className="browser-live-action-label">{t('Trả lại trình duyệt')}</span></Button>
       : <Button variant="outline" {...labelled(t('Tiếp quản'))} onClick={() => takeOverBrowser(taskId, true)}><Hand size={15} /><span className="browser-live-action-label">{t('Tiếp quản')}</span></Button>}
-    {!live.inChrome && <Button variant="outline" {...labelled(t('Mở trong Chrome'))} onClick={() => takeOverBrowser(taskId, true, true)}><ExternalLink size={15} /><span className="browser-live-action-label">{t('Mở trong Chrome')}</span></Button>}
+    {!live.inChrome && <Button variant="outline" {...labelled(t('Mở trong Chrome'))} onClick={() => takeOverBrowser(taskId, true, true)}><BrandMark brand="chrome" size={15} /><span className="browser-live-action-label">{t('Mở trong Chrome')}</span></Button>}
   </>;
 }
 

@@ -22,6 +22,25 @@ export const MCP_CATALOG: readonly McpCatalogApp[] = [
   { id: 'github', name: 'GitHub', url: 'https://api.githubcopilot.com/mcp/', signIn: 'token', tokenPage: 'https://github.com/settings/personal-access-tokens/new' },
 ];
 
+/**
+ * The catalog app a server's address belongs to, so a server added by hand or imported still shows that company's mark.
+ * Matched on the host only.
+ */
+export function catalogAppOf(address: string): McpCatalogApp['id'] | undefined {
+  let host: string;
+  try {
+    host = new URL(address).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+  const within = (domain: string) => host === domain || host.endsWith(`.${domain}`);
+  if (within('linear.app')) return 'linear';
+  if (within('notion.com') || within('notion.so')) return 'notion';
+  if (within('atlassian.com') || within('atlassian.net')) return 'atlassian';
+  if (within('github.com') || within('githubcopilot.com')) return 'github';
+  return undefined;
+}
+
 /** The server a catalog app becomes: browser sign-in, or a token the person pastes. */
 export function catalogDraft(app: McpCatalogApp, token?: string): McpServerDraft {
   if (app.signIn === 'browser') return { name: app.name, enabled: true, transport: { kind: 'http', url: app.url, headers: [], oauth: true } };
