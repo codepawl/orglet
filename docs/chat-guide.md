@@ -187,6 +187,8 @@ While the orglet waits for you, for example on a card asking to click a button o
 
 The chat stays on its newest message while you are there: new text, a card, a window resize or opening **Details** keep the end in view. Scroll up and it stays where you left it; scroll back to the last lines and it follows again. A card that needs you (an approval, a question, a failure or a blocked hand-in) is brought into view once when it appears if you were less than a screen up. Further up, the tab on the message box tells you instead. Sending a message always goes back to the end.
 
+When an orglet stops to ask you something, the question and its choices sit in the tab on top of the message box, one row each. Pick one with a click or its number key, and add a note under it if you like; or type your own answer on the **Other** row or in the message box. **Send** (Ctrl+Enter) answers; **Skip** lets the orglet choose and say what it chose. The arrow folds the choices away while you read the chat. Either way the same turn goes on.
+
 A message that got no answer keeps what happened to it after newer messages, on one line under the orglet's name: "This turn didn’t finish: …" with the error, "This turn was stopped before it answered.", "This turn stopped while it waited for you." Hover the line for a long error in full.
 
 Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from, last command first: "Last command exited 0 · earlier: 1 failed." A turn that ran a failing test, fixed the code and ran it again reads that way instead of "1 exited 0, 1 failed". Their full output is in the same panel. Exit 0 means that command finished; it does not mean the task passed.

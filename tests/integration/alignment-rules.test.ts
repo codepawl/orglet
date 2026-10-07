@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BASELINE_TOLERANCE,
+  baselineOffsets,
+  strandedGap,
   centreOffset,
   clusterValues,
   commonValue,
@@ -177,5 +180,19 @@ describe('the island seam on the prompt bar', () => {
       "the left corner meets the tab's side 0.2px off its border",
       "the tab reaches 1px into the bar, so the bar's line or its typing ring shows under it",
     ]);
+  });
+
+  it('finds text on one line that does not stand on the lead text\'s baseline (2026-10-07)', () => {
+    // A name, its connection and the time: centred at three sizes, the smaller two stood a pixel above the name's line.
+    expect(baselineOffsets([366.28, 365.28, 365.28], BASELINE_TOLERANCE)).toEqual([{ index: 1, offset: -1 }, { index: 2, offset: -1 }]);
+    expect(baselineOffsets([366.28, 366.28, 366.1], BASELINE_TOLERANCE)).toEqual([]);
+    expect(baselineOffsets([120], 1)).toEqual([]);
+  });
+
+  it('finds a picture-only piece left far past the end of the text above it (2026-10-07)', () => {
+    // Read faces pushed to the end of an 80-character box under a one-line message.
+    expect(strandedGap(box(1068, 400, 14, 14), [box(376, 376, 517, 20)])).toBe(175);
+    expect(strandedGap(box(900, 400, 14, 14), [box(376, 376, 517, 20)])).toBeUndefined();
+    expect(strandedGap(box(1068, 400, 14, 14), [])).toBeUndefined();
   });
 });

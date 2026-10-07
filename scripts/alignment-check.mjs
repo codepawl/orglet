@@ -15,17 +15,18 @@ import { openSettings, expandSidebar } from './smoke-language.mjs';
 // themes, and runs the checks in scripts/alignment/rules.ts in the window. Findings go to stdout, a JSON report and one outlined
 // screenshot per screen that has any. Exits 1 on findings unless --report-only.
 //
-//   pnpm test:alignment [--report-only] [--all-screenshots] [--only schedules,settings-general] [--language vi|en] [--out <folder>]
+//   pnpm test:alignment [--report-only] [--all-screenshots] [--snapshot] [--only schedules,settings-general] [--language vi|en] [--out <folder>]
 
 const SIZES = [{ width: 1200, height: 820 }, { width: 740, height: 600 }];
 const THEMES = ['light', 'dark'];
 
 function parseArguments(argv) {
-  const options = { reportOnly: false, allScreenshots: false, only: undefined, language: 'vi', out: undefined };
+  const options = { reportOnly: false, allScreenshots: false, snapshot: false, only: undefined, language: 'vi', out: undefined };
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === '--report-only') options.reportOnly = true;
     else if (argument === '--all-screenshots') options.allScreenshots = true;
+    else if (argument === '--snapshot') options.snapshot = true;
     else if (argument === '--only') options.only = argv[++index].split(',');
     else if (argument === '--language') options.language = argv[++index];
     else if (argument === '--out') options.out = resolve(argv[++index]);
@@ -81,11 +82,16 @@ async function startHeldModel() {
     response.end(JSON.stringify(body));
   };
   const server = createServer((request, response) => {
-    if (request.method === 'GET' && request.url.startsWith('/api/tags')) return sendJson(response, { models: [{ name: HELD_MODEL, model: HELD_MODEL, size: 1 }] });
-    if (request.method === 'GET' && request.url.startsWith('/v1/models')) return sendJson(response, { object: 'list', data: [{ id: HELD_MODEL, object: 'model', owned_by: 'alignment-check' }] });
+    if (request.method === 'GET' && request.url.startsWith('/api/tags')) return sendJson(response, { models: [HELD_MODEL, ASKING_MODEL].map(name => ({ name, model: name, size: 1 })) });
+    if (request.method === 'GET' && request.url.startsWith('/v1/models')) return sendJson(response, { object: 'list', data: [HELD_MODEL, ASKING_MODEL].map(id => ({ id, object: 'model', owned_by: 'alignment-check' })) });
     if (request.method === 'POST' && request.url.startsWith('/v1/chat/completions')) {
-      heldResponses.add(response);
-      request.on('close', () => heldResponses.delete(response));
+      let body = '';
+      request.on('data', chunk => { body += chunk; });
+      request.on('end', () => {
+        if (JSON.parse(body).model === ASKING_MODEL) return askQuestion(response);
+        heldResponses.add(response);
+        request.on('close', () => heldResponses.delete(response));
+      });
       return;
     }
     response.writeHead(404);
@@ -105,6 +111,21 @@ async function startHeldModel() {
 }
 
 const HELD_MODEL = 'held:latest';
+/** A model that answers every request by stopping to ask the person a question, so the island's question can be measured. */
+const ASKING_MODEL = 'asks:latest';
+
+/** One streamed reply that calls `request_user_decision`, in the chunks an OpenAI-compatible server sends. */
+function askQuestion(response) {
+  const decision = { question: 'Should the release note go to the early readers first, or to everyone on Friday?', options: ['Early readers first', 'Everyone on Friday', 'Hold it a week'] };
+  const chunk = (delta, finish) => ({ id: 'ask', object: 'chat.completion.chunk', created: 0, model: ASKING_MODEL, choices: [{ index: 0, delta, finish_reason: finish ?? null }] });
+  const lines = [
+    chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_ask', type: 'function', function: { name: 'request_user_decision', arguments: JSON.stringify(decision) } }] }),
+    chunk({}, 'tool_calls'),
+    { id: 'ask', object: 'chat.completion.chunk', created: 0, model: ASKING_MODEL, choices: [], usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 } },
+  ];
+  response.writeHead(200, { 'content-type': 'text/event-stream' });
+  response.end(`${lines.map(line => `data: ${JSON.stringify(line)}\n\n`).join('')}data: [DONE]\n\n`);
+}
 
 /**
  * A stand-in for accounts.codepawl.com (COD-344), so Settings → Account can be measured signed in without a real
@@ -201,9 +222,12 @@ async function seedWorkspace(page) {
     await callCore(page, 'saveRoutine', { ...base, name: schedule.name, enabled: schedule.enabled ?? true, schedule: schedule.schedule, task: { ...base.task, ...schedule.task } });
   }
   const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
+  // One orglet on each stand-in: one stays at work, so its header and the island can be measured mid-turn; one asks.
+  const heldOrglet = islandCrew ? islandCrew.memberIds[0] : undefined;
+  const askingOrglet = heldModel ? (await callCore(page, 'saveWorker', { name: 'Release planner', description: 'Plans releases and asks before deciding', instructions: 'Answer clearly and briefly.', provider: 'ollama', modelId: ASKING_MODEL, skillId: researcher.skillId, avatar: { color: '#7048e8' } })).id : undefined;
   const channels = await seedChannels(page, crew);
   await seedArchive(page, researcher);
-  return { researcher, crew, islandCrew, earlierChatBrief, sideThreadBrief, channels };
+  return { researcher, crew, islandCrew, heldOrglet, askingOrglet, earlierChatBrief, sideThreadBrief, channels };
 }
 
 /** A channel of an orglet and a crew with one answered message, and an empty one (COD-361). */
@@ -241,6 +265,23 @@ async function seedArchive(page, researcher) {
   await archiveWhenIdle(page, 'archiveTask', { id: retiredChatId, archived: true });
   await archiveWhenIdle(page, 'archiveTask', { id: retroTaskId, archived: true });
   await archiveWhenIdle(page, 'archiveEntity', { kind: 'worker', id: retired.id, archived: true });
+}
+
+/** Starts a turn in an orglet's main chat on a stand-in model and opens the chat from search until `ready` shows. */
+async function openOrgletTurn(page, context, workerId, name, brief, ready) {
+  context.turnTaskId = await callCore(page, 'createTask', { workerId, brief, sourceIds: [], consent: true, providerScopes: ['ollama'], budgetMicros: 100_000 });
+  await page.keyboard.press('Control+K');
+  await page.getByRole('dialog').getByRole('combobox').fill(name);
+  await page.getByRole('dialog').getByRole('option').filter({ hasText: name }).first().click();
+  await page.locator(ready).waitFor();
+}
+
+/** Stops the turn `openOrgletTurn` started and deletes its chat, so the Activity and Archive screens measure the same workspace as before. */
+async function stopOrgletTurn(page, context) {
+  await callCore(page, 'cancel', { id: context.turnTaskId });
+  await page.waitForFunction(async taskId => ['cancelled', 'failed', 'completed'].includes((await window.orglet.call('task', { id: taskId })).task.status), context.turnTaskId);
+  await archiveWhenIdle(page, 'archiveTask', { id: context.turnTaskId, archived: true }, 'Công việc đang chạy. Dừng trước khi lưu trữ.');
+  await callCore(page, 'deleteTask', { id: context.turnTaskId });
 }
 
 async function archiveWhenIdle(page, command, input, expectedBusyMessage) {
@@ -364,6 +405,18 @@ const SCREENS = [
     // A cancelled task can still have run cleanup in progress; the archive guard is the authority.
     await archiveWhenIdle(page, 'archiveTask', { id: context.islandTaskId, archived: true }, 'Công việc đang chạy. Dừng trước khi lưu trữ.');
   } },
+  // One orglet mid-turn: its header (name, connection, time on one baseline) and the island (user, 2026-10-07).
+  { name: 'chat-running', needs: 'heldOrglet', open: (page, context) => openOrgletTurn(page, context, context.heldOrglet, 'Run auditor', 'Check the last run log and say what failed.', '.live-island:not(.leaving)'),
+    close: stopOrgletTurn },
+  // An orglet that stopped to ask: the question, its choices and a line for the person's own answer, in the island.
+  { name: 'decision-island', needs: 'askingOrglet', open: (page, context) => openOrgletTurn(page, context, context.askingOrglet, 'Release planner', 'Plan the release note for Friday.', '.live-island-decision'),
+    close: stopOrgletTurn },
+  // The same question with a choice picked: its row filled and the note line under the choices.
+  { name: 'decision-island-note', needs: 'askingOrglet', open: async (page, context) => {
+    await openOrgletTurn(page, context, context.askingOrglet, 'Release planner', 'Plan the release note for Friday.', '.live-island-decision');
+    await page.locator('.live-island-choice[role=radio]').first().click();
+    await page.locator('.live-island-note').waitFor();
+  }, close: stopOrgletTurn },
   { name: 'sidebar-row-menu', open: async (page, context) => { await openArea(page, 'Trò chuyện'); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
@@ -445,9 +498,28 @@ async function record(page, screen, size, theme, family) {
     pass.screenshot = join(outputFolder, `${screen}-${size.width}x${size.height}-${theme}.png`);
     await screenshotWithOutlines(page, findings, pass.screenshot);
   }
+  if (options.snapshot) await writeFile(join(outputFolder, `${screen}-${size.width}x${size.height}-${theme}.html`), await snapshotHtml(page));
   passes.push(pass);
   console.log(`${screen} ${size.width}x${size.height} ${theme}: ${findings.length === 0 ? 'clean' : `${findings.length} finding${findings.length === 1 ? '' : 's'}`}`);
   for (const finding of findings) printFinding(pass, finding);
+}
+
+/**
+ * The screen as one HTML file that renders without the app: the DOM as it stands, with every stylesheet's rules
+ * written inline and the scripts left out, for page-level tools that take a file (Loupe, 2026-10-07).
+ */
+async function snapshotHtml(page) {
+  return page.evaluate(() => {
+    const rules = [...document.styleSheets].flatMap(sheet => {
+      try { return [...sheet.cssRules].map(rule => rule.cssText); } catch { return []; }
+    });
+    const copy = document.documentElement.cloneNode(true);
+    copy.querySelectorAll('script, link[rel=stylesheet], style, meta[http-equiv], [data-align-overlay]').forEach(element => element.remove());
+    const style = document.createElement('style');
+    style.textContent = rules.join('\n');
+    copy.querySelector('head').append(style);
+    return `<!doctype html>\n${copy.outerHTML}`;
+  });
 }
 
 async function resize(page, size) {

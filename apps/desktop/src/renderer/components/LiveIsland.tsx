@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { Eye, Gauge, Lightbulb, Undo2, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
+import { ChevronDown, Eye, Gauge, Lightbulb, Undo2, X } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
+import { Input } from '@codepawlhq/orglet-ui';
 import { Button } from './ui';
 import { usageResetLabel } from './PlanUsage';
 import { t } from '../i18n';
@@ -180,6 +181,89 @@ export function AccountIsland({ harnessName, target, resetsAt, switchAccount, di
           : resetsAt && <span className="live-island-meta">{usageResetLabel(resetsAt)}</span>}
         <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
       </span>
+    </div>
+  </div>;
+}
+
+/** What a decision island sends: a choice with the person's note under it, their own words, or that they skipped. */
+export type DecisionPick = { kind: 'option'; option: string; note: string } | { kind: 'other'; text: string } | { kind: 'skip' };
+
+/** The answer text the orglet reads for a pick; undefined while there is nothing to send yet. */
+export function decisionAnswer(pick: DecisionPick): string | undefined {
+  if (pick.kind === 'skip') return t('Bỏ qua câu hỏi này. Tự chọn cách hợp lý nhất và nói rõ đã chọn gì.');
+  if (pick.kind === 'other') return pick.text.trim() || undefined;
+  const note = pick.note.trim();
+  return note ? `${pick.option}\n\n${t('Ghi chú: {0}', [note])}` : pick.option;
+}
+
+/**
+ * A question an orglet stopped to ask, answered from the island on the prompt bar (user, 2026-10-07, after Claude's
+ * question box): the asker's face and the question, then one row per choice with its number key, and a last row for
+ * the person's own words. A picked choice can carry a note. Skip lets the orglet decide; Send (or Ctrl+Enter) answers.
+ * The chevron folds the choices away to read the chat behind. The chat keeps the question as the orglet's message, and
+ * the prompt bar under the island still sends a typed answer. `busy` holds everything while an answer is on its way.
+ */
+export function DecisionIsland({ question, options, workers, busy, answer, leaving }: {
+  question: string;
+  options: readonly string[];
+  workers: readonly Worker[];
+  busy: boolean;
+  answer: (text: string) => void;
+  leaving?: boolean;
+}) {
+  const [picked, setPicked] = useState<number>();
+  const [other, setOther] = useState('');
+  const [note, setNote] = useState('');
+  const [folded, setFolded] = useState(false);
+  const otherIndex = options.length;
+  const pick: DecisionPick | undefined = picked === undefined ? undefined
+    : picked === otherIndex ? { kind: 'other', text: other } : { kind: 'option', option: options[picked], note };
+  const ready = pick ? decisionAnswer(pick) : undefined;
+  const send = (text: string | undefined) => {
+    if (!busy && text) answer(text);
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      send(ready);
+      return;
+    }
+    // Number keys pick a row, except while typing in one of the island's fields.
+    if (event.target instanceof HTMLInputElement || event.ctrlKey || event.metaKey || event.altKey) return;
+    const index = Number(event.key) - 1;
+    if (Number.isInteger(index) && index >= 0 && index <= otherIndex) {
+      event.preventDefault();
+      setPicked(index);
+    }
+  };
+  return <div role="group" aria-label={t('Quyết định đang chờ')} className={leaving ? 'live-island live-island-decision leaving' : 'live-island live-island-decision'} data-state="waiting" data-folded={folded ? '' : undefined} onKeyDown={onKeyDown}>
+    <div className="live-island-body">
+      <div className="live-island-question">
+        <span className="live-island-faces" aria-hidden="true">
+          <RosterAvatars workers={workers} size="sm" max={workers.length} />
+        </span>
+        <p>{question}</p>
+        <Button type="button" size="icon" className="live-island-fold" aria-expanded={!folded} aria-label={folded ? t('Mở các lựa chọn') : t('Thu gọn các lựa chọn')} onClick={() => setFolded(value => !value)}>
+          <ChevronDown size={16} aria-hidden="true" />
+        </Button>
+      </div>
+      {!folded && <>
+        <div className="live-island-choices" role="radiogroup" aria-label={question}>
+          {options.map((option, index) => <Button key={option} type="button" role="radio" aria-checked={picked === index} className="live-island-choice" disabled={busy} onClick={() => setPicked(index)}>
+            <span className="live-island-choice-text">{option}</span><kbd>{index + 1}</kbd>
+          </Button>)}
+          <div className="live-island-choice live-island-other" data-checked={picked === otherIndex ? '' : undefined}>
+            <Input value={other} disabled={busy} maxLength={2000} placeholder={t('Khác: tự trả lời theo ý bạn')} aria-label={t('Câu trả lời của bạn')}
+              onFocus={() => setPicked(otherIndex)} onChange={event => { setOther(event.target.value); setPicked(otherIndex); }} />
+            <kbd>{otherIndex + 1}</kbd>
+          </div>
+        </div>
+        {pick?.kind === 'option' && <Input className="live-island-note" value={note} disabled={busy} maxLength={1000} placeholder={t('Thêm ghi chú cho lựa chọn này (không bắt buộc)')} aria-label={t('Ghi chú')} onChange={event => setNote(event.target.value)} />}
+        <div className="live-island-decision-actions">
+          <Button type="button" variant="outline" disabled={busy} onClick={() => send(decisionAnswer({ kind: 'skip' }))}>{t('Bỏ qua')}</Button>
+          <Button type="button" variant="primary" disabled={busy || !ready} onClick={() => send(ready)}>{t('Gửi')}<kbd>Ctrl ↵</kbd></Button>
+        </div>
+      </>}
     </div>
   </div>;
 }

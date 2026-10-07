@@ -276,8 +276,27 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
       rememberDismissedLimitRun(detail.task.id, limitRun.id);
     },
   };
+  // A question an orglet stopped to ask is answered from the island (user, 2026-10-07): its choices, or the person's
+  // own words. MCP approvals keep their card in the chat, since their four choices carry a scope to read first.
+  const decisionShown = detail.task.status === 'waiting_input' && pendingDecision && !pendingDecision.approval ? pendingDecision : undefined;
+  const decisionAsker = decisionShown ? detail.runs.find(run => run.id === decisionShown.runId)?.snapshot.worker : undefined;
+  const decisionActions = useRef({ answer: (_text: string) => {} });
+  decisionActions.current = {
+    answer: text => {
+      if (!decisionShown || answeringDecision) return;
+      setAnsweringDecision(true);
+      action(async () => {
+        try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: decisionShown.id, answer: text }); }
+        finally { setAnsweringDecision(false); }
+      });
+    },
+  };
   useEffect(() => {
-    if (dockedIsland) dockIsland({ kind: 'run', ...dockedIsland }, islandDock);
+    if (decisionShown) dockIsland({
+      kind: 'decision', key: decisionShown.id, question: decisionShown.question, options: decisionShown.options,
+      workers: decisionAsker ? [decisionAsker] : [], busy: answeringDecision, answer: text => decisionActions.current.answer(text),
+    }, islandDock);
+    else if (dockedIsland) dockIsland({ kind: 'run', ...dockedIsland }, islandDock);
     else if (accountShown) dockIsland({
       kind: 'account', key: accountShown.runId, harnessName: accountShown.harness.name,
       ...(switchTarget ? { target: { label: switchTarget.label, usedPercent: switchTarget.usedPercent } } : {}),
@@ -286,7 +305,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
     }, islandDock);
     else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() }, islandDock);
     else dockIsland(undefined, islandDock);
-  }, [islandDock, dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.since, dockedIsland?.actions?.map(control => control.kind).join(','), islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
+  }, [islandDock, dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.since, dockedIsland?.actions?.map(control => control.kind).join(','), islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt, decisionShown?.id, decisionAsker?.id, answeringDecision]);
   useEffect(() => () => dockIsland(undefined, islandDock), [islandDock]);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was
@@ -531,7 +550,8 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
           : true;
         const sectionHeader = sectionSigned && !sectionContinued ? workerHeader(sectionAuthor, latest && busy) : undefined;
         const chatAnswered = answered && turn.artifact?.report.format === 'chat';
-        const standaloneReceipts = chatAnswered ? undefined : receiptsFor(turn.revision);
+        // While the turn is at work or asking, its header already names who is on it; a face saying they read it would repeat that.
+        const standaloneReceipts = chatAnswered || (latest && (busy || detail.task.status === 'waiting_input')) ? undefined : receiptsFor(turn.revision);
         const turnQuotes = (detail.task.quotes ?? []).filter(quote => quote.afterRevision === turn.revision);
         const quoteHeads = turnQuotes.map(quote => grouping.place({ key: personAuthorKey, at: quote.createdAt }) ? undefined : personHeader);
         return <div className="chat-turn" key={personMessageId}>
@@ -589,17 +609,8 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
                   finally { setAnsweringDesktop(false); }
                 });
               }} />}
-            {latest && detail.task.status === 'waiting_input' && pendingDecision && !pendingDecision.approval && <div role="group" aria-label={t('Quyết định đang chờ')}>
-              <p role="status">{pendingDecision.question}</p>
-              <div className="actions">{pendingDecision.options.map(option => <Button key={option} variant="outline" disabled={answeringDecision} onClick={() => {
-                if (answeringDecision) return;
-                setAnsweringDecision(true);
-                action(async () => {
-                  try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: option }); }
-                  finally { setAnsweringDecision(false); }
-                });
-              }}>{option}</Button>)}</div>
-            </div>}
+            {/* The question reads as the orglet's message; its choices and a free answer sit in the island. */}
+            {latest && decisionShown && <p className="decision-question">{decisionShown.question}</p>}
             {latest && detail.task.status === 'waiting_input' && !pendingDecision && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && detail.task.pendingStart && <p role="status">{t('Đã lưu yêu cầu mới. Đang dừng lượt cũ rồi sẽ bắt đầu.')}</p>}
             {workspace.showWork && crewPlan && <CrewPlanFlow diagram={crewPlan} live={latest && busy} statusLabel={statusLabel} />}
