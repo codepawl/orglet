@@ -79,7 +79,12 @@ export class TeamRunner {
         this.finish(task, plannedNow.status === 'failed' ? 'failed' : 'interrupted');
         return;
       }
-      const assigned = new Set(plannedNow.snapshot.plan.assignments.map(assignment => assignment.workerId));
+      // A plan that hands the work only to the lead itself (a lead listed among its own members) is the lead working
+      // alone (owner, 2026-10-07): its part runs as the final step, which has every tool and answers once, instead of a
+      // member run followed by a second answer from the same orglet.
+      const plan = plannedNow.snapshot.plan;
+      const leadAlone = plan.assignments.length === 1 && plan.assignments[0].workerId === team.synthesizerId;
+      const assigned = new Set(leadAlone ? [] : plan.assignments.map(assignment => assignment.workerId));
       for (const workerId of team.memberIds) {
         if (assigned.has(workerId)) continue;
         const run = planned.members.get(workerId)!;
@@ -131,7 +136,7 @@ export class TeamRunner {
           failures.push({ role: run.snapshot.worker.name, error: result.runs.find(r => r.id === run.id)?.error ?? 'chưa hoàn tất' });
         }
       };
-      const orderedAssignments = team.memberIds.map(workerId => plannedNow.snapshot.plan!.assignments.find(assignment => assignment.workerId === workerId)).filter(assignment => assignment !== undefined);
+      const orderedAssignments = leadAlone ? [] : team.memberIds.map(workerId => plannedNow.snapshot.plan!.assignments.find(assignment => assignment.workerId === workerId)).filter(assignment => assignment !== undefined);
       const pending = new Map(orderedAssignments.map(assignment => [assignment.workerId, assignment]));
       const drain = async (signal?: AbortSignal) => {
         while (pending.size && !control.cancelled && !control.paused) {
@@ -177,7 +182,9 @@ export class TeamRunner {
       const unfinishedRoles = () => failures.map(failure => `Role chưa hoàn tất: ${failure.role}: ${failure.error}`);
       const limitations = unfinishedRoles();
       await this.runner.run(task, synthesis, { keepTaskOpen: true, upstream: memberArtifacts, limitations,
-        assignment: plannedNow.snapshot.plan.synthesisBrief,
+        assignment: leadAlone
+          ? [plan.assignments[0].brief, plan.assignments[0].expectedOutput && `Expected output: ${plan.assignments[0].expectedOutput}`, plan.synthesisBrief].filter(Boolean).join('\n')
+          : plan.synthesisBrief,
         sendBack: async (callId, input, signal) => {
           signal.throwIfAborted();
           if (control.cancelled || control.paused) throw new Error('Kênh bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.');
@@ -227,7 +234,7 @@ export class TeamRunner {
         },
       });
       const result = this.store.get<Run>('runs', synthesis.id);
-      this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : !memberArtifacts.length ? 'failed' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
+      this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : !memberArtifacts.length && !leadAlone ? 'failed' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
     } catch (error) {
       const last = this.store.detail(task.id).runs.at(-1);
       if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Kênh bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });

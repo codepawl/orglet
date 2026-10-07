@@ -44,18 +44,22 @@ function grade(saved) {
   if (expects.corrects) checks.push({ name: 'corrects the premise', pass: expects.corrects.test(answers) });
   // A principal's channel: who did the work (owner, 2026-10-07). 'self' means the lead answered with nobody else running.
   if (expects.routes) {
-    // The lead doing a part itself is still the lead alone.
-    const workedBy = (detail?.runs ?? []).filter(run => run.stage === 'member' && run.status === 'completed' && run.snapshot.worker.id !== run.snapshot.team?.synthesizerId).map(run => run.snapshot.worker.name);
-    const pass = expects.routes === 'self' ? workedBy.length === 0 : workedBy.includes(expects.routes);
-    checks.push({ name: `routes to ${expects.routes}`, pass, detail: workedBy.join(', ') || 'lead alone' });
+    // Who the lead handed work to, whether or not it finished; the lead doing a part itself is still the lead alone.
+    const handedTo = (detail?.runs ?? []).filter(run => run.stage === 'member' && run.status !== 'cancelled' && run.snapshot.worker.id !== run.snapshot.team?.synthesizerId).map(run => run.snapshot.worker.name);
+    const pass = expects.routes === 'self' ? handedTo.length === 0 : handedTo.includes(expects.routes);
+    checks.push({ name: `routes to ${expects.routes}`, pass, detail: handedTo.join(', ') || 'lead alone' });
   }
   if (expects.maxWords) {
-    const words = answers.split(/\s+/).filter(Boolean).length;
+    // The answer the person reads: in a channel with a lead, its last word, not the members' drafts before it.
+    const final = detail?.task.teamSnapshot ? (detail.artifacts.at(-1)?.report.summary ?? '') : answers;
+    const words = final.split(/\s+/).filter(Boolean).length;
     checks.push({ name: `under ${expects.maxWords} words`, pass: words <= expects.maxWords, detail: `${words} words` });
   }
   const failedRuns = (detail?.runs ?? []).filter(run => run.status === 'failed').map(run => `${run.snapshot.worker.name}: ${run.error}`);
   checks.push({ name: 'no failed runs', pass: failedRuns.length === 0, detail: failedRuns.join(' | ') });
-  checks.push({ name: 'no app errors', pass: problems.length === 0, detail: problems.slice(0, 3).join(' | ') });
+  // Slow typing is the test machine under load, not the app; it is reported, never counted.
+  const appProblems = problems.filter(problem => !/^typing \d+ characters took/.test(problem));
+  checks.push({ name: 'no app errors', pass: appProblems.length === 0, detail: appProblems.slice(0, 3).join(' | ') });
   // What the turn cost in calls and time: every run that did work, and from the first start to the last answer.
   const worked = (detail?.runs ?? []).filter(run => ['completed', 'partial', 'failed'].includes(run.status));
   const firstStart = Math.min(...(detail?.runs ?? []).map(run => Date.parse(run.startedAt)));

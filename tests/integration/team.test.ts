@@ -20,7 +20,7 @@ let failReviewer: boolean; let blockedFirstMember: boolean; let memberCalls: num
 let sendBackOnce: boolean; let sentBack: boolean;
 /** What the reviewer's provider throws when failReviewer is set. */
 let reviewerError: Error;
-let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent' | 'leadCombines' | 'leadOwnJob' | 'self'; let calls: string[]; let planBodies: string[]; let bodies: string[]; let live: number; let peak: number;
+let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent' | 'leadCombines' | 'leadOwnJob' | 'self' | 'leadOnly'; let calls: string[]; let planBodies: string[]; let bodies: string[]; let live: number; let peak: number;
 const COMBINING_BRIEF = 'Combine the others\' results into one short final answer with links';
 const LEAD_OWN_BRIEF = 'Read the attention paper yourself and summarise its method';
 beforeEach(async () => {
@@ -47,6 +47,11 @@ beforeEach(async () => {
       }
       // The principal answers by itself instead of handing anything out (owner, 2026-10-07).
       if (planMode === 'self') return { calls: [{ id: 'self', name: 'reply', arguments: JSON.stringify({ message: 'Chào bạn, mình trả lời luôn.', title: null, knowledgeProposals: [] }) }], usage: { input: 10, output: 10 } };
+      // The lead hands the work only to itself, as a lead listed among its own members did in the benchmark.
+      if (planMode === 'leadOnly') {
+        const leadId = memberIdsFromPlanPrompt(messages).at(-1)!;
+        return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [{ workerId: leadId, brief: LEAD_OWN_BRIEF, dependsOn: [], writeResources: [] }] }) }], usage: { input: 10, output: 10 } };
+      }
       if (planMode === 'invalid') return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [{ workerId: '00000000-0000-4000-8000-000000000000', brief: 'Nope' }] }) }], usage: { input: 10, output: 10 } };
       if (planMode === 'dependent') {
         const [firstWorkerId, secondWorkerId] = memberIdsFromPlanPrompt(messages);
@@ -394,6 +399,19 @@ it('lets the principal send a finished part back with feedback, and answers from
   // The member worked again with the feedback in its brief.
   expect(bodies.some(body => body.includes('sent it back: Thiếu nguồn cho con số Q3'))).toBe(true);
   expect(detail.events.some(event => event.message.startsWith('Đã gửi lại phần việc cho'))).toBe(true);
+});
+
+it('runs a plan that hands the work only to the lead as the final step, so the lead answers once (owner, 2026-10-07)', async () => {
+  planMode = 'leadOnly';
+  const { detail } = await setupLeadAsMember('parallel');
+  expect(detail.task.status).toBe('completed');
+  expect(detail.runs.filter(run => run.stage === 'member').every(run => run.status === 'cancelled' && run.error === UNASSIGNED_PLAN_ERROR)).toBe(true);
+  const synthesis = detail.runs.find(run => run.stage === 'synthesis')!;
+  expect(synthesis.status).toBe('completed');
+  // One answer in the chat, from the final step, and the lead's own brief reached it.
+  expect(detail.artifacts.map(artifact => artifact.runId)).toEqual([synthesis.id]);
+  expect(bodies.at(-1)).toContain(LEAD_OWN_BRIEF);
+  expect(calls).toHaveLength(1);
 });
 
 it('lets the principal answer by itself in one call, and nobody else runs (owner, 2026-10-07)', async () => {
