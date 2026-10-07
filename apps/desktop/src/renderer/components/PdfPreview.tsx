@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from './ui';
-import { t } from '../i18n';
+import { currentLocale, t } from '../i18n';
+import { PreviewBar, PreviewIconButton } from './PreviewBar';
 
 const PAGE_BATCH = 10;
+/** The page widths the zoom buttons step through, as shares of the default width. */
+const ZOOM_STEPS = [0.6, 0.8, 1, 1.25, 1.5];
+const DEFAULT_ZOOM_INDEX = 2;
 /** How wide a page is shown, in the viewer and while marking it up. */
 export const PDF_PAGE_WIDTH = 720;
 
@@ -26,7 +31,7 @@ export function loadPdf(): Promise<PdfModule> {
 }
 
 /** Draws one page into a canvas sized to the preview column, at the screen's pixel density. */
-function PdfPage({ document, pageNumber }: { document: PdfDocument; pageNumber: number }) {
+function PdfPage({ document, pageNumber, width }: { document: PdfDocument; pageNumber: number; width: number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +39,7 @@ function PdfPage({ document, pageNumber }: { document: PdfDocument; pageNumber: 
     void document.getPage(pageNumber).then(page => {
       if (cancelled || !canvas.current) return;
       const base = page.getViewport({ scale: 1 });
-      const scale = PDF_PAGE_WIDTH / base.width;
+      const scale = width / base.width;
       const ratio = window.devicePixelRatio || 1;
       const viewport = page.getViewport({ scale: scale * ratio });
       const element = canvas.current;
@@ -47,7 +52,7 @@ function PdfPage({ document, pageNumber }: { document: PdfDocument; pageNumber: 
       renderTask = page.render({ canvasContext: context, viewport, canvas: element });
     }).catch(() => { /* a page that fails to draw stays blank; the file itself already opened */ });
     return () => { cancelled = true; renderTask?.cancel(); };
-  }, [document, pageNumber]);
+  }, [document, pageNumber, width]);
   return <canvas ref={canvas} className="pdf-page" role="img" aria-label={t('Trang {0}', [pageNumber])} />;
 }
 
@@ -60,6 +65,7 @@ export function PdfPreview({ bytes, name, fallback }: { bytes: Uint8Array; name:
   const [document, setDocument] = useState<PdfDocument>();
   const [failed, setFailed] = useState(false);
   const [shown, setShown] = useState(PAGE_BATCH);
+  const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   useEffect(() => {
     let active = true;
     let task: { destroy(): Promise<void>; promise: Promise<PdfDocument> } | undefined;
@@ -76,13 +82,20 @@ export function PdfPreview({ bytes, name, fallback }: { bytes: Uint8Array; name:
   if (!document) return <p className="preview-state">{t('Đang mở {0}…', [name])}</p>;
   const total = document.numPages;
   const visible = Math.min(total, shown);
+  const zoom = ZOOM_STEPS[zoomIndex];
+  const pageWidth = Math.round(PDF_PAGE_WIDTH * zoom);
   return <div className="pdf-preview">
+    <PreviewBar summary={total === 1 ? t('1 trang') : t('{0} trang', [total.toLocaleString(currentLocale())])}>
+      <span className="preview-zoom-level" aria-live="polite">{Math.round(zoom * 100)}%</span>
+      <PreviewIconButton label={t('Thu nhỏ')} icon={<ZoomOut size={15} aria-hidden="true" />} disabled={zoomIndex === 0} onClick={() => setZoomIndex(current => Math.max(0, current - 1))} />
+      <PreviewIconButton label={t('Phóng to')} icon={<ZoomIn size={15} aria-hidden="true" />} disabled={zoomIndex === ZOOM_STEPS.length - 1} onClick={() => setZoomIndex(current => Math.min(ZOOM_STEPS.length - 1, current + 1))} />
+    </PreviewBar>
     <div className="pdf-pages">
-      {Array.from({ length: visible }, (_, index) => <PdfPage key={index + 1} document={document} pageNumber={index + 1} />)}
+      {Array.from({ length: visible }, (_, index) => <PdfPage key={index + 1} document={document} pageNumber={index + 1} width={pageWidth} />)}
     </div>
-    <p className="preview-note">
-      {visible < total ? t('Đang hiện {0} trong {1} trang.', [visible, total]) : total === 1 ? t('1 trang') : t('{0} trang', [total])}
-      {visible < total && <Button variant="outline" onClick={() => setShown(current => current + PAGE_BATCH)}>{total - visible === 1 ? t('Thêm 1 trang') : t('Thêm {0} trang', [Math.min(PAGE_BATCH, total - visible)])}</Button>}
-    </p>
+    {visible < total && <p className="preview-note">
+      {t('Đang hiện {0} trong {1} trang.', [visible, total])}
+      <Button variant="outline" onClick={() => setShown(current => current + PAGE_BATCH)}>{total - visible === 1 ? t('Thêm 1 trang') : t('Thêm {0} trang', [Math.min(PAGE_BATCH, total - visible)])}</Button>
+    </p>}
   </div>;
 }

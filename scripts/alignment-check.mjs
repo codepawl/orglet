@@ -8,6 +8,7 @@ import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 import { openSettings, expandSidebar } from './smoke-language.mjs';
+import { writeViewerFixtures } from './viewer-fixtures.mjs';
 
 // Measures alignment on the packaged app's main screens instead of trusting a screenshot (COD-333). It seeds a
 // throwaway workspace on Demo (no provider is called; one crew member runs on a local stand-in for Ollama that holds
@@ -210,6 +211,7 @@ async function seedWorkspace(page) {
   await waitForTask(page, earlierChatId);
   const newerChatId = await callCore(page, 'createTask', { workerId: analyst.id, brief: 'Summarise this week’s sign-ups.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, newerChatId);
+  await seedViewerFiles(page, analyst);
   const base = { enabled: true, task: { sourceIds: [], consent: false, budgetMicros: 50_000 } };
   const schedules = [
     { name: 'Morning digest', schedule: { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency: 'daily', weekday: 1, dailyCapMicros: 200_000 }, task: { workerId: researcher.id, brief: 'Summarise what changed in my inbox overnight.' } },
@@ -228,6 +230,27 @@ async function seedWorkspace(page) {
   const channels = await seedChannels(page, crew);
   await seedArchive(page, researcher);
   return { researcher, crew, islandCrew, heldOrglet, askingOrglet, earlierChatBrief, sideThreadBrief, channels };
+}
+
+/**
+ * One file of every kind the viewer shows, attached to a message in the Data analyst's chat (the native file dialog is
+ * answered with the fixtures), so the viewers can be opened from that chat and measured.
+ */
+async function seedViewerFiles(page, analyst) {
+  const files = await writeViewerFixtures(join(dataFolder, 'viewer-files'));
+  await app.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, files.map(file => file.path));
+  const sourceIds = (await page.evaluate(() => window.orglet.pickSources())).map(source => source.id);
+  const taskId = await callCore(page, 'createTask', { workerId: analyst.id, brief: 'Look through these files.', sourceIds, consent: false, budgetMicros: 1000 });
+  await waitForTask(page, taskId);
+}
+
+/** Opens one of the seeded files in the viewer, from the Data analyst's chat, and waits until its content is drawn. */
+async function openViewerFile(page, name, ready) {
+  await openArea(page, 'Trò chuyện');
+  await page.locator('.sidebar').getByRole('button', { name: 'Data analyst', exact: true }).first().click();
+  await page.getByRole('button', { name: new RegExp('^' + name.replace('.', '\\.')) }).first().click();
+  await page.locator('#source-viewer').waitFor();
+  await page.locator('#source-viewer ' + ready).first().waitFor();
 }
 
 /** A channel of an orglet and a crew with one answered message, and an empty one (COD-361). */
@@ -417,6 +440,36 @@ const SCREENS = [
     await page.locator('.live-island-choice[role=radio]').first().click();
     await page.locator('.live-island-note').waitFor();
   }, close: stopOrgletTurn },
+  // The file viewer's previews (user, 2026-10-07: "file viewers look ugly"): a table, JSON, code, Markdown, a picture and a PDF.
+  { name: 'viewer-table', open: page => openViewerFile(page, 'customers.csv', '.preview-table-scroll tbody tr') },
+  { name: 'viewer-table-filtered', open: async page => {
+    await openViewerFile(page, 'customers.csv', '.preview-table-scroll tbody tr');
+    await page.getByRole('searchbox', { name: label('Lọc dòng'), exact: true }).fill('north');
+    await page.locator('#source-viewer .preview-bar-summary', { hasText: /^[\d,]+ of / }).waitFor();
+  } },
+  { name: 'viewer-table-empty', open: async page => {
+    await openViewerFile(page, 'customers.csv', '.preview-table-scroll tbody tr');
+    await page.getByRole('searchbox', { name: label('Lọc dòng'), exact: true }).fill('zzzz');
+    await page.locator('#source-viewer .table-empty').waitFor();
+  } },
+  { name: 'viewer-json', open: page => openViewerFile(page, 'sample.json', '.json-tree .json-node') },
+  { name: 'viewer-json-raw', open: async page => {
+    await openViewerFile(page, 'sample.json', '.json-tree .json-node');
+    await page.getByRole('tab', { name: label('Văn bản gốc'), exact: true }).click();
+    await page.locator('#source-viewer .code-preview').waitFor();
+  } },
+  { name: 'viewer-code', open: page => openViewerFile(page, 'count-lines.ts', '.code-preview .line-number') },
+  { name: 'viewer-code-nowrap', open: async page => {
+    await openViewerFile(page, 'count-lines.ts', '.code-preview .line-number');
+    await page.getByRole('button', { name: label('Xuống dòng tự động'), exact: true }).click();
+    await page.locator('#source-viewer .no-wrap').waitFor();
+  } },
+  { name: 'viewer-markdown', open: page => openViewerFile(page, 'notes.md', '.markdown-preview .source-document') },
+  { name: 'viewer-image', open: async page => {
+    await openViewerFile(page, 'disc.png', '.media-image img');
+    await page.locator('#source-viewer .media-image img').evaluate(image => image.decode());
+  } },
+  { name: 'viewer-pdf', open: page => openViewerFile(page, 'report.pdf', '.pdf-page') },
   { name: 'sidebar-row-menu', open: async (page, context) => { await openArea(page, 'Trò chuyện'); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },

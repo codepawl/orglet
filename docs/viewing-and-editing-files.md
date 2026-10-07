@@ -14,10 +14,19 @@ Part of the [user guide](user-guide.md). How files get into a chat: [Attach file
 Click a file card in the chat, or open the chat's **Files** tab and click a row. The viewer shows:
 
 - text and code with line numbers and colours
-- Markdown as a document, with **View source text** to see the text
+- Markdown as a document, with a **Source text** tab to see the text
 - CSV and TSV as a table, JSON and JSONL as a tree
 - images, video and audio
 - PDF pages
+
+Above the content, a slim bar names what you are looking at and how much of it is on screen, with the few controls that change how it is drawn. Each kind has its own:
+
+- **Tables** (CSV, TSV). The first row is a header that stays in view while you scroll, and a row-number column stays at the left edge. Columns that hold numbers are right-aligned, header included, in digits of equal width, so they line up. An empty cell shows a faint dash. A long value is cut to the column width; hover it to read the whole value. **Filter rows** narrows the table to the rows with any cell containing your text, and the bar says how many match. Only the first 200 rows are drawn at first and the bar says "Showing 200 of 260 rows"; **Show more rows** adds the next batch.
+- **JSON and JSONL.** A tree you can fold, with **Source text** one tab away. **Expand all** and **Collapse all** open or close every node, and **Copy** puts the whole text on the clipboard. A file that does not parse opens as code instead of an error.
+- **Code and plain text.** The bar shows the language and the number of lines. **Wrap lines** is on by default; switch it off and long lines scroll sideways instead. And **Copy** copies the whole file.
+- **Images.** The picture sits on a checkerboard so transparent parts read as transparent, and the bar shows its size in pixels. It opens fitted to the window; **Actual size** (or a click on the picture) shows every pixel, and the same control fits it again.
+- **PDF.** The bar shows the page count and the zoom; **Zoom out** and **Zoom in** step through 60% to 150% of the default page width. Pages sit on the grey backdrop with a soft shadow.
+- **Markdown.** **Formatted** and **Source text** switch between the document and its text.
 
 The buttons at the top right:
 
