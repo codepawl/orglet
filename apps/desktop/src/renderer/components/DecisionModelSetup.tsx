@@ -135,7 +135,7 @@ export function DecisionModelSetup({ connections, customConnections, harnesses }
     {!view && <Skeleton width="100%" height={34} />}
     {rows.map((row, index) => {
       const harness = isHarnessDecisionConnection(row.connection);
-      return <div key={index} className="setting-row decision-entry" role="group" aria-label={t('Lựa chọn {0}', [index + 1])}>
+      return <div key={index} className="setting-row decision-entry" data-align-ignore="family-lead" role="group" aria-label={t('Lựa chọn {0}', [index + 1])}>
         <span className="decision-entry-rank" aria-hidden="true">{index + 1}</span>
         <div className="decision-entry-fields">
           <div className="decision-entry-inputs">
