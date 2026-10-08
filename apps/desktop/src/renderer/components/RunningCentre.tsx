@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, Pause, Play, Square } from 'lucide-react';
+import { Activity, ArrowUpRight, Pause, Play, Square, type LucideIcon } from 'lucide-react';
 import type { Task, Team } from '../../shared/contracts';
 import type { RunningItem } from '../../shared/running';
 import { Avatar } from './Avatar';
@@ -33,11 +33,11 @@ function useNow() {
  * same `changed` events as the sidebar's status marks; the step each run is on comes from live progress. The sections
  * share one clock and one progress subscription.
  */
-export function RunningGroups({ items, tasks, teams, onOpenChat, emptyLine }: { items: readonly RunningItem[]; tasks: readonly Task[]; teams: readonly Team[]; onOpenChat: (taskId: string) => void; emptyLine?: string }) {
+export function RunningGroups({ items, tasks, teams, onOpenChat, emptyLine, emptyIcon: EmptyIcon = Activity }: { items: readonly RunningItem[]; tasks: readonly Task[]; teams: readonly Team[]; onOpenChat: (taskId: string) => void; emptyLine?: string; /** The mark before the empty line, as the Saved list has (user, 2026-10-08). */ emptyIcon?: LucideIcon }) {
   const progressByRun = useAllRunProgress();
   const now = useNow();
   const groups = runningGroups(items);
-  if (groups.length === 0) return <p className="muted running-empty">{emptyLine ?? t('Không có gì đang chạy.')}</p>;
+  if (groups.length === 0) return <p className="muted running-empty"><EmptyIcon size={16} aria-hidden="true" />{emptyLine ?? t('Không có gì đang chạy.')}</p>;
   return <div className="running-groups">
     {groups.map(group => <section key={group.id} className="running-group" aria-labelledby={`running-group-${group.id}`}>
       <h3 id={`running-group-${group.id}`} className="running-group-title">{groupTitles[group.id]()}<span>{group.items.length}</span></h3>

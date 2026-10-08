@@ -864,7 +864,7 @@ function UnfinishedWork({ limitations, onRetry }: { limitations: readonly string
   </div>;
 }
 
-export type ThreadStartInfo = { name: string; about?: string; faces: ReactNode };
+export type ThreadStartInfo = { name: string; about?: string; faces: ReactNode; /** A channel begins with its hash; an orglet's chat is "your chat with" them. */ channel?: boolean };
 
 /**
  * The top of a chat's history (user, 2026-10-04): the faces, the name in large type, what the orglet does, and one
@@ -875,7 +875,7 @@ function ThreadStart({ start }: { start: ThreadStartInfo }) {
     <div className="thread-start-faces">{start.faces}</div>
     <h2 className="thread-start-name">{start.name}</h2>
     {start.about && <p className="thread-start-about">{start.about}</p>}
-    <p className="thread-start-line">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [start.name])}</p>
+    <p className="thread-start-line">{start.channel ? t('Đây là khởi đầu của #{0}.', [start.name]) : t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [start.name])}</p>
   </header>;
 }
 

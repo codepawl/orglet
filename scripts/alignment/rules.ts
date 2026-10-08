@@ -12,7 +12,7 @@ export type Box = { left: number; top: number; right: number; bottom: number };
 
 export type FindingKind =
   | 'centre-line' | 'column-start' | 'icon-slot' | 'uneven-gap' | 'wrap' | 'clip' | 'overflow' | 'heading-action' | 'heading-wrap'
-  | 'family-heading' | 'family-edge' | 'family-lead' | 'island-seam' | 'near-miss' | 'baseline' | 'stranded';
+  | 'family-heading' | 'family-edge' | 'family-lead' | 'island-seam' | 'near-miss' | 'baseline' | 'stranded' | 'cramped';
 
 export type Finding = {
   kind: FindingKind;
@@ -644,6 +644,56 @@ export function checkNearMisses(block: Element, tolerances: Tolerances): Finding
   }));
 }
 
+/** Stacked blocks closer than this touch: they need spacing between them (owner, 2026-10-08). */
+export const CRAMPED_GAP = 4;
+/** Blocks that read as their own piece (a disclosure row, a code block, a list, a control) and so never sit flush against a neighbour. */
+export const CRAMPED_SELECTOR = 'summary, details, pre, ul, ol, table, button, [role=button], select, input, textarea, figure, form';
+export const STACKED_DISPLAYS = ['block', 'flex', 'grid', 'list-item', 'flow-root', 'table'];
+
+/** The space between a block and the one stacked under it, when they touch or nearly so; undefined when there is room. */
+export function crampedGap(upper: Box, lower: Box): number | undefined {
+  const gap = lower.top - upper.bottom;
+  return gap > -1 && gap < CRAMPED_GAP ? gap : undefined;
+}
+
+/**
+ * Blocks stacked in one column keep room between them. A pair is flagged when the gap is under 4px and one of the two is
+ * a piece in its own right (a disclosure row, code block, list, control, or anything that paints a surface). Lines of
+ * text, a title over its description, and lines of code, rows of lists, menus and tables are intended tight stacks and are not compared;
+ * `data-align-ignore="cramped"` switches the check off for a deliberate one.
+ */
+export function checkCramped(container: Element): Finding[] {
+  if (ignoredFor(container, 'cramped') || inHiddenLayer(container) || container.matches(LIST_SELECTOR) || container.closest('pre, code') || container.closest('[role=menu], [role=listbox], [role=tablist], table, [role=grid]')) return [];
+  const style = getComputedStyle(container);
+  const stacksVertically = style.display === 'block' || style.display === 'flow-root' || style.display === 'list-item'
+    || ((style.display === 'flex' || style.display === 'inline-flex') && style.flexDirection.startsWith('column'));
+  if (!stacksVertically) return [];
+  const children = inFlowChildren(container).filter(child => STACKED_DISPLAYS.includes(getComputedStyle(child).display) && !ignoredFor(child, 'cramped'));
+  const findings: Finding[] = [];
+  for (let index = 1; index < children.length; index++) {
+    const upper = children[index - 1];
+    const lower = children[index];
+    // Rows of one kind (a nav's buttons) are a list of tight rows; their spacing is the uneven-gap check's business.
+    if (kindOf(upper) === kindOf(lower)) continue;
+    // What the eye sees: padding inside a transparent block is room, so a block is measured by its text and marks.
+    const upperBox = paintedBox(upper) ?? toBox(upper.getBoundingClientRect());
+    const lowerBox = paintedBox(lower) ?? toBox(lower.getBoundingClientRect());
+    const gap = crampedGap(upperBox, lowerBox);
+    if (gap === undefined) continue;
+    const piece = (element: Element) => element.matches(CRAMPED_SELECTOR) || paintsSurface(element);
+    if (!piece(upper) && !piece(lower)) continue;
+    findings.push({
+      kind: 'cramped',
+      selector: describe(lower),
+      text: snippet(lower),
+      message: `only ${round(gap)}px between this block and the one above it (${describe(upper)}); keep at least ${CRAMPED_GAP}px`,
+      offset: round(gap),
+      boxes: [upperBox, lowerBox],
+    });
+  }
+  return findings;
+}
+
 /** Siblings of one kind in a flex row or column should sit the same distance apart. */
 export function checkGaps(container: Element, tolerances: Tolerances): Finding[] {
   if (ignoredFor(container, 'uneven-gap') || inHiddenLayer(container)) return [];
@@ -1039,6 +1089,7 @@ export function measurePage(tolerances: Tolerances): Finding[] {
     const isFlexColumn = (style.display === 'flex' || style.display === 'inline-flex') && style.flexDirection.startsWith('column');
     if (isList || isGrid || isFlexColumn) columns.push(...columnItems(element));
     if (style.display === 'flex' || style.display === 'inline-flex') findings.push(...checkGaps(element, tolerances));
+    findings.push(...checkCramped(element));
     findings.push(...checkSingleLine(element));
     findings.push(...checkOverflow(element));
     if (element.matches(PANEL_HEADING_SELECTOR)) findings.push(...checkHeadingAction(element, tolerances), ...checkHeadingWrap(element));
@@ -1063,7 +1114,7 @@ export function drawOutlines(findings: Finding[]): void {
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;';
   const colours: Record<string, string> = {
     'centre-line': '#e5484d', 'column-start': '#f76b15', 'icon-slot': '#f76b15', 'uneven-gap': '#8e4ec6', wrap: '#0090ff', clip: '#0090ff', overflow: '#e54666',
-    'heading-action': '#e5484d', 'heading-wrap': '#0090ff', 'family-heading': '#12a594', 'family-edge': '#12a594', 'family-lead': '#12a594', 'island-seam': '#e5484d',
+    'heading-action': '#e5484d', 'heading-wrap': '#0090ff', 'family-heading': '#12a594', 'family-edge': '#12a594', 'family-lead': '#12a594', 'island-seam': '#e5484d', cramped: '#e5484d',
   };
   for (const finding of findings) {
     for (const box of finding.boxes) {

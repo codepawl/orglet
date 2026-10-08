@@ -1,4 +1,4 @@
-import { BookOpen, CalendarClock, Bookmark, BookmarkX } from 'lucide-react';
+import { BookOpen, CalendarClock, Bookmark, BookmarkX, CircleCheck } from 'lucide-react';
 import type { Task, Team } from '../../shared/contracts';
 import { waitsForPerson, type RunningItem } from '../../shared/running';
 import { t } from '../i18n';
@@ -53,7 +53,7 @@ export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedul
       {tab === 'needs' && <>
         {pendingSchedules > 0 && <ActivityLink icon={<CalendarClock size={16} />} text={t('{0} lịch cần bạn xem', [pendingSchedules])} action={t('Mở lịch chạy')} onClick={onOpenSchedules} />}
         {notesToReview > 0 && <ActivityLink icon={<BookOpen size={16} />} text={t('{0} ghi chú đang chờ duyệt', [notesToReview])} action={t('Mở thư viện')} onClick={onOpenLibrary} />}
-        <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={pendingSchedules + notesToReview > 0 ? undefined : t('Không có gì đang chờ bạn.')} />
+        <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyIcon={CircleCheck} emptyLine={pendingSchedules + notesToReview > 0 ? undefined : t('Không có gì đang chờ bạn.')} />
       </>}
       {tab === 'running' && <RunningGroups items={working} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={t('Không có gì đang chạy.')} />}
       {tab === 'done' && <NoticeList open onOpenChat={(taskId, messageId) => messageId ? onOpenMessage(taskId, messageId) : onOpenChat(taskId)} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} />}

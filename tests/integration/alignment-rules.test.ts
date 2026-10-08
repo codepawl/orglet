@@ -6,6 +6,7 @@ import {
   centreOffset,
   clusterValues,
   commonValue,
+  crampedGap,
   familyFindings,
   gapsBetween,
   groupLines,
@@ -85,6 +86,13 @@ describe('alignment check maths (COD-333)', () => {
     expect(unevenGaps(gaps, 2)).toEqual([2]);
     expect(unevenGaps([6, 6, 200, 6], 2)).toEqual([]);
     expect(unevenGaps([6, 10], 2)).toEqual([]);
+  });
+
+  it('finds blocks that touch and leaves the ones with room', () => {
+    expect(crampedGap(box(0, 0, 100, 20), box(0, 20, 100, 20))).toBe(0);
+    expect(crampedGap(box(0, 0, 100, 20), box(0, 23, 100, 20))).toBe(3);
+    expect(crampedGap(box(0, 0, 100, 20), box(0, 24, 100, 20))).toBeUndefined();
+    expect(crampedGap(box(0, 0, 100, 20), box(0, 8, 100, 20))).toBeUndefined();
   });
 
   it('calls text clipped only when it is cut with no ellipsis', () => {

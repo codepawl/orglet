@@ -29,6 +29,7 @@ Reading map:
 - The sidebar is resizable by dragging its inner edge, and the picked width is remembered.
 - The side list always belongs to what the main panel shows, never to the area left behind.
 - A place reached from the navigation opens as a page in the main panel, not as a dialog.
+- Stacked blocks keep room between them: about 8px between rows of a group, 12 to 16px between groups, set by gap or margin and never by a divider line. `scripts/alignment/rules.ts` flags a disclosure row, code block, list, control or surface that sits under 4px from the block above it (`cramped`); mark an intended tight stack with `data-align-ignore="cramped"`.
 - A close (X) button belongs only to a dialog in the middle of the screen. Panels, pages and columns are left by navigating elsewhere or by the toggle that opened them.
 - Controls in one column share a width (settings selects and money inputs are 210px).
 - A parent and its children are separated by a larger gap than siblings are from each other.
