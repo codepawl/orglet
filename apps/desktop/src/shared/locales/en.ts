@@ -164,7 +164,7 @@ export const en: Dictionary = {
   "Loại mẫu đã thay đổi. Thêm mẫu mới để giữ bản hiện tại.": "The template type changed. Add a new copy to keep the current one.",
   "Làm mới": "Refresh",
   "Mục trong danh mục bị trùng.": "The catalog contains duplicate listings.",
-  "Nhóm Tí": "Orglet crew",
+  "Kênh của Tí": "Channel",
   "Nội dung mẫu không khớp SHA-256 của danh mục.": "The template content does not match the catalog SHA-256.",
   "Từ marketplace": "From the marketplace",
   "Hướng dẫn crew": "Crew instructions",

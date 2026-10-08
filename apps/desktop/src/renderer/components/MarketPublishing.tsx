@@ -75,7 +75,7 @@ export function PublicContentPreview({ requestText }: { requestText: string }) {
   const submission = JSON.parse(requestText) as MarketSubmission;
   const workers = submission.kind === 'orglet' ? [submission.template.worker] : submission.template.workers;
   const skills = submission.kind === 'orglet' ? [submission.template.skill] : submission.template.skills;
-  const kindName = submission.kind === 'space' ? t('Không gian') : submission.kind === 'crew' ? t('Nhóm Tí') : t('Tí');
+  const kindName = submission.kind === 'space' ? t('Không gian') : submission.kind === 'crew' ? t('Kênh của Tí') : t('Tí');
   return <div className="market-content-preview">
     <section className="market-preview-summary"><h3>{submission.name}</h3><p>{submission.summary}</p><p className="muted">{kindName} · {submission.language.toUpperCase()} · {submission.license}{submission.tags.length > 0 && ` · ${submission.tags.join(', ')}`}</p>{submission.changelog && <p>{submission.changelog}</p>}</section>
     {submission.kind === 'space' && <section><h3>{submission.template.space.name}</h3>
