@@ -30,7 +30,7 @@ export class PermissionSuggestions {
     const ticket = ++this.latest;
     await this.running;
     if (ticket !== this.latest) return null;
-    const check = this.read(message, { taskId });
+    const check = this.read(message, { taskId, budgetMs: this.timeoutMs });
     this.running = check.catch(() => undefined);
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), this.timeoutMs); });

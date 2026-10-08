@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DecisionModelConnection } from './decisions';
 
 /**
  * Who the decision model picked to answer one group-chat message that tagged nobody (COD-305), kept on the chat so the thread can
@@ -11,6 +12,8 @@ export const TurnRoute = z.object({
   /** The decision model's probability for the pick, shown in the line's tooltip. */
   probability: z.number().min(0).max(1),
   decidedAt: z.iso.datetime(),
+  /** The backend of the person's list that answered, so the line never hides which one was asked. */
+  answeredBy: DecisionModelConnection.optional(),
 }).strict();
 export type TurnRoute = z.infer<typeof TurnRoute>;
 

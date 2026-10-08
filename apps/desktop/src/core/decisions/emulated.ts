@@ -65,16 +65,22 @@ function describeQuestion(name: string, question: DecisionQuestions[string]): st
   return [`Question "${name}" (${kind}): ${question.instructions}`, 'Options:', ...options].join('\n');
 }
 
-/** The messages one request sends: the instructions, the text between markers, and every question. */
-export function emulationMessages(input: string, questions: DecisionQuestions): { messages: RunMessage[]; ids: Map<string, string> } {
+/** The text between markers followed by every question and its options, and the question names mapped back to the ids callers use. */
+export function questionsPrompt(input: string, questions: DecisionQuestions): { prompt: string; ids: Map<string, string> } {
   const ids = new Map<string, string>();
   const described = Object.entries(questions).map(([id, question], index) => {
     const name = questionName(id, index);
     ids.set(name, id);
     return describeQuestion(name, question);
   });
-  const user = ['<text>', input, '</text>', '', ...described.flatMap(block => [block, ''])].join('\n').trimEnd();
-  return { messages: [{ role: 'system', content: INSTRUCTIONS }, { role: 'user', content: user }], ids };
+  const prompt = ['<text>', input, '</text>', '', ...described.flatMap(block => [block, ''])].join('\n').trimEnd();
+  return { prompt, ids };
+}
+
+/** The messages one request sends: the instructions, the text between markers, and every question. */
+export function emulationMessages(input: string, questions: DecisionQuestions): { messages: RunMessage[]; ids: Map<string, string> } {
+  const { prompt, ids } = questionsPrompt(input, questions);
+  return { messages: [{ role: 'system', content: INSTRUCTIONS }, { role: 'user', content: prompt }], ids };
 }
 
 /** The answers a reply's `report_probabilities` call gives; empty when it gave no usable call. */
@@ -104,7 +110,7 @@ export async function askThroughAdapter(request: { adapter: ModelAdapter; model:
 }
 
 /** The provider's own counts when the reply carries them; otherwise a guess from the text, marked as one. */
-function usageOf(reported: ModelReply['usage'], input: string): DecisionUsage {
+export function usageOf(reported: ModelReply['usage'], input: string): DecisionUsage {
   if (!reported) return { inputTokens: Math.ceil(input.length / 4), estimated: true };
   return { inputTokens: reported.input, outputTokens: reported.output, cacheReadTokens: reported.cacheRead ?? 0, cacheWriteTokens: reported.cacheWrite ?? 0 };
 }

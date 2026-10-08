@@ -716,7 +716,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 <Switch checked={workspace.showWork} disabled={busy} labelledBy="show-work-label" onChange={value => void save({ showWork: value })} />
               </Row>
               {/* Which connection answers the decision model's small questions (COD-303), beside the other rule for notices. */}
-              <DecisionModelSetup connections={connections} customConnections={workspace.customConnections ?? []} />
+              <DecisionModelSetup connections={connections} customConnections={workspace.customConnections ?? []} harnesses={harnesses} />
               <Row title={t('Định dạng khi sao chép')} description={t('Bấm là sao chép, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi sao chép')} className="setting-select" value={workspace.copyFormat} disabled={busy} onChange={value => void save({ copyFormat: value as Workspace['copyFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản thuần') }, { value: 'markdown', label: 'Markdown' }]} />
               </Row>

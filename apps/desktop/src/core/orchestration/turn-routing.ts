@@ -52,11 +52,11 @@ export class TurnRouting {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), this.timeoutMs); });
     try {
-      const asked = this.decisions().decide(words, routingQuestion(group), ROUTING_MAX_LENGTH, { taskId: task.id }).catch(() => undefined);
+      const asked = this.decisions().decide(words, routingQuestion(group), ROUTING_MAX_LENGTH, { taskId: task.id, budgetMs: this.timeoutMs }).catch(() => undefined);
       const response = await Promise.race([asked, timeout]);
       const pick = routedOrglet(response, group);
       if (!pick) return group;
-      this.keep(task, { inputRevision: task.inputRevision ?? 0, workerIds: [pick.orglet.id], probability: pick.probability, decidedAt: this.clock().toISOString() });
+      this.keep(task, { inputRevision: task.inputRevision ?? 0, workerIds: [pick.orglet.id], probability: pick.probability, decidedAt: this.clock().toISOString(), ...(response?.answeredBy ? { answeredBy: response.answeredBy } : {}) });
       return [pick.orglet];
     } finally {
       clearTimeout(timer);

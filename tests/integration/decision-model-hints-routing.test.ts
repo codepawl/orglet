@@ -27,7 +27,7 @@ type Asked = { state: DecisionState; questions: DecisionQuestions; maxLength: nu
 
 /** Dependencies of a decision model that has a connection; the stubs below answer instead of any provider. */
 const connectedDependencies = {
-  saved: () => ({ connection: 'openai', model: 'gpt-6-luna' }),
+  saved: () => [{ connection: 'openai', model: 'gpt-6-luna' }],
   save: () => {},
   readKey: async () => 'test-key',
   adapter: async () => { throw new Error('Not used by these tests.'); },
@@ -46,7 +46,7 @@ class AnsweringDecisions extends Decisions {
 }
 const answering = (answer: (asked: Asked) => Promise<DecisionResponse> | DecisionResponse, asked: Asked[] = []): Decisions => new AnsweringDecisions(answer, asked);
 /** A decision model the person turned off. */
-const turnedOff = (): Decisions => new Decisions({ ...connectedDependencies, saved: () => 'off' });
+const turnedOff = (): Decisions => new Decisions({ ...connectedDependencies, saved: () => [] });
 
 let directory: string;
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-decision-model-305-')); });

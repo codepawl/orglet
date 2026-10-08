@@ -201,7 +201,7 @@ describe('a run asks the decision model about the notes its keywords missed', ()
   it('asks nothing of a decision model with no connection: the service wires the real ask and it answers undefined', async () => {
     await core.command('saveKnowledge', { title: 'Invoice format', content: 'Invoices go out as PDF.', tags: [], pinned: false, scope: { type: 'workspace' } });
     // No OpenAI key is saved and nothing was chosen, so the setting in force is off and no request is made.
-    expect((await core.decisions.view()).setting).toBe('off');
+    expect((await core.decisions.view()).entries).toEqual([]);
     expect(await core.decisions.decide('bill Acme for May', { topic: { type: 'noul', instructions: 'Is it billing?' } })).toBeUndefined();
     const run = await runWith('bill Acme for May');
     expect(run.snapshot.context!.knowledge).toEqual([]);

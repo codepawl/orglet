@@ -20,7 +20,7 @@ const daily: Schedule = { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency
 type Asked = { state: DecisionState; questions: DecisionQuestions; maxLength: number };
 
 const connectedDependencies = {
-  saved: () => ({ connection: 'openai', model: 'gpt-6-luna' }),
+  saved: () => [{ connection: 'openai', model: 'gpt-6-luna' }],
   save: () => {},
   readKey: async () => 'test-key',
   adapter: async () => { throw new Error('Not used by these tests.'); },
@@ -72,7 +72,7 @@ describe('a quiet schedule run that the decision model finds noteworthy (COD-303
     });
   }
   function turnOff() {
-    core.decisions = new Decisions({ ...connectedDependencies, saved: () => 'off' });
+    core.decisions = new Decisions({ ...connectedDependencies, saved: () => [] });
   }
   async function run(schedule: Schedule): Promise<Task> {
     const workerId = store.workspace().workers[0].id;
@@ -159,10 +159,10 @@ describe('a quiet schedule run that the decision model finds noteworthy (COD-303
 
   it('forgets the chosen connection with Erase everything', async () => {
     const real = new CoreService(store, () => {}, async () => { throw new Error('unused'); });
-    await real.command('saveDecisionModelSetting', { connection: 'anthropic', model: 'claude-sonnet-5-5' });
-    expect(await real.command('decisionModelSetting', {})).toEqual({ setting: { connection: 'anthropic', model: 'claude-sonnet-5-5' }, chosen: true });
+    await real.command('saveDecisionModelSetting', [{ connection: 'anthropic', model: 'claude-sonnet-5-5' }]);
+    expect(await real.command('decisionModelSetting', {})).toEqual({ entries: [{ connection: 'anthropic', model: 'claude-sonnet-5-5' }], chosen: true });
     await real.command('eraseData', { scope: 'everything', confirm: ERASE_CONFIRMATION });
-    expect(await real.command('decisionModelSetting', {})).toEqual({ setting: 'off', chosen: false });
+    expect(await real.command('decisionModelSetting', {})).toEqual({ entries: [], chosen: false });
   });
 });
 

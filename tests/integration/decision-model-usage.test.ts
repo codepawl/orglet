@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe('a choice saved under the old name', () => {
-  const chosen: DecisionModelSetting = { connection: 'ollama', model: 'llama3.2' };
+  const chosen: DecisionModelSetting = [{ connection: 'ollama', model: 'llama3.2' }];
 
   it('moves to the new key the first time it is read, and the old row goes', () => {
     const store = createStore();
@@ -46,18 +46,18 @@ describe('a choice saved under the old name', () => {
     expect(readDecisionModelSetting(store)).toEqual(chosen);
   });
 
-  it('keeps "off" as a choice', () => {
+  it('keeps "off" as a choice, now an empty list', () => {
     const store = createStore();
     store.setSetting('tacet', 'off');
-    expect(readDecisionModelSetting(store)).toBe('off');
-    expect(store.setting('decisionModel', undefined)).toBe('off');
+    expect(readDecisionModelSetting(store)).toEqual([]);
+    expect(store.setting('decisionModel', undefined)).toEqual([]);
   });
 
   it('prefers the new key, and saving clears an old row that was left behind', () => {
     const store = createStore();
-    store.setSetting('decisionModel', 'off');
+    store.setSetting('decisionModel', []);
     store.setSetting('tacet', chosen);
-    expect(readDecisionModelSetting(store)).toBe('off');
+    expect(readDecisionModelSetting(store)).toEqual([]);
     saveDecisionModelSetting(store, chosen);
     expect(store.setting('decisionModel', undefined)).toEqual(chosen);
     expect(store.setting('tacet', undefined)).toBeUndefined();
@@ -75,7 +75,7 @@ describe('a choice saved under the old name', () => {
     const store = createStore();
     store.setSetting('tacet', chosen);
     const core = new CoreService(store, () => {}, async () => { throw new Error('unused'); });
-    expect(await core.command('decisionModelSetting', {})).toEqual({ setting: chosen, chosen: true });
+    expect(await core.command('decisionModelSetting', {})).toEqual({ entries: chosen, chosen: true });
     expect(store.setting('decisionModel', undefined)).toEqual(chosen);
   });
 });
@@ -104,7 +104,7 @@ function counted(store: Store, options: { saved: DecisionModelSetting; fetcher?:
 }
 
 describe('counting what the decision model used', () => {
-  const openAi: DecisionModelSetting = { connection: 'openai', model: 'gpt-6-luna' };
+  const openAi: DecisionModelSetting = [{ connection: 'openai', model: 'gpt-6-luna' }];
 
   it('records an OpenAI request at the Decisions API price, in the workspace totals', async () => {
     const store = createStore();
@@ -128,7 +128,7 @@ describe('counting what the decision model used', () => {
 
   it('prices another connection like a chat request when the model has a verified price', async () => {
     const store = createStore();
-    const saved = { connection: 'anthropic', model: 'claude-sonnet-5-5' };
+    const saved = [{ connection: 'anthropic', model: 'claude-sonnet-5-5' }];
     const decisions = counted(store, { saved, adapter: reportingAdapter({ input: 1_000, output: 100, cacheRead: 200 }) });
     await decisions.decide('hello', oneQuestion);
     const total = store.usage();
@@ -139,7 +139,7 @@ describe('counting what the decision model used', () => {
 
   it('keeps a request visible, with its tokens, when the model has no verified price', async () => {
     const store = createStore();
-    const decisions = counted(store, { saved: { connection: 'anthropic', model: 'a-model-nobody-priced' }, adapter: reportingAdapter({ input: 500, output: 50 }) });
+    const decisions = counted(store, { saved: [{ connection: 'anthropic', model: 'a-model-nobody-priced' }], adapter: reportingAdapter({ input: 500, output: 50 }) });
     await decisions.decide('hello', oneQuestion);
     expect(store.usage()).toMatchObject({ chargedMicros: 0, inputTokens: 500, outputTokens: 50, unpricedDecisionCalls: 1 });
   });
@@ -167,7 +167,7 @@ describe('counting what the decision model used', () => {
 
   it('counts nothing while off, and an unreadable count never costs the answer', async () => {
     const store = createStore();
-    expect(await counted(store, { saved: 'off' as never }).decide('hello', oneQuestion)).toBeUndefined();
+    expect(await counted(store, { saved: [] }).decide('hello', oneQuestion)).toBeUndefined();
     expect(store.usage().inputTokens).toBe(0);
     const failing = new Decisions({
       saved: () => openAi, save: () => {}, readKey: async () => 'sk-test', adapter: async () => reportingAdapter(undefined),

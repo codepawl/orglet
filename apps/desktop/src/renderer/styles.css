@@ -1326,7 +1326,23 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .plan-resets { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:2px 0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .plan-resets .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
 /* The decision model's connection block (COD-303): the model field shares the column width of the selects above it. */
-.setting-control .decision-model-input { width:210px; }
+/* The list: a rank in the mark slot, the connection and model on one line (the note for a slow backend under them), and
+   the three icon buttons at the right. Rows are told apart by spacing alone, like every Settings list. */
+/* Top-aligned, so the rank and the buttons stay on the select's centre line when a slow backend's note makes the row taller. */
+.decision-entry { padding:8px 0; align-items:flex-start; }
+.decision-entry-rank { margin-top:4px; flex:0 0 var(--setting-mark); height:var(--setting-mark); display:grid; place-items:center; border-radius:50%; font-size:12px; font-weight:500; color:var(--muted); background:color-mix(in srgb, var(--text) 8%, var(--bg)); font-variant-numeric:tabular-nums; }
+.decision-entry-fields { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.decision-entry-inputs { display:flex; align-items:center; gap:8px; min-width:0; }
+.decision-entry-inputs .setting-select { width:198px; flex:0 0 198px; }
+.decision-entry-model { flex:1; min-width:0; display:flex; }
+.decision-entry-model .decision-model-input { width:100%; min-width:0; }
+.decision-entry-note { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); }
+.decision-entry { --setting-mark-gap:8px; }
+.decision-entry .setting-control { gap:0; min-height:34px; }
+.decision-entry .setting-control .org-button { min-width:28px; width:28px; min-height:28px; height:28px; padding:0; }
+.decision-entry-model .decision-model-input { padding-inline:10px; }
+.decision-note { padding:4px 0 8px calc(var(--setting-mark) + 8px); }
+.decision-model-setup .org-skeleton { margin:4px 0 8px; }
 /* Settings → Giới thiệu (COD-176): the face and the name lead, then the same rows as every other section. The links
    are one row of compact outline chips, each mark left of its name; the changelog is the version, the date and what
    changed, one release at a time. */

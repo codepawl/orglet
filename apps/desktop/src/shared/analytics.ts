@@ -252,7 +252,7 @@ export function featureForCommand(command: string, args: unknown): AnalyticsFeat
   if (command === 'setMcpGrant') return (args as { allowed?: boolean }).allowed ? 'mcp' : undefined;
   if (command === 'saveSourceVersion') return 'file_edit';
   if (command === 'forwardMessage') return 'forward';
-  if (command === 'saveDecisionModelSetting') return args === 'off' ? undefined : 'tacet';
+  if (command === 'saveDecisionModelSetting') return Array.isArray(args) && args.length === 0 ? undefined : 'tacet';
   return undefined;
 }
 
