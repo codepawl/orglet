@@ -22,6 +22,8 @@ export const SyncStatus = z.object({
   lastSyncedAt: z.iso.datetime().optional(),
   /** Changes too large for the server; they stay on this computer. */
   skipped: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  /** Chats that stay on this computer because an orglet in them was deleted, which is permanent for the account. */
+  withheld: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
 }).strict();
 export type SyncStatus = z.infer<typeof SyncStatus>;
 

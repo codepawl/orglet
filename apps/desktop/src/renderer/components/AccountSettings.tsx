@@ -226,6 +226,7 @@ function SyncRow({ busy }: { busy: boolean }) {
   const description = <span role="status">
     {syncText(status)}
     {status.skipped ? <>{' '}{t('{0} thay đổi quá lớn nên chỉ ở trên máy này.', [status.skipped])}</> : null}
+    {status.withheld ? <>{' '}{t('{0} chat chỉ ở lại máy này vì có Tí đã bị xóa vĩnh viễn.', [status.withheld])}</> : null}
   </span>;
   return <>
     <Row icon={<StatusMark {...syncMark(status)} decorative />} title={t('Đồng bộ')} description={description}>

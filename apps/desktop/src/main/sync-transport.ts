@@ -144,6 +144,8 @@ type Session = {
   uploadRefused?: SyncPauseReason;
   uploadHeldUntil: number;
   skipped: number;
+  /** Chats kept here because an orglet in them was deleted. */
+  withheld: number;
 };
 
 /**
@@ -328,7 +330,7 @@ export class SyncTransport {
     if (!context) return;
     const session: Session = {
       context, controller: new AbortController(), deviceId: '', cursor: null, waitingForConsent: false, stopped: false, reclaimed: false, wantPull: true,
-      uploadHeldUntil: 0, skipped: 0,
+      uploadHeldUntil: 0, skipped: 0, withheld: 0,
     };
     this.session = session;
     let state: SyncReplicaState;
@@ -378,6 +380,7 @@ export class SyncTransport {
       ...status,
       ...(this.lastSyncedAt && status.state !== 'off' ? { lastSyncedAt: this.lastSyncedAt } : {}),
       ...(this.session?.skipped ? { skipped: this.session.skipped } : {}),
+      ...(this.session?.withheld ? { withheld: this.session.withheld } : {}),
     });
     if (JSON.stringify(next) === JSON.stringify(this.status)) return;
     this.status = next;
@@ -585,6 +588,7 @@ export class SyncTransport {
     for (;;) {
       const batch = SyncReplicaBatch.parse(await this.core({ action: 'outbox', context: session.context }, session));
       session.skipped = batch.skipped;
+      session.withheld = batch.withheld;
       if (batch.updateRequired) {
         session.uploadRefused = 'update_required';
         session.uploadHeldUntil = 0;

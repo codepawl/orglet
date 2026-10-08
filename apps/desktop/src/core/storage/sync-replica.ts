@@ -205,7 +205,7 @@ export class SyncReplica {
   }
 
   private outbox(context: SyncRecordingContext): SyncReplicaBatch {
-    if (this.store.sync.hasFutureRecords(context)) return { records: [], skipped: 0, updateRequired: true };
+    if (this.store.sync.hasFutureRecords(context)) return { records: [], skipped: 0, withheld: 0, updateRequired: true };
     const records: SyncRecord[] = [];
     let bytes = 0;
     for (const { record } of this.store.sync.outbox(context, 100)) {
@@ -213,7 +213,7 @@ export class SyncReplica {
       if (records.length && bytes > SYNC_BATCH_BYTES - BATCH_MARGIN_BYTES) break;
       records.push(record);
     }
-    return { records, skipped: this.store.sync.oversized(context), updateRequired: false };
+    return { records, skipped: this.store.sync.oversized(context), withheld: this.store.sync.chatsKeptByDeletedOrglet().length, updateRequired: false };
   }
 
   private acknowledge(context: SyncRecordingContext, outcomes: { id: string; status: 'kept' | 'superseded' | 'blocked' }[]): null {

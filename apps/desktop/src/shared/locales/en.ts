@@ -4223,6 +4223,8 @@ export const en: Dictionary = {
   'Máy chủ đồng bộ đang tắt. Orglet sẽ tự thử lại.': 'The sync server is turned off. Orglet will try again.',
   'Máy chủ từ chối một số thay đổi. Chúng vẫn nằm trên máy này.': 'The server refused some changes. They are still on this computer.',
   '{0} thay đổi quá lớn nên chỉ ở trên máy này.': '{0} changes are too large to sync and stay on this computer.',
+  '{0} chat chỉ ở lại máy này vì có Tí đã bị xóa vĩnh viễn.': '{0} chats stay on this computer because an orglet in them was deleted for good.',
+  'Một Tí trong chat này đã bị xóa vĩnh viễn, nên chat chỉ ở lại máy này và không đồng bộ.': 'An orglet in this chat was deleted for good, so the chat stays on this computer and does not sync.',
   'Không gửi được cập nhật trạng thái đồng bộ.': 'Could not send the sync status update.',
   'Phản hồi đồng bộ quá lớn.': 'The sync reply is too large.',
   // GH-479: an installed copy whose old baseline cannot say whether it was edited.
