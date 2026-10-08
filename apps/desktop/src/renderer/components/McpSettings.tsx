@@ -13,6 +13,7 @@ import { Input, Textarea } from '@codepawlhq/orglet-ui';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { toast } from './toast';
+import { isBlank, useFieldErrors } from '../fieldErrors';
 
 /** Stands in for a saved value the window never reads back. */
 const SAVED_MASK = '••••••••';
@@ -245,6 +246,7 @@ function McpServerEditor({ server, app, onClose }: { server?: McpServerView; app
   const [bearerRemoved, setBearerRemoved] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const fieldErrors = useFieldErrors('mcp');
   const changeKind = (next: 'stdio' | 'http') => {
     setKind(next);
     // Variables and headers are different things, so switching kind starts that list over.
@@ -254,6 +256,12 @@ function McpServerEditor({ server, app, onClose }: { server?: McpServerView; app
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError('');
+    const filled = fieldErrors.check(event.currentTarget as HTMLElement, [
+      { field: 'name', failed: isBlank(name), message: t('Đặt tên cho máy chủ.') },
+      { field: 'command', failed: kind === 'stdio' && isBlank(command), message: t('Nhập lệnh để chạy máy chủ.') },
+      { field: 'url', failed: kind === 'http' && isBlank(url), message: t('Nhập địa chỉ của máy chủ.') },
+    ]);
+    if (!filled) return;
     setBusy(true);
     try {
       const saved = await orglet.saveMcpServer(draftOf({ server, name, kind, command, args, url, entries, bearer, bearerRemoved, browserSignIn }));
@@ -270,19 +278,19 @@ function McpServerEditor({ server, app, onClose }: { server?: McpServerView; app
   const entryLabel = kind === 'stdio' ? t('Biến môi trường') : t('Header');
   return <Drawer open onClose={onClose} title={server ? t('Sửa máy chủ MCP') : t('Máy chủ MCP mới')}
     description={t('Giá trị bí mật được mã hóa trên máy này và không hiện lại.')}>
-    <form className="form mcp-form" onSubmit={event => void submit(event)}>
-      <label><FieldLabel icon={Tag} required>{t('Tên')}</FieldLabel><Input value={name} onChange={event => setName(event.target.value)} maxLength={40} required placeholder={t('Ví dụ: GitHub')} /></label>
+    <form className="form mcp-form" noValidate onSubmit={event => void submit(event)}>
+      <label><FieldLabel icon={Tag} required>{t('Tên')}</FieldLabel><Input {...fieldErrors.props('name')} value={name} onChange={event => { setName(event.target.value); fieldErrors.clear('name'); }} maxLength={40} placeholder={t('Ví dụ: GitHub')} />{fieldErrors.message('name')}</label>
       <Select label={<FieldLabel icon={Server} required>{t('Cách kết nối')}</FieldLabel>} value={kind} onChange={value => changeKind(value as 'stdio' | 'http')} options={[
         { value: 'stdio', label: t('Chạy trên máy (stdio)'), icon: <SquareTerminal size={16} /> },
         { value: 'http', label: t('Từ xa (HTTP)'), icon: <Globe size={16} /> },
       ]} />
       {kind === 'stdio' && <>
-        <label><FieldLabel icon={SquareTerminal} required>{t('Lệnh')}</FieldLabel><Input className="mcp-mono" value={command} onChange={event => setCommand(event.target.value)} maxLength={1024} required spellCheck={false} placeholder="npx" /></label>
+        <label><FieldLabel icon={SquareTerminal} required>{t('Lệnh')}</FieldLabel><Input className="mcp-mono" {...fieldErrors.props('command')} value={command} onChange={event => { setCommand(event.target.value); fieldErrors.clear('command'); }} maxLength={1024} spellCheck={false} placeholder="npx" />{fieldErrors.message('command')}</label>
         <label><FieldLabel icon={ListTree}>{t('Tham số, mỗi dòng một tham số')}</FieldLabel><Textarea className="mcp-mono" rows={3} value={args} onChange={event => setArgs(event.target.value)} spellCheck={false} placeholder={'-y\n@modelcontextprotocol/server-everything'} /></label>
         <p className="muted">{t('Tham số hiện trong app. Đặt token vào biến môi trường, đừng đặt vào tham số.')}</p>
       </>}
       {kind === 'http' && <>
-        <label><FieldLabel icon={Globe} required>{t('Địa chỉ')}</FieldLabel><Input className="mcp-mono" value={url} onChange={event => setUrl(event.target.value)} maxLength={2048} required spellCheck={false} placeholder="https://example.com/mcp" /></label>
+        <label><FieldLabel icon={Globe} required>{t('Địa chỉ')}</FieldLabel><Input className="mcp-mono" {...fieldErrors.props('url')} value={url} onChange={event => { setUrl(event.target.value); fieldErrors.clear('url'); }} maxLength={2048} spellCheck={false} placeholder="https://example.com/mcp" />{fieldErrors.message('url')}</label>
         <Select label={<FieldLabel icon={ShieldCheck} required>{t('Xác thực')}</FieldLabel>} value={browserSignIn ? 'browser' : 'token'} onChange={value => setBrowserSignIn(value === 'browser')} options={[
           { value: 'token', label: t('Token hoặc header'), detail: t('Dán token dịch vụ cấp cho bạn'), icon: <KeyRound size={16} /> },
           { value: 'browser', label: t('Đăng nhập bằng trình duyệt'), detail: t('Dịch vụ hỗ trợ đăng nhập OAuth'), icon: <LogIn size={16} /> },

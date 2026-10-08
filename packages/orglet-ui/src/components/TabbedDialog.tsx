@@ -3,6 +3,7 @@ import type { ComponentProps, KeyboardEvent, ReactNode } from 'react';
 import { Button } from './Button';
 import { DialogOverlay, keepOpenForPopup, useReturnFocus } from './Dialog';
 import { PanelHeading } from './PanelHeading';
+import { ErrorIcon } from '../icons';
 import { cn } from '../cn';
 import './TabbedDialog.css';
 
@@ -102,7 +103,8 @@ export function TabbedDialog<T extends string>({
 
 /**
  * A tabbed editor: `TabbedDialog` with Cancel and Save pinned at the bottom, reachable from every tab, and `error`
- * beside them. `focusField` names the `data-field` to focus when it opens, scrolled into view, instead of the first
+ * beside them, led by an error mark: it is for a failure that belongs to no field (a save refused), since a mistake in a
+ * field is said under that field with `FieldError`. `focusField` names the `data-field` to focus when it opens, scrolled into view, instead of the first
  * control, so a link that names one field lands on it. `fieldsClassName` styles the box the fields sit in.
  */
 export function TabbedFormDialog<T extends string>({ onSubmit, submitLabel, busyLabel, cancelLabel, busy, error, focusField, fieldsClassName, children, ...dialog }:
@@ -125,7 +127,7 @@ export function TabbedFormDialog<T extends string>({ onSubmit, submitLabel, busy
     field.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
   };
   const footer = <>
-    {error ? <p className="org-tabbed-dialog-error" role="alert">{error}</p> : <span className="org-tabbed-dialog-footer-spacer" />}
+    {error ? <p className="org-tabbed-dialog-error" role="alert"><ErrorIcon size={14} /><span>{error}</span></p> : <span className="org-tabbed-dialog-footer-spacer" />}
     <RadixDialog.Close asChild><Button type="button" variant="outline" disabled={busy}>{cancelLabel}</Button></RadixDialog.Close>
     <Button type="submit" variant="primary" disabled={busy}>{busy ? busyLabel : submitLabel}</Button>
   </>;

@@ -12,6 +12,7 @@ import { Checkbox } from './Checkbox';
 import { Select } from './Select';
 import { TabbedFormDialog } from './DialogTabs';
 import { fieldInvalid } from './fieldInvalid';
+import { fieldMessage } from '../fieldErrors';
 import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
@@ -112,10 +113,10 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
   };
 
   return <TabbedFormDialog open={open} onClose={onClose} title={editing ? t('Thiết lập không gian') : t('Không gian mới')} tabs={[generalTab, membersTab, categoriesTab, permissionsTab]} tab={tab} onTab={next => { setTab(next); clearError(); }}
-    panelId="space-panel" onSubmit={submit} submitLabel={editing ? t('Lưu không gian') : t('Tạo không gian')} busy={busy} error={error}>
+    panelId="space-panel" onSubmit={submit} submitLabel={editing ? t('Lưu không gian') : t('Tạo không gian')} busy={busy} error={invalid ? '' : error}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Boxes} required>{t('Tên không gian')}</FieldLabel>
-        <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={SPACE_NAME_LIMIT} placeholder={t('ví dụ: Ra mắt sản phẩm')} invalid={invalid === 'name'} flash={flash} /></label>
+        <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={SPACE_NAME_LIMIT} placeholder={t('ví dụ: Ra mắt sản phẩm')} invalid={invalid === 'name'} flash={flash} />{fieldMessage('name', invalid, error)}</label>
       <p className="muted">{t('Một không gian gom các kênh của một việc lớn, với những Tí làm việc đó. Kênh trong không gian chỉ có những Tí của không gian.')}</p>
       <label><FieldLabel icon={Folder}>{t('Thư mục')}</FieldLabel>
         <Input value={folder} onChange={event => setFolder(event.target.value)} maxLength={SPACE_FOLDER_LIMIT} placeholder={t('ví dụ: Khách hàng')} list="space-folder-names" />
@@ -130,7 +131,7 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
           <span className="inline-mark">{orgletFace(worker)}{worker.name}</span>
         </Checkbox>)}
         {!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}
-      </div></fieldset>
+      </div>{fieldMessage('members', invalid, error)}</fieldset>
       {editing && <p className="muted">{t('Bỏ một Tí khỏi không gian thì Tí đó rời mọi kênh trong không gian. Tin nhắn cũ vẫn còn.')}</p>}
     </>}
     {tab === 'categories' && <>
@@ -141,6 +142,7 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
             onChange={event => changeCategory(category.key, { name: event.target.value })} invalid={invalid === 'category' && !category.name.trim()} flash={flash} />
           <Button type="button" size="icon" aria-label={t('Xóa nhóm {0}', [category.name.trim() || t('chưa đặt tên')])} title={t('Xóa nhóm')} onClick={() => { setCategories(current => current.filter(item => item.key !== category.key)); clearError(); }}><Trash size={16} /></Button>
         </div>
+        {!category.name.trim() && fieldMessage('category', invalid, error)}
         <Select ariaLabel={t('Ai ở trong nhóm {0}', [category.name.trim() || t('chưa đặt tên')])} value={category.listed ? 'listed' : 'inherit'} onChange={value => changeCategory(category.key, { listed: value === 'listed' })}
           options={[
             { value: 'inherit', label: t('Mọi Tí của không gian'), icon: <UsersRound size={16} /> },

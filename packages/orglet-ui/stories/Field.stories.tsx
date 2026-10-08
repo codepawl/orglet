@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Button, Input, Textarea } from '../src';
+import { Button, FieldError, Input, Textarea } from '../src';
 
 const meta = {
   title: 'Components/Input and Textarea',
@@ -54,5 +54,15 @@ export const TextareaInvalid: Story = {
   render: () => <label className="gallery-label" style={{ maxWidth: 420 }}>
     Instructions
     <Textarea rows={3} invalid defaultValue="" />
+  </label>,
+};
+
+/** The message sits directly under the field: a mark, then a short sentence in the error colour. */
+export const WithError: Story = {
+  name: 'Invalid, with its message',
+  render: () => <label className="gallery-label gallery-narrow">
+    Space name
+    <Input invalid aria-describedby="space-name-error" defaultValue="" />
+    <FieldError id="space-name-error">Give the space a name.</FieldError>
   </label>,
 };

@@ -8,6 +8,7 @@ import { Checkbox } from './Checkbox';
 import { Avatar } from './Avatar';
 import { TabbedFormDialog } from './DialogTabs';
 import { fieldInvalid } from './fieldInvalid';
+import { fieldMessage } from '../fieldErrors';
 import { formatMoney, toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t } from '../i18n';
@@ -58,7 +59,7 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
   };
 
   const shownTabs = task.channel ? tabs.filter(item => item.id === 'limits') : tabs;
-  return <TabbedFormDialog open={open} onClose={onClose} title={t('Thiết lập chat')} tabs={shownTabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="task-panel" onSubmit={() => void submit()} submitLabel={t('Lưu chat')} busy={busy || running} error={error}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={t('Thiết lập chat')} tabs={shownTabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="task-panel" onSubmit={() => void submit()} submitLabel={t('Lưu chat')} busy={busy || running} error={invalid ? '' : error}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Type}>{t('Tên chat')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder={task.brief.split('\n')[0].slice(0, 120)} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={mode} onChange={value => { setMode(value); if (invalid === 'assignees') clearError(); }} invalid={invalid === 'assignees'} flash={flash} options={[
@@ -72,10 +73,11 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
           <span className="inline-mark"><Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />{worker.name}</span>
         </Checkbox>)}
       </fieldset>}
+      {fieldMessage('assignees', invalid, error)}
       <p className="muted">{mode === 'all' || (mode === 'workers' && chosen.length > 1) ? t('Từng người trả lời lần lượt, đọc được câu trả lời trước đó.') : t('Người được giao trả lời tin nhắn tiếp theo và đọc được cuộc trò chuyện trước đó.')}</p>
     </>}
     {tab === 'limits' && <>
-      <label><FieldLabel icon={Wallet} required>{t('Giới hạn chi phí của chat')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>
+      <label><FieldLabel icon={Wallet} required>{t('Giới hạn chi phí của chat')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} />{fieldMessage('budget', invalid, error)}</label>
       <p className="muted">{t('Đã dùng {0}; mọi người được giao dùng chung giới hạn này.', [formatMoney(usedMicros)])}</p>
     </>}
     {running && <p role="status">{t('Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.')}</p>}

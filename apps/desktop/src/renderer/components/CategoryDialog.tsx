@@ -10,6 +10,7 @@ import { ProviderMark } from './ProviderMark';
 import { Checkbox } from './Checkbox';
 import { Select } from './Select';
 import { TabbedFormDialog } from './DialogTabs';
+import { fieldMessage } from '../fieldErrors';
 import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
@@ -67,10 +68,10 @@ export function CategoryDialog({ open, draft, workspace, onClose }: { open: bool
   };
 
   return <TabbedFormDialog open={open} onClose={onClose} title={t('Nhóm mới')} tabs={[generalTab, membersTab]} tab={tab} onTab={next => { setTab(next); clearError(); }}
-    panelId="category-panel" onSubmit={submit} submitLabel={t('Tạo nhóm')} busy={busy} error={error || (full ? t('Không gian đã có đủ số nhóm.') : '')}>
+    panelId="category-panel" onSubmit={submit} submitLabel={t('Tạo nhóm')} busy={busy} error={invalid ? '' : error || (full ? t('Không gian đã có đủ số nhóm.') : '')}>
     {tab === 'general' && <>
       <label><FieldLabel icon={FolderTree} required>{t('Tên nhóm')}</FieldLabel>
-        <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={CHANNEL_CATEGORY_LIMIT} placeholder={t('ví dụ: Nghiên cứu')} invalid={invalid === 'name'} flash={flash} /></label>
+        <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={CHANNEL_CATEGORY_LIMIT} placeholder={t('ví dụ: Nghiên cứu')} invalid={invalid === 'name'} flash={flash} />{fieldMessage('name', invalid, error)}</label>
       <p className="muted">{t('Nhóm gom các kênh trong không gian. Một nhóm có thể chỉ có một số Tí của không gian.')}</p>
     </>}
     {tab === 'members' && <>

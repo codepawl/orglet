@@ -54,7 +54,7 @@ and its accessibility notes. This table is written from those pages by `pnpm --f
 | A tick for picking items out of a list or confirming something once, with a label and optional description. | `Checkbox` | [Checkbox](docs/components/Checkbox.md) |
 | A colour panel with an area, a hue slider, a hex field, presets and the person's saved colours. | `ColorPicker`, `normalizeHex` | [ColorPicker](docs/components/ColorPicker.md) |
 | A name that is renamed where it is shown: text at rest, an input when clicked. | `EditableText` | [EditableText](docs/components/EditableText.md) |
-| A single-line text input and a multi-line textarea with a shared invalid state and shake. | `Input`, `Textarea` | [Field](docs/components/Field.md) |
+| A single-line text input and a multi-line textarea with a shared invalid state and shake, and the line that says what is wrong under a field. | `Input`, `Textarea`, `FieldError` | [Field](docs/components/Field.md) |
 | A field's title with a small leading icon and an optional required asterisk drawn outside its name. | `FieldLabel` | [FieldLabel](docs/components/FieldLabel.md) |
 | A field for an amount of money, with the currency symbol before it and its code after it. | `MoneyInput` | [MoneyInput](docs/components/MoneyInput.md) |
 | One choice out of a few labelled options, each with an optional description. | `RadioGroup` | [RadioGroup](docs/components/RadioGroup.md) |

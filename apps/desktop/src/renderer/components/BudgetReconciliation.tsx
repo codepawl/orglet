@@ -6,6 +6,7 @@ import { t } from '../i18n';
 import { Button, FieldLabel, MoneyInput } from './ui';
 import { Checkbox } from './Checkbox';
 import { Select } from './Select';
+import { useFieldErrors } from '../fieldErrors';
 import { providerName } from './workerModel';
 
 type Source = 'provider_dashboard' | 'invoice';
@@ -35,7 +36,7 @@ export function BudgetReconciliation({ workspace, busy, onReconcile }: {
   const [amount, setAmount] = useState('');
   const [source, setSource] = useState<Source>('provider_dashboard');
   const [verified, setVerified] = useState(false);
-  const [error, setError] = useState('');
+  const fieldErrors = useFieldErrors('budget-review');
   const unknown = workspace.budgetReservations.filter(item => item.resolvedAt === null);
   const resolved = workspace.budgetReservations.filter(item => item.resolvedAt !== null);
   const taskName = (item: BudgetReservationView) => {
@@ -47,20 +48,17 @@ export function BudgetReconciliation({ workspace, busy, onReconcile }: {
     setAmount('');
     setSource('provider_dashboard');
     setVerified(false);
-    setError('');
+    fieldErrors.reset();
   };
-  const submit = async (item: BudgetReservationView) => {
+  const submit = async (item: BudgetReservationView, form: HTMLElement) => {
     const text = amount.trim();
     const micros = amountToMicros(text, usdCurrency);
-    if (!/^(0|[1-9]\d*)(?:\.\d{1,6})?$/.test(text) || !Number.isSafeInteger(micros) || micros < 0) {
-      setError(t('Nhập số tiền USD từ hóa đơn hoặc trang usage, tối đa 6 chữ số thập phân.'));
-      return;
-    }
-    if (!verified) {
-      setError(t('Xác nhận đã kiểm tra khoản phí trên provider.'));
-      return;
-    }
-    setError('');
+    const amountValid = /^(0|[1-9]\d*)(?:\.\d{1,6})?$/.test(text) && Number.isSafeInteger(micros) && micros >= 0;
+    const allowed = fieldErrors.check(form, [
+      { field: 'amount', failed: !amountValid, message: t('Nhập số tiền USD từ hóa đơn hoặc trang usage, tối đa 6 chữ số thập phân.') },
+      { field: 'verified', failed: !verified, message: t('Xác nhận đã kiểm tra khoản phí trên provider.') },
+    ]);
+    if (!allowed) return;
     await onReconcile(item.id, micros, source);
     reset();
   };
@@ -75,11 +73,11 @@ export function BudgetReconciliation({ workspace, busy, onReconcile }: {
           <FileCheck2 size={14} aria-hidden="true" />{t('Đối soát')}
         </Button>
       </div>
-      {selectedId === item.id && <form className="budget-review-form" onSubmit={event => { event.preventDefault(); void submit(item).catch(() => {}); }}>
-        <label><FieldLabel icon={Wallet} required>{t('Phí thực tế (USD)')}</FieldLabel><MoneyInput currencyCode="USD" aria-label={t('Phí thực tế (USD)')} value={amount} onChange={setAmount} disabled={busy} autoFocus /></label>
+      {selectedId === item.id && <form className="budget-review-form" noValidate onSubmit={event => { event.preventDefault(); void submit(item, event.currentTarget).catch(() => {}); }}>
+        <label><FieldLabel icon={Wallet} required>{t('Phí thực tế (USD)')}</FieldLabel><MoneyInput currencyCode="USD" aria-label={t('Phí thực tế (USD)')} {...fieldErrors.props('amount')} value={amount} onChange={value => { setAmount(value); fieldErrors.clear('amount'); }} disabled={busy} autoFocus />{fieldErrors.message('amount')}</label>
         <label><FieldLabel icon={FileCheck2} required>{t('Nguồn đã kiểm tra')}</FieldLabel><Select ariaLabel={t('Nguồn đã kiểm tra')} value={source} disabled={busy} onChange={value => setSource(value as Source)} options={[{ value: 'provider_dashboard', label: t('Trang usage của provider') }, { value: 'invoice', label: t('Hóa đơn provider') }]} /></label>
-        <Checkbox required checked={verified} disabled={busy} onChange={event => setVerified(event.target.checked)}>{t('Tôi đã kiểm tra phí thực tế trên provider')}</Checkbox>
-        {error && <p className="error" role="alert">{error}</p>}
+        <Checkbox required {...fieldErrors.toggleProps('verified')} checked={verified} disabled={busy} onChange={event => { setVerified(event.target.checked); fieldErrors.clear('verified'); }}>{t('Tôi đã kiểm tra phí thực tế trên provider')}</Checkbox>
+        {fieldErrors.message('verified')}
         <Button type="submit" variant="primary" disabled={busy}><FileCheck2 size={14} aria-hidden="true" />{t('Lưu đối soát')}</Button>
       </form>}
     </li>)}</ul>}

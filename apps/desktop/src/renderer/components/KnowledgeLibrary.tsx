@@ -12,6 +12,7 @@ import { t } from '../i18n';
 import { orglet } from '../api';
 import { SwitchField } from './Switch';
 import { Input, Textarea } from '@codepawlhq/orglet-ui';
+import { isBlank, useFieldErrors } from '../fieldErrors';
 
 export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
   if (scope.type === 'workspace') return t('Toàn workspace');
@@ -84,19 +85,27 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
   const [scope, setScope] = useState(item ? (item.scope.type === 'workspace' ? 'workspace' : `${item.scope.type}:${item.scope.id}`) : 'workspace');
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const proposed = item?.status === 'proposed';
+  const fieldErrors = useFieldErrors('knowledge');
   const changed = !item || title !== item.title || content !== item.content || tags !== item.tags.join(', ') || pinned !== item.pinned || scope !== (item.scope.type === 'workspace' ? 'workspace' : `${item.scope.type}:${item.scope.id}`);
   const run = async (fn: () => Promise<unknown>) => { setBusy(true); setError(''); try { await fn(); done(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } };
   const save = () => {
     const [type, id] = scope.split(':');
     return orglet.call('saveKnowledge', { ...(item ? { id: item.id } : {}), title, content, tags: tags.split(',').map(tag => tag.trim()).filter(Boolean), pinned, scope: type === 'workspace' ? { type: 'workspace' } : { type: type as 'team' | 'worker', id } });
   };
-  return <form className="form floating-form" onSubmit={event => { event.preventDefault(); void run(save); }}>
+  return <form className="form floating-form" noValidate onSubmit={event => {
+    event.preventDefault();
+    const filled = fieldErrors.check(event.currentTarget, [
+      { field: 'title', failed: isBlank(title), message: t('Đặt tiêu đề cho knowledge.') },
+      { field: 'content', failed: isBlank(content), message: t('Viết nội dung cho knowledge.') },
+    ]);
+    if (filled) void run(save);
+  }}>
     <div className="floating-form-fields">
       {item && <KnowledgeAuthor item={item} workspace={workspace} />}
-      <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} /></label>
+      <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><Input {...fieldErrors.props('title')} value={title} onChange={event => { setTitle(event.target.value); fieldErrors.clear('title'); }} maxLength={200} />{fieldErrors.message('title')}</label>
       {/* Five rows keep the last row, Always load, clear of the floating action bar at the default window size, with a
           scope note showing (COD-250, COD-287: six rows let the bar cover its switch); the box still resizes. */}
-      <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={5} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
+      <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={5} {...fieldErrors.props('content')} value={content} onChange={event => { setContent(event.target.value); fieldErrors.clear('content'); }} maxLength={8000} />{fieldErrors.message('content')}</label>
       <label><FieldLabel icon={Tag}>{t('Thẻ')}</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder={t('ví dụ: khách hàng, giá')} /></label>
       <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: channelLabel(team.name), group: t('Kênh'), icon: <Hash size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
       {scope.startsWith('team:') && <p className="muted scope-note">{t('Knowledge của kênh chỉ nạp khi chạy trong kênh đó.')}</p>}
