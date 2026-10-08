@@ -559,6 +559,10 @@ export interface Bridge {
   /** Opens the browser to sign in; settles when the sign-in finishes, is cancelled or fails (a translated reason). */
   accountSignIn(): Promise<import('./account').AccountState>;
   accountCancelSignIn(): Promise<import('./account').AccountState>;
+  /** Opens the sign-in page in the browser again while a sign-in waits; nothing happens when none does. */
+  accountReopenSignIn(): Promise<void>;
+  /** The sign-in page's address while a sign-in waits, for pasting into another browser; it holds no secret. */
+  accountSignInLink(): Promise<string | null>;
   /** Forgets the sign-in on this computer first, then asks the service to revoke it. Local data stays. */
   accountSignOut(): Promise<import('./account').AccountState>;
   /** Every change of the account's state, pushed by the main process. */

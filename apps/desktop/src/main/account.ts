@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { z } from 'zod';
 import {
@@ -80,6 +82,62 @@ export class AccountFile implements AccountStore {
   }
 }
 
+/** The path the identity service sends the browser back to, on the loopback address and on the custom scheme alike. */
+const CALLBACK_PATH = '/auth/callback';
+const LOOPBACK_ADDRESS = '127.0.0.1';
+
+/**
+ * Answers one request to the loopback callback with the query it carried. It returns the address the browser is sent
+ * on to (303), or nothing when the request is not a callback for the sign-in in progress.
+ */
+export type LoopbackHandler = (query: URLSearchParams) => Promise<string | undefined>;
+
+/** A listener on 127.0.0.1 for the length of one sign-in. */
+export type LoopbackServer = { port: number; close(): void };
+export type LoopbackStarter = (handle: LoopbackHandler) => Promise<LoopbackServer>;
+
+/**
+ * RFC 8252 section 7.3: a one-shot HTTP listener on the loopback interface, on a port the system picks. It serves
+ * `GET /auth/callback` and nothing else (no CORS, no other route), and it never writes the query anywhere.
+ */
+export const listenOnLoopback: LoopbackStarter = async handle => {
+  const server = createServer((request, response) => {
+    const notFound = () => {
+      response.writeHead(404, { connection: 'close' });
+      response.end();
+    };
+    let url: URL;
+    try {
+      url = new URL(request.url ?? '/', `http://${LOOPBACK_ADDRESS}`);
+    } catch {
+      return notFound();
+    }
+    if (request.method !== 'GET' || url.pathname !== CALLBACK_PATH) return notFound();
+    handle(url.searchParams).then(location => {
+      if (!location) return notFound();
+      response.writeHead(303, { location, connection: 'close', 'cache-control': 'no-store' });
+      response.end();
+    }, notFound);
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, LOOPBACK_ADDRESS, () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+  server.on('error', () => undefined);
+  const port = (server.address() as AddressInfo).port;
+  return {
+    port,
+    // A response still being written finishes on its own: every reply carries `connection: close`.
+    close: () => {
+      server.close();
+      server.closeIdleConnections();
+    },
+  };
+};
+
 export type AccountDependencies = {
   /** `https://accounts.codepawl.com`, or a development service named by `ORGLET_ACCOUNTS_URL`. */
   baseUrl: string;
@@ -90,6 +148,11 @@ export type AccountDependencies = {
   now?: () => number;
   signInTimeoutMs?: number;
   onChange?: (state: AccountState) => void;
+  /**
+   * Starts the loopback listener the browser returns to. Main passes `listenOnLoopback`; without it, or when it
+   * fails to listen, the sign-in returns through the custom scheme instead.
+   */
+  loopback?: LoopbackStarter;
 };
 
 const TokenResponse = z.object({
@@ -118,6 +181,11 @@ type PendingSignIn = {
   generation: number;
   state: string;
   verifier: string;
+  /** The exact `redirect_uri` sent to authorize, which the token exchange must repeat. */
+  redirectUri: string;
+  /** The address opened in the browser; it carries only the state and the PKCE challenge. */
+  authorizeUrl: string;
+  loopback?: LoopbackServer;
   timer: ReturnType<typeof setTimeout>;
   resolve: (state: AccountState) => void;
   reject: (error: Error) => void;
@@ -202,9 +270,9 @@ export class AccountService {
   }
 
   /**
-   * Opens the browser at the sign-in page and waits for it to come back through `handleCallback`. Resolves with the
-   * signed-in state, or with the earlier state when the person cancels; rejects with a Vietnamese reason otherwise.
-   * A second call replaces a sign-in still waiting.
+   * Opens the browser at the sign-in page and waits for it to come back, through the loopback listener or, when that
+   * cannot start, through `handleCallback`. Resolves with the signed-in state, or with the earlier state when the
+   * person cancels; rejects with a Vietnamese reason otherwise. A second call replaces a sign-in still waiting.
    */
   async signIn(): Promise<AccountState> {
     this.pending?.reject(new Error(SIGN_IN_REPLACED));
@@ -212,11 +280,74 @@ export class AccountService {
     const generation = this.generation;
     const { verifier, challenge } = pkcePair();
     const state = base64Url(randomBytes(16));
+    const finished = new Promise<AccountState>((resolve, reject) => {
+      const timer = setTimeout(() => this.fail(state, new Error(SIGN_IN_TIMED_OUT)), this.dependencies.signInTimeoutMs ?? SIGN_IN_TIMEOUT_MS);
+      this.pending = { state, verifier, redirectUri: ACCOUNT_REDIRECT_URI, authorizeUrl: '', timer, resolve, reject, exchanging: false, generation };
+    });
+    const pending = this.pending!;
+    this.announce();
+    // Without a listener the browser opens in this same turn, as it did before the loopback redirect.
+    const loopback = this.dependencies.loopback ? await this.startLoopback(pending) : undefined;
+    // Replaced, cancelled or timed out while the listener was starting: it has no sign-in left to serve.
+    if (this.pending !== pending) {
+      loopback?.close();
+      return finished;
+    }
+    if (loopback) {
+      pending.loopback = loopback;
+      pending.redirectUri = `http://${LOOPBACK_ADDRESS}:${loopback.port}${CALLBACK_PATH}`;
+    }
+    pending.authorizeUrl = this.authorizeAddress(pending, challenge);
+    try {
+      await this.dependencies.openExternal(pending.authorizeUrl);
+    } catch {
+      this.fail(state, new Error(SIGN_IN_BROWSER_FAILED));
+    }
+    return finished;
+  }
+
+  /** Opens the sign-in page in the browser again, for a browser that was closed or never came forward. */
+  async reopenSignIn(): Promise<void> {
+    const pending = this.pending;
+    if (!pending?.authorizeUrl) return;
+    try {
+      await this.dependencies.openExternal(pending.authorizeUrl);
+    } catch {
+      this.fail(pending.state, new Error(SIGN_IN_BROWSER_FAILED));
+    }
+  }
+
+  /** The sign-in page's address while a sign-in waits, to paste into another browser. */
+  signInLink(): string | undefined {
+    return this.pending?.authorizeUrl || undefined;
+  }
+
+  private async startLoopback(pending: PendingSignIn): Promise<LoopbackServer | undefined> {
+    const start = this.dependencies.loopback;
+    if (!start) return undefined;
+    try {
+      return await start(query => this.answerLoopback(pending, query));
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Where the browser goes after the callback: the service's page for a sign-in that worked or one that did not. */
+  private async answerLoopback(pending: PendingSignIn, query: URLSearchParams): Promise<string> {
+    const base = this.dependencies.baseUrl.replace(/\/+$/, '');
+    const failed = `${base}/signed-in?failed=1`;
+    if (this.pending !== pending) return failed;
+    const finished = this.acceptCallback(query);
+    return (finished && await finished) ? `${base}/signed-in` : failed;
+  }
+
+  private authorizeAddress(pending: PendingSignIn, challenge: string): string {
+    const state = pending.state;
     const address = new URL(this.endpoints.authorize);
     address.search = new URLSearchParams({
       response_type: 'code',
       client_id: ACCOUNT_CLIENT_ID,
-      redirect_uri: ACCOUNT_REDIRECT_URI,
+      redirect_uri: pending.redirectUri,
       scope: ACCOUNT_SCOPES,
       state,
       code_challenge: challenge,
@@ -224,17 +355,7 @@ export class AccountService {
       resource: ACCOUNT_RESOURCE,
     }).toString();
     address.searchParams.append('resource', ACCOUNT_MARKET_RESOURCE);
-    const finished = new Promise<AccountState>((resolve, reject) => {
-      const timer = setTimeout(() => this.fail(state, new Error(SIGN_IN_TIMED_OUT)), this.dependencies.signInTimeoutMs ?? SIGN_IN_TIMEOUT_MS);
-      this.pending = { state, verifier, timer, resolve, reject, exchanging: false, generation };
-    });
-    this.announce();
-    try {
-      await this.dependencies.openExternal(address.toString());
-    } catch {
-      this.fail(state, new Error(SIGN_IN_BROWSER_FAILED));
-    }
-    return finished;
+    return address.toString();
   }
 
   /** The person gave up in the app: the sign-in stops and the account goes back to how it was. */
@@ -252,8 +373,6 @@ export class AccountService {
    * neither finish nor cancel it. Returns whether the callback was taken.
    */
   handleCallback(raw: string): boolean {
-    const pending = this.pending;
-    if (!pending || pending.exchanging) return false;
     let url: URL;
     try {
       url = new URL(raw);
@@ -261,20 +380,28 @@ export class AccountService {
       return false;
     }
     if (url.protocol.toLowerCase() !== `${ACCOUNT_SCHEME}:` || !isCallbackPath(url)) return false;
-    const parameters = url.searchParams;
-    if (parameters.get('state') !== pending.state) return false;
+    return this.acceptCallback(url.searchParams) !== undefined;
+  }
+
+  /**
+   * The checks both ways back share: the state of the sign-in in progress, the issuer, then the code. Returns nothing
+   * when the callback is not taken, otherwise whether the sign-in ended up signed in.
+   */
+  private acceptCallback(parameters: URLSearchParams): Promise<boolean> | undefined {
+    const pending = this.pending;
+    if (!pending || pending.exchanging) return undefined;
+    if (parameters.get('state') !== pending.state) return undefined;
     // RFC 9207: when the service names itself, it must be the issuer this sign-in went to.
     const issuer = parameters.get('iss');
-    if (issuer !== null && issuer !== this.endpoints.issuer) return false;
+    if (issuer !== null && issuer !== this.endpoints.issuer) return undefined;
     if (parameters.get('error')) {
       this.fail(pending.state, new Error(SIGN_IN_REFUSED));
-      return true;
+      return Promise.resolve(false);
     }
     const code = parameters.get('code');
-    if (!code) return false;
+    if (!code) return undefined;
     pending.exchanging = true;
-    void this.finishSignIn(pending, code);
-    return true;
+    return this.finishSignIn(pending, code);
   }
 
   /**
@@ -384,14 +511,14 @@ export class AccountService {
     await this.keep(rest, generation);
   }
 
-  private async finishSignIn(pending: PendingSignIn, code: string) {
+  private async finishSignIn(pending: PendingSignIn, code: string): Promise<boolean> {
     let tokens: TokenResponse | undefined;
     let committedGeneration: number | undefined;
     try {
       tokens = await this.tokenRequest({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: ACCOUNT_REDIRECT_URI,
+        redirect_uri: pending.redirectUri,
         client_id: ACCOUNT_CLIENT_ID,
         code_verifier: pending.verifier,
         resource: ACCOUNT_RESOURCE,
@@ -401,7 +528,7 @@ export class AccountService {
       // Cancelled while the code was being exchanged: the new sign-in is thrown away at the service too.
       if (this.pending !== pending || pending.generation !== this.generation) {
         await this.revoke(tokens.refresh_token).catch(() => undefined);
-        return;
+        return false;
       }
       const generation = await this.commitSignIn({ refreshToken: tokens.refresh_token, profile, resources: [ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE] }, pending);
       committedGeneration = generation;
@@ -410,9 +537,11 @@ export class AccountService {
       this.clearPending();
       this.announce();
       pending.resolve(this.state());
+      return true;
     } catch (error) {
       if (tokens?.refresh_token && committedGeneration === undefined) await this.revoke(tokens.refresh_token).catch(() => undefined);
       this.fail(pending.state, new Error(error instanceof GrantRefused ? SIGN_IN_REFUSED : SIGN_IN_FAILED));
+      return false;
     }
   }
 
@@ -425,7 +554,10 @@ export class AccountService {
   }
 
   private clearPending() {
-    if (this.pending) clearTimeout(this.pending.timer);
+    if (this.pending) {
+      clearTimeout(this.pending.timer);
+      this.pending.loopback?.close();
+    }
     this.pending = undefined;
   }
 
