@@ -27,7 +27,7 @@ export function relativeDay(iso: string, now = new Date()) {
 type SearchWorkspace = Pick<Workspace, 'tasks' | 'workers' | 'teams' | 'archivedWorkers'>;
 
 type SearchRow =
-  | { key: string; kind: 'orglet'; worker: Worker }
+  | { key: string; kind: 'orglet'; worker: Worker; archived?: boolean }
   | { key: string; kind: 'crew'; team: Team }
   | { key: string; kind: 'chat'; task: Task; hit?: ChatSearchHit };
 
@@ -95,13 +95,15 @@ function Faces({ workers, several, fallbackName, fallbackSeed }: { workers: read
  * its best-matching message, with a snippet around the match. Choosing a chat opens it scrolled to that message;
  * choosing an orglet or crew opens its chat.
  */
-export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrglet, onOpenCrew, onDwellTask }: {
+export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrglet, onRestoreOrglet, onOpenCrew, onDwellTask }: {
   open: boolean;
   onClose: () => void;
   workspace: SearchWorkspace;
   /** Opens a chat, scrolled to the message the search found when there is one. */
   onOpenChat: (taskId: string, messageId?: string) => void;
   onOpenOrglet: (workerId: string) => void;
+  /** Brings an archived orglet back and opens it: a person who forgot they archived one still finds it by name. */
+  onRestoreOrglet?: (workerId: string) => void;
   onOpenCrew: (teamId: string) => void;
   /** The chat Enter or a click would open is resting under the pointer or the arrow keys, or no longer is (COD-218). */
   onDwellTask?: (id: string, resting: boolean) => void;
@@ -133,6 +135,13 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
       const worker = workspace.workers.find(item => item.id === id);
       return worker ? [{ key: `orglet:${id}`, kind: 'orglet', worker }] : [];
     });
+    // Archived orglets are not in the search index: their names are matched here, and the row says they are archived.
+    const typed = found.query.trim().toLocaleLowerCase();
+    const archived = onRestoreOrglet
+      ? workspace.archivedWorkers.flatMap((worker): SearchRow[] => worker.name.toLocaleLowerCase().includes(typed)
+        ? [{ key: `orglet:${worker.id}`, kind: 'orglet', worker, archived: true }]
+        : [])
+      : [];
     const crews = found.result.crewIds.flatMap((id): SearchRow[] => {
       const team = workspace.teams.find(item => item.id === id);
       return team ? [{ key: `crew:${id}`, kind: 'crew', team }] : [];
@@ -141,8 +150,8 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
       const task = workspace.tasks.find(item => item.id === hit.taskId);
       return task ? [{ key: `chat:${hit.taskId}`, kind: 'chat', task, hit }] : [];
     });
-    return [...orglets, ...crews, ...chats];
-  }, [searching, found, workspace]);
+    return [...orglets, ...archived, ...crews, ...chats];
+  }, [searching, found, workspace, onRestoreOrglet]);
   const terms = searching ? found?.result.terms ?? [] : [];
   // Titles only help when orglets or crews sit above the chats; a list of chats alone needs none.
   const grouped = rows.some(row => row.kind !== 'chat');
@@ -170,7 +179,8 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
     if (!row) return;
     chosen.current = true;
     onClose();
-    if (row.kind === 'orglet') onOpenOrglet(row.worker.id);
+    if (row.kind === 'orglet' && row.archived) onRestoreOrglet?.(row.worker.id);
+    else if (row.kind === 'orglet') onOpenOrglet(row.worker.id);
     else if (row.kind === 'crew') onOpenCrew(row.team.id);
     else onOpenChat(row.task.id, row.hit?.messageId);
   };
@@ -224,7 +234,7 @@ function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose 
   if (row.kind === 'orglet') {
     faces = <Faces workers={[row.worker]} several={false} fallbackName={row.worker.name} fallbackSeed={row.worker.id} />;
     name = row.worker.name;
-    detail = row.worker.description;
+    detail = row.archived ? t('Đã lưu trữ · chọn để khôi phục') : row.worker.description;
   } else if (row.kind === 'crew') {
     const members = teamRoster(row.team, workspace.workers);
     faces = <Faces workers={members} several fallbackName={row.team.name} fallbackSeed={row.team.id} />;
