@@ -7,11 +7,11 @@
 
 The decision model is the part of Orglet that makes small decisions. It does not write text. It reads a piece of text and answers typed questions about it: a **choice** among named options, a place on an ordered **score**, or a yes/no (**noul**), with a probability for every option and a confidence.
 
-It asks a model through an API. It used to run a model downloaded to this computer, under the name Tacet; since 2026-10-07 there is no download and no model on disk, and the questions go to the connection the person chooses in **Settings → Chat → Decision model**. This page is how that works (COD-303, COD-305, COD-306). The code is `apps/desktop/src/core/decisions/`.
+It asks a model through an API, or through the Codex CLI on a ChatGPT plan. It used to run a model downloaded to this computer, under the name Tacet; since 2026-10-07 there is no download and no model on disk, and the questions go to the backends the person lists, in order, in **Settings → Chat → Decision model**. This page is how that works (COD-303, COD-305, COD-306). The code is `apps/desktop/src/core/decisions/`.
 
 ## Where the data goes
 
-Every question sends two things to the provider you chose: the **questions** (fixed wording written into Orglet, plus names such as an orglet's name and description for a group-chat pick) and a **short piece of context** (the text the question is about, cut to a few hundred tokens or less). What each use sends:
+Every question sends two things to the provider of the row that answers it: the **questions** (fixed wording written into Orglet, plus names such as an orglet's name and description for a group-chat pick) and a **short piece of context** (the text the question is about, cut to a few hundred tokens or less). What each use sends:
 
 | Use | Text sent |
 |---|---|
@@ -23,21 +23,28 @@ Every question sends two things to the provider you chose: the **questions** (fi
 
 Nothing else is sent: not the chat history, files, keys or the page itself. The decision model sends nothing at all while it is **off**, and it is off when no connection is set up (below).
 
-## The connection
+## The priority list
 
-**Settings → Chat → Decision model** has a select with **Off** and the same connections a chat can use: OpenAI, Anthropic, Grok (xAI), OpenRouter, OpenCode Zen and Go, Ollama, and every custom connection (an OpenAI-compatible endpoint, including one on this computer, which keeps the text on this computer). Harness CLIs (Claude Code, Codex and the like) are not offered, since they are programs, not APIs.
+**Settings → Chat → Decision model** is an ordered list of up to **three** backends. Each row is a connection and a model, with up and down buttons to reorder, a remove button, and **Add option** while there are fewer than three. The connections are the ones a chat can use (OpenAI, Anthropic, Grok (xAI), OpenRouter, OpenCode Zen and Go, Ollama, and every custom connection, including an OpenAI-compatible endpoint on this computer, which keeps the text on this computer), plus **ChatGPT (Codex)** while the Codex CLI is signed in. An empty list is **off**.
 
-- **Default.** With nothing chosen, the decision model uses **OpenAI** with the model **`gpt-6-luna`** when an OpenAI key is saved, and is **off** otherwise. Choosing anything, Off included, replaces the default for good.
-- **Where the text goes.** The note under the model field says the questions and a short piece of context go to the chosen connection's provider, and what that costs. With **Off**, nothing is sent.
-- **Model.** A field under the select, prefilled for the connection (`gpt-6-luna` for OpenAI; a hint for each other connection; empty for a custom one, where only you know the model). It saves when you leave the field or press Enter.
-- **Test.** Sends one sample question to the chosen connection and shows the answer and how long it took, or why it failed (no key, a refused request, a reply it cannot read).
-- **One connection, no fallback.** If the chosen connection fails, the question is left unanswered. It never tries another connection behind your back.
-- **Stored** in the core's settings as `decisionModel` (`"off"` or `{ connection, model }`), not in a backup and not synced. A choice saved under the old name, `tacet`, moves to `decisionModel` the first time it is read, so nobody chooses again. **Erase everything** clears it.
-- **Same keys as the chat.** The decision model reads the connection's key the way a chat does; nothing about keys changes.
+- **Order.** A question goes to the first row that can answer it. A row is passed over when its connection is missing or signed out, when it fails, runs out of time or gives a reply that cannot be read, and, for a slow row, when the question cannot wait (below). The next row then tries.
+- **Never outside the list.** If every row is passed over, the question is left unanswered and the caller does what it did before the decision model existed. Nothing falls back to a connection you did not list.
+- **Which one answered is kept.** The group-chat line says which backend picked (in its tooltip), the schedule card says which backend scored the run that was announced, and every request is counted on the connection it went through. Settings → **Test** sends one sample question through the whole list and says which row answered, how long it took, and what happened to the rows before it.
+- **Default.** With nothing chosen, the list is one row, **OpenAI** with the model **`gpt-6-luna`**, when an OpenAI key is saved, and empty otherwise. Saving anything, an empty list included, replaces the default for good.
+- **Where the text goes.** The note under the list says what goes to each kind of row and what it costs. With an empty list, nothing is sent.
+- **Model.** A field on each row, prefilled for its connection (`gpt-6-luna` for OpenAI and for ChatGPT (Codex); a hint for each other connection; empty for a custom one, where only you know the model). It saves when you leave the field or press Enter. The same connection and model cannot be listed twice.
+- **Stored** in the core's settings as `decisionModel`, a list of `{ connection, model }` (at most three), not in a backup and not synced. Before the list the value was `"off"` or one `{ connection, model }`; either is rewritten as a list (empty, or of one) the first time it is read, and a choice saved under the older name `tacet` moves over the same way, so nobody chooses again. **Erase everything** clears it.
+- **Same keys as the chat.** A row reads its connection's key the way a chat does; nothing about keys changes.
+
+### ChatGPT (Codex) in the list
+
+The row runs the Codex CLI the way a chat runs it (`core/decisions/codex.ts`): the CLI Settings → Harness found, the selected account's folder, and the same restricted flags (read-only sandbox, no shell, no browser, no apps, no user config, no rules), never `--yolo` or any loosened one. One `codex exec` per question, in a private empty folder: the model (`gpt-6-luna`) with reasoning off, a prompt that asks for one JSON object of probabilities per question, an output schema, the prompt on stdin (closed after it) and a **25 second** stop. The reply is validated and turned into the same answers as the other backends. The call runs on your ChatGPT plan: it costs no money and is recorded as a plan request (`decision_usage` with amount 0 and the version `harness-plan`), never as an unknown cost.
+
+It is a **background-only** row, shown in Settings as *Background only · slow*. Measured on 2026-10-08 with codex-cli 0.157 on a ChatGPT login, a decision took about **5 seconds** typically (4.6 to 8.7 seconds in 18 runs, one run at 25.5 seconds), against a second or less for an API. So it serves only a question whose caller can wait **15 seconds or more** (`HARNESS_MIN_BUDGET_MS`) or that nothing waits on: today the quiet-run review and Settings → Test. The group-chat pick (4 s), the permission hint (3 s), the notes that fit (3 s) and the step second opinion (3 s) skip it without starting Codex. About one reply in eight wrote the whole question line where the name belongs; that name is read from between the quotes, or by position. Other CLIs (Claude Code, Cursor Agent) are not offered.
 
 ## How a question is answered
 
-`Decisions.decide(state, questions, maxLength)` in `core/decisions/service.ts` is the one call every use makes. It returns `undefined` when the decision model is off, has no key, takes longer than **15 seconds**, or gets a reply it cannot read, and the caller does what it did before the decision model existed. `maxLength` is the text's room in tokens; the text is cut to about four characters per token. A structured state (a step's fields) is sent as compact JSON.
+`Decisions.decide(state, questions, maxLength, context)` in `core/decisions/service.ts` is the one call every use makes. It tries the list in order (above) and returns `undefined` when the list is empty or every row is passed over: no key, longer than **15 seconds** (Codex: 25), a reply it cannot read, or the caller's own budget used up so no further row is started. The caller then does what it did before the decision model existed. `context` says the chat the answer is for (its usage is counted there) and how long the caller waits (`budgetMs`, or `background`); a caller that says neither is treated as one that cannot wait. `maxLength` is the text's room in tokens; the text is cut to about four characters per token. A structured state (a step's fields) is sent as compact JSON.
 
 **OpenAI** (`core/decisions/openai-decisions.ts`). A plain `POST https://api.openai.com/v1/decisions` with the OpenAI key (the Decisions API, public beta). The decision model's question types map to the API's:
 
@@ -151,4 +158,4 @@ Tags, `@all`, a reply to an orglet's answer, a forward (someone else's words), g
 
 ## Later uses
 
-The service (`Decisions` in `core/decisions/service.ts`) takes any choice, score or noul question and returns probabilities and a confidence. Each use keeps its question builder in its own file under `core/decisions/` (`permission-questions.ts`, `group-routing.ts`, `knowledge-fit.ts`, `action-risk.ts`). A later use can ask who in a crew should take a turn. Low confidence always leaves the app doing what it did without the decision model.
+The service (`Decisions` in `core/decisions/service.ts`) takes any choice, score or noul question and returns probabilities and a confidence. Each use keeps its question builder in its own file under `core/decisions/` (`permission-questions.ts`, `group-routing.ts`, `knowledge-fit.ts`, `action-risk.ts`). A later use can ask who in a crew should take a turn; it names its budget so a slow row is only used when it fits. Low confidence always leaves the app doing what it did without the decision model.

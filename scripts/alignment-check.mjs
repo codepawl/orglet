@@ -640,16 +640,24 @@ const SCREENS = [
   // lead column of their list rows are compared with each other (familyFindings in rules.ts).
   { name: 'settings-general', family: 'settings', open: page => openSettingsTab(page, 'Chung') },
   { name: 'settings-chat', family: 'settings', open: page => openSettingsTab(page, 'Cuộc trò chuyện') },
-  // The decision model pointed at OpenAI (COD-303): its model field and the Test row, after a Test that the missing key answers at
-  // once, so the failure line is measured without any request leaving the machine.
+  // The decision model's priority list with two rows, OpenAI then Anthropic (COD-303): each row's connection, model and
+  // order buttons, and the Test row after a Test that the missing keys answer at once, so the failure lines are measured
+  // without any request leaving the machine.
   { name: 'settings-chat-decision-model', family: 'settings', open: async page => {
-    await callCore(page, 'saveDecisionModelSetting', { connection: 'openai', model: 'gpt-6-luna' });
+    await callCore(page, 'saveDecisionModelSetting', [{ connection: 'openai', model: 'gpt-6-luna' }, { connection: 'anthropic', model: 'claude-sonnet-5-5' }]);
     await openSettingsTab(page, 'Cuộc trò chuyện');
     await page.getByRole('button', { name: label('Chạy thử'), exact: true }).click();
     await page.getByText(label('Chưa kết nối {0}. Mở Cài đặt để nhập API key.', ['OpenAI'])).waitFor();
     // Clicking Test scrolled the row into view; the screen is measured from the top like its family.
     await page.evaluate(() => document.querySelector('#settings-panel')?.scrollTo(0, 0));
-  }, close: page => callCore(page, 'saveDecisionModelSetting', 'off') },
+  }, close: page => callCore(page, 'saveDecisionModelSetting', []) },
+  // A list that starts with the ChatGPT (Codex) row: its quiet "background only" note and a third, empty-model-free row (no Test, so no CLI runs).
+  { name: 'settings-chat-decision-model-background', family: 'settings', open: async page => {
+    await callCore(page, 'saveDecisionModelSetting', [{ connection: 'codex', model: 'gpt-6-luna' }, { connection: 'openai', model: 'gpt-6-luna' }, { connection: 'ollama', model: 'llama3.2' }]);
+    await openSettingsTab(page, 'Cuộc trò chuyện');
+    await page.getByRole('group', { name: label('Lựa chọn {0}', [3]) }).waitFor();
+    await page.evaluate(() => document.querySelector('#settings-panel')?.scrollTo(0, 0));
+  }, close: page => callCore(page, 'saveDecisionModelSetting', []) },
   // Archived orglets, channels and chats, with Restore and the auto-delete rule (COD-375).
   { name: 'settings-archive', family: 'settings', open: page => openSettingsTab(page, 'Lưu trữ') },
   { name: 'settings-connections', family: 'settings', open: page => openSettingsTab(page, 'Kết nối API') },

@@ -90,12 +90,12 @@ export class QuietRunReview {
   /** The decision model's verdict on one run, or undefined when it could not give one; the run then stays quiet as before. */
   private async ask(task: Task, answer: Artifact): Promise<RunAttention | undefined> {
     try {
-      const response = await this.decisions().decide(quietRunState(task, answer.report.summary), NOTEWORTHY_QUESTION, QUIET_RUN_MAX_LENGTH, { taskId: task.id });
+      const response = await this.decisions().decide(quietRunState(task, answer.report.summary), NOTEWORTHY_QUESTION, QUIET_RUN_MAX_LENGTH, { taskId: task.id, background: true });
       const verdict = response?.answers.attention;
       if (!verdict || verdict.type !== 'score') return undefined;
       // The expected level, 0 to 2, as a share of the highest.
       const score = Math.min(1, Math.max(0, verdict.score / HIGHEST_LEVEL));
-      return { score, notified: score >= NOTEWORTHY_THRESHOLD, decidedAt: this.clock().toISOString() };
+      return { score, notified: score >= NOTEWORTHY_THRESHOLD, decidedAt: this.clock().toISOString(), ...(response.answeredBy ? { answeredBy: response.answeredBy } : {}) };
     } catch {
       return undefined;
     }

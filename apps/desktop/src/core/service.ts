@@ -91,6 +91,7 @@ import { runBy } from '../shared/schedule-runs';
 import { Decisions } from './decisions/service';
 import { DecisionUsageLedger } from './budgets/decision-usage';
 import { readDecisionModelSetting, saveDecisionModelSetting } from './decisions/stored-setting';
+import { DecisionBackendUnavailable } from './decisions/codex';
 import { QuietRunReview } from './orchestration/quiet-runs';
 import { ScheduleDelivery } from './orchestration/schedule-delivery';
 import { askKnowledgeFit } from './decisions/knowledge-fit';
@@ -259,6 +260,7 @@ export class CoreService {
     const decisionUsage = new DecisionUsageLedger(store);
     this.decisions = new Decisions({
       saved: () => readDecisionModelSetting(store),
+      codex: { locate: () => this.locateCodexForDecisions(), execute: request => this.executeHarness(request) },
       save: setting => saveDecisionModelSetting(store, setting),
       recordUsage: entry => decisionUsage.record(entry),
       readKey: async provider => {
@@ -1416,6 +1418,14 @@ export class CoreService {
     this.notify();
     if (isResetAnswer(outcome)) return { outcome, usage };
     throw new Error(resetClaimFailures[outcome]);
+  }
+
+  /** The Codex CLI the decision model runs: the selected account's, installed and signed in, or the reason it cannot be used. */
+  private async locateCodexForDecisions(): Promise<{ executable: string; configDir?: string }> {
+    const codex = (await this.harnesses(false)).find(item => item.id === 'codex');
+    if (!codex?.executable || codex.status === 'not_installed') throw new DecisionBackendUnavailable(`Không tìm thấy ${harnessNames.codex} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness trên máy.`);
+    if (codex.auth !== 'logged_in') throw new DecisionBackendUnavailable(codex.authDetail);
+    return { executable: codex.executable, ...(codex.configDir ? { configDir: codex.configDir } : {}) };
   }
 
   /** Runs one harness call for the runner; the call may have renewed that account's saved sign-in. */

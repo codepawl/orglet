@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DecisionModelConnection } from './decisions';
 import type { ScheduleFrequency } from './schedule';
 import type { RoutineTriggerKind } from './routine-triggers';
 
@@ -11,6 +12,8 @@ export const RunAttention = z.object({
   score: z.number().min(0).max(1),
   notified: z.boolean(),
   decidedAt: z.iso.datetime(),
+  /** The backend of the person's list that gave the score. */
+  answeredBy: DecisionModelConnection.optional(),
 }).strict();
 export type RunAttention = z.infer<typeof RunAttention>;
 

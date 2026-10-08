@@ -27,6 +27,8 @@ export type HarnessRequest = {
   /** Exact `--model` / `-m` slug. Omitted so the CLI keeps its own default. */
   model?: string;
   effort?: NativeEffortSetting;
+  /** Codex only: run with reasoning switched off (`model_reasoning_effort="none"`), for one-shot decisions where speed is the point. */
+  reasoningOff?: boolean;
   /** Tool selection is returned as JSON; native file tools must not bypass core authorization. */
   coreToolsOnly?: boolean;
   /** Credential folder of the account this run signs in as; absent runs the CLI as installed. */
@@ -123,7 +125,7 @@ export function cursorSandbox(platform: NodeJS.Platform = process.platform) {
   return platform === 'win32' ? 'disabled' : 'enabled';
 }
 
-export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images' | 'effort'>, platform: NodeJS.Platform = process.platform): string[] {
+export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images' | 'effort' | 'reasoningOff'>, platform: NodeJS.Platform = process.platform): string[] {
   if (request.harness === 'gemini') return geminiArgs(request.model);
   const model = modelFlag(request.harness, request.model);
   const effort = request.effort?.transport === request.harness ? request.effort.level : undefined;
@@ -133,7 +135,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
   if (request.harness === 'cursor') {
     return ['-p', ...model, '--mode=ask', '--sandbox', cursorSandbox(platform), '--trust', '--workspace', request.cwd, '--output-format', 'stream-json', '--stream-partial-output'];
   }
-  return ['exec', ...model, ...(effort ? ['-c', 'model_reasoning_effort=' + effort] : []), '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
+  return ['exec', ...model, ...(request.reasoningOff ? ['-c', 'model_reasoning_effort="none"'] : effort ? ['-c', 'model_reasoning_effort=' + effort] : []), '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
 }
 
 const authHint = (harness: HarnessId) => {

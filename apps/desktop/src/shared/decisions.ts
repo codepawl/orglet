@@ -66,34 +66,61 @@ export type DecisionAnswer = ChoiceAnswer | ScoreAnswer | NoulAnswer;
  * the provider's counts, left out where it gives none (OpenAI's Decisions API answers without output tokens).
  */
 export type DecisionUsage = { inputTokens: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number; estimated?: true; stateTruncated?: true };
-export type DecisionResponse = { model: string; answers: Record<string, DecisionAnswer>; usage: DecisionUsage };
+/** `answeredBy` is the backend of the person's list that gave the answers; nothing outside the list ever answers. */
+export type DecisionResponse = { model: string; answers: Record<string, DecisionAnswer>; usage: DecisionUsage; answeredBy?: DecisionModelConnection };
 
-/** The decision model's connection: one of the chat's own connections and the model that answers it, or off. */
+/** The connection id of the Codex CLI, signed in with a ChatGPT account: the one harness the decision model can use. */
+export const CODEX_DECISION_CONNECTION = 'codex';
+/** A harness answers in seconds, not fractions of one, so it only serves decisions nobody is waiting on. */
+export const isHarnessDecisionConnection = (connection: string): boolean => connection === CODEX_DECISION_CONNECTION;
+/** The list is a priority order of at most this many backends. */
+export const DECISION_MODEL_MAX_ENTRIES = 3;
+
+/** One backend of the decision model: one of the chat's own connections (or the Codex CLI) and the model that answers on it. */
 export const DecisionModelConnection = z.object({
   connection: z.string().min(1).max(200),
   model: z.string().trim().min(1).max(200),
 }).strict();
 export type DecisionModelConnection = z.infer<typeof DecisionModelConnection>;
-export const DecisionModelSetting = z.union([z.literal('off'), DecisionModelConnection]);
+const entryKey = (entry: DecisionModelConnection) => `${entry.connection}\n${entry.model}`;
+/** The person's priority list: tried in order, at most three, the same connection and model not twice. An empty list is off. */
+export const DecisionModelSetting = z.array(DecisionModelConnection).max(DECISION_MODEL_MAX_ENTRIES)
+  .refine(entries => new Set(entries.map(entryKey)).size === entries.length, 'The same backend is listed twice.');
 export type DecisionModelSetting = z.infer<typeof DecisionModelSetting>;
+
+/**
+ * A saved value as a list. Before the list the setting was 'off' or one connection; both still read, as an empty list
+ * and a list of one. Anything else is no choice.
+ */
+export function parseStoredDecisionModelSetting(stored: unknown): DecisionModelSetting | undefined {
+  if (stored === 'off') return [];
+  const single = DecisionModelConnection.safeParse(stored);
+  if (single.success) return [single.data];
+  const list = DecisionModelSetting.safeParse(stored);
+  return list.success ? list.data : undefined;
+}
 
 /** The default when an OpenAI key is saved and the person has not chosen: OpenAI's Decisions API on its small model. */
 export const DEFAULT_DECISION_MODEL_CONNECTION: DecisionModelConnection = { connection: 'openai', model: 'gpt-6-luna' };
 
-/** What Settings shows: the setting in force, and whether the person chose it or it is the default. */
-export type DecisionModelSettingView = { setting: DecisionModelSetting; chosen: boolean };
+/** What Settings shows: the list in force, and whether the person chose it or it is the default. */
+export type DecisionModelSettingView = { entries: DecisionModelSetting; chosen: boolean };
 
-/** What one sample decision from Settings → Test came back with. */
-export type DecisionModelTestResult = { connection: string; model: string; milliseconds: number; choice: string; probability: number };
+/** What happened to one backend of the list during a decision: it answered, it failed, or it was passed over. */
+export type DecisionAttempt = { connection: string; model: string; outcome: 'answered' | 'failed' | 'skipped'; milliseconds: number; reason?: string };
 
-/** The setting in force: the saved one, else OpenAI's default when a key is saved, else off. */
+/** What one sample decision from Settings → Test came back with: the backend that answered, and every one tried on the way. */
+export type DecisionModelTestResult = { connection: string; model: string; milliseconds: number; choice: string; probability: number; attempts: DecisionAttempt[] };
+
+/** The list in force: the saved one, else OpenAI's default when a key is saved, else off (empty). */
 export function effectiveDecisionModelSetting(saved: DecisionModelSetting | undefined, openAiKeySaved: boolean): DecisionModelSetting {
   if (saved !== undefined) return saved;
-  return openAiKeySaved ? DEFAULT_DECISION_MODEL_CONNECTION : 'off';
+  return openAiKeySaved ? [DEFAULT_DECISION_MODEL_CONNECTION] : [];
 }
 
 const MODEL_HINTS: Record<string, string> = {
   openai: DEFAULT_DECISION_MODEL_CONNECTION.model,
+  [CODEX_DECISION_CONNECTION]: 'gpt-6-luna',
   anthropic: 'claude-sonnet-5-5',
   xai: 'grok-3-mini',
   openrouter: 'openai/gpt-4.1-mini',

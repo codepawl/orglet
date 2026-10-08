@@ -42,6 +42,7 @@ import type { ChatSearchResult } from './chat-search';
 import { BrowserChoice, type BrowserAction, type BrowserLive, type BrowserProfileId, type BrowserState } from './browser';
 import { DesktopChoice, type DesktopAction, type DesktopLive, type DesktopWindowsView } from './desktop';
 import type { DecisionModelSettingView, DecisionModelTestResult } from './decisions';
+import { CODEX_DECISION_CONNECTION, DECISION_MODEL_MAX_ENTRIES } from './decisions';
 import type { RunAttention } from './quiet-runs';
 import type { PermissionNeedsAnswer } from './permission-needs';
 import type { TurnRoute } from './turn-routing';
@@ -312,6 +313,11 @@ export type Workspace = { syncLocalOnly?: { workers: string[]; tasks: string[]; 
 export type Connections = Record<ApiProvider, boolean> & { custom: Record<string, boolean>; /** Keys for web search (COD-266), kept apart from the model connections. */ search: Record<WebSearchKeyProvider, boolean> };
 export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false, custom: {}, search: { exa: false } });
 
+/** The decision model's priority list as the window sends it: up to three backends, each a chat connection or the Codex CLI, none twice. An empty list is off. */
+const DecisionModelSettingInput = z.array(z.object({ connection: z.union([CredentialProvider, z.literal(CODEX_DECISION_CONNECTION)]), model: z.string().trim().min(1).max(200) }).strict()).max(DECISION_MODEL_MAX_ENTRIES)
+  .refine(entries => new Set(entries.map(entry => `${entry.connection}
+${entry.model}`)).size === entries.length, 'The same backend is listed twice.');
+
 export const commands = {
   marketCatalog: z.object({ refresh: z.boolean().optional(), cursor: z.string().min(1).max(256).optional() }).strict(),
   marketAdd: MarketTarget,
@@ -506,7 +512,7 @@ export const commands = {
   answerDesktopApproval: z.object({ taskId: Id, requestId: Id, answer: z.enum(['allow', 'decline']) }).strict(),
   /** The decision model through an API (COD-303): which connection answers, choosing it (or off), and one sample decision to try it. */
   decisionModelSetting: z.object({}).strict(),
-  saveDecisionModelSetting: z.union([z.literal('off'), z.object({ connection: CredentialProvider, model: z.string().trim().min(1).max(200) }).strict()]),
+  saveDecisionModelSetting: DecisionModelSettingInput,
   testDecisionModel: z.object({}).strict(),
   /** What the decision model reads a message just sent as needing (COD-305); `null` when it has nothing to say. `taskId` is the chat it was sent to, which the request is counted against. */
   suggestPermissions: z.object({ text: z.string().max(16000), taskId: Id.optional() }).strict(),

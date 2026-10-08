@@ -29,6 +29,7 @@ import { BrowserSitesEditor, profileOptions, useBrowserState } from './BrowserSe
 import { browserLevelOf, capabilitiesWithBrowserLevel, defaultBrowserChoice, routineBrowserLevels, type BrowserLevel, type BrowserProfileId, type BrowserSite } from '../../shared/browser';
 import { snapshotCapabilities, withCapability, type ToolCapability } from '../../shared/tool-policy';
 import { WEB_SEARCH_PROVIDER_NAMES } from '../../shared/web-tools';
+import { decisionBackendName } from '../decisionBackends';
 
 /** Read when shown, so it follows the interface language like every other message. */
 const INVALID_ZONE = () => t('Múi giờ không hợp lệ. Chọn một múi giờ trong danh sách.');
@@ -243,7 +244,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
               cap shows what today's runs used of it. */}
           {runsToday(item) > 0 && <li><History size={14} aria-hidden="true" />{runsToday(item) === 1 ? t('1 lần chạy hôm nay') : t('{0} lần chạy hôm nay', [runsToday(item)])}</li>}
           {/* Why an hourly schedule spoke up (COD-303): when the decision model flagged a run, and its rating behind the line. */}
-          {announced && <li title={t('Lịch hằng giờ thường im lặng khi xong. Model quyết định chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)])}><BellRing size={14} aria-hidden="true" />{t('Model quyết định đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li>}
+          {announced && <li title={t('Lịch hằng giờ thường im lặng khi xong. Model quyết định chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)]) + (announced.answeredBy ? ` ${t('Trả lời bởi {0} · {1}.', [decisionBackendName(announced.answeredBy.connection), announced.answeredBy.model])}` : '')}><BellRing size={14} aria-hidden="true" />{t('Model quyết định đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li>}
           {item.schedule.dailyCapMicros !== undefined && <li><Gauge size={14} aria-hidden="true" />{t('Hôm nay {0} / {1}', [formatMoney(spentToday(item)), formatMoney(item.schedule.dailyCapMicros)])}</li>}
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
           {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}

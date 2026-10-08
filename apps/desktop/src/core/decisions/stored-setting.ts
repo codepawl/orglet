@@ -1,4 +1,4 @@
-import { DecisionModelSetting } from '../../shared/decisions';
+import { parseStoredDecisionModelSetting, type DecisionModelSetting } from '../../shared/decisions';
 
 /** Where the choice is kept, and where it was kept before the feature was renamed from Tacet to the decision model. */
 export const DECISION_MODEL_SETTING_KEY = 'decisionModel';
@@ -12,19 +12,24 @@ export type SettingStore = {
 };
 
 /**
- * The saved choice, or undefined when the person has made none. A choice saved under the old `tacet` key moves to
- * `decisionModel` the first time it is read, and the old row is dropped, so nobody has to choose again. A value in
- * either key that is not a choice is ignored; an unreadable old row is dropped too, since nothing reads it any more.
+ * The saved priority list, or undefined when the person has made none. The setting used to be 'off' or one connection;
+ * that value is rewritten as a list (empty, or of one) the first time it is read. A choice saved under the older
+ * `tacet` key moves to `decisionModel` the same way, and the old row is dropped, so nobody has to choose again. A value
+ * in either key that is not a choice is ignored; an unreadable old row is dropped too, since nothing reads it any more.
  */
 export function readDecisionModelSetting(store: SettingStore): DecisionModelSetting | undefined {
-  const current = DecisionModelSetting.safeParse(store.setting<unknown>(DECISION_MODEL_SETTING_KEY, undefined));
-  if (current.success) return current.data;
+  const stored = store.setting<unknown>(DECISION_MODEL_SETTING_KEY, undefined);
+  const current = parseStoredDecisionModelSetting(stored);
+  if (current !== undefined) {
+    if (!Array.isArray(stored)) store.setSetting(DECISION_MODEL_SETTING_KEY, current);
+    return current;
+  }
   const legacyValue = store.setting<unknown>(LEGACY_TACET_SETTING_KEY, undefined);
   if (legacyValue === undefined) return undefined;
-  const legacy = DecisionModelSetting.safeParse(legacyValue);
-  if (legacy.success) store.setSetting(DECISION_MODEL_SETTING_KEY, legacy.data);
+  const legacy = parseStoredDecisionModelSetting(legacyValue);
+  if (legacy !== undefined) store.setSetting(DECISION_MODEL_SETTING_KEY, legacy);
   store.clearSetting(LEGACY_TACET_SETTING_KEY);
-  return legacy.success ? legacy.data : undefined;
+  return legacy;
 }
 
 export function saveDecisionModelSetting(store: SettingStore, setting: DecisionModelSetting): void {

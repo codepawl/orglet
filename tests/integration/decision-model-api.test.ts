@@ -202,12 +202,12 @@ describe('answering through a chat connection', () => {
 
 describe('the setting', () => {
   it('defaults to OpenAI\'s small model when an OpenAI key is saved, and to off otherwise', () => {
-    expect(effectiveDecisionModelSetting(undefined, true)).toEqual(DEFAULT_DECISION_MODEL_CONNECTION);
+    expect(effectiveDecisionModelSetting(undefined, true)).toEqual([DEFAULT_DECISION_MODEL_CONNECTION]);
     expect(DEFAULT_DECISION_MODEL_CONNECTION).toEqual({ connection: 'openai', model: 'gpt-6-luna' });
-    expect(effectiveDecisionModelSetting(undefined, false)).toBe('off');
+    expect(effectiveDecisionModelSetting(undefined, false)).toEqual([]);
     // What the person chose wins over the default, including off with a key saved.
-    expect(effectiveDecisionModelSetting('off', true)).toBe('off');
-    expect(effectiveDecisionModelSetting({ connection: 'ollama', model: 'llama3.2' }, false)).toEqual({ connection: 'ollama', model: 'llama3.2' });
+    expect(effectiveDecisionModelSetting([], true)).toEqual([]);
+    expect(effectiveDecisionModelSetting([{ connection: 'ollama', model: 'llama3.2' }], false)).toEqual([{ connection: 'ollama', model: 'llama3.2' }]);
   });
 
   it('prefills a model per connection and leaves a custom one for the person', () => {
@@ -218,13 +218,20 @@ describe('the setting', () => {
 
   it('is saved by the command only for a connection the chat has, never a harness', () => {
     const save = commands.saveDecisionModelSetting;
-    expect(save.safeParse('off').success).toBe(true);
-    expect(save.safeParse({ connection: 'openai', model: 'gpt-6-luna' }).success).toBe(true);
-    expect(save.safeParse({ connection: 'ollama', model: ' llama3.2 ' }).success).toBe(true);
-    expect(save.safeParse({ connection: 'custom:2f9b0f5e-5d0b-4d4b-9d57-2b8b1f2b6a11', model: 'local' }).success).toBe(true);
-    expect(save.safeParse({ connection: 'codex', model: 'x' }).success).toBe(false);
-    expect(save.safeParse({ connection: 'bing', model: 'x' }).success).toBe(false);
-    expect(save.safeParse({ connection: 'openai', model: '  ' }).success).toBe(false);
+    expect(save.safeParse([]).success).toBe(true);
+    expect(save.safeParse([{ connection: 'openai', model: 'gpt-6-luna' }]).success).toBe(true);
+    expect(save.safeParse([{ connection: 'ollama', model: ' llama3.2 ' }]).success).toBe(true);
+    expect(save.safeParse([{ connection: 'custom:2f9b0f5e-5d0b-4d4b-9d57-2b8b1f2b6a11', model: 'local' }]).success).toBe(true);
+    expect(save.safeParse([{ connection: 'codex', model: 'gpt-6-luna' }]).success).toBe(true);
+    expect(save.safeParse([{ connection: 'claude-code', model: 'x' }]).success).toBe(false);
+    expect(save.safeParse([{ connection: 'cursor', model: 'x' }]).success).toBe(false);
+    expect(save.safeParse([{ connection: 'bing', model: 'x' }]).success).toBe(false);
+    expect(save.safeParse({ connection: 'openai', model: 'gpt-6-luna' }).success).toBe(false);
+    expect(save.safeParse([{ connection: 'openai', model: '  ' }]).success).toBe(false);
+    const three = ['a', 'b', 'c'].map(model => ({ connection: 'ollama', model }));
+    expect(save.safeParse(three).success).toBe(true);
+    expect(save.safeParse([...three, { connection: 'ollama', model: 'd' }]).success).toBe(false);
+    expect(save.safeParse([three[0], three[0]]).success).toBe(false);
   });
 });
 
@@ -251,17 +258,17 @@ const yesReply = { answers: [{ type: 'predicate', name: 'yes', probability: 0.9 
 
 describe('The decision model\'s service', () => {
   it('shows the default only while nothing is chosen and a key is saved', async () => {
-    expect(await service().decisions.view()).toEqual({ setting: 'off', chosen: false });
-    expect(await service({ keys: { openai: 'sk-test' } }).decisions.view()).toEqual({ setting: DEFAULT_DECISION_MODEL_CONNECTION, chosen: false });
-    expect(await service({ keys: { openai: 'sk-test' }, saved: 'off' }).decisions.view()).toEqual({ setting: 'off', chosen: true });
+    expect(await service().decisions.view()).toEqual({ entries: [], chosen: false });
+    expect(await service({ keys: { openai: 'sk-test' } }).decisions.view()).toEqual({ entries: [DEFAULT_DECISION_MODEL_CONNECTION], chosen: false });
+    expect(await service({ keys: { openai: 'sk-test' }, saved: [] }).decisions.view()).toEqual({ entries: [], chosen: true });
   });
 
   it('saves what the person chose and reports it back', async () => {
     const { decisions, savedSetting } = service();
-    expect(await decisions.save({ connection: 'ollama', model: 'llama3.2' })).toEqual({ setting: { connection: 'ollama', model: 'llama3.2' }, chosen: true });
-    expect(savedSetting()).toEqual({ connection: 'ollama', model: 'llama3.2' });
+    expect(await decisions.save([{ connection: 'ollama', model: 'llama3.2' }])).toEqual({ entries: [{ connection: 'ollama', model: 'llama3.2' }], chosen: true });
+    expect(savedSetting()).toEqual([{ connection: 'ollama', model: 'llama3.2' }]);
     expect(decisions.isEnabled()).toBe(true);
-    await decisions.save('off');
+    await decisions.save([]);
     expect(decisions.isEnabled()).toBe(false);
   });
 
@@ -276,16 +283,16 @@ describe('The decision model\'s service', () => {
 
   it('answers undefined when off, or when the default has no key, without a request', async () => {
     const { fetcher, seen } = fakeFetch(yesReply);
-    expect(await service({ saved: 'off', keys: { openai: 'sk-test' }, fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
+    expect(await service({ saved: [], keys: { openai: 'sk-test' }, fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(await service({ fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
-    expect(await service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
+    expect(await service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION], fetcher }).decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(seen).toEqual([]);
   });
 
   it('answers any other connection through its chat adapter and model', async () => {
     const { adapter } = fakeAdapter(report([{ question: 'yes', probabilities: [0.25, 0.75] }]));
     const { fetcher, seen } = fakeFetch(yesReply);
-    const { decisions, adapterRequests } = service({ saved: { connection: 'anthropic', model: 'claude-sonnet-5-5' }, adapter, fetcher });
+    const { decisions, adapterRequests } = service({ saved: [{ connection: 'anthropic', model: 'claude-sonnet-5-5' }], adapter, fetcher });
     const response = await decisions.decide('hello there', oneQuestion);
     expect(response).toMatchObject({ model: 'claude-sonnet-5-5', answers: { yes: { type: 'noul', noul: 0.75 } } });
     expect(adapterRequests).toEqual([{ provider: 'anthropic', model: 'claude-sonnet-5-5' }]);
@@ -295,17 +302,17 @@ describe('The decision model\'s service', () => {
   it('reaches a custom connection the way a chat does, with its own id', async () => {
     const connection = 'custom:2f9b0f5e-5d0b-4d4b-9d57-2b8b1f2b6a11';
     const { adapter } = fakeAdapter(report([{ question: 'yes', probabilities: [0.1, 0.9] }]));
-    const { decisions, adapterRequests } = service({ saved: { connection, model: 'local-model' }, adapter });
+    const { decisions, adapterRequests } = service({ saved: [{ connection, model: 'local-model' }], adapter });
     expect((await decisions.decide('hello', oneQuestion))?.answers.yes).toMatchObject({ noul: 0.9 });
     expect(adapterRequests).toEqual([{ provider: connection, model: 'local-model' }]);
   });
 
   it('never falls back to another connection when the chosen one fails', async () => {
     const { fetcher, seen } = fakeFetch(yesReply);
-    const failing = service({ saved: { connection: 'anthropic', model: 'm' }, adapter: fakeAdapter(new Error('Chưa kết nối Anthropic.')).adapter, keys: { openai: 'sk-test' }, fetcher });
+    const failing = service({ saved: [{ connection: 'anthropic', model: 'm' }], adapter: fakeAdapter(new Error('Chưa kết nối Anthropic.')).adapter, keys: { openai: 'sk-test' }, fetcher });
     expect(await failing.decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(seen).toEqual([]);
-    const rejected = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher: fakeFetch({}, 500).fetcher });
+    const rejected = service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION], keys: { openai: 'sk-test' }, fetcher: fakeFetch({}, 500).fetcher });
     expect(await rejected.decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(rejected.adapterRequests).toEqual([]);
   });
@@ -316,14 +323,14 @@ describe('The decision model\'s service', () => {
       init.signal?.addEventListener('abort', () => reject(new Error('aborted')));
     });
     const started = Date.now();
-    const { decisions } = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher: hangs, timeoutMs: 40 });
+    const { decisions } = service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION], keys: { openai: 'sk-test' }, fetcher: hangs, timeoutMs: 40 });
     expect(await decisions.decide('hello', oneQuestion)).toBeUndefined();
     expect(Date.now() - started).toBeLessThan(2_000);
   });
 
   it('cuts a long text to the caller\'s room, about four characters to a token, and says so', async () => {
     const { fetcher, seen } = fakeFetch(yesReply);
-    const { decisions } = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher });
+    const { decisions } = service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION], keys: { openai: 'sk-test' }, fetcher });
     const response = await decisions.decide('x'.repeat(1000), oneQuestion, 100);
     expect(String(seen[0].body.input)).toHaveLength(400);
     expect(response?.usage.stateTruncated).toBe(true);
@@ -333,21 +340,21 @@ describe('The decision model\'s service', () => {
 
   it('reads structured state as compact JSON text', async () => {
     const { fetcher, seen } = fakeFetch(yesReply);
-    const { decisions } = service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher });
+    const { decisions } = service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION], keys: { openai: 'sk-test' }, fetcher });
     await decisions.decide({ action: 'click', element: 'Empty trash' }, oneQuestion);
     expect(seen[0].body.input).toBe('{"action":"click","element":"Empty trash"}');
   });
 
   it('tests the connection with one sample question and reports the answer and the time, or why it failed', async () => {
     const { fetcher } = fakeFetch({ answers: [{ type: 'choice', name: 'kind', choice: 'request', probabilities: [{ value: 'greeting', probability: 0.05 }, { value: 'question', probability: 0.15 }, { value: 'request', probability: 0.8 }] }] });
-    const tested = await service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'sk-test' }, fetcher }).decisions.test();
+    const tested = await service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION], keys: { openai: 'sk-test' }, fetcher }).decisions.test();
     expect(tested).toMatchObject({ connection: 'openai', model: 'gpt-6-luna', choice: 'request', probability: 0.8 });
     expect(tested.milliseconds).toBeGreaterThanOrEqual(0);
-    await expect(service({ saved: 'off' }).decisions.test()).rejects.toThrow('Model quyết định đang tắt');
-    await expect(service({ saved: DEFAULT_DECISION_MODEL_CONNECTION }).decisions.test()).rejects.toThrow('Chưa kết nối OpenAI');
-    await expect(service({ saved: DEFAULT_DECISION_MODEL_CONNECTION, keys: { openai: 'k' }, fetcher: fakeFetch({}, 429).fetcher }).decisions.test()).rejects.toThrow('429');
+    await expect(service({ saved: [] }).decisions.test()).rejects.toThrow('Model quyết định đang tắt');
+    await expect(service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION] }).decisions.test()).rejects.toThrow('Chưa kết nối OpenAI');
+    await expect(service({ saved: [DEFAULT_DECISION_MODEL_CONNECTION], keys: { openai: 'k' }, fetcher: fakeFetch({}, 429).fetcher }).decisions.test()).rejects.toThrow('429');
     const unreadable = fakeAdapter(report([{ question: 'kind', probabilities: [1, 2] }]));
-    await expect(service({ saved: { connection: 'xai', model: 'grok' }, adapter: unreadable.adapter }).decisions.test()).rejects.toThrow('không đọc được');
+    await expect(service({ saved: [{ connection: 'xai', model: 'grok' }], adapter: unreadable.adapter }).decisions.test()).rejects.toThrow('không đọc được');
   });
 });
 
@@ -361,10 +368,10 @@ describe('The decision model in the core', () => {
   it('starts on OpenAI when a key is saved and the person has not chosen, then keeps what they choose', async () => {
     const { store, service: withKey } = core({ openai: 'sk-test' });
     try {
-      expect(await withKey.command('decisionModelSetting', {})).toEqual({ setting: DEFAULT_DECISION_MODEL_CONNECTION, chosen: false });
-      expect(await withKey.command('saveDecisionModelSetting', 'off')).toEqual({ setting: 'off', chosen: true });
-      expect(store.setting('decisionModel', undefined)).toBe('off');
-      expect(await withKey.command('saveDecisionModelSetting', { connection: 'openrouter', model: 'openai/gpt-4.1-mini' })).toEqual({ setting: { connection: 'openrouter', model: 'openai/gpt-4.1-mini' }, chosen: true });
+      expect(await withKey.command('decisionModelSetting', {})).toEqual({ entries: [DEFAULT_DECISION_MODEL_CONNECTION], chosen: false });
+      expect(await withKey.command('saveDecisionModelSetting', [])).toEqual({ entries: [], chosen: true });
+      expect(store.setting('decisionModel', undefined)).toEqual([]);
+      expect(await withKey.command('saveDecisionModelSetting', [{ connection: 'openrouter', model: 'openai/gpt-4.1-mini' }])).toEqual({ entries: [{ connection: 'openrouter', model: 'openai/gpt-4.1-mini' }], chosen: true });
     } finally {
       store.close();
     }
@@ -373,8 +380,8 @@ describe('The decision model in the core', () => {
   it('starts off without a key, and refuses a connection the chat does not have', async () => {
     const { store, service: noKey } = core();
     try {
-      expect(await noKey.command('decisionModelSetting', {})).toEqual({ setting: 'off', chosen: false });
-      await expect(noKey.command('saveDecisionModelSetting', { connection: 'codex', model: 'x' })).rejects.toThrow();
+      expect(await noKey.command('decisionModelSetting', {})).toEqual({ entries: [], chosen: false });
+      await expect(noKey.command('saveDecisionModelSetting', [{ connection: 'claude-code', model: 'x' }])).rejects.toThrow();
       expect(store.setting('decisionModel', undefined)).toBeUndefined();
     } finally {
       store.close();

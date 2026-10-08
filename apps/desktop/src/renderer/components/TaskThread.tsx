@@ -67,6 +67,7 @@ import type { BlockingCommand } from '../../shared/blocked-hand-in';
 import { canContinueRun } from '../../shared/out-of-steps';
 import { needsPersonKey, useThreadFollow } from '../threadFollow';
 import { unansweredTurnLine } from '../turnOutcome';
+import { decisionBackendName } from '../decisionBackends';
 
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
@@ -897,7 +898,8 @@ export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (work
   if (!route) return null;
   const names = route.workerIds.map(workerId => nameOf(workerId)).filter((name): name is string => Boolean(name));
   if (!names.length) return null;
-  const why = t('Tin nhắn không gắn thẻ ai, nên model quyết định chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)]);
+  const why = t('Tin nhắn không gắn thẻ ai, nên model quyết định chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)])
+    + (route.answeredBy ? ` ${t('Trả lời bởi {0} · {1}.', [decisionBackendName(route.answeredBy.connection), route.answeredBy.model])}` : '');
   return <p className="message-reply-context message-routed" title={why}>
     <Route size={13} aria-hidden="true" />{t('Model quyết định chọn {0} trả lời', [names.join(', ')])}
   </p>;

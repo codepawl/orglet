@@ -1,5 +1,5 @@
 import type { Worker } from '../../shared/contracts';
-import type { DecisionUsage } from '../../shared/decisions';
+import { isHarnessDecisionConnection, type DecisionUsage } from '../../shared/decisions';
 import { readModelListCache } from '../models/cache';
 import { resolveWorkerModel, type ModelRates } from '../models/resolve';
 import { readCustomConnections } from '../storage/custom-connections';
@@ -38,16 +38,18 @@ export class DecisionUsageLedger {
 
   record(entry: DecisionUsageEntry): void {
     const usage = entry.usage;
-    const rates = this.ratesFor(entry.provider, entry.model);
+    const rates = isHarnessDecisionConnection(entry.provider) ? undefined : this.ratesFor(entry.provider, entry.model);
     const reported = usage !== undefined && !usage.estimated;
     const inputTokens = usage?.inputTokens ?? 0;
     const outputTokens = usage?.outputTokens ?? 0;
     const cacheRead = usage?.cacheReadTokens ?? 0;
     const cacheWrite = usage?.cacheWriteTokens ?? 0;
-    const amount = reported && rates ? cost(inputTokens, outputTokens, rates, { read: cacheRead, write: cacheWrite }) : null;
+    // A harness runs on the person's plan or subscription: a request of it costs no money, whatever it counted, and is no unknown cost.
+    const onPlan = isHarnessDecisionConnection(entry.provider);
+    const amount = onPlan ? 0 : reported && rates ? cost(inputTokens, outputTokens, rates, { read: cacheRead, write: cacheWrite }) : null;
     this.store.db.prepare(`INSERT INTO decision_usage (id,task_id,provider,model,month,amount,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,estimated,pricing_version,created_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(id(), entry.taskId ?? null, entry.provider, entry.model, new Date().toISOString().slice(0, 7), amount, inputTokens, outputTokens, cacheRead, cacheWrite, reported ? 0 : 1, rates?.pricingVersion ?? null, now());
+      .run(id(), entry.taskId ?? null, entry.provider, entry.model, new Date().toISOString().slice(0, 7), amount, inputTokens, outputTokens, cacheRead, cacheWrite, reported ? 0 : 1, onPlan ? 'harness-plan' : rates?.pricingVersion ?? null, now());
   }
 
   /** The verified price of the connection's model, or undefined when Orglet has none for it. */
