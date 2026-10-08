@@ -28,6 +28,7 @@ Nothing else is sent: not the chat history, files, keys or the page itself. The 
 **Settings → Chat → Decision model** has a select with **Off** and the same connections a chat can use: OpenAI, Anthropic, Grok (xAI), OpenRouter, OpenCode Zen and Go, Ollama, and every custom connection (an OpenAI-compatible endpoint, including one on this computer, which keeps the text on this computer). Harness CLIs (Claude Code, Codex and the like) are not offered, since they are programs, not APIs.
 
 - **Default.** With nothing chosen, the decision model uses **OpenAI** with the model **`gpt-6-luna`** when an OpenAI key is saved, and is **off** otherwise. Choosing anything, Off included, replaces the default for good.
+- **Where the text goes.** The note under the model field says the questions and a short piece of context go to the chosen connection's provider, and what that costs. With **Off**, nothing is sent.
 - **Model.** A field under the select, prefilled for the connection (`gpt-6-luna` for OpenAI; a hint for each other connection; empty for a custom one, where only you know the model). It saves when you leave the field or press Enter.
 - **Test.** Sends one sample question to the chosen connection and shows the answer and how long it took, or why it failed (no key, a refused request, a reply it cannot read).
 - **One connection, no fallback.** If the chosen connection fails, the question is left unanswered. It never tries another connection behind your back.
