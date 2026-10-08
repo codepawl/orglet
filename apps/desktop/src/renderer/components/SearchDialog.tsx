@@ -3,7 +3,7 @@ import { DialogOverlay } from '@codepawlhq/orglet-ui';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CornerDownLeft, Hash, Search, X } from 'lucide-react';
 import type { Task, Team, Worker, Workspace } from '../../shared/contracts';
-import { markMatches, type ChatSearchHit, type ChatSearchResult, type SnippetPart } from '../../shared/chat-search';
+import { markMatches, plainSearchText, type ChatSearchHit, type ChatSearchResult, type SnippetPart } from '../../shared/chat-search';
 import { chatHeadline } from '../../shared/forward';
 import { liveTeamTask, liveWorkerTask } from '../../shared/live-task';
 import { Button } from './ui';
@@ -58,13 +58,21 @@ function chatOwner(task: Task, workspace: SearchWorkspace, faces: readonly Worke
  * is, so a result always says which orglet or crew it belongs to; beside an owner's name sits the first message, so
  * several untitled chats of one orglet can be told apart. A side thread says so, as it does in the Send to picker.
  */
-function chatLabel(task: Task, workspace: SearchWorkspace, faces: readonly Worker[]): { name: string; detail?: string; channel?: boolean } {
+export function chatLabel(task: Task, workspace: SearchWorkspace, faces: readonly Worker[]): { name: string; detail?: string; channel?: boolean } {
   const owner = chatOwner(task, workspace, faces);
-  if (task.sideOf) return { name: task.title || chatHeadline(task), detail: owner ? t('chat phụ · {0}', [owner]) : t('chat phụ') };
-  if (task.channel) return { name: task.channel.name, detail: owner, channel: true };
-  if (task.title) return { name: task.title, detail: owner };
-  if (owner) return { name: owner, detail: chatHeadline(task) };
-  return { name: chatHeadline(task) };
+  // A title and a first message are what the person typed, Markdown marks and all; a result shows them as read.
+  const headline = plainSearchText(chatHeadline(task));
+  if (task.sideOf) return { name: plainSearchText(task.title || '') || headline, detail: owner ? t('chat phụ · {0}', [owner]) : t('chat phụ') };
+  // A channel's chat is owned by the channel's own crew, so naming the owner would only say the channel's name twice.
+  if (task.channel) return { name: task.channel.name, detail: unrepeated(task.channel.name, owner), channel: true };
+  if (task.title) return { name: plainSearchText(task.title), detail: owner };
+  if (owner) return { name: owner, detail: headline };
+  return { name: headline };
+}
+
+/** A detail line that only repeats the name beside it says nothing, so it is left out. */
+function unrepeated(name: string, detail: string | undefined): string | undefined {
+  return detail && detail.trim().toLowerCase() === name.trim().toLowerCase() ? undefined : detail;
 }
 
 function Marked({ parts }: { parts: readonly SnippetPart[] }) {

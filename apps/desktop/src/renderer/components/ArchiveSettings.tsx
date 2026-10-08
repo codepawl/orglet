@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Hash } from 'lucide-react';
 import { ArchiveRestore, EllipsisVertical, Trash } from './icons';
 import { Button } from './ui';
 import { t, translated } from '../i18n';
@@ -19,6 +20,8 @@ export type ArchiveRowData = {
   archive: ArchiveState;
   /** That kind's own question; the default promises old chats keep their history, which only fits an orglet or channel. */
   deleteQuestion?: string;
+  /** Set when deleting would be refused: the question says why, and the confirmation's button takes the way out instead. */
+  deleteBlock?: { question: string; actionLabel: string; onAction: () => void };
   onRestore: () => void;
   onDelete: () => void;
 };
@@ -32,7 +35,7 @@ const groupTitles: Record<ArchiveGroupId, string> = translated({ orglets: 'Tí',
  * its mark, name and days left, **Khôi phục** as a button and **Xóa vĩnh viễn** in the row menu, which asks first.
  * Settings has the room the sidebar did not, so the pill and both actions stay in view instead of giving way on hover.
  */
-export function ArchivedRow({ name, mark, whose, archive, deleteQuestion, onRestore, onDelete }: Omit<ArchiveRowData, 'key'>) {
+export function ArchivedRow({ name, mark, whose, archive, deleteQuestion, deleteBlock, onRestore, onDelete }: Omit<ArchiveRowData, 'key'>) {
   const deletesIn = archive.daysLeft === null ? undefined : archive.daysLeft === 1 ? t('Tự xóa sau 1 ngày') : t('Tự xóa sau {0} ngày', [archive.daysLeft]);
   return <li className="archive-row" title={[name, whose, deletesIn].filter(Boolean).join('\n')}>
     <span className="archive-mark">{mark}</span>
@@ -43,7 +46,10 @@ export function ArchivedRow({ name, mark, whose, archive, deleteQuestion, onRest
     {deletesIn && <span className={`archive-age ${archive.tone}`}>{t('{0} ngày', [archive.daysLeft])}</span>}
     <Button variant="outline" onClick={onRestore} aria-label={t('Khôi phục {0}', [name])}><ArchiveRestore size={14} />{t('Khôi phục')}</Button>
     <RowMenu label={t('Tùy chọn {0}', [name])} icon={EllipsisVertical}
-      items={[{ label: t('Xóa vĩnh viễn'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: deleteQuestion ?? t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
+      items={[{ label: t('Xóa vĩnh viễn'), icon: Trash, danger: true, onSelect: deleteBlock ? deleteBlock.onAction : onDelete,
+        confirm: deleteBlock
+          ? { question: deleteBlock.question, label: deleteBlock.actionLabel, icon: Hash, safe: true }
+          : { question: deleteQuestion ?? t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
   </li>;
 }
 

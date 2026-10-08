@@ -52,6 +52,21 @@ function operationLabel(operation: PublishingOperationView): string {
   return t('Marketplace đã từ chối lần gửi này.');
 }
 
+/** What kind of listing it is, in the singular: one orglet is "Orglet", where the plural "Orglets" names a group of them. */
+export function listingKindName(kind: MarketSubmission['kind']): string {
+  if (kind === 'space') return t('Không gian');
+  if (kind === 'crew') return t('Kênh của Tí');
+  return t('Mẫu Tí');
+}
+
+/**
+ * Whether an orglet's own heading in the preview would only say the listing's name again. A listing of one orglet is
+ * usually named after it, and the preview already opens with that name.
+ */
+export function repeatsListingName(submission: Pick<MarketSubmission, 'kind' | 'name'>, workerName: string): boolean {
+  return submission.kind === 'orglet' && workerName.trim().toLowerCase() === submission.name.trim().toLowerCase();
+}
+
 function capabilityLabel(status: string): string {
   if (status === 'local') return t('Đăng nhập để gửi; bạn vẫn có thể xem trước trên máy.');
   if (status === 'upgradeRequired') return t('Đăng nhập lại trong trình duyệt để cho phép marketplace.');
@@ -75,7 +90,7 @@ export function PublicContentPreview({ requestText }: { requestText: string }) {
   const submission = JSON.parse(requestText) as MarketSubmission;
   const workers = submission.kind === 'orglet' ? [submission.template.worker] : submission.template.workers;
   const skills = submission.kind === 'orglet' ? [submission.template.skill] : submission.template.skills;
-  const kindName = submission.kind === 'space' ? t('Không gian') : submission.kind === 'crew' ? t('Kênh của Tí') : t('Tí');
+  const kindName = listingKindName(submission.kind);
   return <div className="market-content-preview">
     <section className="market-preview-summary"><h3>{submission.name}</h3><p>{submission.summary}</p><p className="muted">{kindName} · {submission.language.toUpperCase()} · {submission.license}{submission.tags.length > 0 && ` · ${submission.tags.join(', ')}`}</p>{submission.changelog && <p>{submission.changelog}</p>}</section>
     {submission.kind === 'space' && <section><h3>{submission.template.space.name}</h3>
@@ -88,7 +103,7 @@ export function PublicContentPreview({ requestText }: { requestText: string }) {
       </ul>
     </section>}
     {submission.kind === 'crew' && <section><h3>{t('Hướng dẫn crew')}</h3><pre className="market-public-prose">{submission.template.team.instructions}</pre></section>}
-    {workers.map((worker, index) => <section key={index}><h3>{worker.name}</h3>{worker.description && <p>{worker.description}</p>}<p className="muted">{providerName(worker.provider)}{worker.modelId && ` · ${worker.modelId}`}</p><pre className="market-public-prose">{worker.instructions}</pre></section>)}
+    {workers.map((worker, index) => <section key={index}>{!repeatsListingName(submission, worker.name) && <h3>{worker.name}</h3>}{worker.description && <p>{worker.description}</p>}<p className="muted">{providerName(worker.provider)}{worker.modelId && ` · ${worker.modelId}`}</p><pre className="market-public-prose">{worker.instructions}</pre></section>)}
     {skills.map((skill, index) => <section key={index}><h3>{skill.name}</h3><pre className="market-public-prose">{skill.content}</pre></section>)}
     {submission.kind === 'crew' && submission.template.knowledge?.map((note, index) => <section key={index}><h3>{note.title}</h3><pre className="market-public-prose">{note.content}</pre></section>)}
     {decodedPreviewFiles(requestText).map((file, index) => <details className="market-publishing-disclosure" key={`${index}-${file.path}`}><summary><ChevronRight size={14} aria-hidden="true" />{file.path}</summary><pre className="market-public-preview">{file.text}</pre></details>)}

@@ -25,6 +25,7 @@ import { AvatarPicker } from './Avatar';
 import { isMascot, mascotIds } from './mascots';
 import { autoMascot, defaultAvatarColor, distinctAvatar } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
+import { fieldMessage } from '../fieldErrors';
 import { readiness, readyFirst, type ProviderChoice, type Readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
 import { PermissionControls, type FolderChoice } from './PermissionControls';
@@ -231,18 +232,19 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   // What this worker remembered for itself, newest first; team and workspace memories live in Thư viện → Knowledge.
   const memories = worker ? workspace.knowledge.filter(item => isMemory(item) && item.status !== 'archived' && item.scope.type === 'worker' && item.scope.id === worker.id).sort((first, second) => second.createdAt.localeCompare(first.createdAt)) : [];
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; một kênh có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error} focusField={initialField}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; một kênh có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={invalid ? '' : error} focusField={initialField}>
     {tab === 'general' && <>
       {worker && <MarketProfileUpdate entityId={worker.id} onUpdated={onClose} />}
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={shownAvatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
-      <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
+      <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} />{fieldMessage('name', invalid, error)}</label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
-      <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
+      <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} />{fieldMessage('instructions', invalid, error)}</label>
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
       <LocalOnlyControl checked={localOnly} onChange={setLocalOnly} permanent={worker && workspace.syncLocalOnly?.permanentWorkers?.includes(worker.id)} worker />
       <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProviderPicked(true); setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
         options={providerOptions} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} required={modelIdRequired(provider)} />}
+      {provider !== 'demo' && fieldMessage('modelId', invalid, error)}
       {provider !== 'demo' && <>
         <Select label={<FieldLabel icon={Brain}>{t('Mức suy nghĩ')}</FieldLabel>} value={effort} onChange={value => setEffort(value as '' | Effort)} options={[
           { value: '', label: t('Tự động'), detail: t('Cao khi lập kế hoạch và tổng hợp; vừa cho lịch và các lượt khác.') },
@@ -256,7 +258,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}
       {customConnection && <p className="muted">{customConnectionCostNote(customConnection)}</p>}
       {provider === 'opencode-go' && <p className="muted">{t('Tính vào hạn mức gói Go, không qua ngân sách Orglet. Bật Use balance thì phần vượt trừ vào số dư Zen.')}</p>}
-      {capped && <label><FieldLabel icon={Wallet} required={paid}>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} placeholder={paid ? undefined : t('Không giới hạn')} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
+      {capped && <label><FieldLabel icon={Wallet} required={paid}>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} placeholder={paid ? undefined : t('Không giới hạn')} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} />{fieldMessage('budget', invalid, error)}</label>}
       {provider === 'claude-code' && <p className="muted">{t('Claude Code dừng khi ước tính của nó cho một lượt chạm số này. Để trống để chạy theo gói, không giới hạn.')}</p>}
     </>}
     {tab === 'skill' && <>

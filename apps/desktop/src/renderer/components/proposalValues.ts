@@ -76,7 +76,8 @@ export function skillName(value: string, context: ProposalContext): string {
 /** "Anthropic · claude-sonnet-4-5", or just the provider's name when no model is set. */
 export function modelLabel(provider: string | undefined, modelId: string | undefined): string {
   if (!provider) return modelId ?? '';
-  if (provider === 'demo') return demoReplies() ? t('không gọi API') : t('chưa kết nối model');
+  // Named as the model picker names it ("Demo"); "no API calls" is that choice's note, not its name.
+  if (provider === 'demo') return demoReplies() ? 'Demo' : t('chưa kết nối model');
   const name = providerName(provider as Worker['provider']);
   return modelId ? `${name} · ${modelId}` : name;
 }

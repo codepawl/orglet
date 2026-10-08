@@ -53,3 +53,21 @@
   /* The state still has to show, so the red border stays and only the shake goes. */
   .org-input[aria-invalid=true][data-flash] { animation: none; }
 }
+
+/* The message under a failing field: the mark keeps its place beside the first line, however many lines the text takes. */
+.org-field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--org-error, #a82626);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+}
+.org-field-error svg {
+  flex: none;
+  /* Centres the 14px mark on the first line of 13px / 1.35 text. */
+  margin-top: 2px;
+}

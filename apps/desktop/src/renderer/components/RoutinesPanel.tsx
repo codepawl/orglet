@@ -18,7 +18,8 @@ import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
 import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
-import { CommandBlock, Input, Textarea } from '@codepawlhq/orglet-ui';
+import { CommandBlock, Input, Textarea, Tooltip } from '@codepawlhq/orglet-ui';
+import { isBlank, useFieldErrors } from '../fieldErrors';
 import { APP_TRIGGER_KEYWORD_LIMIT, APP_TRIGGER_MINUTES, triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
 import { permissionsForLevel, workspaceLevelOf, workspaceLevels, type WorkspaceLevel } from '../../shared/capability-status';
 import { workspaceLevelNames } from './PermissionControls';
@@ -360,6 +361,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [review, setReview] = useState(savedWorkspace?.review ?? true);
   const browser = useBrowserState();
   const nameInput = useRef<HTMLInputElement>(null);
+  const fieldErrors = useFieldErrors('routine');
   const zoneError = error === INVALID_ZONE();
   const team = workspace.teams.find(team => `team:${team.id}` === target);
   useEffect(() => {
@@ -427,8 +429,20 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   useEffect(() => { if (!routine) nameInput.current?.focus(); }, [routine]);
   useEffect(() => { onDirty(snapshot !== initialSnapshot.current); }, [snapshot, onDirty]);
   useEffect(() => () => onDirty(false), [onDirty]);
-  return <form className="form routine-editor" onSubmit={async event => {
+  return <form className="form routine-editor" noValidate onSubmit={async event => {
     event.preventDefault(); setError('');
+    // The browser's own "fill out this field" bubble is off (noValidate); each missing field says so under itself.
+    const hourly = triggerKind === 'schedule' && frequency === 'hours';
+    const filled = fieldErrors.check(event.currentTarget, [
+      { field: 'name', failed: isBlank(name), message: t('Đặt tên cho lịch.') },
+      { field: 'brief', failed: isBlank(brief), message: t('Viết việc lịch cần làm mỗi lần chạy.') },
+      { field: 'time', failed: triggerKind === 'schedule' && !hourly && isBlank(time), message: t('Chọn giờ chạy.') },
+      { field: 'windowFrom', failed: hourly && windowOn && isBlank(windowFrom), message: t('Chọn giờ bắt đầu.') },
+      { field: 'windowTo', failed: hourly && windowOn && isBlank(windowTo), message: t('Chọn giờ kết thúc.') },
+      { field: 'appEvery', failed: triggerKind === 'app' && appServers.length > 0 && isBlank(appEvery), message: t('Nhập số phút giữa hai lần xem.') },
+      { field: 'budget', failed: isBlank(budget), message: t('Nhập giới hạn cho mỗi lần chạy.') },
+    ]);
+    if (!filled) return;
     if (triggerKind === 'schedule' && !TimeZone.safeParse(timeZone).success) {
       setError(INVALID_ZONE());
       event.currentTarget.querySelector<HTMLElement>('[data-field="timeZone"]')?.focus();
@@ -455,8 +469,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
 
     <section className="routine-group" aria-labelledby="routine-group-job">
       <h4 id="routine-group-job">{t('Việc cần làm')}</h4>
-      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input ref={nameInput} value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
-      <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><Textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
+      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input ref={nameInput} {...fieldErrors.props('name')} value={name} onChange={event => { setName(event.target.value); fieldErrors.clear('name'); }} maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} />{fieldErrors.message('name')}</label>
+      <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><Textarea rows={4} {...fieldErrors.props('brief')} value={brief} onChange={event => { setBrief(event.target.value); fieldErrors.clear('brief'); }} maxLength={16000} />{fieldErrors.message('brief')}</label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <WorkerFace worker={worker} size="xs" /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: channelLabel(team.name), group: t('Kênh'), icon: <RosterAvatars workers={teamRoster(team, workspace.workers)} max={2} /> }))]} />
       <div className="routine-sources">
         <PanelHeading level={3} title={<FieldLabel icon={FileText}>{t('Nguồn ({0}/20)', [sources.length])}</FieldLabel>}>
@@ -490,7 +504,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
           {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
           {frequency === 'hours'
             ? <Select label={<FieldLabel icon={Timer} required>{t('Cách nhau')}</FieldLabel>} value={String(everyHours)} onChange={value => { setEveryHours(Number(value)); }} options={EVERY_HOURS_CHOICES.map(hours => ({ value: String(hours), label: everyHoursInWords(hours) }))} />
-            : <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>}
+            : <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" {...fieldErrors.props('time')} value={time} onChange={event => { setTime(event.target.value); fieldErrors.clear('time'); }} />{fieldErrors.message('time')}</label>}
           <Select label={<FieldLabel icon={Globe} required>{t('Múi giờ')}</FieldLabel>} value={timeZone} field="timeZone" menuMinWidth={300} invalid={zoneError} describedBy={zoneError ? 'routine-zone-error' : undefined}
             onChange={value => { setTimeZone(value); if (zoneError) setError(''); }}
             options={zoneChoices.map(zone => ({ value: zone.value, label: zone.label, detail: zone.offset || undefined, group: zone.system ? t('Máy này') : zone.region || t('Khác') }))} inlineDetail />
@@ -503,8 +517,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
             <FieldLabel icon={Clock}>{t('Chỉ trong khung giờ')}</FieldLabel>
           </SwitchField>
           {windowOn && <div className="field-grid">
-            <label><FieldLabel icon={Clock} required>{t('Từ')}</FieldLabel><Input type="time" value={windowFrom} onChange={event => setWindowFrom(event.target.value)} aria-invalid={windowInvalid || undefined} required /></label>
-            <label><FieldLabel icon={Clock} required>{t('Đến')}</FieldLabel><Input type="time" value={windowTo} onChange={event => setWindowTo(event.target.value)} aria-invalid={windowInvalid || undefined} required /></label>
+            <label><FieldLabel icon={Clock} required>{t('Từ')}</FieldLabel><Input type="time" {...fieldErrors.props('windowFrom')} value={windowFrom} onChange={event => { setWindowFrom(event.target.value); fieldErrors.clear('windowFrom'); }} aria-invalid={windowInvalid || fieldErrors.props('windowFrom').invalid || undefined} />{fieldErrors.message('windowFrom')}</label>
+            <label><FieldLabel icon={Clock} required>{t('Đến')}</FieldLabel><Input type="time" {...fieldErrors.props('windowTo')} value={windowTo} onChange={event => { setWindowTo(event.target.value); fieldErrors.clear('windowTo'); }} aria-invalid={windowInvalid || fieldErrors.props('windowTo').invalid || undefined} />{fieldErrors.message('windowTo')}</label>
           </div>}
           <SwitchField checked={weekdaysOnly} onChange={setWeekdaysOnly} description={t('Thứ hai đến thứ sáu.')}>
             <FieldLabel icon={Briefcase}>{t('Chỉ ngày thường')}</FieldLabel>
@@ -534,7 +548,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
             {readOnlyTools.length === 0 && <p className="muted">{t('Ứng dụng này chưa có công cụ chỉ đọc. Bấm Kiểm tra kết nối trong Cài đặt → MCP để tải lại danh sách.')}</p>}
             <label><FieldLabel icon={FileText}>{t('Tham số (JSON)')}</FieldLabel><Textarea className="mcp-mono" rows={3} value={appArguments} onChange={event => setAppArguments(event.target.value)} spellCheck={false} /></label>
             <div className="field-grid">
-              <label><FieldLabel icon={Timer} required>{t('Xem lại sau mỗi (phút)')}</FieldLabel><Input type="number" min={APP_TRIGGER_MINUTES.least} max={APP_TRIGGER_MINUTES.most} value={appEvery} onChange={event => setAppEvery(event.target.value)} required /></label>
+              <label><FieldLabel icon={Timer} required>{t('Xem lại sau mỗi (phút)')}</FieldLabel><Input type="number" min={APP_TRIGGER_MINUTES.least} max={APP_TRIGGER_MINUTES.most} {...fieldErrors.props('appEvery')} value={appEvery} onChange={event => { setAppEvery(event.target.value); fieldErrors.clear('appEvery'); }} />{fieldErrors.message('appEvery')}</label>
               <label><FieldLabel icon={MessageSquare}>{t('Chỉ khi có một trong các từ')}</FieldLabel><Input value={appKeywords} onChange={event => setAppKeywords(event.target.value)} placeholder={t('Ví dụ: urgent, hóa đơn')} /></label>
             </div>
           </>}
@@ -548,7 +562,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
 
     <section className="routine-group" aria-labelledby="routine-group-limits">
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
-      <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
+      <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" {...fieldErrors.props('budget')} value={budget} onChange={value => { setBudget(value); fieldErrors.clear('budget'); }} />{fieldErrors.message('budget')}</label>
       {/* The ceiling is said before saving (COD-288), and a lower daily cap can be set under it. */}
       <div className="routine-cap">
         <label><FieldLabel icon={Gauge}>{t('Giới hạn mỗi ngày')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={dailyCap} onChange={setDailyCap} placeholder={t('Không giới hạn')} invalid={capInvalid} aria-describedby="routine-cap-ceiling" /></label>
@@ -560,8 +574,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         <Select label={<FieldLabel icon={FolderOpen}>{t('Thư mục làm việc')}</FieldLabel>} value={workLevel} disabled={busy || !providers.length}
           onChange={value => void chooseWorkLevel(value as WorkspaceLevel)}
           options={workspaceLevels.map(level => ({ value: level, label: workspaceLevelNames[level] }))} />
-        {workFolder && workLevel !== 'none' && <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><span title={workFolder.name}>{workFolder.name}</span>
-          <button type="button" className="text-link" disabled={busy} aria-label={t('Đổi thư mục làm việc {0}', [workFolder.name])} onClick={() => void chooseWorkLevel(workLevel, true)}>{t('Đổi')}</button></p>}
+        {workFolder && workLevel !== 'none' && <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><Tooltip label={workFolder.name}><span>{workFolder.name}</span></Tooltip>
+          <Button type="button" className="text-link" disabled={busy} aria-label={t('Đổi thư mục làm việc {0}', [workFolder.name])} onClick={() => void chooseWorkLevel(workLevel, true)}>{t('Đổi')}</Button></p>}
         <p className="muted">{workLevel === 'none'
           ? t('Không có thư mục, mỗi lần chạy chỉ có brief và nguồn.')
           : workLevel === 'execute'

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
-import { Input, Textarea } from '../src';
+import { FieldError, Input, Textarea } from '../src';
 
 describe('Input', () => {
   it('is a text field named by its label that passes its props through', async () => {
@@ -60,5 +60,22 @@ describe('Textarea', () => {
   it('has no accessibility violations', async () => {
     const { container } = render(<label>Instructions<Textarea /></label>);
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('FieldError', () => {
+  it('says what is wrong with a mark before the text, and is announced', async () => {
+    const { container } = render(<label>Name<Input invalid aria-describedby="name-error" /><FieldError id="name-error">Give it a name.</FieldError></label>);
+    const message = screen.getByRole('alert');
+    expect(message.id).toBe('name-error');
+    expect(message.textContent).toBe('Give it a name.');
+    expect(message.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(message.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('applies the caller class after its own', () => {
+    render(<FieldError className="tight">Too long.</FieldError>);
+    expect(screen.getByRole('alert').className).toBe('org-field-error tight');
   });
 });

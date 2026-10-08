@@ -41,7 +41,7 @@ function failureText(message: string): string {
 
 /** What goes to each kind of backend, and what it costs: said once under the list, for the kinds the list holds. */
 function costNote(rows: readonly DecisionModelConnection[]): string {
-  if (!rows.length) return t('Chưa có lựa chọn nào: các việc nhỏ này chạy theo quy tắc như trước.');
+  if (!rows.length) return t('Chưa thêm lựa chọn nào: Orglet quyết định các việc nhỏ này bằng quy tắc cố định.');
   const notes: string[] = [];
   if (rows.some(row => row.connection === 'openai')) notes.push(t('Câu hỏi và ngữ cảnh ngắn gửi tới OpenAI (Decisions API beta), $0,10 mỗi triệu token đầu vào.'));
   if (rows.some(row => row.connection !== 'openai' && !isHarnessDecisionConnection(row.connection))) notes.push(t('Câu hỏi và ngữ cảnh ngắn gửi tới nhà cung cấp này, tính phí theo bảng giá của họ.'));

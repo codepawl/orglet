@@ -22,7 +22,7 @@ Rules that hold for every component: text comes in as props, `className` is appl
 - [Checkbox](docs/components/Checkbox.md): A tick for picking items out of a list or confirming something once, with a label and optional description.
 - [ColorPicker](docs/components/ColorPicker.md): A colour panel with an area, a hue slider, a hex field, presets and the person's saved colours.
 - [EditableText](docs/components/EditableText.md): A name that is renamed where it is shown: text at rest, an input when clicked.
-- [Field](docs/components/Field.md): A single-line text input and a multi-line textarea with a shared invalid state and shake.
+- [Field](docs/components/Field.md): A single-line text input and a multi-line textarea with a shared invalid state and shake, and the line that says what is wrong under a field.
 - [FieldLabel](docs/components/FieldLabel.md): A field's title with a small leading icon and an optional required asterisk drawn outside its name.
 - [MoneyInput](docs/components/MoneyInput.md): A field for an amount of money, with the currency symbol before it and its code after it.
 - [RadioGroup](docs/components/RadioGroup.md): One choice out of a few labelled options, each with an optional description.

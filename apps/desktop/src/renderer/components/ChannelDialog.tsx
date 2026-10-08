@@ -13,6 +13,7 @@ import { Select } from './Select';
 import { SwitchField } from './Switch';
 import { TabbedFormDialog } from './DialogTabs';
 import { fieldInvalid } from './fieldInvalid';
+import { fieldMessage } from '../fieldErrors';
 import { toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { categoryNames } from '../areas';
@@ -131,10 +132,10 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
       : undefined;
 
   return <TabbedFormDialog open={open} onClose={onClose} title={editing ? t('Thiết lập kênh') : t('Kênh mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }}
-    panelId="channel-panel" onSubmit={submit} submitLabel={editing ? t('Lưu kênh') : t('Tạo kênh')} busy={busy} error={error} actions={actions}>
+    panelId="channel-panel" onSubmit={submit} submitLabel={editing ? t('Lưu kênh') : t('Tạo kênh')} busy={busy} error={invalid ? '' : error} actions={actions}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Hash} required>{t('Tên kênh')}</FieldLabel>
-        <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={CHANNEL_NAME_LIMIT + 1} placeholder={t('ví dụ: ra-mắt')} invalid={invalid === 'name'} flash={flash} /></label>
+        <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={CHANNEL_NAME_LIMIT + 1} placeholder={t('ví dụ: ra-mắt')} invalid={invalid === 'name'} flash={flash} />{fieldMessage('name', invalid, error)}</label>
       <label><FieldLabel icon={MessageSquareQuote}>{t('Chủ đề')}</FieldLabel>
         <Input value={topic} onChange={event => setTopic(event.target.value)} maxLength={CHANNEL_TOPIC_LIMIT} placeholder={t('Kênh này để làm gì')} /></label>
       {workspace.spaces.length > 0 && <Select label={<FieldLabel icon={Boxes}>{t('Không gian')}</FieldLabel>} value={spaceId} onChange={changeSpace}
@@ -166,7 +167,8 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
           <span className="inline-mark">{orgletFace(worker)}{worker.name}</span>
         </Checkbox>)}
         {!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}
-      </div></fieldset>}
+      </div>{fieldMessage('members', invalid, error)}</fieldset>}
+      {space && access === 'inherit' && fieldMessage('members', invalid, error)}
       {mode === 'lead' && orgletIds.length > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Mỗi Tí là một lượt gọi model, nên kênh đông hơn thì mỗi tin nhắn tốn hơn.')}</p>}
     </>}
     {tab === 'how' && <>
@@ -177,13 +179,13 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
         ]} />
       {mode === 'turns' && <p className="muted">{t('Mỗi Tí trong kênh trả lời lần lượt và đọc được các câu trả lời trước. Gắn @tên để hỏi riêng một Tí.')}</p>}
       {mode === 'lead' && <p className="muted">{t('Tin không gắn ai thì Tí trưởng nhận: tự trả lời, hoặc giao cho Tí hợp việc, kiểm tra kết quả rồi gửi lại khi còn lỗi. Gắn @tên để hỏi thẳng một Tí.')}</p>}
-      {mode === 'lead' && lead.howFields(workspace.workers.filter(worker => orgletIds.includes(worker.id)), { busy, invalid, flash, clearError })}
+      {mode === 'lead' && lead.howFields(workspace.workers.filter(worker => orgletIds.includes(worker.id)), { busy, invalid, flash, clearError, error })}
     </>}
-    {tab === 'limits' && mode === 'lead' && lead.limitFields({ invalid, flash, clearError })}
+    {tab === 'limits' && mode === 'lead' && lead.limitFields({ invalid, flash, clearError, error })}
   </TabbedFormDialog>;
 }
 
-type FieldState = { invalid: InvalidField | undefined; flash: number; clearError: () => void };
+type FieldState = { invalid: InvalidField | undefined; flash: number; clearError: () => void; error: string };
 type Fail = (at: Tab, message: string, field: InvalidField) => void;
 
 /**
@@ -232,31 +234,31 @@ function useLeadSettings(crew: Team | undefined, orgletIds: readonly string[]) {
     };
   };
 
-  const howFields = (members: readonly Worker[], { busy, invalid, flash, clearError }: FieldState & { busy: boolean }): ReactNode => <>
+  const howFields = (members: readonly Worker[], { busy, invalid, flash, clearError, error }: FieldState & { busy: boolean }): ReactNode => <>
     <Select label={<FieldLabel icon={Combine} required>{t('Tí trưởng')}</FieldLabel>} value={synthesizer} onChange={value => { setLeadPicked(true); setSynthesizer(value); }}
       options={members.map(worker => ({ value: worker.id, label: worker.name, icon: orgletFace(worker) }))} />
     <Select label={<FieldLabel icon={ListOrdered} required>{t('Quy trình')}</FieldLabel>} value={workflow} onChange={value => setWorkflow(value as Team['workflow'])}
       options={[{ value: 'parallel', label: t('Song song, rồi tổng hợp'), icon: <Columns2 size={16} /> }, { value: 'sequential', label: t('Tuần tự, rồi tổng hợp'), icon: <ListOrdered size={16} /> }]} />
     <p className="muted">{t('Tuần tự theo thứ tự chọn thành viên; song song thì chạy cùng lúc trong giới hạn của mỗi kết nối.')}</p>
     <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn của Tí trưởng')}</FieldLabel>
-      <Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
+      <Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} />{fieldMessage('instructions', invalid, error)}</label>
     {(reviewPolicy || preflight) && <div className="review-setup-list">
       {reviewPolicy && <p className="muted review-setup"><span>{t('Câu trả lời của kênh phải trả lời {0} mục kiểm tra.', [reviewPolicy.requiredChecks.length])}</span><Button type="button" variant="ghost" disabled={busy} onClick={() => setReviewPolicy(undefined)}>{t('Bỏ checklist')}</Button></p>}
       {preflight && <p className="muted review-setup"><span>{t('Tệp CSV/JSON được kiểm tra trên máy trước khi kênh review.')}</span><Button type="button" variant="ghost" disabled={busy} onClick={() => setPreflight(undefined)}>{t('Tắt kiểm tra dataset')}</Button></p>}
     </div>}
   </>;
 
-  const limitFields = ({ invalid, flash, clearError }: FieldState): ReactNode => <>
-    <label><FieldLabel icon={Wallet} required>{t('Giới hạn kênh / tháng')}</FieldLabel><MoneyInput data-field="limit" type="number" min="0" step="any" value={limit} onChange={value => { setLimit(value); if (invalid === 'limit') clearError(); }} invalid={invalid === 'limit'} flash={flash} /></label>
-    <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="taskBudget" type="number" min="0" step="any" value={taskBudget} onChange={value => { setTaskBudget(value); if (invalid === 'taskBudget') clearError(); }} invalid={invalid === 'taskBudget'} flash={flash} /></label>
-    <label><FieldLabel icon={Layers} required>{t('Số công việc chạy đồng thời')}</FieldLabel><Input data-field="concurrency" type="number" min="1" max={MAX_CREW_CONCURRENT_TASKS} step="1" value={concurrency} onChange={event => { setConcurrency(Number(event.target.value)); if (invalid === 'concurrency') clearError(); }} invalid={invalid === 'concurrency'} flash={flash} /></label>
+  const limitFields = ({ invalid, flash, clearError, error }: FieldState): ReactNode => <>
+    <label><FieldLabel icon={Wallet} required>{t('Giới hạn kênh / tháng')}</FieldLabel><MoneyInput data-field="limit" type="number" min="0" step="any" value={limit} onChange={value => { setLimit(value); if (invalid === 'limit') clearError(); }} invalid={invalid === 'limit'} flash={flash} />{fieldMessage('limit', invalid, error)}</label>
+    <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="taskBudget" type="number" min="0" step="any" value={taskBudget} onChange={value => { setTaskBudget(value); if (invalid === 'taskBudget') clearError(); }} invalid={invalid === 'taskBudget'} flash={flash} />{fieldMessage('taskBudget', invalid, error)}</label>
+    <label><FieldLabel icon={Layers} required>{t('Số công việc chạy đồng thời')}</FieldLabel><Input data-field="concurrency" type="number" min="1" max={MAX_CREW_CONCURRENT_TASKS} step="1" value={concurrency} onChange={event => { setConcurrency(Number(event.target.value)); if (invalid === 'concurrency') clearError(); }} invalid={invalid === 'concurrency'} flash={flash} />{fieldMessage('concurrency', invalid, error)}</label>
     {concurrency > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}</p>}
     <SwitchField checked={shift} onChange={setShift}>{t('Giới hạn khung giờ làm việc')}</SwitchField>
     {shift && <>
-      <label><FieldLabel icon={Globe} required>{t('Timezone của ca')}</FieldLabel><Input data-field="shiftZone" value={shiftZone} onChange={event => { setShiftZone(event.target.value); if (invalid === 'shiftZone') clearError(); }} maxLength={100} invalid={invalid === 'shiftZone'} flash={flash} /></label>
+      <label><FieldLabel icon={Globe} required>{t('Timezone của ca')}</FieldLabel><Input data-field="shiftZone" value={shiftZone} onChange={event => { setShiftZone(event.target.value); if (invalid === 'shiftZone') clearError(); }} maxLength={100} invalid={invalid === 'shiftZone'} flash={flash} />{fieldMessage('shiftZone', invalid, error)}</label>
       <label><FieldLabel icon={Clock} required>{t('Bắt đầu ca')}</FieldLabel><Input data-field="shift" type="time" value={shiftStart} onChange={event => { setShiftStart(event.target.value); if (invalid === 'shift') clearError(); }} invalid={invalid === 'shift'} flash={flash} /></label>
       <label><FieldLabel icon={Clock} required>{t('Kết thúc ca')}</FieldLabel><Input type="time" value={shiftEnd} onChange={event => { setShiftEnd(event.target.value); if (invalid === 'shift') clearError(); }} invalid={invalid === 'shift'} flash={flash} /></label>
-      <fieldset><legend><FieldLabel icon={CalendarDays} required>{t('Ngày bắt đầu ca')}</FieldLabel></legend><div className="fieldset-options">{weekdayNames().map((day, index) => <Checkbox key={day} checked={shiftDays.includes(index)} onChange={event => { setShiftDays(current => event.target.checked ? [...current, index] : current.filter(value => value !== index)); if (invalid === 'shift') clearError(); }} {...fieldInvalid(invalid === 'shift', flash)}>{day}</Checkbox>)}</div></fieldset>
+      <fieldset><legend><FieldLabel icon={CalendarDays} required>{t('Ngày bắt đầu ca')}</FieldLabel></legend><div className="fieldset-options">{weekdayNames().map((day, index) => <Checkbox key={day} checked={shiftDays.includes(index)} onChange={event => { setShiftDays(current => event.target.checked ? [...current, index] : current.filter(value => value !== index)); if (invalid === 'shift') clearError(); }} {...fieldInvalid(invalid === 'shift', flash)}>{day}</Checkbox>)}</div>{fieldMessage('shift', invalid, error)}</fieldset>
       <p className="muted">{t('Hết ca thì Orglet xong bước đang chạy rồi tạm dừng đến ca sau. Giờ kết thúc sớm hơn giờ bắt đầu nghĩa là ca qua đêm.')}</p>
     </>}
   </>;

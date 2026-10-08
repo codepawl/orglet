@@ -68,6 +68,7 @@ import { archiveGroups } from './archive';
 import type { ArchivedChatKind } from './sidebarChats';
 import { type ArchiveSection, type ArchiveState } from './components/ArchiveSettings';
 import { removalBlocker } from '../shared/removal';
+import { deleteBlockedByChannels } from './archiveBlock';
 import { watchRunProgress } from './runProgress';
 import { runningCount, waitingForPersonCount, waitsForPerson } from '../shared/running';
 import { maskEmail } from '../shared/pii';
@@ -122,6 +123,7 @@ import { ActivityPage, activityTabLabel, activityCounts } from './components/Act
 import { MemberColumn } from './components/MemberColumn';
 import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
+import { SpaceHomePage } from './components/SpaceHomePage';
 import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
 import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
@@ -364,8 +366,19 @@ export function App() {
   // Where a dragged channel would land in the open space: a category's id, or `root` for directly in the space.
   const [channelDropAt, setChannelDropAt] = useState<string>();
   const [categoryDraft, setCategoryDraft] = useState<CategoryDraft>();
-  const setArea = (next: Area) => { setAreaState(next); writeArea(next); };
+  const setArea = (next: Area) => {
+    setAreaState(next);
+    writeArea(next);
+    // A space's own page belongs to the Channels area; any other area leaves it.
+    if (next !== 'channels') setSpaceHomeOpen(false);
+  };
   const [friendsOpen, setFriendsOpen] = useState(false);
+  // The open space's own page (its name and the way to its first channel) stands in the main panel, as Friends does in
+  // Home: a space just made has no chat yet, and the chat that was open before belongs to another place.
+  const [spaceHomeOpen, setSpaceHomeOpen] = useState(false);
+  // A chat opened before the workspace lists it (a schedule's run that has just started): the area and the space the
+  // sidebar lists follow it as soon as its row arrives.
+  const followAreaOfChat = useRef<string>(undefined);
   // Which of Home's two pages is open: making an orglet, or the marketplace, which has its own row in the sidebar.
   const [homePage, setHomePage] = useState<HomePageView>('market');
   const [addOrgletOpen, setAddOrgletOpen] = useState(false);
@@ -722,6 +735,18 @@ export function App() {
     setSideThread({ taskId: id, mainTaskId, messageId });
     setPanel('thread');
   };
+  /** Switches the sidebar to the area that owns a chat: its space's channels, or Home. */
+  const showAreaOfChat = (task: Task) => {
+    setArea(areaOfTask(task));
+    if (task.channel) setOpenSpace(task.channel.spaceId ?? '');
+  };
+  useEffect(() => {
+    const waitingFor = followAreaOfChat.current;
+    const arrived = waitingFor ? workspace?.tasks.find(task => task.id === waitingFor) : undefined;
+    if (!arrived) return;
+    followAreaOfChat.current = undefined;
+    showAreaOfChat(arrived);
+  }, [workspace]);
   /** Opens a chat: a side thread beside its main chat when there is room, anything else in the main pane. */
   const openTask = (id: string, options: { toMessage?: boolean } = {}) => {
     if (leavingPage(() => openTask(id, options))) return;
@@ -749,9 +774,10 @@ export function App() {
     setError('');
     setEmptyChannelId(undefined);
     setFriendsOpen(false);
+    setSpaceHomeOpen(false);
     const opened = workspace?.tasks.find(task => task.id === id);
-    if (opened) setArea(areaOfTask(opened));
-    if (opened?.channel) setOpenSpace(opened.channel.spaceId ?? '');
+    followAreaOfChat.current = opened ? undefined : id;
+    if (opened) showAreaOfChat(opened);
     if (opened?.teamId && !opened.routineId) setTeamId(opened.teamId);
     else {
       setTeamId('');
@@ -801,6 +827,7 @@ export function App() {
     if (leavingPage(() => openTeam(id))) return;
     setTeamId(id);
     setFriendsOpen(false);
+    setSpaceHomeOpen(false);
     const crewChannel = workspace?.tasks.find(task => task.teamId === id && task.channel)?.channel ?? workspace?.emptyChannels.find(channel => channel.crewId === id);
     if (inSpace(crewChannel)) setOpenSpace(crewChannel!.spaceId!);
     setArea(inSpace(crewChannel) ? 'channels' : 'home');
@@ -815,6 +842,7 @@ export function App() {
     setWorkerId(id);
     setTeamId('');
     setFriendsOpen(false);
+    setSpaceHomeOpen(false);
     setArea('home');
     const live = workspace ? liveWorkerTask(workspace.tasks, id) : undefined;
     if (live) { setBrief(''); openTask(live.id); return; }
@@ -830,6 +858,7 @@ export function App() {
     setTeamId('');
     leaveThread();
     setFriendsOpen(false);
+    setSpaceHomeOpen(false);
     // A channel just made may not be in this render's workspace yet; it was made in the place on screen, which stays.
     const waiting = workspaceRef.current?.emptyChannels.find(channel => channel.id === channelId);
     if (waiting) {
@@ -1681,7 +1710,7 @@ export function App() {
    * The trail lives for the session only: it is the window's chrome, never a row.
    */
   const place = {
-    area, spaceId: openSpaceId, chat: selected, emptyChannelId, friends: friendsOpen, homePage, activityTab, libraryTab,
+    area, spaceId: openSpaceId, chat: selected, emptyChannelId, friends: friendsOpen, spaceHome: spaceHomeOpen, homePage, activityTab, libraryTab,
     page: panel === 'routines' ? 'routines' as const : panel === 'library' || panel === 'skill' || panel === 'knowledge' ? 'library' as const : null,
   };
   type Place = typeof place;
@@ -1726,6 +1755,7 @@ export function App() {
     setArea(target.area);
     setOpenSpace(target.spaceId);
     setFriendsOpen(target.friends);
+    setSpaceHomeOpen(target.spaceHome);
     setEmptyChannelId(target.emptyChannelId);
   };
   const travelRef = useRef(travel);
@@ -1906,7 +1936,9 @@ export function App() {
     rows: group.entries.map(entry => {
       if (entry.type === 'worker') {
         const { worker } = entry;
+        const block = deleteBlockedByChannels(workspace.teams, worker.id, worker.name);
         return { key: `worker:${worker.id}`, name: worker.name, archive: archiveState(worker)!,
+          ...(block ? { deleteBlock: { question: block.question, actionLabel: block.actionLabel, onAction: () => editCrewChannel(block.crewId) } } : {}),
           mark: <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />,
           onRestore: () => archiveEntity('worker', worker.id, false), onDelete: () => deleteEntity('worker', worker.id) };
       }
@@ -2105,6 +2137,14 @@ export function App() {
       <Button size="icon" className="row-action" aria-label={createLabel} title={createLabel} onClick={create}><Plus size={16} /></Button>
     </>;
   };
+  /** The sidebar's Delete for an orglet: one still in a channel says so before the person confirms, and opens that channel. */
+  const workerDeleteItem = (worker: { id: string; name: string }) => {
+    const block = deleteBlockedByChannels(workspace.teams, worker.id, worker.name);
+    if (block) {
+      return { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => editCrewChannel(block.crewId), confirm: { question: block.question, label: block.actionLabel, icon: Hash, safe: true } };
+    }
+    return { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', worker.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [worker.name]), label: t('Xóa') } };
+  };
   const selectionCount = selection.ids.length;
   const deleteSelectionQuestion = t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
   const selectionBar = selection.section && <div className="selection-bar" role="toolbar" aria-label={t('Mục đã chọn')}>
@@ -2292,7 +2332,8 @@ export function App() {
   const workingIds = workingOrgletIds(workspace.running ?? []);
   const headerSpace = workspace.spaces.find(space => space.id === headerChannel?.spaceId);
   const crewLeadId = headerChannel?.crewId ? workspace.teams.find(item => item.id === headerChannel.crewId)?.synthesizerId : undefined;
-  const pageShown = area === 'activity' || (area === 'home' && friendsOpen);
+  const spaceHomeShown = area === 'channels' && spaceHomeOpen && Boolean(openSpace);
+  const pageShown = area === 'activity' || (area === 'home' && friendsOpen) || spaceHomeShown;
   // The member column belongs to a channel's chat: a page over the chat (Library, Schedules) has no members.
   const membersShown = Boolean(headerChannel) && membersOpen && !sidePaneOpen && !pageShown && !pagePanelOpen && windowWidth > 1100;
   const userStatus = runningNow > 0 || waitingForYou > 0 ? runningButtonLabel(runningNow, waitingForYou) : account?.status === 'signed_in' ? (account.email ? maskEmail(account.email) : t('Đã đăng nhập')) : t('Dùng trên máy này');
@@ -2327,7 +2368,10 @@ export function App() {
           } else if (result.kind === 'orglet') openWorker(result.entityId);
           else openTeam(result.entityId);
         }} />
-      : null;
+      : spaceHomeShown && openSpace
+        ? <SpaceHomePage space={openSpace} channelCount={channelEntries.filter(entry => spaceOfEntry(entry)?.id === openSpace.id).length}
+          onCreateChannel={() => setChannelDraft({ spaceId: openSpace.id })} onOpenSetup={() => setSpaceDraft({ space: openSpace })} />
+        : null;
   const goToActivity = () => {
     if (!leavingPage(goToActivity)) setArea('activity');
   };
@@ -2566,7 +2610,7 @@ export function App() {
       <SidebarSection id="workers" title={t('Tin riêng')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
         {selection.section === 'workers' && selectionBar}
         {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
-          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
+          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, workerDeleteItem(item)]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
       {/* Home lists direct messages only (user, 2026-10-05): a channel lives in a space, under its tile on the rail.
@@ -2806,7 +2850,7 @@ export function App() {
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}:${newOrgletName}`} open={panel === 'worker'} worker={editingWorker} initialName={newOrgletName} workspace={workspace} connections={connections} harnesses={harnesses ?? []} initialTab={workerDialogTab} initialField={workerDialogField} connectModel={workerDialogConnect} onClose={close} onOpenChat={taskId => { close(); openTask(taskId); }} onCreated={id => setJustCreated({ kind: 'worker', id })} />
     {publishingSource && <MarketPublishingDialog key={`${publishingSource.kind}:${publishingSource.entityId}`} source={publishingSource} sourceRevision={publishingSourceRevision(workspace, publishingSource)} requiresSuggestion={publishingRequiresSuggestion(workspace, publishingSource)} onClose={() => setPublishingSource(undefined)} />}
     {spaceDraft && <SpaceDialog key={`space:${spaceDraft.space?.id ?? 'new'}`} open draft={spaceDraft} workspace={workspace} onClose={() => setSpaceDraft(undefined)}
-      onCreated={spaceId => { setOpenSpace(spaceId); setArea('channels'); }} />}
+      onCreated={spaceId => { setOpenSpace(spaceId); setArea('channels'); setSpaceHomeOpen(true); }} />}
     <AddOrgletDialog open={addOrgletOpen} onClose={() => setAddOrgletOpen(false)} archived={workspace.archivedWorkers} busy={friendsBusy} templates={friendTemplates}
       onCreate={name => { setAddOrgletOpen(false); setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }}
       onRestore={member => { setAddOrgletOpen(false); void archiveEntity('worker', member.id, false); }}
