@@ -482,7 +482,8 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
   return <div className="thread-scroll" ref={viewport}>
     <div className="thread-edge thread-edge-top" aria-hidden="true" />
     <div className="thread-content" ref={threadContent}>
-      {start && !embedded && !detail.task.sideOf && <ThreadStart start={start} />}
+      {/* The beginning is only said when it is on screen: a long chat read from its newest turns starts with "show earlier". */}
+      {start && !embedded && !detail.task.sideOf && !detail.earlierTurns && <ThreadStart start={start} />}
       {detail.task.sideOf && !embedded && <p className="side-thread-origin">
         {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
         <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
