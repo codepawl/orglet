@@ -3,7 +3,7 @@ import { ArrowLeft, Laptop, LogIn, ShieldCheck } from 'lucide-react';
 import type { AccountChoice, AccountState } from '../../shared/account';
 import { orglet } from '../api';
 import { t } from '../i18n';
-import { AnalyticsDisclosure } from './AccountSettings';
+import { AnalyticsDisclosure, SignInWaitActions } from './AccountSettings';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
 import { toast } from './toast';
@@ -85,7 +85,10 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
         <h1 id="account-choice-title" className="welcome">{waiting ? t('Tiếp tục trong trình duyệt') : t('Chào mừng đến với Orglet')}</h1>
         {waiting ? <div className="account-choice-waiting">
           <p role="status"><StatusMark variant="busy" tone="working" label={t('Đang chờ')} decorative />{t('Đang chờ bạn đăng nhập…')}</p>
-          <Button variant="ghost" onClick={cancel}><ArrowLeft size={16} />{t('Hủy')}</Button>
+          <div className="account-choice-waiting-actions">
+            <SignInWaitActions />
+            <Button variant="ghost" onClick={cancel}><ArrowLeft size={16} />{t('Hủy')}</Button>
+          </div>
         </div> : <>
           {phase === 'failed' && <p className="error outcome-line account-choice-error" role="alert"><StatusMark variant="filled" tone="error" label={t('Không thành công')} decorative />{error}</p>}
           {/* Two full-width choices with labels of different lengths: their text is meant to start apart. */}

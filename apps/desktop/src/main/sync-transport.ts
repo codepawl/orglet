@@ -105,6 +105,8 @@ const STOPPED: Record<string, SyncPauseReason> = {
   account_deleted: 'account_deleted',
   account_mismatch: 'account_deleted',
 };
+/** Refusals that mean the service cannot serve anyone right now; retrying soon would not help. */
+const SERVER_UNAVAILABLE = new Set(['sync_disabled', 'key_configuration', 'account_key_unreadable']);
 /** Refusals of one upload; downloading goes on. */
 const UPLOAD_REFUSED: Record<string, SyncPauseReason> = {
   storage_limit: 'storage_limit',
@@ -504,7 +506,8 @@ export class SyncTransport {
         this.halt(session, stopped);
         return;
       }
-      if (error.code === 'sync_disabled') {
+      // The service is up but cannot serve this account now (switched off, or its keys are misconfigured): wait longer.
+      if (SERVER_UNAVAILABLE.has(error.code)) {
         this.set({ state: 'paused', reason: 'server_unavailable' });
         this.retry(session, RETRY_LAST_MS);
         return;

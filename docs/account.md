@@ -1,6 +1,6 @@
 # CodePawl account
 
-Orglet works fully without an account. You can also sign in to a free CodePawl account. Syncing your orglets, channels and chats between computers is built into the app, but CodePawl's sync server is not running yet, so **today nothing syncs**; see [Sync](#sync). Signing in changes nothing about where your chats and files live: they stay on this computer. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
+Orglet works fully without an account. You can also sign in to a free CodePawl account. Signing in also syncs your orglets, channels and chats between the computers signed in to the same account; see [Sync](#sync). Each computer keeps its own full copy, so your chats and files still live on this computer, and the sync server holds an encrypted copy. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
 
 Part of the [user guide](user-guide.md). The design behind it is [account-sync-design.md](account-sync-design.md).
 
@@ -28,18 +28,18 @@ The orglet on the screen reacts as you go. It looks aside while your browser is 
 
 1. Choose **Sign in**, on the first start or in **Settings → Account**.
 2. Your browser opens the CodePawl sign-in page. Sign in there, or create an account.
-3. The browser asks to open Orglet. Allow it. Orglet comes forward, signed in.
+3. The browser returns to Orglet on its own and shows a short "signed in" page on accounts.codepawl.com. Orglet is signed in.
 
-While the browser is open, Orglet shows **Continue in your browser** with a busy mark and **Cancel**. After 10 minutes without an answer the sign-in stops and you can try again. If the sign-in fails, the reason leads with an error mark and the card turns into **Try again**.
+While the browser is open, Orglet shows **Continue in your browser** with a busy mark, **Open the browser again** (opens the same sign-in page once more), **Copy link** (copies that page's address, for a different browser) and **Cancel**. The address holds nothing secret. After 10 minutes without an answer the sign-in stops and you can try again. If the sign-in fails, the reason leads with an error mark and the card turns into **Try again**.
 
-The link back to the app uses the `com.codepawl.orglet:` scheme. Setup registers it for your user, next to [`orglet://` links](integrations.md). A ZIP copy and a development run do not register it, so signing in there cannot finish.
+The way back to the app is a loopback address (RFC 8252): for the length of one sign-in Orglet listens on `127.0.0.1` on a port the system picks, and the sign-in page sends your browser to `http://127.0.0.1:<port>/auth/callback`. Only this computer can reach it, it takes the one callback that carries this sign-in's `state`, and it closes when the sign-in finishes, fails, is cancelled or times out. It needs no registration with Windows, so a ZIP copy and a development run sign in too. If Orglet cannot open that listener, it falls back to the `com.codepawl.orglet:` scheme, which Setup registers for your user next to [`orglet://` links](integrations.md); a ZIP copy and a development run cannot finish a sign-in that way.
 
 ## Settings → Account
 
 Every row starts with an icon. **Sync** leads with its state: a tick when synced, a turning ring while it works, a dashed or filled mark when it cannot go on.
 
 - **Not signed in**: **Sign in**, what an account gives you (above), and one sentence on what signing in sends, with the privacy and terms links and an **i** that lists what is sent.
-- **Signing in**: while your browser is open, the orglet beside **Signing in** thinks, and **Cancel** stops the sign-in.
+- **Signing in**: while your browser is open, the orglet beside **Signing in** thinks. **Open the browser again** and **Copy link** are there if the browser did not come forward, and **Cancel** stops the sign-in.
 - **Signed in**: your email, shown only in part (such as `an•••@example.com`) so a screenshot does not carry it, and your name, with **Sign out**, your **Plan** (Free), **Sync** (what it is doing, see [Sync](#sync)), and the **Usage statistics and error reports** switch.
 - **Your sign-in ended**: the service no longer accepts this computer's sign-in, for example after 30 days without opening Orglet or after you signed out everywhere. Choose **Sign in again**. Nothing on this computer is lost.
 
@@ -53,7 +53,7 @@ The choice is saved on this computer and included in a workspace backup. It does
 
 Sync keeps your orglets, channels, chats, memories, schedules and a few settings the same on every computer signed in to the same account. Each computer keeps its own full copy and works offline; changes catch up when it is online again.
 
-Sync needs a sync server. CodePawl's runs as a private trial only and no install points at it, so a normal install shows **Sync** as coming next and sends nothing. Someone running their own server starts Orglet with `ORGLET_SYNC_URL` set to its address (see the [technical guide](technical-guide.md#account-sync)).
+Orglet syncs with CodePawl's sync server (`sync.orglet.codepawl.com`). Someone running their own server starts Orglet with `ORGLET_SYNC_URL` set to its address, or `off` to turn sync off for that install (see the [technical guide](technical-guide.md#account-sync)).
 
 ### Turning it on
 

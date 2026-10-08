@@ -42,6 +42,8 @@ const bridge: Bridge = {
   accountState: () => invoke('orglet:account-state'),
   accountSignIn: () => invoke('orglet:account-sign-in'),
   accountCancelSignIn: () => invoke('orglet:account-cancel-sign-in'),
+  accountReopenSignIn: () => invoke('orglet:account-reopen-sign-in'),
+  accountSignInLink: () => invoke('orglet:account-sign-in-link'),
   accountSignOut: () => invoke('orglet:account-sign-out'),
   onAccount: callback => {
     const listener = (_event: Electron.IpcRendererEvent, state: AccountState) => callback(state);

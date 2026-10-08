@@ -53,7 +53,7 @@ import { BrowserInputEvent, type BrowserLiveEvent } from '../shared/browser-live
 import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
-import { AccountFile, AccountService, accountPayload } from './account';
+import { AccountFile, AccountService, accountPayload, listenOnLoopback } from './account';
 import { SyncTransport } from './sync-transport';
 import { SyncChoice, syncBaseUrl } from '../shared/sync-status';
 import { MarketPublishingTransport, publishingRelayAllowed } from './market-publishing';
@@ -544,6 +544,7 @@ async function start() {
     baseUrl: accountsBaseUrl(process.env.ORGLET_ACCOUNTS_URL),
     store: new AccountFile(directory, safeStorage),
     openExternal: address => shell.openExternal(address),
+    loopback: listenOnLoopback,
     onChange: state => {
       if (window && !window.isDestroyed()) window.webContents.send('orglet:account', accountPayload(state));
       void analytics?.accountChanged(state);
@@ -683,7 +684,7 @@ async function start() {
   });
   // The token and every request stay here; the core is asked only for what to send and to apply what arrived.
   syncTransport = new SyncTransport({
-    baseUrl: syncBaseUrl(process.env.ORGLET_SYNC_URL),
+    baseUrl: syncBaseUrl(process.env.ORGLET_SYNC_URL, process.env.ORGLET_ACCOUNTS_URL),
     account,
     core: action => request('syncReplica', action),
     replaceLocal: () => request('syncReplaceLocal', undefined),
@@ -786,6 +787,9 @@ async function start() {
     await syncTransport!.downloadFile(input.taskId, input.id);
   });
   handle('orglet:account-cancel-sign-in', async () => accountPayload(account.cancelSignIn()));
+  handle('orglet:account-reopen-sign-in', async () => account.reopenSignIn());
+  // The address holds only the state and the PKCE challenge, so the window may copy it; a token never passes here.
+  handle('orglet:account-sign-in-link', async () => z.string().url().nullable().parse(account.signInLink() ?? null));
   handle('orglet:account-sign-out', async () => accountPayload(await account.signOut()));
   // Analytics (COD-344): the window can read and flip the switch, name a feature from a fixed list, and report an error
   // of its own, which is scrubbed here. It never learns the install id, the queue or the token.

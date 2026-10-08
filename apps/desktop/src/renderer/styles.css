@@ -972,6 +972,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .account-choice-disclosure > svg { flex:none; margin-top:2px; }
 .account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:12px; }
 .account-choice-waiting p { display:flex; align-items:center; gap:8px; margin:0; color:var(--muted); font-size:13px; }
+.account-choice-waiting-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; }
+/* Three actions do not fit beside the sentence, which would be squeezed to a word a line: they take their own line under the text. */
+.account-waiting { flex-wrap:wrap; }
+.account-waiting .account-waiting-actions { width:auto; flex-basis:100%; flex-wrap:wrap; justify-content:flex-start; padding-left:calc(var(--setting-mark) + var(--setting-mark-gap)); margin-top:-4px; }
 .row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
 .row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
@@ -2638,6 +2642,37 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .changed-files-review:hover .changed-files-open { text-decoration:underline; text-underline-offset:2px; }
 .activity-summary.changed-files-carried { margin-block:0; cursor:default; }
 .activity-summary.changed-files-carried:hover { background:none; color:var(--muted); }
+/* The card under an answer that changed files: the files line as its headline, the first few files as quiet rows, the rest
+   behind one toggle. A surface, not lines, tells it from the answer; rows share a 32px line box so the kind icon, the path,
+   the word and the counts sit on one centre, and the folder part of a path shortens first. Chrome is not selectable. */
+.changed-files-card { display:flex; flex-direction:column; align-self:stretch; width:100%; max-width:min(100%, 560px); margin-top:6px; padding:3px; border:1px solid var(--border-subtle); border-radius:12px; background:var(--bg); box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+.turn-after > .changed-files-card:first-child { margin-top:6px; }
+/* Every line of the card (headline, file rows, the fold toggle) shares one left padding and a 15px icon, so the icons and
+   the text after them each sit on one vertical line; on the right the counts keep a fixed column so the status words
+   and the counts line up from row to row. */
+.turn-after .changed-files-card .changed-files,.changes-turn .changed-files-card .changed-files { margin:0; width:100%; box-sizing:border-box; }
+.changed-files-card .changed-files { gap:8px; min-height:32px; padding:4px 10px; color:var(--muted); }
+.changed-files-card .changed-files svg { width:15px; height:15px; }
+.changed-files-card .changed-files:hover { background:color-mix(in srgb, var(--text) 6%, transparent); }
+.changed-files-rows { display:flex; flex-direction:column; gap:1px; margin:0; padding:0; list-style:none; }
+.changed-files-rows li { display:flex; min-width:0; }
+.changed-files-card .changed-file-row,.changed-files-card .changed-files-toggle { color:var(--text); }
+.changed-files-card .changed-file-row { flex:1; justify-content:flex-start; gap:8px; min-width:0; min-height:32px; padding:4px 10px; border-radius:8px; font-weight:400; text-align:left; white-space:nowrap; }
+.changed-files-card .changed-file-row:hover:not(:disabled),.changed-files-card .changed-files-toggle:hover:not(:disabled) { background:color-mix(in srgb, var(--text) 6%, transparent); }
+.changed-file-path { display:flex; flex:1; min-width:0; }
+.changed-file-path > * { min-width:0; }
+/* The name keeps its whole width and the folder in front of it gives way first; only a name wider than the row is cut. */
+.changed-file-path .diff-path-name { flex-shrink:0; max-width:100%; }
+.changed-files-card .diff-path,.changed-files-card .diff-path-from { font-family:inherit; font-size:13px; }
+.changed-files-card .diff-binary { font-family:var(--font-sans, inherit); font-size:12.5px; }
+.changed-files-card .diff-file-status { margin-left:4px; }
+.changed-files-card .diff-file-counts { min-width:56px; margin-left:0; padding-left:4px; text-align:right; }
+.changed-file-outcome { flex-shrink:0; color:var(--muted); font-size:12.5px; }
+.changed-files-single .changed-files-review .changed-files-open { color:var(--text); font-weight:600; }
+.changed-file-chevron { flex-shrink:0; color:var(--muted); }
+.changed-files-more { display:flex; flex-wrap:wrap; align-items:center; gap:2px 4px; margin-top:1px; }
+.changed-files-card .changed-files-toggle { min-height:30px; padding:2px 10px; gap:8px; border-radius:8px; color:var(--muted); font-size:12.5px; font-weight:400; }
+.changed-files-card .changed-files-toggle:hover:not(:disabled) { color:var(--text); }
 /* In the viewer, a tick before each changed file or folder picks what Apply takes; the box sits on the row's centre. */
 .diff-file-tick.org-checkbox { flex-shrink:0; align-items:center; gap:0; margin:0; padding:8px 2px 8px 10px; }
 .diff-file-tick .org-checkbox-box { margin-top:0; }

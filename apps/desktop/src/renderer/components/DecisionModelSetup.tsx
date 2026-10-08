@@ -28,14 +28,14 @@ export function decisionModelConnectionOptions(connections: Connections, customC
 
 function costNote(connection: string): string {
   if (connection === OFF) return t('Không có kết nối nào: các việc nhỏ này chạy theo quy tắc như trước.');
-  if (connection === 'openai') return t('Dùng Decisions API của OpenAI (bản beta công khai), $0,10 cho mỗi triệu token đầu vào.');
-  return t('Model quyết định hỏi qua kết nối này như một câu hỏi ngắn trong chat, tính phí theo bảng giá của nhà cung cấp.');
+  if (connection === 'openai') return t('Câu hỏi và ngữ cảnh ngắn gửi tới OpenAI (Decisions API beta), $0,10 mỗi triệu token đầu vào.');
+  return t('Câu hỏi và ngữ cảnh ngắn gửi tới nhà cung cấp này, tính phí theo bảng giá của họ.');
 }
 
 /**
  * Settings → Chat → the decision model (COD-303): which of the chat's own connections answers the decision model's small questions, or none.
  * The model is a field prefilled for the connection; Test sends one sample question and shows the answer and how long
- * it took. The one sentence under the title says where the text goes, because that is the choice being made.
+ * it took. The note under Model says where the text goes, because that is the choice being made.
  */
 export function DecisionModelSetup({ connections, customConnections }: { connections: Connections; customConnections: readonly CustomConnection[] }) {
   const view = useDecisionModelSetting();
@@ -99,7 +99,7 @@ export function DecisionModelSetup({ connections, customConnections }: { connect
     <div className="setting-row">
       <div className="setting-text">
         <span id={titleId} className="setting-title">{t('Model quyết định')}</span>
-        <span className="setting-description">{t('Trả lời nhanh các câu hỏi nhỏ ở nền: ai trả lời trong kênh, ghi chú nào hợp, một bước có vẻ rủi ro không. Câu hỏi và một đoạn ngắn ngữ cảnh được gửi tới nhà cung cấp bạn chọn.')}</span>
+        <span className="setting-description">{t('Trả lời nhanh các câu hỏi nhỏ ở nền: ai trả lời trong kênh, ghi chú nào hợp, một bước có vẻ rủi ro không.')}</span>
       </div>
       <div className="setting-control">
         {view ? <Select ariaLabel={t('Kết nối của model quyết định')} className="setting-select" value={connection} disabled={busy} showDetail={false}

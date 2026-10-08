@@ -18,7 +18,7 @@ Read, in this order, only what the task needs:
 
 [docs/implementation_status.md](docs/implementation_status.md) is the ship/verify record. [docs/handoff.md](docs/handoff.md) and `.agents/plans/` are **historical session notes**, not current contracts — prefer `docs/product.md` and the code.
 
-Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, who work together in **channels**) on the user's computer. Chats, orglets and files live in SQLite, and no Orglet server holds them. An optional CodePawl account exists (COD-337, [docs/account.md](docs/account.md)): main signs in through the system browser and keeps the tokens, and nothing syncs yet. Sync follows [docs/account-sync-design.md](docs/account-sync-design.md) (COD-329); the app must keep working fully without an account. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
+Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, who work together in **channels**) on the user's computer. Chats, orglets and files live in SQLite on each computer. An optional CodePawl account exists (COD-337, [docs/account.md](docs/account.md)): main signs in through the system browser (a loopback redirect) and keeps the tokens, and a signed-in computer syncs an encrypted copy through `services/sync`. Sync follows [docs/account-sync-design.md](docs/account-sync-design.md) (COD-329); the app must keep working fully without an account. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
 
 ```
 apps/desktop/src/

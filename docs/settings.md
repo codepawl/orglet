@@ -86,7 +86,7 @@ Where the data lives: `%APPDATA%\orglet\orglet.sqlite` on Windows, `~/Library/Ap
 
 ## CodePawl account
 
-Sign in to the optional CodePawl account, see whose account and which plan, or sign out. Nothing syncs yet. See [CodePawl account](account.md).
+Sign in to the optional CodePawl account, see whose account and which plan and how sync stands, or sign out. See [CodePawl account](account.md).
 
 ## About
 

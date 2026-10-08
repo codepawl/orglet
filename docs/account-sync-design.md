@@ -1,6 +1,6 @@
 # Orglet account and sync: technical design
 
-**Status: account sign-in, local replication foundation, sync server and desktop transport implemented; the sync server is not deployed, so no production build syncs** (COD-329, [local foundation](https://github.com/codepawl/orglet/issues/480), [server](https://github.com/codepawl/orglet/issues/481), [desktop](https://github.com/codepawl/orglet/issues/482)). The product decisions are in [product.md](product.md) point 3. The sections below distinguish implemented pieces from the remaining transport and deployment design.
+**Status: account sign-in, local replication foundation, sync server and desktop transport implemented, and the sync server is deployed: two computers signed in to one account were checked end to end on 2026-10-08 (create, delete and pull across both)** (COD-329, [local foundation](https://github.com/codepawl/orglet/issues/480), [server](https://github.com/codepawl/orglet/issues/481), [desktop](https://github.com/codepawl/orglet/issues/482)). The product decisions are in [product.md](product.md) point 3. The sections below distinguish implemented pieces from the remaining transport and deployment design.
 
 ### Local replication foundation
 

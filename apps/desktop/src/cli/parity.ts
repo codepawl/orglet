@@ -197,6 +197,8 @@ export const BRIDGE_PARITY: Record<keyof Bridge, Parity> = {
   accountState: windowOnly('Settings, Account; ' + NOT_BUILT),
   accountSignIn: held(A_SECRET),
   accountCancelSignIn: held(A_SECRET),
+  accountReopenSignIn: held(A_SECRET),
+  accountSignInLink: held(A_SECRET),
   accountSignOut: held(A_SECRET),
   onAccount: windowOnly('an event the window subscribes to'),
   syncState: windowOnly('Settings, Account; ' + NOT_BUILT),

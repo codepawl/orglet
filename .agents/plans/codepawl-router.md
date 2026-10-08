@@ -1,4 +1,4 @@
-# Plan: CodePawl router (tên đề xuất: Pawlway)
+# Plan: CodePawl router (tên: Pawlane)
 
 Ngày 2026-10-07. Bản để An xem trước khi code. Router là sản phẩm trả phí đầu tiên trong `account-sync-design.md`:
 "the model router and a model subscription", sau đó mới tới các phần hạ tầng tốn tiền. Account đã có `plan` và
@@ -14,14 +14,14 @@ người dùng vẫn ghim được một model. Hạn mức hiện trong thanh d
 
 | Tên | Ý | Ghi chú |
 |---|---|---|
-| **Pawlway** (đề xuất) | CodePawl + gateway/pathway: con đường dẫn mỗi tin tới đúng model | Từ tự ghép nên dễ có tên miền và ít trùng; đọc liền với CodePawl |
+| **Pawlane** (An chốt 2026-10-08) | CodePawl + lane: mỗi việc chạy đúng làn model của nó | Từ tự ghép, dễ gõ, ít trùng; đọc liền với CodePawl. Thay cho Pawlway (khó ghi) |
 | Leash | Sợi dây giữ cả bầy model trong tay | Ngắn, hợp chủ đề "pawl"; từ tiếng Anh thường, khó giữ thương hiệu |
 | Pack | Một gói, cả bầy model | Hợp làm **tên gói** ("Orglet Pack") hơn tên dịch vụ |
 | Scout | Đi tìm model hợp với việc | Đã có nhiều sản phẩm tên Scout |
 | Burrow | Đường hầm tới các model | Nghĩa hơi tối |
 
-Đề xuất: dịch vụ tên **Pawlway** (`pawlway.codepawl.com` hoặc `router.codepawl.com`), gói trả phí tên **Orglet Pack**.
-Chưa kiểm nhãn hiệu: cần tra USPTO/WIPO và tên miền trước khi công bố (guessed: Pawlway hiếm gặp).
+Dịch vụ tên **Pawlane** (`pawlane.codepawl.com` hoặc `router.codepawl.com`), gói trả phí tên **Orglet Pack**.
+Chưa kiểm nhãn hiệu: cần tra USPTO/WIPO và tên miền trước khi công bố.
 
 ## Điều khoản nhà cung cấp quyết định hình dạng
 
@@ -100,7 +100,7 @@ Orglet (main giữ token) ──► router.codepawl.com (Cloudflare Worker)
 
 ## An quyết
 
-- Tên: Pawlway hay tên khác.
+- Tên: Pawlane (đã chốt 2026-10-08).
 - Có gói Free dùng thử router không, và bao nhiêu.
 - Gọi lên bằng key trực tiếp, AI Gateway, hay cả hai.
 - Có liên hệ Anthropic/OpenAI xin duyệt bán lại để sau này mở API công khai không.

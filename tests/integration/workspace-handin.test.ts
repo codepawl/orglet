@@ -10,6 +10,7 @@ import { WorkspaceRuntime } from '../../apps/desktop/src/core/tools/workspace-ru
 import type { IntegrationResult, WorkspaceIntegration } from '../../apps/desktop/src/core/tools/workspace-integration';
 import { executeWorkspaceOperation } from '../../apps/desktop/src/core/tools/workspace-files';
 import { toolsFor } from '../../apps/desktop/src/core/tools/catalog';
+import { countsOf } from '../../apps/desktop/src/shared/workspace-diff';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
 import { WorkspaceManifest } from '../../apps/desktop/src/shared/workspace-tools';
@@ -206,7 +207,12 @@ it('hands in an inbox tidy-up through Runner: folders, moves, renames and the du
   expect(await readFile(deleted.backupPath, 'utf8')).toBe('contract v1');
   // Nothing left an unknown outcome, and the chat keeps what the run changed for the line under the answer.
   expect(store.db.prepare("SELECT COUNT(*) AS count FROM tool_calls WHERE state!='completed'").get()!.count).toBe(0);
-  expect(new WorkspaceRecovery(store).view(task.id).copies[0].diff).toEqual({ files: 6, additions: 0, deletions: 0, moved: 5, removed: 1, folders: 4, lines: false });
+  const kept = new WorkspaceRecovery(store).view(task.id).copies[0].diff!;
+  expect(countsOf(kept)).toEqual({ files: 6, additions: 0, deletions: 0, moved: 5, removed: 1, folders: 4, lines: false });
+  // Every file and folder is listed once, with no line counts for a plain copy.
+  expect(kept.entries).toHaveLength(10);
+  expect(kept.entries!.filter(entry => entry.folder)).toHaveLength(4);
+  expect(kept.entries!.every(entry => entry.added === 0 && entry.removed === 0)).toBe(true);
   expect(detail.events.map(event => event.message)).toEqual(expect.arrayContaining([
     'Đã tạo thư mục trong bản làm việc: receipts', 'Đã chuyển trong bản làm việc: receipt 3.pdf → receipts/2026-03 receipt.pdf',
     'Đã xóa trong bản làm việc: contract-old.pdf',

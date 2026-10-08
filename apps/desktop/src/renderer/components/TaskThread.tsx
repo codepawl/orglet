@@ -53,7 +53,7 @@ import { changedFilesOf } from '../changedFiles';
 import { useDiffReview } from './ChangesView';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
-import { ChangedFilesLine } from './DiffViewer';
+import { ChangedFilesCard } from './ChangedFilesCard';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
 import { chatHeadline, type ForwardedMessage } from '../../shared/forward';
@@ -355,7 +355,7 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
   // One line per run of the turn that changed files in its working copy (COD-163); `named` says whose line carries
   // the worker's name. Each opens the diff viewer.
   const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review, restored }) =>
-    <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => diff.open(run)} />);
+    <ChangedFilesCard key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={path => diff.open(run, path)} />);
   // A step that changed a file opens that file's changes, but only for a run that kept a working copy with changes.
   const diffRunOf = (run: Run | undefined) => run && changedFilesOf([run], recovery).length > 0 ? { taskId: detail.task.id, runId: run.id } : undefined;
   // One line per command that kept a failed run's changes out of the folder (COD-270); a crew member's line is named.

@@ -144,13 +144,15 @@ export class AccountSync extends DurableObject<Env> {
       if (!exempt) this.limit('requests');
       this.register(identity, deviceId);
     });
-    const masters = await masterKeys(this.env.SYNC_MASTER_KEYS);
+    // Fixed codes for the two key failures, so an operator can tell a bad deployment secret from an account whose
+    // wrapped key no longer opens. Neither carries key material or account data.
+    const masters = await masterKeys(this.env.SYNC_MASTER_KEYS).catch(() => fail('key_configuration', 503));
     this.name(identity);
     for (let attempt = 0; attempt < 3; attempt++) {
       const previous = this.account();
       const existing = previous.wrapped ? JSON.parse(previous.wrapped) as WrappedKey : undefined;
       const created = existing ? undefined : await createAccountKey(name, masters);
-      const key = existing ? await unwrapAccountKey(name, existing, masters) : created!.key;
+      const key = existing ? await unwrapAccountKey(name, existing, masters).catch(() => fail('account_key_unreadable', 503)) : created!.key;
       const wrapped = existing && existing.version !== masters.active ? await rewrapAccountKey(name, existing, masters) : existing ?? created!.wrapped;
       const committed = this.ctx.storage.transactionSync(() => {
         if (!this.fence(identity, deviceId, previous)) return false;

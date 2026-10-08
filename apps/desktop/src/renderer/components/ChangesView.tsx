@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import type { Run, TaskDetail } from '../../shared/contracts';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { changedFilesOf } from '../changedFiles';
-import { ChangedFilesLine, DiffDialog, type DiffReview } from './DiffViewer';
+import { DiffDialog, type DiffReview } from './DiffViewer';
+import { ChangedFilesCard } from './ChangedFilesCard';
 import { confirmAction } from './confirm';
 import { toast } from './toast';
 import { orglet } from '../api';
@@ -18,8 +19,10 @@ export function useDiffReview({ detail, recovery, action, busy }: {
   action: (perform: () => Promise<unknown>) => void;
   /** A run of this chat is under way, so nothing can be applied or discarded yet. */
   busy: boolean;
-}): { open: (run: Run) => void; dialog: ReactNode } {
+}): { open: (run: Run, focusPath?: string) => void; dialog: ReactNode } {
   const [diffRun, setDiffRun] = useState<Run>();
+  // The file a row of the card asked for; the viewer opens scrolled to it.
+  const [focusPath, setFocusPath] = useState<string>();
   const [deciding, setDeciding] = useState(false);
   const waiting = diffRun ? changedFilesOf([diffRun], recovery)[0]?.review?.state === 'pending' : false;
   const decide = (perform: () => Promise<void>) => {
@@ -52,8 +55,12 @@ export function useDiffReview({ detail, recovery, action, busy }: {
     onApply: paths => { if (!deciding) apply(diffRun, paths); },
     onDiscard: () => { if (!deciding) void discard(diffRun); },
   } : undefined;
-  const dialog = diffRun ? <DiffDialog taskId={detail.task.id} run={diffRun} review={review} onClose={() => setDiffRun(undefined)} /> : null;
-  return { open: setDiffRun, dialog };
+  const dialog = diffRun ? <DiffDialog taskId={detail.task.id} run={diffRun} review={review} focusPath={focusPath} onClose={() => setDiffRun(undefined)} /> : null;
+  const open = (run: Run, path?: string) => {
+    setFocusPath(path);
+    setDiffRun(run);
+  };
+  return { open, dialog };
 }
 
 /** The person's words that started a turn, on one line, to head that turn's changes. */
@@ -90,8 +97,8 @@ export function ChangesView({ detail, recovery, action }: { detail: TaskDetail; 
   return <div className="chat-view-list">
     {changedTurns(detail, recovery).map(turn => <section key={turn.revision} className="changes-turn" aria-label={turnHeadline(detail, turn.revision)}>
       <p className="changes-turn-brief" title={turnHeadline(detail, turn.revision)}>{turnHeadline(detail, turn.revision)}</p>
-      {turn.lines.map(({ run, summary, review, restored }) => <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored}
-        workerName={named ? run.snapshot.worker.name : undefined} onOpen={() => diff.open(run)} />)}
+      {turn.lines.map(({ run, summary, review, restored }) => <ChangedFilesCard key={run.id} summary={summary} review={review} restored={restored}
+        workerName={named ? run.snapshot.worker.name : undefined} onOpen={path => diff.open(run, path)} />)}
     </section>)}
     {diff.dialog}
   </div>;
