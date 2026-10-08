@@ -203,7 +203,8 @@ try {
   assert.equal(toolLayout.overflow, false);
   assert.ok(toolLayout.centerDifference < 1, 'Permission switch and its label block must share a vertical center');
   await page.setViewportSize({ width: 1100, height: 800 });
-  await page.getByRole('button', { name: label('Đóng panel'), exact: true }).click();
+  // The panel has no × of its own: the button that opened it (Details) closes it.
+  await page.getByRole('button', { name: label('Ẩn chi tiết'), exact: true }).click();
   await expandSidebar(page);
   await page.evaluate(taskId => window.orglet.pickWorkspace(taskId, ['read']), result.id);
   console.log(JSON.stringify({ taskToolPermissionsUI: 'passed', toolLayout }));

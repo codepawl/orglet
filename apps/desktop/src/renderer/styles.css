@@ -1332,9 +1332,9 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .decision-entry { padding:8px 0; align-items:flex-start; }
 .decision-entry-rank { margin-top:4px; flex:0 0 var(--setting-mark); height:var(--setting-mark); display:grid; place-items:center; border-radius:50%; font-size:12px; font-weight:500; color:var(--muted); background:color-mix(in srgb, var(--text) 8%, var(--bg)); font-variant-numeric:tabular-nums; }
 .decision-entry-fields { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
-.decision-entry-inputs { display:flex; align-items:center; gap:8px; min-width:0; }
+.decision-entry-inputs { display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; }
 .decision-entry-inputs .setting-select { width:198px; flex:0 0 198px; }
-.decision-entry-model { flex:1; min-width:0; display:flex; }
+.decision-entry-model { flex:1 1 184px; min-width:184px; display:flex; }
 .decision-entry-model .decision-model-input { width:100%; min-width:0; }
 .decision-entry-note { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); }
 .decision-entry { --setting-mark-gap:8px; }
@@ -1470,7 +1470,8 @@ button.notice-body { cursor:pointer; }
 /* Room for all three controls on every row, so the facts column ends at the same x whatever a row offers. */
 .running-actions { display:flex; align-items:center; justify-content:flex-end; gap:2px; width:88px; }
 .org-button.running-action { width:28px; height:28px; min-height:28px; padding:5px; }
-.running-empty { margin:24px 0 0; padding:0 10px; font-size:13px; }
+.running-empty { display:flex; align-items:center; gap:8px; margin:24px 0 0; padding:0 10px; font-size:13px; }
+.running-empty svg { flex-shrink:0; }
 /* The Running button's counts (COD-287): what is under way in the quiet badge, what waits for you in the accent with
    the pause bars, side by side at the button's end. */
 .running-counts { margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
@@ -2216,7 +2217,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
  * calls, the working copy and the commands sit under the head, the last two folded. Long paths and commands wrap.
  */
 .recovery-attempts { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:18px; }
-.recovery-attempt { display:flex; flex-direction:column; gap:8px; min-width:0; outline:none; }
+/* One rhythm in the section (owner, 2026-10-08): 8px between rows of a group, 14px between the groups of an attempt, 18px between attempts. */
+.recovery-attempt { display:flex; flex-direction:column; gap:14px; min-width:0; outline:none; }
 .recovery-attempt:focus-visible { border-radius:8px; box-shadow:0 0 0 2px var(--accent); }
 /* The state sits right of the name when the pane is wide enough and drops under it when it is not; the name never breaks. */
 .recovery-attempt-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:2px 12px; }
@@ -2226,9 +2228,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .recovery-attempt-state { font-size:12px; color:var(--muted); }
 .recovery-attempt-state.blocking { color:var(--error); font-weight:500; }
 .recovery-attempt-state.settled { color:var(--success); }
-.recovery-attempt-flag { display:flex; align-items:center; gap:6px; font-size:12px; line-height:1.45; color:var(--error); }
+.recovery-attempt-flag { display:flex; align-items:center; gap:6px; margin-top:-6px; font-size:12px; line-height:1.45; color:var(--error); }
 .recovery-attempt-flag svg { flex-shrink:0; }
-.recovery-calls { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.recovery-calls { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 .recovery-call { display:flex; align-items:flex-start; gap:6px; font-size:12.5px; line-height:1.45; }
 .recovery-call svg { flex-shrink:0; margin-top:2px; color:var(--muted); }
 .recovery-call-text { display:flex; flex-direction:column; gap:1px; min-width:0; overflow-wrap:anywhere; }
@@ -2236,20 +2238,21 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .workspace-recovery details.recovery-group { margin:0; }
 .workspace-recovery details.recovery-group > summary { font-size:12.5px; color:var(--muted); cursor:pointer; }
 .workspace-recovery details.recovery-group[open] > summary { color:var(--text); }
+.workspace-recovery details.recovery-group > summary + * { margin-top:8px; }
 .workspace-recovery details.recovery-process { margin-top:8px; padding-left:12px; }
 .workspace-recovery details.recovery-process > summary { font-size:12.5px; }
 .workspace-recovery code { white-space:pre-wrap; overflow-wrap:anywhere; }
 .workspace-recovery ul { padding-left:20px; }
 .workspace-recovery .recovery-attempts,.workspace-recovery .recovery-calls { padding-left:0; }
 /* An attempt's hand-in steps (COD-254): one per row with air between, the path first and what became of it muted. */
-.workspace-recovery ul.recovery-changes { list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:10px; }
-.recovery-change { font-size:12.5px; line-height:1.45; overflow-wrap:anywhere; }
+.workspace-recovery ul.recovery-changes { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.recovery-change { display:flex; flex-direction:column; gap:6px; font-size:12.5px; line-height:1.45; overflow-wrap:anywhere; }
 .recovery-change-state { color:var(--muted); }
-.recovery-change-note { margin:2px 0 0; }
-.recovery-change .workspace-process-output { margin-top:6px; }
+.recovery-change-note { margin:0; }
+.recovery-change .workspace-process-output { margin-top:0; }
 .workspace-recovery-action { display:flex; align-items:center; }
 .workspace-recovery-action .org-button { white-space:normal; }
-.workspace-process-output { margin-top:12px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+.workspace-process-output { margin-top:8px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
 .workspace-process-output pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
 /* Markdown in worker replies. Spacing and soft backgrounds separate blocks; no rules or side borders. */
 .markdown { white-space:normal; }
@@ -3411,7 +3414,9 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .member-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted); }
 /* A page's title and tab wear an icon, which the baseline-aligned header would sit above the text's centre. */
 .topbar-title > svg, .page-tabs .chat-view-tab > svg { align-self:center; }
-.topbar-members-toggle[aria-pressed=true] { color:var(--text); background:var(--row-active); }
+.topbar-members-toggle[aria-pressed=true], .topbar-details-toggle[aria-pressed=true] { color:var(--text); background:var(--row-active); }
+/* A 34px button plus the header's padding made the header 58px tall in a chat's other views, and the title sat 1px lower than in the chat. */
+.topbar .topbar-back-to-chat { height:var(--icon-size); min-height:0; }
 .notice-filters .notice-clear { margin-left:auto; }
 
 /* Curated friends and explicit template updates. */

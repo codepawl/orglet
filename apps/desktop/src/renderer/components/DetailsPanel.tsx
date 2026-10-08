@@ -1,6 +1,6 @@
 import { chatTurnRevisions, chatTurnInput, chatTurnMessageId } from '../../shared/chat-turns';
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
+import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench } from 'lucide-react';
 import { arrivedWithChat } from '../chatSwitch';
 import { t, currentLocale, tMessage, withNodes, NODE_MARKERS } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
@@ -353,7 +353,7 @@ function OutcomeCount({ value, tone }: { value: number; tone: 'success' | 'error
   return <span className={value > 0 ? `outcome-count outcome-count-${tone}` : 'outcome-count'}>{value.toLocaleString(currentLocale())}</span>;
 }
 
-export function DetailsPanel({ workspace, team, worker, group, groupName, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
+export function DetailsPanel({ workspace, team, worker, group, groupName, detail, workerStatus, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
   worker?: Worker;
@@ -369,7 +369,6 @@ export function DetailsPanel({ workspace, team, worker, group, groupName, detail
   readProcessOutput?: ReadProcessOutput;
   readPrivateFile?: ReadPrivateFile;
   workerStatus: (id: string) => StatusMarkState;
-  onClose: () => void;
   onOpenSources: () => void;
   onExport: (artifactId: string) => void;
   /**
@@ -422,7 +421,6 @@ export function DetailsPanel({ workspace, team, worker, group, groupName, detail
   return <aside ref={pane} className={`details-pane${cameWithChat ? ' with-chat' : ''}`} aria-label={t('Chi tiết')}>
     <div className="details-head">
       <h2 ref={heading} tabIndex={-1}>{t('Chi tiết')}</h2>
-      <Button size="icon" aria-label={t('Đóng panel')} onClick={onClose}><X size={18} /></Button>
     </div>
     <div className="details-body">
       <ChatSubject team={team} worker={worker} group={group} groupName={groupName} members={members} />

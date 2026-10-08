@@ -166,7 +166,7 @@ export class Decisions {
 
   private async askOpenAi(setting: DecisionModelConnection, input: string, questions: DecisionQuestions, signal: AbortSignal): Promise<DecisionResponse> {
     const key = await this.dependencies.readKey('openai');
-    if (!key) throw new DecisionBackendUnavailable(`Chưa kết nối ${API_PROVIDER_NAMES.openai}. Mở Cài đặt để nhập API key.`);
+    if (!key) throw new DecisionBackendUnavailable(`Chưa kết nối ${API_PROVIDER_NAMES.openai}. Thêm API key trong Kết nối API.`);
     return askOpenAiDecisions({ fetcher: this.dependencies.fetcher ?? fetch, key, model: setting.model, input, questions, signal });
   }
 

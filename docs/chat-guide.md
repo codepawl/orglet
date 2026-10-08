@@ -105,7 +105,7 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 - **Ctrl+Tab** goes back to the chat you used before this one. Keep **Ctrl** held and press **Tab** again to go further back; **Ctrl+Shift+Tab** goes the other way. Let go of **Ctrl** on the chat you want. **Ctrl+W** takes the chat you are in off **Open**. It never closes the Orglet window, and it does nothing in a chat that is not on **Open**, such as an orglet's own chat or a side thread. These keys do nothing while a dialog is open.
 - After you send, the message box stays ready, so you can type the next message straight away. If a message cannot be sent, it comes back in the box, in front of anything you typed since.
 - After you pick files or a folder with **+**, the cursor is back in the message box.
-- Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.
+- Opening **Details** moves the keyboard into the panel. The **Hide details** button at the top of the chat, which is the one that opened it, or **Escape** closes it and puts you back where you were. The panel has no × of its own: only a dialog in the middle of the screen has one.
 - Closing Settings, a viewer or any other window with **Escape** puts you back on the button that opened it.
 
 ## Usage and context
@@ -132,7 +132,7 @@ Each orglet has one main chat. Clicking the orglet always opens it. When you wan
 2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow in the row under the message box and choose **Send in a new thread**.
 3. You stay in the main chat. A short message says the side thread started; click **Open** to see it, or open it later.
 
-A side thread opens in the panel on the right, next to its main chat, so you can read both at once. It has its own message box at the bottom of the panel. Close it with the **×** at the top of the panel or Esc. The panel is the one **Details** uses: opening Details closes the thread, and opening a thread closes Details. In a narrow window, where there is no room for the panel, the thread opens in place of the main chat instead, with **Open main chat** at the top.
+A side thread opens in the panel on the right, next to its main chat, so you can read both at once. It has its own message box at the bottom of the panel. Close it by clicking its row in the sidebar again, which is the row that opened it, or with Esc. The panel is the one **Details** uses: opening Details closes the thread, and opening a thread closes Details. In a narrow window, where there is no room for the panel, the thread opens in place of the main chat instead, with **Open main chat** at the top.
 
 Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. An archived one leaves the sidebar and waits in **Settings → Archive**. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).
 
@@ -236,7 +236,7 @@ In a crew or a channel, each orglet's changes are applied as it finishes, so the
 
 ## Details
 
-**Details** at the top of a chat opens the panel that holds everything the chat does not show inline:
+**Details** (the panel button at the top of the chat, or **Details** in its menu) opens the panel that holds everything the chat does not show inline:
 
 - **Tool permissions** and the working folder for this chat ([Permissions](permissions-and-learning.md#permissions)).
 - Cost so far, and how long the orglets worked, such as **30s of work**: each run's own time added up, so the gaps between your messages do not count, and orglets working at the same time count once. Each internal job (a lead channel's plan, members and combining step) shows its status, retry and cancel. **Pause after this step** and **Continue from checkpoint** let you stop a long run and pick it up later; **Retry with current settings** starts a new run for what did not finish.

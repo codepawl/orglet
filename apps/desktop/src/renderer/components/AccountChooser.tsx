@@ -84,7 +84,7 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
         </div>
         <h1 id="account-choice-title" className="welcome">{waiting ? t('Tiếp tục trong trình duyệt') : t('Chào mừng đến với Orglet')}</h1>
         {waiting ? <div className="account-choice-waiting">
-          <p role="status"><StatusMark variant="busy" tone="working" label={t('Đang chờ')} decorative />{t('Đang chờ bạn đăng nhập…')}</p>
+          <p role="status"><StatusMark variant="dashed" tone="working" label={t('Đang chờ')} decorative />{t('Đang chờ bạn đăng nhập…')}</p>
           <div className="account-choice-waiting-actions">
             <SignInWaitActions />
             <Button variant="ghost" onClick={cancel}><ArrowLeft size={16} />{t('Hủy')}</Button>

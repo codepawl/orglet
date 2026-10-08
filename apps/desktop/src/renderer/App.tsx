@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Drag
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
-import { Bookmark, BellRing, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus, ArrowLeft, Brain, FileDiff, FileText } from 'lucide-react';
+import { PanelRight, Bookmark, BellRing, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus, ArrowLeft, Brain, FileDiff, FileText } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { PanelPage } from './components/PanelPage';
@@ -1844,7 +1844,9 @@ export function App() {
         return <ScheduleRunRow key={`schedule-${routine.id}`} name={routine.name} active={selected === task.id} status={status} onOpen={open} onDwell={dwell}
           onOpenSchedule={() => openRoutines({ editing: true, routine })} onArchive={() => archiveTask(task.id, true)} onDelete={() => deleteTask(task.id)} />;
       }
-      return <SideThreadRow key={task.id} name={taskName(task.id) ?? task.brief} active={selected === task.id} status={status} onOpen={open} onDwell={dwell}
+      // The row that opened the thread beside its chat is also the toggle that closes it again.
+      const shownBeside = threadOpen && sideThread?.taskId === task.id;
+      return <SideThreadRow key={task.id} name={taskName(task.id) ?? task.brief} active={selected === task.id || shownBeside} status={status} onOpen={shownBeside ? () => setPanel(null) : open} onDwell={dwell}
         onRename={title => renameTask(task.id, title)} onArchive={() => archiveTask(task.id, true)} onDelete={() => deleteTask(task.id)} />;
     }} />;
     return { children, childrenLabel };
@@ -1999,6 +2001,7 @@ export function App() {
   const threadStart: ThreadStartInfo | undefined = !selected || openSideThread || openScheduleRun ? undefined : {
     // The hash is the channel's icon in a list, not part of its name (user, 2026-10-04).
     name: headerChannel ? headerChannel.name : headerName,
+    channel: Boolean(headerChannel),
     about: (headerChannel ? headerChannel.topic : headerSettings?.kind === 'worker' ? headerSettings.worker.description : undefined)?.trim() || undefined,
     faces: openTaskWorkers.slice(0, 5).map(item => <Avatar key={item.id} name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot color={item.avatar?.color} size="xl" />),
   };
@@ -2664,6 +2667,7 @@ export function App() {
           {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
 
           {/* The chat is the screen; its files, changes, schedules and memory open from the menu, and a way back sits here (user, 2026-10-07). */}
+          {(selected || team || worker || emptyChannel) && chatView === 'chat' && (windowWidth > 1000 || (windowWidth > 860 && !sidebar)) && <Button size="icon" className="topbar-details-toggle" aria-label={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')} title={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')} aria-pressed={detailsOpen} onClick={() => setPanel(detailsOpen ? null : 'activity')}><PanelRight size={18} /></Button>}
           {chatView !== 'chat' && <Button className="topbar-back-to-chat" onClick={() => showChatView('chat')}><ArrowLeft size={16} aria-hidden="true" />{t('Trò chuyện')}</Button>}
           {(selected || team || worker || emptyChannel) && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[...chatViewMenuItems, ...(headerChannel ? [{ label: t('Thiết lập kênh'), icon: Settings2, onSelect: () => editChannel() }, { label: t('Thành viên'), icon: Users, onSelect: () => editChannel('members') }] : []), ...headerSettingsItems, ...(selected && openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => setPrivacyTaskId(selected) }] : []), ...(selected && !openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => { setEditingTask(selected); setPanel('task'); } }] : []), { label: t('Chi tiết'), icon: SlidersHorizontal, onSelect: () => setPanel('activity') }, ...(!selected && headerChannel && !headerChannel.taskId ? [{ label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEmptyChannel(headerChannel.id, headerChannel.name), confirm: { question: t('Xóa kênh này? Kênh chưa có tin nhắn nào.'), label: t('Xóa') } }] : []), ...(selected ? [detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: LucideArchive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: headerChannel ? t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.') : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }] : [])]} />}
         </>} />
@@ -2691,7 +2695,7 @@ export function App() {
               saying this is where the chat begins. Assistive technology still hears "Chatting with …". */}
           <h1 className="welcome" aria-label={t('Đang nhắn với {0}', [chatName])}>{chatTitle}</h1>
           {chatIntro && <p className="welcome-about">{chatIntro}</p>}
-          <p className="welcome-start">{t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatTitle])}</p>
+          <p className="welcome-start">{team || emptyChannel ? t('Đây là khởi đầu của #{0}.', [chatTitle]) : t('Đây là khởi đầu cuộc trò chuyện của bạn với {0}.', [chatTitle])}</p>
           {/* An orglet with no model: the ways to give it one take the place of the starters, which need a model. */}
           {!demoReplies() && emptyChatDemoWorker ? <ConnectWays orgletName={emptyChatDemoWorker.name} ways={connectWays(emptyChatDemoWorker)} /> : <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}
@@ -2729,7 +2733,7 @@ export function App() {
     {threadOpen && sideThread && sideThreadRow && <SideThreadPanel key={sideThread.taskId} taskId={sideThread.taskId} focusMessageId={sideThread.messageId}
       title={taskName(sideThread.taskId) ?? sideThreadRow.brief}
       orgletName={workspace.workers.find(item => item.id === sideThreadRow.workerId)?.name ?? 'Orglet'}
-      onSettings={() => setPrivacyTaskId(sideThread.taskId)} onClose={() => setPanel(null)} onSeen={() => void refresh()}>
+      onSettings={() => setPrivacyTaskId(sideThread.taskId)} onSeen={() => void refresh()}>
       {(threadDetail, threadRecovery) => <FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}>
         <TaskThread detail={threadDetail} workspace={workspace} recovery={threadRecovery} action={action} islandDock={threadDetail.task.id} embedded
           showSources={target => target?.type === 'source' ? setViewingSource({ id: target.id, lines: target.lines, detail: threadDetail }) : openSources(target)}
@@ -2777,7 +2781,7 @@ export function App() {
         onCapability: changeNewChatCapability,
         onWorkspace: changeNewChatWorkspace,
       } : undefined}
-      workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
+      workerStatus={workerStatus} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
     {viewingSource && sourceDetail && <SourceDialog key={viewingSource.id} detail={sourceDetail} sourceId={viewingSource.id} lines={viewingSource.lines} onClose={() => setViewingSource(undefined)} refresh={() => void refresh()}
       openSource={id => setViewingSource(current => ({ id, detail: current?.detail }))}
       onAsk={source => {
