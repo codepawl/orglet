@@ -3491,8 +3491,8 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-review-footer > :first-child { margin-inline-end: auto; }
 .market-review-reports { display: grid; gap: 12px; margin-block: 20px; min-width: 0; }
 .market-review-reports h3 { margin: 0; font-size: 14px; }
-.market-review-report { border-block-start: 1px solid var(--border); padding-block-start: 12px; min-width: 0; }
-.market-review-report > p { margin-block: 0 6px; }
+.market-review-report { display: grid; gap: 8px; min-width: 0; }
+.market-review-report > p { margin: 0; }
 @media (max-width: 560px) { .marketplace-listing { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; } .market-listing-actions { grid-column: 2; justify-content: flex-start; } .market-own-listing { flex-wrap: wrap; } }
 @media (max-width: 560px) { .market-publishing-target { grid-template-columns: minmax(0, 1fr); } }
 
