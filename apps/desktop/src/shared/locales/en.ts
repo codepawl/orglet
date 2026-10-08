@@ -3336,6 +3336,8 @@ export const en: Dictionary = {
   'Chat phụ luôn thuộc Tí của chat chính. Đổi tên chat phụ trong menu của nó.': 'A side thread always belongs to its main chat’s orglet. Rename it from its menu.',
   'Chat phụ với {0}. Chat chính vẫn như cũ.': 'Side thread with {0}. The main chat is unchanged.',
   'Chat phụ với {0}.': 'Side thread with {0}.',
+  'Còn {0} tin cũ hơn chưa hiện.': '{0} earlier messages are not shown.',
+  'Hiện thêm tin cũ': 'Show earlier messages',
   'Chưa có chat chính để đưa vào. Nhắn cho Tí trong chat chính trước.': 'There is no main chat to bring it into. Message the orglet in its main chat first.',
   'Chỉ câu trả lời trong chat phụ mới đưa vào chat chính được.': 'Only an answer in a side thread can be brought into the main chat.',
   'Gửi trong chat phụ mới': 'Send in a new thread',

@@ -15,6 +15,7 @@ export class TeamRunner {
   /** The runs of each active crew or group turn that are held back, and why (COD-244). Observed, never consulted. */
   private waits = new Map<string, TeamWait[]>();
   constructor(private store: Store, private runner: Runner, private notify: () => void, private preflight: Preflight, private canDispatch: (task: Task) => boolean = () => true) {}
+  activeTaskIds(): string[] { return [...this.active.keys()]; }
   isActive(taskId: string) { return this.active.has(taskId); }
   /** What this task's queued runs wait for right now; empty when the task is not running here. */
   waitsOf(taskId: string): readonly TeamWait[] { return this.waits.get(taskId) ?? []; }

@@ -39,7 +39,8 @@
     "i18n:keys": "node scripts/i18n-keys.cjs --unused",
     "images:readme": "node scripts/readme-screenshots.mjs",
     "images:social": "electron scripts/social-preview.cjs",
-    "images:orglets": "electron scripts/doc-orglets.cjs"
+    "images:orglets": "electron scripts/doc-orglets.cjs",
+    "stress": "node scripts/stress/run.mjs"
   },
   "config": {
     "forge": "./forge.config.ts"

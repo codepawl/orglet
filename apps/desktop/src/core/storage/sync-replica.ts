@@ -24,6 +24,9 @@ export class SyncReplica {
 
   execute(raw: unknown): SyncReplicaState | SyncReplicaBatch | SyncReplicaFiles | SyncReplicaCounts | null | Promise<null> {
     const input = SyncReplicaAction.parse(raw);
+    // A profile opened before its first pass (see Store's deferSyncPass) has an outbox that misses its older rows: sync
+    // never reads it or counts it until the pass is done, even when main asks before the core got to it.
+    this.store.sync.completeDeferredPass();
     if (input.action === 'attach') return this.attach(input.context);
     if (input.action === 'detach') {
       this.store.sync.setRecordingContext(undefined);

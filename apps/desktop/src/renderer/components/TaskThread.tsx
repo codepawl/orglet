@@ -126,10 +126,11 @@ type Turn = { missingInput: boolean; revision: number; runs: Run[]; sentAt: stri
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ start, detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward, islandDock = MAIN_DOCK, embedded = false }: {
+export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward, islandDock = MAIN_DOCK, embedded = false }: {
   /** The prompt bar this chat's island docks on: the main chat's, or a side thread's in the right panel (COD-365). */ islandDock?: string;
   /** Drawn inside the right panel beside its main chat (COD-365): the panel's own head says what the thread is. */ embedded?: boolean; /** Where the chat begins: who it is with, shown above the first message the way a messenger starts a chat. */ start?: ThreadStartInfo; detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'> & Partial<Pick<Workspace, 'showWork'>>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
+  /** Reads more of a long chat's older turns; offered while `detail.earlierTurns` says some were left out. */ onShowEarlier?: () => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
   /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
   /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void;
@@ -481,7 +482,8 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
   return <div className="thread-scroll" ref={viewport}>
     <div className="thread-edge thread-edge-top" aria-hidden="true" />
     <div className="thread-content" ref={threadContent}>
-      {start && !embedded && !detail.task.sideOf && <ThreadStart start={start} />}
+      {/* The beginning is only said when it is on screen: a long chat read from its newest turns starts with "show earlier". */}
+      {start && !embedded && !detail.task.sideOf && !detail.earlierTurns && <ThreadStart start={start} />}
       {detail.task.sideOf && !embedded && <p className="side-thread-origin">
         {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
         <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
@@ -494,6 +496,10 @@ export function TaskThread({ start, detail, workspace, recovery, action, showSou
           : t('Lần chạy của lịch {0} đã xóa, do {1} làm.', [scheduleRun.name, scheduleRun.owner])}</span>
         {scheduleRun.openSchedule && <button type="button" onClick={scheduleRun.openSchedule}>{t('Mở lịch')}</button>}
       </p>}
+      {detail.earlierTurns ? <p className="side-thread-origin">
+        <span>{t('Còn {0} tin cũ hơn chưa hiện.', [detail.earlierTurns])}</span>
+        {onShowEarlier && <Button onClick={onShowEarlier}>{t('Hiện thêm tin cũ')}</Button>}
+      </p> : null}
       {turns.map((turn, index) => {
         const latest = turn.revision === current;
         const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');

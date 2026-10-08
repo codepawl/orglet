@@ -314,7 +314,7 @@ export type BudgetReservationView = {
   verifiedSource: 'provider_dashboard' | 'invoice' | null;
   resolvedAt: string | null;
 };
-export type TaskDetail = { savedTurns?: (import('./sync-records').SyncTurn & { localRevision: number })[]; task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; workspaceEvidence: (import('./workspace-evidence').WorkspaceReadEvidence & { grantCurrent: boolean })[]; /** App changes the chat's workers proposed, with what became of each (COD-199). */ appProposals: AppProposal[]; usage: Usage; /** What the chat's browser shows right now: a card waiting on the person, the take-over (COD-261); only the `task` command fills it. */ browser?: BrowserLive; /** A desktop step waiting on the person (COD-261, phase 2a); only the `task` command fills it. */ desktop?: DesktopLive };
+export type TaskDetail = { /** How many older turns the read left out, when it asked for only the newest ones; absent when it holds the whole chat. */ earlierTurns?: number; savedTurns?: (import('./sync-records').SyncTurn & { localRevision: number })[]; task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; workspaceEvidence: (import('./workspace-evidence').WorkspaceReadEvidence & { grantCurrent: boolean })[]; /** App changes the chat's workers proposed, with what became of each (COD-199). */ appProposals: AppProposal[]; usage: Usage; /** What the chat's browser shows right now: a card waiting on the person, the take-over (COD-261); only the `task` command fills it. */ browser?: BrowserLive; /** A desktop step waiting on the person (COD-261, phase 2a); only the `task` command fills it. */ desktop?: DesktopLive };
 /** How the in-app brand mark is coloured: the text colour, or the user's accent (COD-154). */
 export const LogoColor = z.enum(['mono', 'accent']);
 export type LogoColor = z.infer<typeof LogoColor>;
@@ -335,7 +335,8 @@ export const commands = {
   marketPreviewUpdate: MarketUpdateTarget,
   marketApplyUpdate: MarketApplyUpdate,
   workspace: z.object({}),
-  task: z.object({ id: Id }),
+  // `recentTurns` asks for only the newest turns of a long chat, with their runs, events and answers (see `Store.detail`).
+  task: z.object({ id: Id, recentTurns: z.number().int().min(1).max(100_000).optional() }),
   // The first message of a chat may ask for Plan first too (COD-367); it lands on that turn's input, never the chat row.
   createTask: TaskInput.extend({ planFirst: PlanFirst.optional() }),
   reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, onlyWhenIdle: z.literal(true).optional(), consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),

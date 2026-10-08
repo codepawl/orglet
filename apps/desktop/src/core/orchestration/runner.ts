@@ -618,6 +618,8 @@ export class Runner {
     return run.snapshot.turnId ?? this.store.sync.turns.list(run.taskId)
       .find(turn => turn.localRevision === (run.snapshot.inputRevision ?? 0))?.id ?? turnMessageId(run.taskId, run.snapshot.inputRevision ?? 0);
   }
+  /** The chats with a run working in this process now. */
+  activeTaskIds(): string[] { return [...new Set([...this.active.values()].map(item => item.taskId))]; }
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   /** A run this runner is working on now: when it started here and whether a pause was asked for (COD-244). */
   activeRun(runId: string): { since: number; paused: boolean } | undefined {

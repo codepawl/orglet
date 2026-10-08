@@ -440,6 +440,109 @@ How restore meets what is already there (COD-281):
 - A message sent while an earlier one waits for a stopped turn to settle is its own turn rather than an error. The run that starts next answers the latest turn and reads the earlier message in its history, and the earlier turn shows no "not answered" line (`answeredByLaterTurn` in `TaskThread.tsx`).
 - History, reports and checkpoint context are stored in `%APPDATA%\orglet\orglet.sqlite` on Windows, or `~/Library/Application Support/Orglet/orglet.sqlite` on macOS. Checkpoints can contain selected source text; they are removed on successful report commit, and never sent through the renderer bridge. `safeStorage` protects stored keys (DPAPI on Windows, Keychain on macOS), not against every process running as your user. Workspace records are not encrypted.
 
+## Scale
+
+How Orglet behaves as a profile grows far past what one person makes, how to measure it, what broke first and what is left. The numbers come from `pnpm stress` on one Windows machine (12 logical cores, an SSD) with other jobs running, so read the ratios, not the last millisecond. "Before" is `main` at `c2e34a89`.
+
+### Measuring
+
+```
+node scripts/stress/run.mjs --tiers=x1,x10 [--exe=<Orglet.exe>] [--save=name] [--compare=name]   # also: pnpm stress
+node scripts/stress/seed.mjs x10 <folder>/x10/data      # only write a profile
+node scripts/stress/measure-app.mjs <Orglet.exe> <seed summary.json> [--profile]   # the packaged app on a copy
+node scripts/stress/sync-check.mjs x10                  # push a seeded profile to a local copy of services/sync
+```
+
+`seed-profile.ts` writes a profile of invented names and text from a seeded generator, so one configuration always gives the same profile; every size can be changed (`--chats=500`). It goes through the core's own classes (`Store`, the `saveRoutine` and `saveKnowledge` commands, `Sources.import`, `Channels`). The rows of each turn (the saved message, the run, two events, the answer, the search rows, the usage) are inserted with the SQL the core uses, because the real write path reads a chat's saved turns again on every write, which would make writing a 2,000-turn chat quadratic; a last pass makes the sync replica the way a restore does, so the profile holds what a used one does (more than 40% of the file). `tests/integration/scale-guards.test.ts` seeds a small profile and holds the fixes below in place. The app is measured with the real environment, an isolated `--user-data-dir`, sample replies and no network.
+
+| | x1 | x10 | x100 |
+|---|---|---|---|
+| orglets | 20 | 200 | 500 |
+| chats (the orglet's newest is its live chat; the rest are archived) | 50 × 30 turns | 1,000 (20 of 2,000 turns) | 5,000 (20 of 2,000 turns) |
+| turns in all | 1,540 | 70,400 | 201,860 |
+| channels × members (50 turns, every member answers) | 2 × 4 | 20 × 8 | 50 × 8 |
+| files (12 MB CSVs among them) | 20 | 300 (6) | 1,000 (20) |
+| schedules | 5 | 50 | 100 (the app allows no more) |
+| notes and memories | 100 | 2,000 | 10,000 |
+| database, with the sync replica | 21 MB | 974 MB | 2,783 MB |
+
+### The core
+
+One Node process, below-normal priority, median of three where it is cheap. The `workspace` and `task` commands are what the window sends on every change; the core's own steps are the ones a run and the background tick take.
+
+| measurement | x1 before | x1 after | x10 before | x10 after | x100 after |
+| --- | --- | --- | --- | --- | --- |
+| database size (MB) | 21.4 | 21.4 | 974 | 974 | 2,783 |
+| **core start** (store open, ms) | 7,894 | 23 | 1,339,224 | 40 | 148 |
+| `workspace` (ms) | 24.2 | 2.7 | 1,124 | 71.3 | 240 |
+| `workspace` payload (KB) | 175 | 114 | 4,945 | 2,146 | 10,375 |
+| `task`, 30-turn chat (ms) | 59.1 | 0.9 | 3,055 | 1.1 | 9.8 |
+| `task`, 2,000-turn chat, whole (ms) | - | - | 6,986 | 89.7 | 102 |
+| `task`, 2,000-turn chat, newest 100 turns (ms) | - | - | - | 37.8 | 54.7 |
+| `task`, 2,000-turn chat, payload whole / newest 100 (KB) | - | - | 5,879 / same | 5,881 / 298 | 5,845 / 294 |
+| `searchChats`, a common word (ms) | 22.1 | 8 | 302 | 38.7 | 88 |
+| five-second `tick` (ms) | 6.3 | 0.5 | 263 | 1.5 | 3 |
+| every change announced: `notify` (ms) | - | 0 | - | 0 | 0 |
+| schedule tick, `routines.tick` (ms) | 0.3 | 0.2 | 7.7 | 0.8 | 1.8 |
+| notes into a run's context (ms) | 2 | 1.2 | 29.6 | 26.1 | 123 |
+| history compile for a send, 2,000-turn chat (ms) | - | - | 250 | 51.1 | 55.7 |
+| one event written in a 2,000-turn chat (ms) | - | - | 4.5 | 3.5 | 3.4 |
+| app-wide usage totals (ms) | 1.4 | 0.2 | 575 | 10.9 | 28.4 |
+| add an orglet to a channel (ms) | - | 122 | - | 1,989 | 4,314 |
+| backup export (ms; memory it peaked at, MB RSS) | 253 | 184 | refused (1,948 MB) | refused (280 MB) | refused (392 MB) |
+| backup restore onto the same data (ms) | 18,382 | 3,908 | refused | refused | refused |
+| backup restore onto an erased profile (ms) | 28,968 | 6,884 | - | - | - |
+| erase everything (ms) | 241 | 146 | 27,596 | 13,757 | 73,833 |
+| core memory after the commands (MB RSS) | 345 | 143 | 1,427 | 311 | 392 |
+
+The first start after this change builds the new indexes once (3.4 s at x10, 11.7 s at x100; the limit is 15 s) and then makes the one pass over the sync replica described below; every start after that is the figure in the table.
+
+### The packaged app
+
+Windows, packaged build, a copy of the profile. "Before" exists only at x1: at x10 the old core needs 22 minutes to open the database and the app stops at its 15 s start limit (inferred from the code and the core measurement, not run). The first search of a session reads the word index cold.
+
+| measurement | x1 before | x1 after | x10 after | x100 after |
+| --- | --- | --- | --- | --- |
+| launch to the first window (ms) | 6,832 | 752 | 1,638 | 1,439 |
+| launch to a usable sidebar (ms) | 8,344 | 2,232 | 3,155 | 4,025 |
+| orglets in the sidebar (DOM nodes in the window) | 21 (741) | 21 (741) | 201 (5,103) | 501 (12,409) |
+| `workspace` as the window gets it (ms, KB) | 27 / 186 | 4.7 / 119 | 98 / 2,228 | 435 / 10,770 |
+| open the heaviest chat: first message drawn (ms) | 319 | 144 | 478 | 1,191 |
+| open the heaviest chat: settled (ms) | 255 | 106 | 322 | 1,043 |
+| messages drawn, of the chat's turns | 30 of 30 | 30 of 30 | 100 of 2,000 | 100 of 2,000 |
+| DOM nodes after opening, longest task (ms) | 3,523, 139 | 3,523, 83 | 14,355, 237 | 21,834, 529 |
+| search, first result (ms) | 703 | 50 | 64 | 745 |
+| one message: reads of the workspace, bytes moved (MB) | 6, 1.5 | 5, 1.1 | 5, 12.9 | 4, 45.2 |
+| one message: sent to answered (ms) | 510 | 256 | 880 | 3,798 |
+| memory after opening the chat: main / core / window (MB) | 134 / 227 / 190 | 131 / 122 / 185 | 185 / 203 / 352 | 212 / 419 / 480 |
+
+### What broke first, in order
+
+1. **The start.** The core must say "ready" within 15 seconds (`main/index.ts`, "Core startup timed out"). Every start read through every saved row: `LocalSync.refreshFromCanonical` captured each turn, run, event and answer as a sync record again, and `purgePermanentPayloads` parsed every replicated record with one `visibility` query after another. 8 s at x1, **22 minutes at x10**: the app could not open beyond roughly 5,000 turns. A start now reads through only a database that was never stamped (`syncBackfillRevision` in `settings`), after "ready" (`Store` option `deferSyncPass`, `LocalSync.completeDeferredPass`); the stamp is raised when capture changes, and a restore runs the whole pass itself. `local-sync.ts` also keeps the answers a pass asks for again and again for the length of the pass (`pass`, `bulk`).
+2. **Opening any chat.** `Store.detail` read every run, event and answer in the app and kept those of one chat, and `markTaskSeen` did it a second time: a 30-turn chat took 3 s to open at x10. Nothing was indexed by `runs.task_id`, `events.run_id` and the like, so a delete scanned whole tables as well. Now `CREATE INDEX IF NOT EXISTS` (no schema version, an older build still opens the file), and partial indexes for unsettled runs and chats, pending starts, schedule runs, shift pauses and channels, which the queries name (`INDEXED BY`: without statistics SQLite walked the whole table in order rather than sort the few rows an index returns).
+3. **A long chat.** 2,000 turns are 6 MB, read, copied through two process boundaries and drawn whole on every change. The window asks for the newest 100 turns (`task` takes `recentTurns`; `earlierTurns` says how many were left out), "Hiện thêm tin cũ" reads 200 more, and a jump to an older message reads them all. `chatTurnRevisions` and the history compiler searched the chat for each of its turns (about 12 s to list 4,000 turns); they use lookups. The time on a message made a new `Intl` format for each message (47 ms per 100).
+4. **Every change the core announces.** `notify` ran `WorkPolicy.captureHandoffs`, and the five-second tick three more scans, each parsing every chat. They read what they act on through the partial indexes now. `searchChats` fetched and sorted every match for a common word; it walks the messages newest first through `chat_messages_at` and stops at its limit (620 ms to 28 ms at 420,000 messages). The app-wide usage totals are three sums over covering indexes, not a join. The window, which read the workspace and the open chat once for each notice, reads once and once more after it however many arrive meanwhile (`coalesceRuns`).
+5. **Backup.** One JSON string capped at 50 MB, about 13,000 turns. Past that it refused, after building 1.5 GB of payload in memory; the size of the rows is checked first now and it refuses at once. Restore compared its rows with `find` inside loops and kept no answers between rows; it uses maps and a pass (18 s to 4 s at x1).
+6. **Sync.** Below.
+
+### What a person sees at the limits
+
+- **More than about 13,000 turns:** Settings → Backup says "Bản sao lưu vượt 50 MB." and nothing is saved. There is no other way to back up.
+- **More than 100 schedules:** "Workspace đã có đủ 100 lịch."
+- **Sync with a free account:** the service counts about 4 KB for each record, so the 5 MB entitlement fills after about 1,300 records (roughly 260 turns, which is also x1); the next push is refused with `storage_limit` (413) and the app pauses sync with "Tài khoản đã đầy. Thay đổi mới vẫn lưu trên máy này và chưa được gửi đi." The deployment's own limits (10,000 records, 32 MB) sit above that. The queue stays on the computer and is tried again every ten minutes.
+- **What joining costs the core:** the first join of the x10 profile queues 230,312 records (309 MB), which took the core 5.2 minutes and takes 64 s now (`requeue` keeps its answers for the pass); the x100 profile queues 665,832 (882 MB) in 5 minutes. One push round used to check the whole outbox and sort it by JSON fields (2.8 s at x1, growing with the square of the queue); it reads an index in the order the service needs and checks each record as it picks it: 50 to 80 ms, and the retry after a refusal costs the same.
+
+### Not done, with what it would gain
+
+- **Notes out of the workspace payload.** `workspace.knowledge` is 1.2 MB of the 2.2 MB at x10 and 6 MB of 10.6 MB at x100, sent on every change: four times for one message, which moves 45 MB at x100. Reading them when the Library or a worker's memories open would halve it.
+- **A virtual thread.** The window draws 100 turns in 0.5 s at x10 and 1.2 s at x100 (14,000 and 22,000 nodes, a 240 to 530 ms long task); drawing only what is on screen would make the first paint independent of the window size.
+- **A resumable first pass.** The pass for a database that was never stamped takes about a millisecond per saved record: 5 minutes at x10, half an hour at x100. It runs after "ready" now, but it still blocks the core while it does; it should run in slices. The same goes for `requeue` (64 s at x10).
+- **Backup past 50 MB:** a streamed file, one chat per line, instead of a string.
+- **Erase** deletes row by row: 14 s at x10 and 74 s at x100. Dropping and recreating the tables would take a second or two.
+- **`purgeBlockedOutbox` on every task write** re-checks the whole outbox, so an account paused with a long queue slows every message; adding a member to a channel reads every record that names the chat (2 s at x10, 4 s at x100).
+- **`Store.detail` for the core's own use** reads the whole chat several times for each message (75 ms each at 2,000 turns); most callers need one run or the last answer.
+- **Notes into a run's context** parse all 10,000 notes and score the visible ones (120 ms at x100); a scope filter in SQL and a keyword index would make it about 10 ms.
+
 ## Commands and loopback
 
 A workspace command can start a server, but nothing can connect to it: not the next command, not a child process, not even the process that opened the socket. `fetch('http://127.0.0.1:3123/')` fails with `connect EACCES` (COD-193). This is the sandbox itself, not a missing grant.

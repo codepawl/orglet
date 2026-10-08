@@ -28,6 +28,27 @@ const TaskInput = LocalChat.extend({ brief: z.string(), sourceIds: z.array(Id), 
 const Visibility = z.object({ kind: z.enum(['worker', 'task']), entity_id: Id, epoch: Id,
   local_only: z.union([z.literal(0), z.literal(1)]), deleted: z.union([z.literal(0), z.literal(1)]), clock_json: z.string() }).strict();
 
+/** The settings row saying the whole-workspace capture pass was done, and with which rules; raise the number when capture changes. */
+const BACKFILL_STAMP = 'syncBackfillRevision';
+const SYNC_BACKFILL_REVISION = 1;
+
+type VisibilityRow = z.infer<typeof Visibility>;
+
+/** Where a record goes in the order it is sent: what others depend on first (the same order the outbox query used). */
+function outboxRank(data: SyncData): number {
+  switch (data.kind) {
+    case 'withdraw': case 'delete': return 0;
+    case 'revision': return data.revision.entity === 'worker' ? 1 : data.revision.entity === 'skill' ? 2 : data.revision.entity === 'team' ? 3 : 9;
+    case 'entityState': return 4;
+    case 'chat': return 5;
+    case 'turn': return 6;
+    case 'source': return 7;
+    case 'run': return 10;
+    case 'artifact': case 'event': return 11;
+    default: return 8;
+  }
+}
+
 function stableUuid(namespace: string): string {
   return syncUuidFromDigest(createHash('sha256').update(namespace).digest());
 }
@@ -42,15 +63,35 @@ export class LocalSync {
   private context?: SyncRecordingContext;
   private importing = false;
   private backfilling = false;
-  constructor(private store: Store, nowMs: () => number = Date.now) {
-    this.revisions = new SyncRevisions(store, nowMs);
+  /** Answers worth keeping for the length of one pass over the whole workspace; absent the rest of the time. */
+  private pass?: { visibility: Map<string, VisibilityRow>; roots: Map<string, SyncRoot[]> };
+  private passDeferred = false;
+  constructor(private store: Store, nowMs: () => number = Date.now, deferPass = false) {
+    const stamped = this.backfillStamped();
+    this.passDeferred = deferPass && !stamped;
+    this.revisions = new SyncRevisions(store, nowMs, !stamped && !this.passDeferred);
     this.turns = new ChatTurns(store);
-    this.refreshFromCanonical();
+    if (!this.passDeferred) this.refreshFromCanonical(false);
   }
-  refreshFromCanonical() {
+  /** The pass a deferred open left undone; a no-op for a database that was stamped or opened without deferring. */
+  completeDeferredPass() {
+    if (!this.passDeferred) return;
+    this.passDeferred = false;
+    this.refreshFromCanonical(true);
+  }
+  /**
+   * Captures every saved row as a sync record, so rows from before sync existed, or put back by a restore, are in the
+   * replica. Every write since goes through `captureWrite` as it happens, so a start only needs the pass once: the
+   * stamp it leaves says the pass was done with the capture rules of `SYNC_BACKFILL_REVISION`. Reading and checking
+   * every run, event and answer again at every start took 4 minutes on 70,000 turns (measured, docs/technical-guide.md
+   * → Scale). A restore passes `force`, and a change to what is captured raises the revision.
+   */
+  refreshFromCanonical(force = true) {
+    if (!force && this.backfillStamped()) return;
     this.revisions.refresh();
     this.turns.backfill();
     this.backfilling = true;
+    const ownsPass = this.beginPass();
     try {
       this.store.transaction(() => {
         for (const row of this.store.db.prepare(`SELECT kind,entity_id,local_revision FROM sync_revision_ids identity
@@ -63,8 +104,9 @@ export class LocalSync {
           this.captureWrite('tasks', task);
           for (const turn of this.turns.list(task.id)) this.record({ kind: 'turn', value: SyncTurn.strip().parse(turn) });
         }
+        // One row at a time: reading every run, event and answer into memory first took gigabytes on a large profile.
         for (const table of ['sources', 'routines', 'runs', 'events', 'artifacts']) {
-          for (const value of this.store.all(table)) this.captureWrite(table, value);
+          for (const row of this.store.db.prepare(`SELECT data FROM ${table} ORDER BY rowid`).iterate()) this.captureWrite(table, JSON.parse(String(row.data)));
         }
         for (const key of ['theme', 'language', 'sidebarOrder', 'taskTitles', 'marketOrigins', 'emptyChannels', 'spaces', 'entityState', 'customConnections']) {
           const row = this.store.db.prepare('SELECT data FROM settings WHERE id=?').get(key);
@@ -72,10 +114,38 @@ export class LocalSync {
         }
         this.purgePermanentPayloads();
         this.purgeBlockedOutbox(true);
+        // Raw SQL, not a setting write: the stamp is about this database, and is never captured, synced or exported.
+        this.store.db.prepare('INSERT INTO settings(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data')
+          .run(BACKFILL_STAMP, JSON.stringify(SYNC_BACKFILL_REVISION));
       });
     } finally {
       this.backfilling = false;
+      this.endPass(ownsPass);
     }
+  }
+  /** Runs `work` with the answers a pass over many rows asks for again and again kept, as a restore does; see `pass`. */
+  bulk<T>(work: () => T): T {
+    const ownsPass = this.beginPass();
+    try {
+      return work();
+    } finally {
+      this.endPass(ownsPass);
+    }
+  }
+  private beginPass(): boolean {
+    if (this.pass) return false;
+    this.pass = { visibility: new Map(), roots: new Map() };
+    this.revisions.rememberReads(true);
+    return true;
+  }
+  private endPass(owned: boolean) {
+    if (!owned) return;
+    this.pass = undefined;
+    this.revisions.rememberReads(false);
+  }
+  private backfillStamped(): boolean {
+    const row = this.store.db.prepare('SELECT data FROM settings WHERE id=?').get(BACKFILL_STAMP);
+    return row !== undefined && JSON.parse(String(row.data)) === SYNC_BACKFILL_REVISION;
   }
   setRecordingContext(raw?: SyncRecordingContext) {
     this.context = raw === undefined ? undefined : SyncRecordingContext.parse(raw);
@@ -90,10 +160,15 @@ export class LocalSync {
     }
     return context;
   }
-  private visibility(root: SyncRoot) {
+  private visibility(root: SyncRoot): VisibilityRow {
+    const key = `${root.kind}:${root.id}`;
+    const remembered = this.pass?.visibility.get(key);
+    if (remembered) return remembered;
     const row = this.store.db.prepare('SELECT * FROM sync_visibility WHERE kind=? AND entity_id=?').get(root.kind, root.id);
-    return row ? Visibility.parse(row) : { kind: root.kind, entity_id: root.id, epoch: initialEpoch(root), local_only: 0, deleted: 0,
+    const policy = row ? Visibility.parse(row) : { kind: root.kind, entity_id: root.id, epoch: initialEpoch(root), local_only: 0 as const, deleted: 0 as const,
       clock_json: JSON.stringify({ ...this.revisions.clock.read(), wallMs: 0, counter: 0 }) };
+    this.pass?.visibility.set(key, policy);
+    return policy;
   }
   isLocalOnly(kind: SyncRoot['kind'], id: string): boolean {
     return this.roots(kind, id).some(root => {
@@ -106,32 +181,41 @@ export class LocalSync {
    * (every synced copy that names it is erased and fenced), and a chat names its orglets, so these never sync.
    */
   chatsKeptByDeletedOrglet(): string[] {
-    return this.store.all<Task>('tasks')
-      .filter(task => !task.deletedAt && !this.visibility({ kind: 'task', id: task.id }).deleted
-        && this.roots('task', task.id).some(root => root.kind === 'worker' && Boolean(this.visibility(root).deleted)))
-      .map(task => task.id);
+    // Read from the policies in one query, as localOnlyState does: a per-chat visibility lookup is a scan at scale.
+    return this.localOnlyState().deletedOrgletTasks;
   }
   localOnlyState() {
-    const rows = this.store.db.prepare('SELECT kind,entity_id,deleted FROM sync_visibility WHERE local_only=1 OR deleted=1').all();
+    const rows = this.store.db.prepare('SELECT kind,entity_id,local_only,deleted FROM sync_visibility WHERE local_only=1 OR deleted=1').all();
+    // A computer that has never hidden or deleted anything has nothing to say, and the window asks on every change.
+    if (!rows.length) return { workers: [], tasks: [], permanentWorkers: [], deletedOrgletTasks: [], permanentTasks: [], inheritedTasks: [] };
     const tasks = this.store.all<Task>('tasks');
     const workerIds = new Set(this.store.db.prepare('SELECT id FROM workers').all().map(row => String(row.id)));
     const taskIds = new Set(tasks.map(task => task.id));
+    // A root with no row is neither hidden nor deleted, so the rows above are every policy that matters.
+    const policies = new Map(rows.map(row => [`${row.kind}:${row.entity_id}`, { localOnly: Boolean(row.local_only), deleted: Boolean(row.deleted) }]));
+    const rootsOf = (task: Task) => this.chatRoots(task).map(root => policies.get(`${root.kind}:${root.id}`));
     return { workers: rows.filter(row => row.kind === 'worker' && workerIds.has(String(row.entity_id))).map(row => String(row.entity_id)),
       tasks: rows.filter(row => row.kind === 'task' && taskIds.has(String(row.entity_id))).map(row => String(row.entity_id)),
       permanentWorkers: rows.filter(row => row.kind === 'worker' && row.deleted && workerIds.has(String(row.entity_id))).map(row => String(row.entity_id)),
-      deletedOrgletTasks: this.chatsKeptByDeletedOrglet(),
-      permanentTasks: tasks.filter(task => this.roots('task', task.id).some(root => this.visibility(root).deleted)).map(task => task.id),
-      inheritedTasks: tasks.filter(task => this.roots('task', task.id).some(root => {
+      // Chats still here whose orglet was deleted: they never sync (see chatsKeptByDeletedOrglet).
+      deletedOrgletTasks: tasks.filter(task => !task.deletedAt && !policies.get(`task:${task.id}`)?.deleted
+        && this.chatRoots(task).some(root => root.kind === 'worker' && policies.get(`worker:${root.id}`)?.deleted)).map(task => task.id),
+      permanentTasks: tasks.filter(task => rootsOf(task).some(policy => policy?.deleted)).map(task => task.id),
+      inheritedTasks: tasks.filter(task => this.chatRoots(task).some(root => {
         if (root.kind === 'task' && root.id === task.id) return false;
-        const policy = this.visibility(root);
-        return Boolean(policy.local_only || policy.deleted);
+        const policy = policies.get(`${root.kind}:${root.id}`);
+        return Boolean(policy?.localOnly || policy?.deleted);
       })).map(task => task.id) };
   }
   private roots(kind: SyncRoot['kind'], id: string): SyncRoot[] {
     if (kind === 'worker') return [{ kind, id }];
+    // Every turn, run, event and answer of a chat asks for the chat's roots, and a long chat's row is 100 KB of ids.
+    const remembered = this.pass?.roots.get(id);
+    if (remembered) return [...remembered];
     const row = this.store.db.prepare('SELECT data FROM tasks WHERE id=?').get(id);
-    if (!row) return [{ kind, id }];
-    return this.chatRoots(JSON.parse(String(row.data)) as Task);
+    const found = row ? this.chatRoots(JSON.parse(String(row.data)) as Task) : [{ kind, id }];
+    this.pass?.roots.set(id, found);
+    return [...found];
   }
   private teamWorkers(teamId?: string): string[] {
     const row = teamId && this.store.db.prepare('SELECT data FROM teams WHERE id=?').get(teamId);
@@ -251,6 +335,9 @@ export class LocalSync {
   }
   /** Erase replicated copies; canonical paid/cited history keeps its own retention policy. */
   private purgePermanentPayloads() {
+    // With no deletion and no deleted root on record, nothing can be blocked (`permanentlyBlocked` reads only those),
+    // so there is nothing to find in the replica; the scan parsed every record to learn that.
+    if (!this.store.db.prepare('SELECT 1 FROM sync_deletions LIMIT 1').get() && !this.store.db.prepare('SELECT 1 FROM sync_visibility WHERE deleted=1 LIMIT 1').get()) return;
     for (const table of ['sync_records', 'sync_outbox', 'sync_inbox']) {
       for (const row of this.store.db.prepare(`SELECT rowid,data FROM ${table}`).all()) {
         const raw: unknown = JSON.parse(String(row.data));
@@ -293,8 +380,9 @@ export class LocalSync {
   }
   private enqueue(record: SyncRecord) {
     if (!this.context || !this.eligible(record) || !this.sendable(record)) return;
-    this.store.db.prepare('INSERT OR IGNORE INTO sync_outbox(account_key,record_id,data) VALUES(?,?,?)')
-      .run(this.context.accountKey, record.id, JSON.stringify(record));
+    const text = JSON.stringify(record);
+    this.store.db.prepare('INSERT OR IGNORE INTO sync_outbox(account_key,record_id,data,rank,sort_key,bytes) VALUES(?,?,?,?,?,?)')
+      .run(this.context.accountKey, record.id, text, outboxRank(record.data), record.data.kind === 'chat' ? record.data.value.createdAt : '', Buffer.byteLength(text, 'utf8'));
   }
   /** Returns whether a new envelope was written. */
   private record(raw: SyncData): boolean {
@@ -338,7 +426,7 @@ export class LocalSync {
       const run = z.object({ id: Id, taskId: Id, startedAt: z.iso.datetime(), snapshot: z.object({ inputRevision: z.number().int().nonnegative().optional(),
         turnId: Id.optional(), input: RunInput.optional() }).passthrough(), originDeviceId: Id.optional() }).parse(value);
       const alias = run.snapshot.inputRevision ?? 0;
-      let saved = this.turns.list(run.taskId).find(turn => turn.localRevision === alias);
+      let saved = this.turns.get(run.taskId, alias);
       if (!saved && run.snapshot.input) saved = this.turns.save({ id: run.snapshot.turnId ?? turnMessageId(run.taskId, alias), taskId: run.taskId,
         createdAt: this.turns.nextCreatedAt(run.taskId, Date.parse(run.startedAt)), input: SyncTurn.shape.input.strip().parse(run.snapshot.input) }, alias);
       if (saved) this.recordTurn(SyncTurn.strip().parse(saved));
@@ -347,22 +435,26 @@ export class LocalSync {
     if (table !== 'tasks' || this.importing) return value;
     const task = TaskInput.strip().parse(value);
     const alias = task.inputRevision ?? 0;
-    const savedTurns = this.turns.list(task.id);
-    const existing = savedTurns.find(turn => turn.localRevision === alias);
+    // Only the turn this write is about is read whole; the rest of a long chat is needed by id alone.
+    const existing = this.turns.get(task.id, alias);
     const input = existing?.input ?? task.currentInput ?? (alias === 0 ? task : undefined);
     if (!input) return value;
     const requestedOwner = task.currentTurnId && this.store.db.prepare('SELECT task_id FROM chat_turns WHERE id=?').get(task.currentTurnId);
     const requestedId = task.currentTurnId && (!requestedOwner || requestedOwner.task_id === task.id)
-      && !savedTurns.some(turn => turn.id === task.currentTurnId && turn.localRevision !== alias)
+      && !Object.entries(this.turns.ids(task.id)).some(([revision, turnId]) => turnId === task.currentTurnId && Number(revision) !== alias)
       ? task.currentTurnId : undefined;
     const turn = this.turns.save({ id: existing?.id ?? requestedId ?? (alias === 0 ? task.id : randomUUID()), taskId: task.id,
       createdAt: existing?.createdAt ?? task.currentTurnCreatedAt ?? (alias === 0 ? task.createdAt : this.turns.nextCreatedAt(task.id)),
       input: SyncTurn.shape.input.strip().parse(input) }, alias);
-    const turnIds = Object.fromEntries(this.turns.list(task.id).map(saved => [saved.localRevision, saved.id]));
-    return { ...value, currentTurnId: turn.id, turnIds };
+    return { ...value, currentTurnId: turn.id, turnIds: this.turns.ids(task.id) };
   }
   captureWrite(table: string, value: unknown, previous?: unknown) {
     if (this.importing) return;
+    // A chat's roots come from its row, its crew and the orglets; a pass keeps them only while none of those is written.
+    if (this.pass && table !== 'runs' && table !== 'events' && table !== 'artifacts') {
+      if (table === 'tasks') this.pass.roots.delete((value as { id: string }).id);
+      else this.pass.roots.clear();
+    }
     if (table === 'workers') {
       const worker = value as Worker;
       const before = previous as Worker | undefined;
@@ -422,7 +514,7 @@ export class LocalSync {
       if (!this.visibility({ kind: 'task', id: task.id }).local_only) this.withdraw({ kind: 'task', id: task.id }, true, false);
     }
     if (!before || canonicalJson(chat) !== canonicalJson(priorChat)) {
-      const anchor = task.sideOf && this.turns.list(task.sideOf.taskId).find(turn => turn.localRevision === task.sideOf!.throughRevision);
+      const anchor = task.sideOf && this.turns.get(task.sideOf.taskId, task.sideOf.throughRevision);
       // Missing legacy context stays local instead of attaching the thread to another device's numeric alias.
       if (!task.sideOf || anchor) this.record({ kind: 'chat', value: SyncChat.parse({ ...chat,
         assignees: task.assignees === 'all' ? this.participantIds(task) : task.assignees, participants: this.participantIds(task),
@@ -435,7 +527,7 @@ export class LocalSync {
       if (row) this.captureWrite('sources', JSON.parse(String(row.data)));
     }
     this.purgeBlockedOutbox();
-    const turn = this.turns.list(task.id).find(saved => saved.localRevision === (task.inputRevision ?? 0));
+    const turn = this.turns.get(task.id, task.inputRevision ?? 0);
     if (turn) this.recordTurn(SyncTurn.strip().parse(turn));
     for (const field of ['title', 'archivedAt', 'channel'] as const) {
       if (canonicalJson(task[field] ?? null) !== canonicalJson(before?.[field] ?? null)) {
@@ -461,7 +553,7 @@ export class LocalSync {
     }
   }
   private captureQuote(taskId: string, quote: ChatQuote, deleted: boolean) {
-    const anchor = this.turns.list(taskId).find(turn => turn.localRevision === quote.afterRevision);
+    const anchor = this.turns.get(taskId, quote.afterRevision);
     if (!anchor) return;
     const { afterRevision: _alias, ...value } = quote;
     this.record({ kind: 'quote', taskId, value: { ...value, afterTurnId: anchor.id }, deleted });
@@ -519,6 +611,7 @@ export class LocalSync {
     if (previous.deleted && !deleted) throw new Error('Mục đã xóa không thể bật đồng bộ lại.');
     const epoch = randomUUID();
     const clock = this.revisions.clock.tick();
+    this.pass?.visibility.clear();
     this.store.db.prepare('INSERT INTO sync_visibility VALUES(?,?,?,?,?,?) ON CONFLICT(kind,entity_id) DO UPDATE SET epoch=excluded.epoch,local_only=excluded.local_only,deleted=excluded.deleted,clock_json=excluded.clock_json')
       .run(root.kind, root.id, epoch, Number(localOnly), Number(deleted), JSON.stringify(clock));
     const record = SyncRecord.parse({ schemaVersion: 1, id: randomUUID(), origin: clock.deviceId, clock, scopes: [],
@@ -601,7 +694,7 @@ export class LocalSync {
     // Incomplete legacy rows remain visible locally; they cannot establish a frozen public history.
     if (!run.snapshot.worker || !run.snapshot.skill) return;
     if (this.runRoots(run).some(root => this.visibility(root).deleted || this.visibility(root).local_only)) return;
-    const turn = this.turns.list(run.taskId).find(turn => turn.localRevision === (run.snapshot.inputRevision ?? 0));
+    const turn = this.turns.get(run.taskId, run.snapshot.inputRevision ?? 0);
     if (!turn) return;
     const key = `run:${run.id}`;
     if (this.store.db.prepare('SELECT record_key FROM sync_records WHERE record_key=?').get(key)) return;
@@ -633,7 +726,12 @@ export class LocalSync {
     }
   }
   private refreshScopes(taskId?: string, sourcesOnly = false) {
-    for (const row of this.store.db.prepare('SELECT record_key,data FROM sync_records').all()) {
+    // A change to one chat looks only at the records that name it; every record was read and parsed before (6 s on 280,000).
+    const rows = taskId
+      ? this.store.db.prepare(`SELECT record_key,data FROM sync_records WHERE EXISTS (SELECT 1 FROM json_each(json_extract(data,'$.scopes'))
+          WHERE json_extract(value,'$.kind')='task' AND json_extract(value,'$.id')=?)`).all(taskId)
+      : this.store.db.prepare('SELECT record_key,data FROM sync_records').all();
+    for (const row of rows) {
       const previous = SyncRecord.parse(JSON.parse(String(row.data)));
       if (previous.data.kind === 'withdraw' || previous.data.kind === 'delete') continue;
       if (sourcesOnly && previous.data.kind !== 'source') continue;
@@ -674,23 +772,32 @@ export class LocalSync {
     const checked = this.assertContext(context);
     this.assertCompatible(context);
     z.number().int().min(1).max(100).parse(limit);
-    this.store.transaction(() => this.purgeBlockedOutbox());
     // The server checks each record against what it already holds plus the rest of the batch, so whatever a record
-    // depends on goes first: an orglet before its skill, a chat before its turns, a run before its answer.
-    return this.store.db.prepare(`SELECT sequence,data FROM sync_outbox WHERE account_key=? AND length(CAST(data AS BLOB))<=?
-      ORDER BY CASE json_extract(data,'$.data.kind')
-        WHEN 'withdraw' THEN 0 WHEN 'delete' THEN 0
-        WHEN 'revision' THEN CASE json_extract(data,'$.data.revision.entity') WHEN 'worker' THEN 1 WHEN 'skill' THEN 2 WHEN 'team' THEN 3 ELSE 9 END
-        WHEN 'entityState' THEN 4 WHEN 'chat' THEN 5 WHEN 'turn' THEN 6 WHEN 'source' THEN 7
-        WHEN 'run' THEN 10 WHEN 'artifact' THEN 11 WHEN 'event' THEN 11 ELSE 8 END,
-        CASE json_extract(data,'$.data.kind') WHEN 'chat' THEN json_extract(data,'$.data.value.createdAt') ELSE '' END,
-        sequence LIMIT ?`).all(checked.accountKey, SYNC_RECORD_BYTES, limit)
-      .map(row => ({ sequence: Number(row.sequence), record: SyncRecord.parse(JSON.parse(String(row.data))) }));
+    // depends on goes first: an orglet before its skill, a chat before its turns, a run before its answer. The index
+    // serves that order (named, because left to itself SQLite filters on size first and sorts the whole queue); a record is checked as it is picked, and one that is no longer allowed to leave is dropped
+    // here, so nothing ineligible is ever sent. The whole outbox was checked at every round before, which took 2.8 s
+    // for 5,000 queued records and grew with the square of the queue.
+    this.store.rankOutbox();
+    const picked: { sequence: number; record: SyncRecord }[] = [];
+    const dropped: number[] = [];
+    for (const row of this.store.db.prepare(`SELECT sequence,data FROM sync_outbox INDEXED BY sync_outbox_order WHERE account_key=? AND bytes<=?
+      ORDER BY rank,sort_key,sequence`).iterate(checked.accountKey, SYNC_RECORD_BYTES)) {
+      const record = SyncRecord.parse(JSON.parse(String(row.data)));
+      if (!this.eligible(record)) {
+        dropped.push(Number(row.sequence));
+        continue;
+      }
+      picked.push({ sequence: Number(row.sequence), record });
+      if (picked.length >= limit) break;
+    }
+    if (dropped.length) this.store.transaction(() => { for (const sequence of dropped) this.store.db.prepare('DELETE FROM sync_outbox WHERE sequence=?').run(sequence); });
+    return picked;
   }
   /** Queued changes the server would refuse for their size; they stay on this computer. */
   oversized(context: SyncRecordingContext): number {
     const checked = this.assertContext(context);
-    return Number(this.store.db.prepare('SELECT COUNT(*) AS count FROM sync_outbox WHERE account_key=? AND length(CAST(data AS BLOB))>?')
+    this.store.rankOutbox();
+    return Number(this.store.db.prepare('SELECT COUNT(*) AS count FROM sync_outbox WHERE account_key=? AND bytes>?')
       .get(checked.accountKey, SYNC_RECORD_BYTES)!.count);
   }
   /** Whether a newer Orglet left data here that this build cannot read; sending waits for an update. */
@@ -701,12 +808,14 @@ export class LocalSync {
   /** After the account was downloaded: queue every public record whose current envelope the server does not hold. */
   requeue(context: SyncRecordingContext, confirmed: ReadonlyMap<string, string>) {
     this.assertContext(context);
-    this.store.transaction(() => {
-      for (const row of this.store.db.prepare('SELECT record_key,data FROM sync_records').all()) {
+    // Every record is checked against the same few chats and orglets; a pass remembers those answers. Joining an account
+    // with 230,000 records took 5 minutes of the core's time without it.
+    this.bulk(() => this.store.transaction(() => {
+      for (const row of this.store.db.prepare('SELECT record_key,data FROM sync_records').iterate()) {
         const record = SyncRecord.parse(JSON.parse(String(row.data)));
         if (confirmed.get(String(row.record_key)) !== record.id) this.enqueue(record);
       }
-    });
+    }));
   }
   deviceId(): string {
     return this.revisions.clock.read().deviceId;
@@ -893,6 +1002,7 @@ export class LocalSync {
       this.purgePermanentPayloads();
       this.purgeBlockedOutbox();
     } else if (data.kind === 'withdraw') {
+      this.pass?.visibility.clear();
       this.store.db.prepare('INSERT INTO sync_visibility VALUES(?,?,?,?,?,?) ON CONFLICT(kind,entity_id) DO UPDATE SET epoch=excluded.epoch,local_only=excluded.local_only,deleted=excluded.deleted,clock_json=excluded.clock_json')
         .run(data.root.kind, data.root.id, data.epoch, Number(data.localOnly), Number(data.deleted), JSON.stringify(record.clock));
       if (data.deleted && data.root.kind === 'task' && this.exists('tasks', data.root.id)) {

@@ -29,10 +29,12 @@ export class ScheduleDelivery {
       since = now();
       this.store.setSetting(DELIVERY_SINCE, since);
     }
-    const tasks = this.store.all<Task>('tasks');
-    const waiting = tasks.filter(task => task.routineId && !task.deletedAt && task.createdAt >= since && ['completed', 'partial'].includes(task.status)
+    // The tick asks every five seconds; the database narrows the chats to the schedule runs not yet delivered, and the
+    // whole list of chats is read only when one is to be posted.
+    const waiting = this.store.scheduleRunsToDeliver(since).filter(task => task.routineId && !task.deletedAt && task.createdAt >= since && ['completed', 'partial'].includes(task.status)
       && (!task.deliveredTo || ('quiet' in task.deliveredTo && task.attention?.notified)));
     if (!waiting.length) return;
+    const tasks = this.store.all<Task>('tasks');
     const routines = new Map(this.store.all<Routine>('routines').map(routine => [routine.id, routine]));
     const held = new Set(this.store.heldForReview());
     let changed = false;

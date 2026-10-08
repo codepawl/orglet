@@ -100,7 +100,8 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
   signal?.addEventListener('abort', abort, { once: true });
   port.postMessage({ type: 'profile', id, input });
 });
-const store = new Store(join(process.argv[2], 'orglet.sqlite'));
+// A profile from before the sync replica was stamped is read through once after "ready", not before it (see Store).
+const store = new Store(join(process.argv[2], 'orglet.sqlite'), { deferSyncPass: true });
 const moderationJournal = new MarketModerationJournal(store);
 // Only main sends `syncReplica`, while it talks to the sync server; the window's command list does not have it.
 const syncReplica = new SyncReplica(store, () => port.postMessage({ type: 'changed' }));
@@ -275,5 +276,8 @@ function reportTurn(command: string, args: unknown, result: unknown) {
 void core.tick();
 setInterval(() => { void core.tick().catch(() => port.postMessage({ type: 'changed' })); }, 5000);
 port.postMessage({ type: 'ready', sqliteVersion: store.sqliteVersion });
+// A turn of the loop first, so "ready" is on its way before the pass starts; commands the window sends meanwhile wait
+// their turn behind it, as they would behind any long step of the core.
+setTimeout(() => store.sync.completeDeferredPass(), 0);
 // Chats from before search covered every message are indexed now, a few at a time, behind the window (COD-267).
 void core.chatSearch.backfill().catch(() => undefined);

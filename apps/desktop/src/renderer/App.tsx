@@ -14,6 +14,7 @@ import { SettingsDialog, type SettingsTab } from './components/SettingsDialog';
 import { TaskThread, ThreadSkeleton, type ThreadStartInfo } from './components/TaskThread';
 import { SideThreadPanel } from './components/SideThreadPanel';
 import { focusMessage } from './components/messageMarks';
+import { coalesceRuns } from './coalesceRuns';
 import { SourcePanel, type SourceTarget } from './components/SourcePanel';
 import { SourceDialog } from './components/SourceViewer';
 import { TaskDialog } from './components/TaskDialog';
@@ -97,7 +98,7 @@ import { ChannelDialog, type ChannelDraft } from './components/ChannelDialog';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
 import { EditableText } from '@codepawlhq/orglet-ui';
-import { APP_KEY, dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails, updateStates } from './caches';
+import { APP_KEY, dwellAbout, dwellChat, dwellModels, followWorkspace, showEarlierTurns, taskDetails, updateStates } from './caches';
 import { useCached } from './prefetch';
 import { becameReady, updateIndicator } from '../shared/updates';
 import { readyUpdateLabel, UpdateButton } from './components/UpdateButton';
@@ -588,7 +589,8 @@ export function App() {
   }, [goneChat]);
   useEffect(() => {
     if (!window.orglet) { setError(t('Mở Orglet bằng pnpm dev để dùng desktop core. Bản web không có quyền truy cập dữ liệu.')); return; }
-    return orglet.onChange(() => void refresh());
+    // A burst of change notices is one read now and one after it, not one read for each (see coalesceRuns).
+    return orglet.onChange(coalesceRuns(refresh));
   }, [refresh]);
   // Every run's live step, from launch, so the Running view shows what a run is doing even if it opens mid-run.
   useEffect(() => {
@@ -707,10 +709,21 @@ export function App() {
     const frame = requestAnimationFrame(() => {
       const found = document.getElementById(`message-${messageToShow.messageId}`);
       if (found) focusMessage(messageToShow.messageId);
+      // A message older than the turns the window read: read them all, and the jump looks again.
+      if (!found && detail.earlierTurns && showingCachedDetail.current !== messageToShow.taskId) {
+        void showEarlierTurns(messageToShow.taskId, true).then(opened => { if (selectedRef.current === opened.task.id) setDetail(opened); });
+        return;
+      }
       if (found || showingCachedDetail.current !== messageToShow.taskId) setMessageToShow(undefined);
     });
     return () => cancelAnimationFrame(frame);
   }, [detail, selected, messageToShow]);
+  /** "Show earlier" on a long chat: reads more of its older turns and draws them above the ones on screen. */
+  const showEarlierOfOpenChat = () => {
+    const chatId = selectedRef.current;
+    if (!chatId) return;
+    void showEarlierTurns(chatId).then(opened => { if (selectedRef.current === chatId) setDetail(opened); }).catch(err => setError((err as Error).message));
+  };
   const leaveThread = () => { setSelected(null); setDetail(undefined); setEmptyChannelId(undefined); setBrief(''); setSources([]); setSkippedSources([]); setError(''); };
   const hideTaskLocally = (taskId: string, field: 'archivedAt' | 'deletedAt') => {
     const stamp = new Date().toISOString();
@@ -2728,7 +2741,7 @@ export function App() {
         </>} />
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><LucideCalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã lỡ một lần chạy khi app tắt. Có thể chạy bù một lần.', [singleCatchUp.name]) : t('{0} lịch đã lỡ lần chạy khi app tắt. Mỗi lịch chạy bù được một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}
-      {chatView !== 'chat' ? <ChatViewPanel view={chatView}>{chatViewContent}</ChatViewPanel> : selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} start={threadStart} detail={detail} workspace={workspace} recovery={workspaceRecovery} action={action} showSources={openSources} reviewRecovery={runId => { setRecoveryFocus({ runId, at: Date.now() }); setPanel('activity'); }} openMessage={messageId => {
+      {chatView !== 'chat' ? <ChatViewPanel view={chatView}>{chatViewContent}</ChatViewPanel> : selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} start={threadStart} detail={detail} onShowEarlier={showEarlierOfOpenChat} workspace={workspace} recovery={workspaceRecovery} action={action} showSources={openSources} reviewRecovery={runId => { setRecoveryFocus({ runId, at: Date.now() }); setPanel('activity'); }} openMessage={messageId => {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));

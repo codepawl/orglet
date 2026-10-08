@@ -50,11 +50,11 @@ export class QuietRunReview {
     const held = new Set(this.store.heldForReview());
     const now = this.clock().getTime();
     const found: { task: Task; answer: Artifact }[] = [];
-    for (const task of this.store.all<Task>('tasks')) {
+    for (const task of this.store.finishedScheduleRunsWithoutVerdict()) {
       if (task.attention || task.deletedAt || task.status !== 'completed' || !task.routineId || this.tooOld.has(task.id)) continue;
       const routine = routines.get(task.routineId);
       if (!routine || !isQuietScheduleRun(routine.schedule.frequency, triggerOf(routine).kind, held.has(task.id))) continue;
-      const answer = this.store.detail(task.id).artifacts.at(-1);
+      const answer = this.store.latestArtifact(task.id);
       if (!answer) continue;
       if (now - new Date(answer.createdAt).getTime() > QUIET_RUN_WINDOW_MS) {
         this.tooOld.add(task.id);

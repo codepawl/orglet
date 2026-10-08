@@ -47,9 +47,10 @@ function compare(first: SyncRevision, second: SyncRevision): number {
 /** Maps stable wire identities to immutable local aliases; existing run and memory references never get renumbered. */
 export class SyncRevisions {
   readonly clock: SyncClockStore;
-  constructor(private store: Store, nowMs: () => number = Date.now) {
+  /** `backfill` is false at a start that the capture stamp says needs no pass (see `LocalSync.refreshFromCanonical`). */
+  constructor(private store: Store, nowMs: () => number = Date.now, backfill = true) {
     this.clock = new SyncClockStore(store, nowMs);
-    this.backfill();
+    if (backfill) this.backfill();
   }
   private atomic<T>(work: () => T): T {
     return this.store.transaction(work);
@@ -69,12 +70,21 @@ export class SyncRevisions {
     if (!row) throw new Error('Thiếu nội dung revision đồng bộ.');
     return JSON.parse(String(row.data));
   }
+  /** Revisions read and checked during one pass over many rows; a revision never changes, so it is read once per pass. */
+  private remembered?: Map<string, SyncRevision>;
+  rememberReads(on: boolean) {
+    this.remembered = on ? new Map() : undefined;
+  }
   read(entity: Entity, entityId: string, alias: number): SyncRevision {
+    const key = `${entity}:${entityId}:${alias}`;
+    const known = this.remembered?.get(key);
+    if (known) return known;
     const metadata = this.metadata(entity, entityId, alias);
     if (!metadata) throw new Error('Thiếu định danh revision đồng bộ.');
     const result = SyncRevision.parse({ entity, revisionId: metadata.revision_id, generation: metadata.generation,
       clock: JSON.parse(metadata.clock_json), value: projection(entity, this.raw(entity, entityId, alias)) });
     if (dataHash(result) !== metadata.data_hash) throw new Error('Nội dung revision đồng bộ đã đổi.');
+    this.remembered?.set(key, result);
     return result;
   }
   /** Old backups may hold an exact frozen snapshot after its live entity or history was removed. */

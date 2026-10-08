@@ -7,16 +7,55 @@ import { DELETED_CHAT_TEXT } from './deleted-chat';
 
 export type SavedChatTurn = SyncTurn & { localRevision: number };
 
+/**
+ * Rows already checked by `SyncTurn`, by their stored text. A turn is written once and never changes, but a chat of 2,000
+ * turns was read, parsed and checked again whole on every write to it (a 40 ms event, a 21 ms task save); a row seen
+ * before is now a lookup. The parsed value is shared, so callers treat a turn as read-only, as they already do.
+ */
+const CHECKED_TURN_LIMIT = 50_000;
+const checkedTurns = new Map<string, SyncTurn>();
+function checkedTurn(text: string): SyncTurn {
+  const known = checkedTurns.get(text);
+  if (known) return known;
+  const parsed = SyncTurn.parse(JSON.parse(text));
+  if (checkedTurns.size >= CHECKED_TURN_LIMIT) checkedTurns.delete(checkedTurns.keys().next().value!);
+  checkedTurns.set(text, parsed);
+  return parsed;
+}
+
 /** User messages survive even when no run was started before the next message. Numeric aliases stay local. */
 export class ChatTurns {
   constructor(private store: Store) {}
   list(taskId: string): SavedChatTurn[] {
     return this.store.db.prepare('SELECT local_revision,data FROM chat_turns WHERE task_id=? ORDER BY local_revision').all(taskId)
-      .map(row => ({ ...SyncTurn.parse(JSON.parse(String(row.data))), localRevision: Number(row.local_revision) }));
+      .map(row => ({ ...checkedTurn(String(row.data)), localRevision: Number(row.local_revision) }));
+  }
+  /** The turns from `fromRevision` on, for a window onto the end of a long chat. */
+  listFrom(taskId: string, fromRevision: number): SavedChatTurn[] {
+    return this.store.db.prepare('SELECT local_revision,data FROM chat_turns WHERE task_id=? AND local_revision>=? ORDER BY local_revision').all(taskId, fromRevision)
+      .map(row => ({ ...checkedTurn(String(row.data)), localRevision: Number(row.local_revision) }));
+  }
+  /** One turn by its number, without reading the rest of the chat. */
+  get(taskId: string, revision: number): SavedChatTurn | undefined {
+    const row = this.store.db.prepare('SELECT local_revision,data FROM chat_turns WHERE task_id=? AND local_revision=?').get(taskId, revision);
+    return row ? { ...checkedTurn(String(row.data)), localRevision: Number(row.local_revision) } : undefined;
+  }
+  /** The ids of all turns by number: what a chat's `turnIds` holds, without reading any message. */
+  ids(taskId: string): Record<number, string> {
+    return Object.fromEntries(this.store.db.prepare('SELECT local_revision,id FROM chat_turns WHERE task_id=? ORDER BY local_revision').all(taskId)
+      .map(row => [Number(row.local_revision), String(row.id)]));
+  }
+  /** How many turns a chat has and the number of its oldest one among its newest `count`, or undefined when it has no more than that. */
+  windowStart(taskId: string, count: number): number | undefined {
+    const row = this.store.db.prepare('SELECT local_revision FROM chat_turns WHERE task_id=? ORDER BY local_revision DESC LIMIT 1 OFFSET ?').get(taskId, count - 1);
+    return row ? Number(row.local_revision) : undefined;
   }
   /** Later authored messages always sort after their known predecessors, even within a millisecond or clock rollback. */
   nextCreatedAt(taskId: string, wallMs = Date.now()): string {
-    const latest = this.list(taskId).reduce((maximum, turn) => Math.max(maximum, Date.parse(turn.createdAt)), -1);
+    let latest = -1;
+    for (const row of this.store.db.prepare("SELECT json_extract(data,'$.createdAt') AS created_at FROM chat_turns WHERE task_id=?").all(taskId)) {
+      latest = Math.max(latest, Date.parse(String(row.created_at)));
+    }
     return new Date(Math.max(wallMs, latest + 1)).toISOString();
   }
   /** Retained cost records keep message identities without retaining the deleted conversation. */
