@@ -260,8 +260,10 @@ export class Routines {
     try {
       for (const listed of this.store.all<Routine>('routines')) {
         // A run awaited above may have given the person time to delete a later routine in the list.
-        const found = this.store.all<Routine>('routines').find(item => item.id === listed.id);
-        if (!found) continue;
+        // One row by id: reading the whole list again for each schedule made a tick quadratic in the schedules.
+        const row = this.store.db.prepare('SELECT data FROM routines WHERE id=?').get(listed.id);
+        if (!row) continue;
+        const found = JSON.parse(String(row.data)) as Routine;
         const routine = this.forgetYesterdaysCap(found, at);
         if (triggerOf(routine).kind !== 'schedule') continue;
         if (!routine.enabled || new Date(routine.nextDueAt).getTime() > timestamp || this.dispatching.has(routine.id)) continue;

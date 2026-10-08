@@ -34,6 +34,19 @@ export function seedWorker(workerId: string, skillId: string): Worker {
 export const SCHEMA_VERSION = 20;
 
 /**
+ * The conditions the partial indexes in the constructor are made for. A query must repeat a condition word for word to
+ * be served by its index, so each is written once, here, and the queries name their index: without statistics SQLite
+ * walked the whole table in order rather than sort the few rows an index returns (60 ms for 5,000 chats, every tick).
+ */
+const UNSETTLED_STATUSES = "('running','queued','pausing')";
+const UNSETTLED_RUNS = `json_extract(data,'$.status') IN ${UNSETTLED_STATUSES}`;
+const UNSETTLED_TASKS = `json_extract(data,'$.status') IN ${UNSETTLED_STATUSES}`;
+const PENDING_TASKS = "json_extract(data,'$.pendingStart') IS NOT NULL";
+const ROUTINE_TASKS = "json_extract(data,'$.routineId') IS NOT NULL";
+const SHIFT_PAUSED_TASKS = "json_extract(data,'$.pauseReason')='shift'";
+const CHANNEL_TASKS = "json_extract(data,'$.channel') IS NOT NULL";
+
+/**
  * What a new database records for the first-run account question (COD-337). The packaged smokes and screenshot
  * scripts start from an empty profile to test the app behind the question, so they set `ORGLET_SKIP_ACCOUNT_CHOICE=1`
  * and the new install counts as local, the way an older install does.
@@ -62,7 +75,12 @@ export class Store {
   /** Where the database lives; files Orglet keeps for the person (edited sources, COD-280) sit in the same folder. */
   readonly databasePath: string;
   readonly sync: LocalSync;
-  constructor(path: string, options: { syncNow?: () => number } = {}) {
+  /**
+   * `deferSyncPass`: a database that was never stamped (see `LocalSync.refreshFromCanonical`) is not read through at
+   * open but when the caller says (`sync.completeDeferredPass()`), so the app can answer "ready" first: the core must
+   * report ready within 15 seconds, and the pass takes about a millisecond for each saved record.
+   */
+  constructor(path: string, options: { syncNow?: () => number; deferSyncPass?: boolean } = {}) {
     this.databasePath = path;
     this.db = new DatabaseSync(path);
     this.sqliteVersion = String(this.db.prepare('SELECT sqlite_version() AS v').get()!.v);
@@ -314,6 +332,39 @@ export class Store {
           WHERE json_extract(data,'$.provider')='claude-code' AND json_extract(data,'$.taskBudgetMicros')=500000;
           INSERT INTO settings (id,data) VALUES ('claudeCodeDefaultLimitDropped','true');`);
       }
+      // Lookups by the column a chat's rows hang from. Without them every read of one chat scanned its whole table
+      // (the runs, events, answers and usage of every chat in the app), and so did a foreign key check when a chat
+      // was deleted; a 30-turn chat took 1.1 s to open once the app held 70,000 turns. The partial ones list only
+      // what is unsettled, so the start and the five-second tick find it without reading the rest. Plain `IF NOT
+      // EXISTS` indexes, no schema version, so an older build still opens the workspace.
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS runs_task ON runs(task_id);
+        CREATE INDEX IF NOT EXISTS events_run ON events(run_id);
+        CREATE INDEX IF NOT EXISTS profiles_task ON profiles(task_id);
+        CREATE INDEX IF NOT EXISTS reservations_task ON reservations(task_id);
+        CREATE INDEX IF NOT EXISTS reservations_run ON reservations(run_id);
+        CREATE INDEX IF NOT EXISTS app_proposals_task ON app_proposals(task_id);
+        CREATE INDEX IF NOT EXISTS runs_unsettled ON runs(task_id) WHERE ${UNSETTLED_RUNS};
+        CREATE INDEX IF NOT EXISTS tasks_unsettled ON tasks(id) WHERE ${UNSETTLED_TASKS};
+        CREATE INDEX IF NOT EXISTS tasks_pending_start ON tasks(id) WHERE ${PENDING_TASKS};
+        CREATE INDEX IF NOT EXISTS tasks_archived_at ON tasks(json_extract(data,'$.archivedAt')) WHERE json_extract(data,'$.archivedAt') IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS tasks_routine ON tasks(id) WHERE ${ROUTINE_TASKS};
+        CREATE INDEX IF NOT EXISTS tasks_shift_paused ON tasks(id) WHERE ${SHIFT_PAUSED_TASKS};
+        CREATE INDEX IF NOT EXISTS tasks_channel ON tasks(id) WHERE ${CHANNEL_TASKS};
+        CREATE INDEX IF NOT EXISTS chat_messages_at ON chat_messages(at);
+        CREATE INDEX IF NOT EXISTS reservations_totals ON reservations(state,amount);
+        CREATE INDEX IF NOT EXISTS ledger_totals ON ledger(amount,input_tokens,output_tokens);`);
+      // The order the outbox is sent in, kept in columns an index can serve. Each push round used to sort the whole outbox
+      // by JSON fields it had to open row by row: 2.8 s a round for 5,000 queued records. A build that does not know these
+      // columns inserts rows without them; the update below gives such rows theirs at the next start.
+      const outboxColumns = new Set(this.db.prepare('PRAGMA table_info(sync_outbox)').all().map(row => String(row.name)));
+      for (const column of ['rank INTEGER', 'sort_key TEXT', 'bytes INTEGER']) {
+        if (!outboxColumns.has(column.split(' ')[0])) this.db.exec(`ALTER TABLE sync_outbox ADD COLUMN ${column}`);
+      }
+      this.db.exec(`CREATE INDEX IF NOT EXISTS sync_outbox_order ON sync_outbox(account_key,rank,sort_key,sequence);
+        CREATE INDEX IF NOT EXISTS sync_outbox_size ON sync_outbox(account_key,bytes);
+        CREATE INDEX IF NOT EXISTS sync_outbox_unranked ON sync_outbox(sequence) WHERE rank IS NULL;`);
+      this.rankOutbox();
       this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
@@ -323,8 +374,10 @@ export class Store {
     // Crews become channels where the lead splits the work (COD-369); the crew rows stay, so no schema version either.
     migrateCrews(this, now);
     if (newInstall) this.setSetting('accountChoice', firstRunChoice());
+    // The replica comes first, so what the recovery below changes is captured as it is written, not by a pass over
+    // every row at the next start.
+    this.sync = new LocalSync(this, options.syncNow, options.deferSyncPass);
     this.recover();
-    this.sync = new LocalSync(this, options.syncNow);
   }
   /** The worker and skill a new workspace starts with; run again after the workspace is erased. */
   seedDefaults() {
@@ -421,10 +474,14 @@ export class Store {
     }
   }
   usage(taskId?: string): Usage {
-    const where = taskId ? 'WHERE r.task_id=?' : '';
-    const row = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state!='settled' THEN r.amount ELSE 0 END),0) AS reserved, COALESCE(SUM(l.amount),0) AS charged, COALESCE(SUM(CASE WHEN r.state='unknown' THEN 1 ELSE 0 END),0) AS uncertain, COALESCE(SUM(l.input_tokens),0) AS input_tokens, COALESCE(SUM(l.output_tokens),0) AS output_tokens,
+    const row = taskId ? this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state!='settled' THEN r.amount ELSE 0 END),0) AS reserved, COALESCE(SUM(l.amount),0) AS charged, COALESCE(SUM(CASE WHEN r.state='unknown' THEN 1 ELSE 0 END),0) AS uncertain, COALESCE(SUM(l.input_tokens),0) AS input_tokens, COALESCE(SUM(l.output_tokens),0) AS output_tokens,
       COALESCE(SUM(c.cache_read_tokens),0) AS cache_read_tokens, COALESCE(SUM(c.cache_write_tokens),0) AS cache_write_tokens
-      FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id LEFT JOIN ledger_cache c ON c.ledger_id=l.id ${where}`).get(...(taskId ? [taskId] : []))!;
+      FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id LEFT JOIN ledger_cache c ON c.ledger_id=l.id WHERE r.task_id=?`).get(taskId)!
+      // Every ledger row belongs to exactly one reservation, so the whole app's totals are three plain sums. The join
+      // above took 260 ms on 70,000 requests and ran on every refresh of the window.
+      : { ...this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN state!='settled' THEN amount ELSE 0 END),0) AS reserved, COALESCE(SUM(CASE WHEN state='unknown' THEN 1 ELSE 0 END),0) AS uncertain FROM reservations`).get()!,
+        ...this.db.prepare('SELECT COALESCE(SUM(amount),0) AS charged, COALESCE(SUM(input_tokens),0) AS input_tokens, COALESCE(SUM(output_tokens),0) AS output_tokens FROM ledger').get()!,
+        ...this.db.prepare('SELECT COALESCE(SUM(cache_read_tokens),0) AS cache_read_tokens, COALESCE(SUM(cache_write_tokens),0) AS cache_write_tokens FROM ledger_cache').get()! };
     // The decision model's small requests count like chat requests: their cost, their tokens, and, while a call's cost is
     // unknown, a count of such calls that stays visible.
     const decisionWhere = taskId ? 'WHERE task_id=?' : '';
@@ -530,7 +587,8 @@ export class Store {
    * themselves. A schedule's next run waits for them, and its notice and card say so (COD-294).
    */
   heldForReview(): string[] {
-    const rows = this.db.prepare(`SELECT DISTINCT runs.task_id AS taskId FROM workspace_copies copies JOIN runs ON runs.id=copies.run_id
+    // CROSS JOIN keeps the working copies as the outer table: without it SQLite walked every run to look for a copy (180 ms on 70,000 runs).
+    const rows = this.db.prepare(`SELECT DISTINCT runs.task_id AS taskId FROM workspace_copies copies CROSS JOIN runs ON runs.id=copies.run_id
       WHERE json_extract(copies.data,'$.state')='ready' AND json_extract(copies.data,'$.review.state')='pending'`).all();
     return rows.map(row => String(row.taskId));
   }
@@ -539,29 +597,48 @@ export class Store {
     const pending = this.setting<Record<string, { name: string; permissions: WorkspacePermission[] }>>('newChatWorkspace', {});
     return Object.fromEntries(Object.entries(pending).map(([key, entry]) => [key, { name: entry.name, permissions: [...entry.permissions] }]));
   }
-  detail(taskId: string): TaskDetail {
-    const task = this.titled(this.get<Task>('tasks', taskId), this.setting('taskTitles', {}));
-    const savedTurns = this.sync?.turns.list(taskId);
+  /**
+   * One chat's rows, read by the chat they belong to. `recentTurns` keeps only that many of the newest turns, with
+   * their runs, events and answers, and says how many older ones were left out (`earlierTurns`): a chat of 2,000 turns
+   * was 6 MB, sent whole to the window on every change. The core's own readers ask for the whole chat.
+   */
+  detail(taskId: string, recentTurns?: number): TaskDetail {
+    // Only this chat's title is read, not the titles of every chat.
+    const title = this.db.prepare("SELECT json_extract(data,?) AS title FROM settings WHERE id='taskTitles'").get(`$."${taskId}"`);
+    const task = this.titled(this.get<Task>('tasks', taskId), title?.title ? { [taskId]: String(title.title) } : {});
+    const from = recentTurns === undefined ? undefined : this.sync?.turns.windowStart(taskId, recentTurns);
+    const savedTurns = this.sync && (from === undefined ? this.sync.turns.list(taskId) : this.sync.turns.listFrom(taskId, from));
     if (savedTurns) task.turnIds = Object.fromEntries(savedTurns.map(turn => [turn.localRevision, turn.id]));
-    const runs = this.all<Run>('runs').filter(run => run.taskId === taskId);
-    const runIds = new Set(runs.map(run => run.id));
+    const earlierTurns = from === undefined ? 0 : Number(this.db.prepare('SELECT COUNT(*) AS count FROM chat_turns WHERE task_id=? AND local_revision<?').get(taskId, from)!.count);
+    // A run belongs to the turn it answers; one with no number answers the first.
+    const since = from === undefined ? '' : " AND COALESCE(json_extract(r.data,'$.snapshot.inputRevision'),0)>=?";
+    const runs = this.db.prepare(`SELECT r.data FROM runs r WHERE r.task_id=?${since} ORDER BY r.rowid`).all(...(from === undefined ? [taskId] : [taskId, from]))
+      .map(row => JSON.parse(String(row.data))) as Run[];
+    // The rest hangs off those runs by id, so a window reads each run's events and answer by index, not by looking at every run again.
+    const runIds = JSON.stringify(runs.map(run => run.id));
+    const rowsOf = (sql: string) => this.db.prepare(sql).all(runIds).map(row => JSON.parse(String(row.data)));
     const grantRow = this.db.prepare('SELECT data FROM workspace_grants WHERE task_id=?').get(taskId);
     const currentGrant = grantRow ? JSON.parse(String(grantRow.data)) as { id: string; revision: number; revoked: boolean } : null;
-    const workspaceEvidence = this.db.prepare('SELECT data FROM workspace_read_evidence').all()
-      .map(row => WorkspaceReadEvidence.parse(JSON.parse(String(row.data))))
-      .filter(evidence => runIds.has(evidence.runId))
+    const workspaceEvidence = rowsOf('SELECT w.data FROM workspace_read_evidence w WHERE w.run_id IN (SELECT value FROM json_each(?)) ORDER BY w.rowid')
+      .map(row => WorkspaceReadEvidence.parse(row))
       .map(evidence => ({ ...evidence, grantCurrent: !task.archivedAt && !task.deletedAt && !!currentGrant
         && !currentGrant.revoked && currentGrant.id === evidence.grantId && currentGrant.revision === evidence.grantRevision }));
     const appProposals = this.db.prepare('SELECT data FROM app_proposals WHERE task_id=? ORDER BY rowid').all(taskId)
-      .map(row => AppProposal.parse(JSON.parse(String(row.data))));
-    return { task, savedTurns, runs, events: this.all<Activity>('events').filter(e => runIds.has(e.runId)), artifacts: this.all<Artifact>('artifacts').filter(a => runIds.has(a.runId)), profiles: this.all<ProfileRecord>('profiles').filter(p => p.taskId === taskId), preflights: this.all<PreflightRecord>('preflights').filter(p => p.taskId === taskId), sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, appProposals, usage: this.usage(taskId) };
+      .map(row => AppProposal.parse(JSON.parse(String(row.data))))
+      .filter(proposal => from === undefined || proposal.inputRevision >= from);
+    const events = rowsOf('SELECT e.data FROM events e WHERE e.run_id IN (SELECT value FROM json_each(?)) ORDER BY e.rowid') as Activity[];
+    const artifacts = rowsOf('SELECT a.data FROM artifacts a WHERE a.run_id IN (SELECT value FROM json_each(?)) ORDER BY a.rowid') as Artifact[];
+    const profiles = this.db.prepare('SELECT data FROM profiles WHERE task_id=? ORDER BY rowid').all(taskId).map(row => JSON.parse(String(row.data)) as ProfileRecord);
+    const preflights = this.db.prepare('SELECT data FROM preflights WHERE task_id=? ORDER BY rowid').all(taskId).map(row => JSON.parse(String(row.data)) as PreflightRecord);
+    return { task, savedTurns, runs, events, artifacts, profiles, preflights, sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, appProposals, usage: this.usage(taskId),
+      ...(earlierTurns > 0 ? { earlierTurns } : {}) };
   }
   recover() {
-    for (const run of this.all<Run>('runs')) {
-      if (run.status === 'running' || run.status === 'queued' || run.status === 'pausing') {
-        this.status(run.taskId, run.id, 'interrupted', 'App đã đóng trước khi lần chạy kết thúc. Kiểm tra chi phí trước khi thử lại.');
-        this.event(run.id, 'Khôi phục lịch sử; không tự gửi lại request bị gián đoạn.');
-      }
+    // Only the unsettled rows are read, through the partial indexes made for them; every run and chat used to be.
+    for (const row of this.db.prepare(`SELECT data FROM runs INDEXED BY runs_unsettled WHERE ${UNSETTLED_RUNS}`).all()) {
+      const run = JSON.parse(String(row.data)) as Run;
+      this.status(run.taskId, run.id, 'interrupted', 'App đã đóng trước khi lần chạy kết thúc. Kiểm tra chi phí trước khi thử lại.');
+      this.event(run.id, 'Khôi phục lịch sử; không tự gửi lại request bị gián đoạn.');
     }
     this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
       SELECT id,'interrupted',? FROM reservations WHERE state='held'`).run(now());
@@ -578,7 +655,59 @@ export class Store {
       WHERE json_extract(data,'$.state') IN ('preparing','integrating')`);
     this.db.exec(`UPDATE workspace_processes SET data=json_set(data,'$.state','uncertain')
       WHERE json_extract(data,'$.state')='running'`);
-    for (const task of this.all<Task>('tasks')) if (task.status === 'running' || task.status === 'queued' || task.status === 'pausing') this.update('tasks', { ...task, status: 'interrupted' });
+    for (const row of this.db.prepare(`SELECT data FROM tasks INDEXED BY tasks_unsettled WHERE ${UNSETTLED_TASKS}`).all()) {
+      this.update('tasks', { ...JSON.parse(String(row.data)) as Task, status: 'interrupted' });
+    }
+  }
+  /** Gives queued records that lack their place in the sending order (written by a build that did not know it) theirs. */
+  rankOutbox() {
+    if (!this.db.prepare('SELECT 1 FROM sync_outbox WHERE rank IS NULL LIMIT 1').get()) return;
+    this.db.exec(`UPDATE sync_outbox SET bytes=length(CAST(data AS BLOB)), sort_key=CASE json_extract(data,'$.data.kind') WHEN 'chat' THEN json_extract(data,'$.data.value.createdAt') ELSE '' END,
+      rank=CASE json_extract(data,'$.data.kind')
+        WHEN 'withdraw' THEN 0 WHEN 'delete' THEN 0
+        WHEN 'revision' THEN CASE json_extract(data,'$.data.revision.entity') WHEN 'worker' THEN 1 WHEN 'skill' THEN 2 WHEN 'team' THEN 3 ELSE 9 END
+        WHEN 'entityState' THEN 4 WHEN 'chat' THEN 5 WHEN 'turn' THEN 6 WHEN 'source' THEN 7
+        WHEN 'run' THEN 10 WHEN 'artifact' THEN 11 WHEN 'event' THEN 11 ELSE 8 END
+      WHERE rank IS NULL`);
+  }
+  /** Chats running, queued or stopping now, read by a partial index. */
+  unsettledTasks(): Task[] {
+    return this.db.prepare(`SELECT data FROM tasks INDEXED BY tasks_unsettled WHERE ${UNSETTLED_TASKS} ORDER BY rowid`).all().map(row => JSON.parse(String(row.data)) as Task);
+  }
+  /** Chats that stopped when their crew's working hours ended; the core runs through them at every change it announces. */
+  shiftPausedTasks(): Task[] {
+    return this.db.prepare(`SELECT data FROM tasks INDEXED BY tasks_shift_paused WHERE ${SHIFT_PAUSED_TASKS} ORDER BY rowid`).all().map(row => JSON.parse(String(row.data)) as Task);
+  }
+  /** Chats whose next message is waiting for an earlier turn to settle, read by a partial index instead of by reading every chat. */
+  pendingTasks(): Task[] {
+    return this.db.prepare(`SELECT data FROM tasks INDEXED BY tasks_pending_start WHERE ${PENDING_TASKS} ORDER BY rowid`).all().map(row => JSON.parse(String(row.data)) as Task);
+  }
+  /** Finished schedule runs the decision model has not looked at, for the quiet-run review that runs on every tick. */
+  finishedScheduleRunsWithoutVerdict(): Task[] {
+    return this.db.prepare(`SELECT data FROM tasks INDEXED BY tasks_routine WHERE ${ROUTINE_TASKS} AND json_extract(data,'$.status')='completed'
+      AND json_extract(data,'$.deletedAt') IS NULL AND json_extract(data,'$.attention') IS NULL ORDER BY rowid`).all().map(row => JSON.parse(String(row.data)) as Task);
+  }
+  /** The newest answer a chat holds, without reading the chat. */
+  latestArtifact(taskId: string): Artifact | undefined {
+    const row = this.db.prepare('SELECT a.data FROM artifacts a JOIN runs r ON r.id=a.run_id WHERE r.task_id=? ORDER BY a.rowid DESC LIMIT 1').get(taskId);
+    return row ? JSON.parse(String(row.data)) as Artifact : undefined;
+  }
+  /** The names of the channels, by id, for search to match: it asks on every keystroke and most chats are not channels. */
+  channelNames(): Map<string, string> {
+    const rows = this.db.prepare(`SELECT id, json_extract(data,'$.channel.name') AS name FROM tasks INDEXED BY tasks_channel
+      WHERE ${CHANNEL_TASKS} AND json_extract(data,'$.deletedAt') IS NULL`).all();
+    return new Map(rows.map(row => [String(row.id), String(row.name)]));
+  }
+  /** The finished schedule runs created since `since` that were not posted into a chat yet, or whose quiet post can now be made. */
+  scheduleRunsToDeliver(since: string): Task[] {
+    return this.db.prepare(`SELECT data FROM tasks INDEXED BY tasks_routine WHERE ${ROUTINE_TASKS} AND json_extract(data,'$.createdAt')>=?
+      AND json_extract(data,'$.status') IN ('completed','partial') AND json_extract(data,'$.deletedAt') IS NULL
+      AND (json_extract(data,'$.deliveredTo') IS NULL OR json_extract(data,'$.attention.notified')=1) ORDER BY rowid`).all(since).map(row => JSON.parse(String(row.data)) as Task);
+  }
+  /** Archived chats whose retention has run out: archived before `cutoff` (an ISO time) and not deleted. */
+  archivedBefore(cutoff: string): Task[] {
+    return this.db.prepare(`SELECT data FROM tasks INDEXED BY tasks_archived_at WHERE json_extract(data,'$.archivedAt') IS NOT NULL AND json_extract(data,'$.archivedAt') < ?
+      AND json_extract(data,'$.deletedAt') IS NULL ORDER BY rowid`).all(cutoff).map(row => JSON.parse(String(row.data)) as Task);
   }
   close() {
     if (!this.db.isOpen) return;

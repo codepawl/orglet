@@ -100,6 +100,17 @@ const Payload = z.object({
   workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), workspaceEvidence: z.array(WorkspaceReadEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
+
+/** A payload's tasks by id, built once per payload: a restore looks one up for every run it compares and every chat it merges. */
+const taskIndexes = new WeakMap<object, Map<string, Payload['tasks'][number]>>();
+function taskById(payload: Payload, taskId: string): Payload['tasks'][number] | undefined {
+  let index = taskIndexes.get(payload);
+  if (!index) {
+    index = new Map(payload.tasks.map(task => [task.id, task]));
+    taskIndexes.set(payload, index);
+  }
+  return index.get(taskId);
+}
 const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.union([z.literal(1), z.literal(2)]), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
 export type BackupSummary = { token: string; workers: number; teams: number; tasks: number; reports: number; createdAt: string };
 const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
@@ -441,16 +452,18 @@ function validateRelations(data: Payload) {
   const settled = new Set<string>();
   for (const entry of data.ledger) { if (!reservations.has(entry.reservation_id) || settled.has(entry.reservation_id)) fail('Ledger thiếu reservation hoặc bị trùng.'); settled.add(entry.reservation_id); }
   for (const reservation of reservations.values()) if (runs.get(reservation.run_id)?.taskId !== reservation.task_id || (reservation.state === 'settled') !== settled.has(reservation.id)) fail('Reservation không khớp run/ledger.');
+  const ledgerById = new Map(data.ledger.map(item => [item.id, item]));
+  const ledgerByReservation = new Map(data.ledger.map(item => [item.reservation_id, item]));
   const cachedLedgerIds = new Set<string>();
   for (const cache of data.ledgerCache ?? []) {
-    const entry = data.ledger.find(item => item.id === cache.ledger_id);
+    const entry = ledgerById.get(cache.ledger_id);
     if (!entry || cachedLedgerIds.has(cache.ledger_id) || cache.cache_read_tokens + cache.cache_write_tokens > entry.input_tokens) fail('Ledger thiếu reservation hoặc bị trùng.');
     cachedLedgerIds.add(cache.ledger_id);
   }
   const reviewed = new Set<string>();
   for (const review of data.reservationReviews ?? []) {
     const reservation = reservations.get(review.reservation_id);
-    const entry = data.ledger.find(item => item.reservation_id === review.reservation_id);
+    const entry = ledgerByReservation.get(review.reservation_id);
     if (!reservation) fail('Đối soát ngân sách thiếu reservation.');
     if (reviewed.has(review.reservation_id)) fail('Đối soát ngân sách bị trùng.');
     const reservationState = reservation?.state;
@@ -628,19 +641,28 @@ function replaceUntouchedSeed(store: Store, current: Payload, incoming: Payload)
   return { ...current, workers: [], skills: [], revisions: [], syncIdentities: current.syncIdentities?.filter(identity => identity.entityId !== worker.id && identity.entityId !== skill.id) };
 }
 
+/** The most a backup file may hold. */
+const BACKUP_LIMIT_BYTES = 50 * 1024 * 1024;
+
 export class Backups {
   private pending?: { token: string; expires: number; payload: Payload };
   constructor(private store: Store, private busy: () => boolean, private notify: () => void) {}
   export(): string {
+    // The file is capped at 50 MB. The rows of chats alone say when it cannot fit, so the app does not build a payload of
+    // gigabytes, then a string of it, only to refuse it (1.5 GB of memory on a 1 GB profile). The payload holds each of
+    // these rows whole, so their size in bytes (read from each row's header, not its text) is a floor under its size; a tenth is left off for what the payload drops.
+    const chatBytes = Number(this.store.db.prepare(`SELECT (SELECT COALESCE(SUM(octet_length(data)),0) FROM tasks) + (SELECT COALESCE(SUM(octet_length(data)),0) FROM runs)
+      + (SELECT COALESCE(SUM(octet_length(data)),0) FROM events) + (SELECT COALESCE(SUM(octet_length(data)),0) FROM artifacts) + (SELECT COALESCE(SUM(octet_length(data)),0) FROM chat_turns) AS bytes`).get()!.bytes);
+    if (chatBytes * 0.9 > BACKUP_LIMIT_BYTES) throw new Error('Bản sao lưu vượt 50 MB.');
     return this.store.transaction(() => {
       const payload = withoutBrowser(snapshot(this.store)); validateRelations(payload);
       const text = JSON.stringify({ format: 'orglet-backup', version: 2, createdAt: now(), checksum: digest(payload), payload });
-      if (Buffer.byteLength(text) > 50 * 1024 * 1024) throw new Error('Bản sao lưu vượt 50 MB.');
+      if (Buffer.byteLength(text) > BACKUP_LIMIT_BYTES) throw new Error('Bản sao lưu vượt 50 MB.');
       return text;
     });
   }
   preview(text: string): BackupSummary {
-    if (Buffer.byteLength(text) > 50 * 1024 * 1024) throw new Error('Bản sao lưu vượt 50 MB.');
+    if (Buffer.byteLength(text) > BACKUP_LIMIT_BYTES) throw new Error('Bản sao lưu vượt 50 MB.');
     let parsed: unknown;
     try { parsed = JSON.parse(text); } catch { return fail('Tệp JSON bị hỏng.'); }
     const envelope = Envelope.parse(parsed);
@@ -654,13 +676,14 @@ export class Backups {
     if (!pending || pending.token !== token || pending.expires < Date.now()) throw new Error('Phiên khôi phục đã hết hạn. Chọn lại bản sao lưu.');
     if (this.busy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi khôi phục.');
     const incoming = pending.payload;
-    this.store.transaction(() => {
+    // The restore writes every run, event and answer of the backup; the sync replica keeps what each of them asks again.
+    this.store.sync.bulk(() => this.store.transaction(() => {
       const current = replaceUntouchedSeed(this.store, snapshot(this.store), incoming);
       const revived = revivedChats(current, incoming);
       // Older runs derive their original input from their own backup's task.
       // Compare that scope with the later backfill, never with the merged task's source history.
       const normalizedSnapshot = (run: Payload['runs'][number], payload: Payload) => {
-        const task = payload.tasks.find(task => task.id === run.taskId)!;
+        const task = taskById(payload, run.taskId)!;
         // The browser profile a run used never travels in a backup (COD-261), so it is not part of what must match.
         const { input, inputRevision, browser: _browser, desktop: _desktop, ...rest } = run.snapshot;
         return { ...rest, turnId: rest.turnId ?? turnMessageId(task.id, inputRevision ?? 0, task.turnIds), inputRevision: inputRevision ?? 0, input: RunInput.parse(input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources }) };
@@ -670,8 +693,9 @@ export class Backups {
         const normalized = normalizedSnapshot(run, payload);
         return revived.has(run.taskId) ? deletedRunSnapshot(normalized) : normalized;
       };
+      const currentRunsById = new Map(current.runs.map(run => [run.id, run]));
       for (const run of incoming.runs) {
-        const existing = current.runs.find(item => item.id === run.id);
+        const existing = currentRunsById.get(run.id);
         if (existing && (existing.taskId !== run.taskId || !isDeepStrictEqual(JSON.parse(JSON.stringify(comparableSnapshot(existing, current))), JSON.parse(JSON.stringify(comparableSnapshot(run, incoming)))))) fail('Snapshot của run xung đột.');
       }
       // What is already here stays, except a deleted chat's own rows, which give way to the backup's full ones.
@@ -699,15 +723,16 @@ export class Backups {
         const restored = { ...task, decisionRequests, toolCapabilities: [], mcpGrants: [], browser: undefined, desktop: undefined, consent: false, providerScopes: [],
           status: pendingDecision || ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status };
         if (!revived.has(task.id)) return restored;
-        const deleted = current.tasks.find(item => item.id === task.id)!;
+        const deleted = taskById(current, task.id)!;
         const laterRuns = current.runs.filter(run => run.taskId === task.id && !incomingRunIds.has(run.id));
         const laterTurns = (current.savedTurns ?? []).filter(turn => turn.taskId === task.id && turn.localRevision > (restored.inputRevision ?? 0));
         return withLaterDeletedTurns(restored, deleted, laterRuns, laterTurns);
       });
       const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: normalizedSnapshot(run, incoming),
         status: pendingDecisionRuns.has(run.id) || ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
+      const restoredTasksById = new Map(restoredTasks.map(task => [task.id, task]));
       const mergedTasks = merge(current.tasks, restoredTasks, false, revived).map(task => {
-        const imported = restoredTasks.find(item => item.id === task.id);
+        const imported = restoredTasksById.get(task.id);
         if (!imported || imported === task) return task;
         const reactions = [...(task.messageReactions ?? [])];
         for (const reaction of imported.messageReactions ?? []) {
@@ -719,8 +744,9 @@ export class Backups {
       });
       const restoredTurns = incoming.savedTurns ?? [];
       const replacedTurnIds = new Set<string>();
+      const currentTurnsById = new Map((current.savedTurns ?? []).map(turn => [turn.id, turn]));
       for (const turn of restoredTurns) {
-        const existing = current.savedTurns?.find(item => item.id === turn.id);
+        const existing = currentTurnsById.get(turn.id);
         if (!existing || digest(existing) === digest(turn)) continue;
         const { replyTo: _replyTo, ...input } = turn.input;
         const redacted = { ...input, brief: DELETED_CHAT_TEXT };
@@ -744,11 +770,13 @@ export class Backups {
         ledgerCache: mergeLedgerCache(current.ledgerCache ?? [], incoming.ledgerCache ?? []),
       };
       // Financial facts cannot be rolled back by importing an older snapshot.
+      const currentReservationsById = new Map(current.reservations.map(reservation => [reservation.id, reservation]));
       for (const row of incoming.reservations) {
-        const existing = current.reservations.find(item => item.id === row.id);
+        const existing = currentReservationsById.get(row.id);
         if (existing && digest({ ...existing, state: '' }) !== digest({ ...row, state: '' })) fail('Reservation xung đột.');
       }
-      for (const row of merged.reservations) row.state = merged.ledger.some(entry => entry.reservation_id === row.id) ? 'settled' : 'unknown';
+      const settledReservations = new Set(merged.ledger.map(entry => entry.reservation_id));
+      for (const row of merged.reservations) row.state = settledReservations.has(row.id) ? 'settled' : 'unknown';
       const reviews = new Map((incoming.reservationReviews ?? []).map(review => [review.reservation_id, review]));
       for (const review of current.reservationReviews ?? []) {
         const imported = reviews.get(review.reservation_id);
@@ -843,7 +871,7 @@ export class Backups {
       }
       this.store.sync.refreshFromCanonical();
       new ChatSearch(this.store).rebuild();
-    });
+    }));
     // A backup made before channels brings its group chats back as group chats; they become channels like any other (COD-361).
     migrateGroupChats(this.store);
     // A backup made before crews became channels brings its crews back as crews; they become channels too (COD-369).

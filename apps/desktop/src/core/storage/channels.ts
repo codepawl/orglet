@@ -92,9 +92,11 @@ export function migrateCrews(store: Store, now: () => string): { adopted: number
 export function adoptCrews(store: Store, now: () => string): number {
   // A change announced from inside a transaction is adopted on the next announcement, once the transaction is over.
   if (store.db.isTransaction) return 0;
+  // Asked for every change the core announces: with no crew there is nothing to adopt, and the chats need not be looked at.
+  const teamIds = store.db.prepare('SELECT id FROM teams').all().map(row => String(row.id));
+  if (!teamIds.length) return 0;
   const waitingIds = crewsWithAChannel(store);
   const state = store.entityState().teams;
-  const teamIds = store.db.prepare('SELECT id FROM teams').all().map(row => String(row.id));
   const missing = teamIds.filter(teamId => !waitingIds.has(teamId) && !state[teamId]?.archivedAt && !state[teamId]?.deletedAt);
   if (!missing.length) return 0;
   const tasks = store.all<Task>('tasks').filter(task => !task.deletedAt);

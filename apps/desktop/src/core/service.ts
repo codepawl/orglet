@@ -396,14 +396,17 @@ export class CoreService {
         workspace.mcpServers = this.mcp.views();
         workspace.running = this.running();
         workspace.routineToday = this.routines.today();
+        // A chat's list entry needs no turn ids: the open chat's detail carries the ones it shows. A chat of 2,000 turns
+        // carried 100 KB of them, in every copy of the workspace sent to the window.
+        workspace.tasks = workspace.tasks.map(({ turnIds: _turnIds, ...task }) => task);
         return workspace;
       }
       case 'task': {
-        const id = (args as { id: string }).id;
+        const { id, recentTurns } = args as { id: string; recentTurns?: number };
         this.markTaskSeen(id);
         const taskId = this.liveTask(id).id;
         // The browser card, take-over and whether a run uses the browser live in memory, beside the saved chat (COD-261).
-        return { ...this.store.detail(taskId), browser: this.browser.live(taskId), desktop: this.desktop.live(taskId) };
+        return { ...this.store.detail(taskId, recentTurns), browser: this.browser.live(taskId), desktop: this.desktop.live(taskId) };
       }
       case 'reconcileBudget': {
         const input = commands.reconcileBudget.parse(args);
@@ -1782,7 +1785,11 @@ export class CoreService {
         ? { ...request, interruptedAt: now() } : request) };
     this.store.transaction(() => {
       // Preserve readable input for older runs before expanding the task's history scope.
-      for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
+      // Only the chat's older runs that never recorded their input (the query finds them without reading the whole chat).
+      for (const row of this.store.db.prepare("SELECT data FROM runs WHERE task_id=? AND json_extract(data,'$.snapshot.input') IS NULL").all(task.id)) {
+        const run = JSON.parse(String(row.data)) as Run;
+        this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
+      }
       this.keepForwardHeadline(task);
       this.store.update('tasks', revised);
       this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, revised.currentInput!, now());
@@ -1993,12 +2000,13 @@ export class CoreService {
   }
   /** Record that the user opened this task's current result; unread returns when the stamp changes. */
   private markTaskSeen(taskId: string) {
-    const detail = this.store.detail(this.liveTask(taskId).id);
-    const latest = [...detail.artifacts].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
-    const lastArtifactId = latest?.id ?? detail.task.lastArtifactId;
-    const task = lastArtifactId && detail.task.lastArtifactId !== lastArtifactId
+    const live = this.liveTask(taskId);
+    const latest = this.store.db.prepare(`SELECT a.id FROM artifacts a JOIN runs r ON r.id=a.run_id WHERE r.task_id=?
+      ORDER BY json_extract(a.data,'$.createdAt') DESC, a.rowid DESC LIMIT 1`).get(live.id);
+    const lastArtifactId = latest ? String(latest.id) : live.lastArtifactId;
+    const task = lastArtifactId && live.lastArtifactId !== lastArtifactId
       ? this.store.patchTask(taskId, { lastArtifactId })
-      : detail.task;
+      : live;
     const stamp = taskResultStamp(task);
     if (task.seenStamp === stamp) return task;
     return this.store.patchTask(taskId, { seenStamp: stamp, seenAt: now(), ...(lastArtifactId ? { lastArtifactId } : {}) });
@@ -2243,7 +2251,8 @@ export class CoreService {
     return packageForExport(skill);
   }
   async tick() {
-    for (const task of this.store.all<Task>('tasks')) {
+    // The tick runs every five seconds, so it reads only the chats it has something to do for, by the partial indexes.
+    for (const task of this.store.pendingTasks()) {
       if (!task.pendingStart || task.status === 'interrupted' || this.runner.isActive(task.id) || this.teams.isActive(task.id)) continue;
       const previous = this.store.detail(task.id).runs.filter(run => (run.snapshot.inputRevision ?? 0) < (task.inputRevision ?? 0));
       if (previous.some(run => ['running', 'queued', 'pausing'].includes(run.status))) continue;
@@ -2265,14 +2274,17 @@ export class CoreService {
       if (!state.archivedAt || state.deletedAt || this.clock().getTime() - new Date(state.archivedAt).getTime() < retention * 86_400_000) continue;
       try { this.deleteEntity(kind, entityId); changed = true; } catch { /* still in use: retry on a later tick */ }
     }
-    if (retention) for (const task of this.store.all<Task>('tasks')) {
-      if (!task.archivedAt || task.deletedAt || this.clock().getTime() - new Date(task.archivedAt).getTime() < retention * 86_400_000) continue;
+    if (retention) for (const task of this.store.archivedBefore(new Date(this.clock().getTime() - retention * 86_400_000).toISOString())) {
       try { this.deleteTask(task.id); changed = true; } catch { /* running or busy: retry on a later tick */ }
     }
-    for (const task of this.store.all<Task>('tasks')) {
-      if ((this.runner.isActive(task.id) || this.teams.isActive(task.id)) && task.status !== 'pausing' && !this.policy.allowed(task)) {
-        this.teams.pause(task.id); this.runner.pause(task.id);
-        this.store.update('tasks', { ...this.store.get<Task>('tasks', task.id), status: 'pausing' }); changed = true;
+    // Only a chat that is working in this process can be told to stop, so those are the ones looked at.
+    for (const activeId of new Set([...this.runner.activeTaskIds(), ...this.teams.activeTaskIds()])) {
+      const task = this.store.db.prepare('SELECT data FROM tasks WHERE id=?').get(activeId);
+      if (!task) continue;
+      const chat = JSON.parse(String(task.data)) as Task;
+      if (chat.status !== 'pausing' && !this.policy.allowed(chat)) {
+        this.teams.pause(chat.id); this.runner.pause(chat.id);
+        this.store.update('tasks', { ...this.store.get<Task>('tasks', chat.id), status: 'pausing' }); changed = true;
       }
     }
     if (changed) this.notify();

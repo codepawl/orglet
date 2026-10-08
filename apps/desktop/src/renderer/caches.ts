@@ -13,8 +13,30 @@ import { orglet } from './api';
  * core knows better is asked again behind the kept copy where it matters; see each caller.
  */
 
+/**
+ * How many of a chat's newest turns the window reads, and how many more each "show earlier" adds. A chat of 2,000 turns
+ * was 6 MB crossing two process boundaries on every change, and 2,000 messages drawn at once (about 5 ms each); the newest ones are what
+ * a person opens a chat for. A chat shorter than this reads whole.
+ */
+export const RECENT_TURNS = 100;
+const EARLIER_TURNS_STEP = 200;
+const turnsAsked = new Map<string, number | 'all'>();
+
 /** A chat's detail, keyed by task id. Opening a chat draws this at once and fetches the fresh copy behind it. */
-export const taskDetails = new SessionCache<TaskDetail>({ load: id => orglet.call('task', { id }), limit: 20 });
+export const taskDetails = new SessionCache<TaskDetail>({
+  load: id => {
+    const asked = turnsAsked.get(id) ?? RECENT_TURNS;
+    return orglet.call('task', asked === 'all' ? { id } : { id, recentTurns: asked });
+  },
+  limit: 20,
+});
+
+/** Reads more of an open chat's older turns, or all of them, and keeps asking for that many from then on. */
+export function showEarlierTurns(taskId: string, all = false): Promise<TaskDetail> {
+  const asked = turnsAsked.get(taskId) ?? RECENT_TURNS;
+  turnsAsked.set(taskId, all || asked === 'all' ? 'all' : asked + EARLIER_TURNS_STEP);
+  return taskDetails.refresh(taskId);
+}
 
 /** A chat's folder grant, keyed by task id. Dropped on every workspace change: a grant can change under it. */
 export const taskGrants = new SessionCache<WorkspaceGrantView | null>({ load: taskId => orglet.call('workspaceAccess', { taskId }), limit: 20 });

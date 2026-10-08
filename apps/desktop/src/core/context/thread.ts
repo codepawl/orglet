@@ -70,8 +70,47 @@ export type CompactedThread = {
 /** Who is reading a chat's turns: the run doing it (its own answer is not history yet) and its worker, who is 'you'. */
 type Reader = { runId?: string; workerId: string };
 
+/**
+ * A chat's runs and answers by the turn and run they belong to. Compiling the history of a chat looked up each turn's
+ * runs, each run's answers and each answer's run by searching the whole chat, so a chat of 2,000 turns spent about
+ * 180 ms of the core's time on every message it was sent. The lookups keep the chat's own order.
+ */
+type ThreadIndex = { runs: Run[]; artifacts: Artifact[]; runCount: number; artifactCount: number; runsByRevision: Map<number, Run[]>; runById: Map<string, Run>;
+  artifactsByRun: Map<string, Artifact[]>; position: Map<Artifact, number> };
+const threadIndexes = new WeakMap<object, ThreadIndex>();
+function threadIndex(detail: TaskDetail): ThreadIndex {
+  const known = threadIndexes.get(detail);
+  if (known && known.runs === detail.runs && known.artifacts === detail.artifacts && known.runCount === detail.runs.length && known.artifactCount === detail.artifacts.length) return known;
+  const runsByRevision = new Map<number, Run[]>();
+  const runById = new Map<string, Run>();
+  for (const run of detail.runs) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    const bucket = runsByRevision.get(revision);
+    if (bucket) bucket.push(run);
+    else runsByRevision.set(revision, [run]);
+    if (!runById.has(run.id)) runById.set(run.id, run);
+  }
+  const artifactsByRun = new Map<string, Artifact[]>();
+  const position = new Map<Artifact, number>();
+  detail.artifacts.forEach((artifact, order) => {
+    const bucket = artifactsByRun.get(artifact.runId);
+    if (bucket) bucket.push(artifact);
+    else artifactsByRun.set(artifact.runId, [artifact]);
+    position.set(artifact, order);
+  });
+  const built: ThreadIndex = { runs: detail.runs, artifacts: detail.artifacts, runCount: detail.runs.length, artifactCount: detail.artifacts.length, runsByRevision, runById, artifactsByRun, position };
+  threadIndexes.set(detail, built);
+  return built;
+}
+
 function answers(detail: TaskDetail, runs: Run[], reader: Reader) {
-  return detail.artifacts.filter(item => runs.some(owner => owner.id === item.runId && owner.id !== reader.runId && (owner.stage === 'group' || (detail.task.teamSnapshot ? owner.stage === 'synthesis' || owner.stage === 'plan' : !owner.stage))));
+  const index = threadIndex(detail);
+  const found: Artifact[] = [];
+  for (const owner of runs) {
+    if (owner.id === reader.runId || !(owner.stage === 'group' || (detail.task.teamSnapshot ? owner.stage === 'synthesis' || owner.stage === 'plan' : !owner.stage))) continue;
+    found.push(...(index.artifactsByRun.get(owner.id) ?? []));
+  }
+  return found.sort((first, second) => index.position.get(first)! - index.position.get(second)!);
 }
 
 function clip(text: string): { text: string; truncated: boolean } {
@@ -80,7 +119,7 @@ function clip(text: string): { text: string; truncated: boolean } {
 }
 
 function said(detail: TaskDetail, artifact: Artifact, reader: Reader): ThreadTurn {
-  const owner = detail.runs.find(item => item.id === artifact.runId)!;
+  const owner = threadIndex(detail).runById.get(artifact.runId)!;
   const raw = artifact.report.format === 'chat'
     ? artifact.report.summary
     : `${artifact.report.title}\n\n${artifact.report.summary}${artifact.report.findings.map(finding => `\n- ${finding.title}`).join('')}`;
@@ -118,7 +157,7 @@ function turnsBefore(detail: TaskDetail, revision: number, reader: Reader, inclu
   // A new run can be assembled before it is stored. A missing side-thread anchor fails closed instead.
   const pastAliases = anchor < 0 ? (inclusive ? [] : ordered) : ordered.slice(0, anchor + Number(inclusive));
   for (const earlier of pastAliases) {
-    const runs = detail.runs.filter(item => (item.snapshot.inputRevision ?? 0) === earlier);
+    const runs = threadIndex(detail).runsByRevision.get(earlier) ?? [];
     const message = chatTurnInput(detail, earlier)?.brief;
     if (message) {
       const { text, truncated } = clip(message);
@@ -140,7 +179,7 @@ export function collectTurns(detail: TaskDetail, run: Run) {
   const past = turnsBefore(detail, revision, reader);
   const sidecar: ThreadTurn[] = [];
   if (run.stage === 'group') {
-    for (const artifact of answers(detail, detail.runs.filter(item => (item.snapshot.inputRevision ?? 0) === revision && item.stage === 'group'), reader)) {
+    for (const artifact of answers(detail, (threadIndex(detail).runsByRevision.get(revision) ?? []).filter(item => item.stage === 'group'), reader)) {
       sidecar.push(said(detail, artifact, reader));
     }
   }
