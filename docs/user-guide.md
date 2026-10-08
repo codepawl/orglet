@@ -15,7 +15,7 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 | [In a chat](chat-guide.md) | Attaching files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, notifications |
 | [Permissions and learning](permissions-and-learning.md) | The permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
 | [Settings](settings.md) | Every settings tab, including backup, erasing data, and updates |
-| [CodePawl account](account.md) | The optional account: the first-start choice, signing in and out, what is stored where; nothing syncs yet |
+| [CodePawl account](account.md) | The optional account: the first-start choice, signing in and out, what is stored where, and sync between computers |
 | [Troubleshooting](troubleshooting.md) | Sign-in errors, SmartScreen, a harness that is not found, commands that cannot reach `localhost` |
 
 The step-by-step first walk-through with screenshots is [Getting started](getting-started.md). The full [docs map](README.md) also lists the how-it-works pages and the product decisions behind them.

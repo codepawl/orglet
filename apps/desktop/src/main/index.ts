@@ -684,7 +684,7 @@ async function start() {
   });
   // The token and every request stay here; the core is asked only for what to send and to apply what arrived.
   syncTransport = new SyncTransport({
-    baseUrl: syncBaseUrl(process.env.ORGLET_SYNC_URL),
+    baseUrl: syncBaseUrl(process.env.ORGLET_SYNC_URL, process.env.ORGLET_ACCOUNTS_URL),
     account,
     core: action => request('syncReplica', action),
     replaceLocal: () => request('syncReplaceLocal', undefined),

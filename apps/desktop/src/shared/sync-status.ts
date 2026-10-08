@@ -23,12 +23,18 @@ export const SyncStatus = z.object({
 }).strict();
 export type SyncStatus = z.infer<typeof SyncStatus>;
 
+/** CodePawl's sync service, checked end to end with two computers on 2026-10-08. */
+export const DEFAULT_SYNC_URL = 'https://sync.orglet.codepawl.com';
+
 /**
- * The sync server's address, from `ORGLET_SYNC_URL`. There is no default: CodePawl's sync service is not deployed
- * yet, so a build without the variable does not sync. Only https is accepted, except a server on this computer.
+ * The sync server's address. `ORGLET_SYNC_URL` names another one, or `off` for none. Without it, a build signed in to
+ * CodePawl's own accounts service syncs with CodePawl's service; one pointed at another accounts service
+ * (`ORGLET_ACCOUNTS_URL`, as tests and development do) has no sync unless it names a server too, so its tokens never
+ * reach the real service. Only https is accepted, except a server on this computer.
  */
-export function syncBaseUrl(override: string | undefined): string | undefined {
-  if (!override) return undefined;
+export function syncBaseUrl(override: string | undefined, accountsOverride?: string): string | undefined {
+  if (override === 'off') return undefined;
+  if (!override) return accountsOverride ? undefined : DEFAULT_SYNC_URL;
   try {
     const url = new URL(override);
     const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';

@@ -1,6 +1,6 @@
 # CodePawl account
 
-Orglet works fully without an account. You can also sign in to a free CodePawl account. Syncing your orglets, channels and chats between computers is built into the app, but CodePawl's sync server is not running yet, so **today nothing syncs**; see [Sync](#sync). Signing in changes nothing about where your chats and files live: they stay on this computer. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
+Orglet works fully without an account. You can also sign in to a free CodePawl account. Signing in also syncs your orglets, channels and chats between the computers signed in to the same account; see [Sync](#sync). Each computer keeps its own full copy, so your chats and files still live on this computer, and the sync server holds an encrypted copy. A signed-in account sends usage statistics and error reports, which you can turn off; see [below](#usage-statistics-and-error-reports).
 
 Part of the [user guide](user-guide.md). The design behind it is [account-sync-design.md](account-sync-design.md).
 
@@ -53,7 +53,7 @@ The choice is saved on this computer and included in a workspace backup. It does
 
 Sync keeps your orglets, channels, chats, memories, schedules and a few settings the same on every computer signed in to the same account. Each computer keeps its own full copy and works offline; changes catch up when it is online again.
 
-Sync needs a sync server. CodePawl's runs as a private trial only and no install points at it, so a normal install shows **Sync** as coming next and sends nothing. Someone running their own server starts Orglet with `ORGLET_SYNC_URL` set to its address (see the [technical guide](technical-guide.md#account-sync)).
+Orglet syncs with CodePawl's sync server (`sync.orglet.codepawl.com`). Someone running their own server starts Orglet with `ORGLET_SYNC_URL` set to its address, or `off` to turn sync off for that install (see the [technical guide](technical-guide.md#account-sync)).
 
 ### Turning it on
 

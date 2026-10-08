@@ -30,7 +30,7 @@ Orglet is made for one person: freelancers, solo founders and anyone who uses Ch
 
 - **Use the plan you already pay for.** Orglets run on your Claude Code, Codex, Cursor Agent or Gemini CLI account. There is no extra API bill.
 - **Keep your data on your computer.** Chats, orglets and files live in a local database. No Orglet server holds your work.
-- **No account needed.** A free CodePawl account is optional, and nothing syncs yet ([account](docs/account.md)).
+- **No account needed.** A free CodePawl account is optional; signing in syncs your orglets and chats between your computers ([account](docs/account.md)).
 - **Open source.** The code is here under AGPL-3.0.
 
 > Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.

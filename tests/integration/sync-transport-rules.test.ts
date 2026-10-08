@@ -63,8 +63,11 @@ function chat(store: Store): Task {
   return task;
 }
 
-it('has no sync server unless one is configured, and accepts only https or this computer', () => {
-  expect(syncBaseUrl(undefined)).toBeUndefined();
+it('syncs with CodePawl by default, never with another accounts service, and accepts only https or this computer', () => {
+  expect(syncBaseUrl(undefined)).toBe('https://sync.orglet.codepawl.com');
+  expect(syncBaseUrl(undefined, 'http://localhost:8787')).toBeUndefined();
+  expect(syncBaseUrl('off')).toBeUndefined();
+  expect(syncBaseUrl('http://localhost:8788', 'http://localhost:8787')).toBe('http://localhost:8788');
   expect(syncBaseUrl('http://example.com')).toBeUndefined();
   expect(syncBaseUrl('not an address')).toBeUndefined();
   expect(syncBaseUrl('https://sync.example.com/path?query=1')).toBe('https://sync.example.com');
@@ -159,6 +162,16 @@ it('says the server is turned off and keeps trying slowly', async () => {
   await vi.advanceTimersByTimeAsync(4 * 60_000);
   await transport.settled();
   expect(requests.length).toBe(2);
+});
+
+it('treats a server whose keys are misconfigured as unavailable, not as this computer being offline', async () => {
+  vi.useFakeTimers();
+  const { transport, requests } = setup(() => ({ status: 503, body: { code: 'key_configuration' } }));
+  await transport.refresh();
+  await transport.settled();
+  expect(transport.state()).toEqual({ state: 'paused', reason: 'server_unavailable' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(requests.length).toBe(1);
 });
 
 it('sends an orglet before its skill and a chat before its turn, and leaves an oversized change at home', async () => {

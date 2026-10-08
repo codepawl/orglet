@@ -31,7 +31,7 @@ One short page per part of the app, in the words on screen.
 | [viewing-and-editing-files.md](viewing-and-editing-files.md) | Open a chat's files, edit text and code with find and replace, mark up images and PDFs, save an edit as a new version, Ask about this |
 | [permissions-and-learning.md](permissions-and-learning.md) | Permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
 | [settings.md](settings.md) | Every settings tab: appearance, chat, connections, costs, backup and erase, About and updates |
-| [account.md](account.md) | The optional CodePawl account: the first-start choice, signing in and out, what is stored where; nothing syncs yet |
+| [account.md](account.md) | The optional CodePawl account: the first-start choice, signing in and out, what is stored where, and sync between computers |
 | [cli.md](cli.md) | The `orglet` terminal command: install, chat in the terminal, send and read from scripts, colours, exit codes, how it talks to the app |
 | [integrations.md](integrations.md) | File Explorer's **Send to → Orglet** and `orglet://` links: what they open, the limits, what they can never do, how Setup adds and removes them |
 | [troubleshooting.md](troubleshooting.md) | Sign-in errors, SmartScreen, a harness not found, budget, blocked attempts, commands and `localhost` |
