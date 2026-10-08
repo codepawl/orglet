@@ -229,11 +229,14 @@ function SyncRow({ busy }: { busy: boolean }) {
   </span>;
   return <>
     <Row icon={<StatusMark {...syncMark(status)} decorative />} title={t('Đồng bộ')} description={description}>
-      {choosing ? <>
-        <Button variant="outline" disabled={busy || resting} onClick={() => void takeFromAccount()}>{t('Chỉ lấy từ tài khoản')}</Button>
-        <Button variant="primary" disabled={busy || resting} onClick={() => syncNow()}><RefreshCw size={14} />{t('Đồng bộ máy này')}</Button>
-      </> : canSync ? <Button variant="outline" disabled={busy || resting || status.state === 'syncing'} onClick={() => syncNow()}><RefreshCw size={14} />{t('Đồng bộ ngay')}</Button> : null}
+      {!choosing && canSync ? <Button variant="outline" disabled={busy || resting || status.state === 'syncing'} onClick={() => syncNow()}><RefreshCw size={14} />{t('Đồng bộ ngay')}</Button> : null}
     </Row>
+    {choosing && <div className="setting-row sync-choice">
+      <div className="setting-control">
+        <Button variant="primary" disabled={busy || resting} onClick={() => syncNow()}><RefreshCw size={14} />{t('Đồng bộ máy này')}</Button>
+        <Button variant="outline" disabled={busy || resting} onClick={() => void takeFromAccount()}>{t('Chỉ lấy từ tài khoản')}</Button>
+      </div>
+    </div>}
     <ConflictsRow busy={busy} />
   </>;
 }
