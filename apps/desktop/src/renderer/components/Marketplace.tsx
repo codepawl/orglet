@@ -82,11 +82,13 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     }
   };
   return <section className="page-section marketplace" aria-labelledby="marketplace-title">
-    <PanelHeading title={<span id="marketplace-title">{t('Marketplace')}</span>}>
+    {/* The page's top bar already says "Marketplace", so the heading here is for assistive technology only and the
+        line under it leads the row. */}
+    <PanelHeading className="marketplace-heading" title={<span id="marketplace-title" className="visually-hidden">{t('Marketplace')}</span>}
+      description={tab === 'discover' ? t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.') : undefined}>
       {moderation.entry}
       {tab === 'discover' && <Button type="button" variant="outline" disabled={busy || refreshing} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{refreshing ? t('Đang làm mới') : t('Làm mới')}</Button>}
     </PanelHeading>
-    {tab === 'discover' && <p className="muted">{t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.')}</p>}
     <PageTabs tabs={[{ id: 'discover', label: t('Khám phá') }, { id: 'own', label: t('Mục của tôi') }]} current={tab} onSelect={setTab} label={t('Các phần của marketplace')} />
     {tab === 'discover' ? <div className="marketplace-discover">
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
