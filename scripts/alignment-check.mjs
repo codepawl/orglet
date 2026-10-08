@@ -2,6 +2,7 @@ import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
+import { createHash, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as rules from './alignment/rules.ts';
@@ -211,6 +212,7 @@ async function seedWorkspace(page) {
   const earlierChatBrief = 'Check last month’s sign-up numbers.';
   const earlierChatId = await callCore(page, 'createTask', { workerId: analyst.id, brief: earlierChatBrief, sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, earlierChatId);
+  await seedRecovery(page, earlierChatId);
   const newerChatId = await callCore(page, 'createTask', { workerId: analyst.id, brief: 'Summarise this week’s sign-ups.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, newerChatId);
   await seedViewerFiles(page, analyst);
@@ -255,6 +257,32 @@ async function seedChangedFiles(page, taskId) {
   const database = new DatabaseSync(databasePath);
   database.exec('PRAGMA busy_timeout = 5000');
   database.prepare('INSERT OR REPLACE INTO workspace_copies(run_id,data) VALUES(?,?)').run(runId, JSON.stringify(copy));
+  database.close();
+}
+
+/**
+ * What a run that stopped in the middle leaves for Details' "Files and processes": a private edit of one file held for
+ * review, a step whose outcome is unknown and a command with output. They hang on the first run of the earlier chat, so
+ * the section can be opened and measured with its groups folded and unfolded.
+ */
+async function seedRecovery(page, taskId) {
+  const detail = await callCore(page, 'task', { id: taskId });
+  const run = detail.runs[0];
+  const privateDirectory = join(dataFolder, 'private-recovery-copy');
+  await mkdir(privateDirectory, { recursive: true });
+  await writeFile(join(privateDirectory, 'note.txt'), 'Private edit for inspection');
+  const databasePath = await findFile(dataFolder, 'orglet.sqlite');
+  const database = new DatabaseSync(databasePath);
+  database.exec('PRAGMA busy_timeout = 5000');
+  const grant = run.snapshot.workspaceGrant ?? { id: 'alignment-grant', taskId, revision: 1, permissions: ['read'] };
+  const changedFile = { path: 'note.txt', hash: createHash('sha256').update('Private edit for inspection').digest('hex'), bytes: 27, expectedHash: createHash('sha256').update('Original file').digest('hex'), status: 'conflict' };
+  database.prepare('INSERT OR REPLACE INTO workspace_copies(run_id,data) VALUES(?,?)').run(run.id, JSON.stringify({
+    runId: run.id, grant, directory: privateDirectory, state: 'conflict', baseline: { files: [], omitted: [] }, kind: 'copy', changes: [changedFile],
+  }));
+  const processRecord = { id: randomUUID(), runId: run.id, state: 'uncertain', exitCode: null,
+    command: { program: 'node', arguments: ['fixture.cjs'], timeoutMs: 1000 }, stdout: 'Compiled 12 files\nDone', stderr: 'warning: slow step' };
+  database.prepare('INSERT OR REPLACE INTO workspace_processes(id,run_id,data) VALUES(?,?,?)').run(processRecord.id, run.id, JSON.stringify(processRecord));
+  database.prepare("INSERT OR REPLACE INTO tool_calls(run_id,call_id,fingerprint,state,output,replay) VALUES(?,?,?,'uncertain',NULL,'never')").run(run.id, 'alignment-step', 'c'.repeat(64));
   database.close();
 }
 
@@ -625,6 +653,26 @@ const SCREENS = [
     await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
     await page.getByRole('menuitem', { name: startsWith('Lịch chạy') }).click();
     await page.locator('#chat-view-panel').getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor();
+    // The way back must be as tall as the chat header's icon buttons, or the header grows and its title sits lower than the chat's (1px, 2026-10-08).
+    const [backHeight, iconHeight] = await page.evaluate(() => [document.querySelector('.topbar-back-to-chat').getBoundingClientRect().height, document.querySelector('.topbar-actions .org-button-icon, .topbar-actions [aria-haspopup]').getBoundingClientRect().height]);
+    if (backHeight !== iconHeight) throw new Error(`The way back is ${backHeight}px tall; the header's icon buttons are ${iconHeight}px.`);
+  } },
+  // Details on a chat whose run stopped half way: the step of unknown outcome, the held file, its private edit and a command's output (2026-10-08).
+  { name: 'details-recovery', minWidth: 900, open: async (page, context) => {
+    await page.keyboard.press('Control+K');
+    await page.getByRole('dialog').getByRole('combobox').fill(context.earlierChatBrief);
+    await page.getByRole('dialog').getByRole('option').filter({ hasText: context.earlierChatBrief }).first().click();
+    await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
+    await foldSidebar(page);
+    await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click();
+    await page.getByRole('menuitem', { name: label('Chi tiết') }).click();
+    const recovery = page.locator('.workspace-recovery');
+    await recovery.getByRole('heading', { name: label('File và tiến trình'), exact: true }).waitFor();
+    for (const summary of await recovery.locator('details.recovery-group > summary').all()) await summary.click();
+    await recovery.getByRole('button', { name: label('Xem bản sửa riêng'), exact: true }).click();
+    await recovery.locator('details.recovery-process > summary').first().click();
+    await recovery.getByRole('button', { name: label('Xem đầu ra'), exact: true }).click();
+    await recovery.locator('.workspace-process-output pre').last().waitFor();
   } },
   { name: 'rail', open: async (page, context) => { await openOpenChats(page, context); await foldSidebar(page); } },
   { name: 'rail-details', open: async (page, context) => {
@@ -647,7 +695,7 @@ const SCREENS = [
     await callCore(page, 'saveDecisionModelSetting', [{ connection: 'openai', model: 'gpt-6-luna' }, { connection: 'anthropic', model: 'claude-sonnet-5-5' }]);
     await openSettingsTab(page, 'Cuộc trò chuyện');
     await page.getByRole('button', { name: label('Chạy thử'), exact: true }).click();
-    await page.getByText(label('Chưa kết nối {0}. Mở Cài đặt để nhập API key.', ['OpenAI'])).waitFor();
+    await page.getByText(label('Chưa kết nối {0}. Thêm API key trong Kết nối API.', ['OpenAI'])).waitFor();
     // Clicking Test scrolled the row into view; the screen is measured from the top like its family.
     await page.evaluate(() => document.querySelector('#settings-panel')?.scrollTo(0, 0));
   }, close: page => callCore(page, 'saveDecisionModelSetting', []) },
@@ -813,6 +861,8 @@ try {
     for (const size of SIZES) {
       await resize(page, size);
       for (const screen of screens) {
+        // The right panel is hidden below 860px, so a screen about it is only measured where it can be shown.
+        if (screen.minWidth && size.width < screen.minWidth) continue;
         await reset(page, context);
         await screen.open(page, context);
         await settle(page);
