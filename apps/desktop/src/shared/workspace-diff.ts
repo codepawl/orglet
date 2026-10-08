@@ -9,11 +9,11 @@ export const WorkspaceDiffRequest = z.object({ taskId: z.uuid(), runId: z.uuid()
 export type WorkspaceDiffRequest = z.infer<typeof WorkspaceDiffRequest>;
 
 /**
- * The counts a turn shows without opening the viewer; saved with the copy when the run finishes. The optional counts
- * (COD-254) are present only when they are not zero, and `lines` only when it is false: a plain folder copy knows
- * which files moved or were deleted but has no line counts.
+ * The counts a turn shows without opening the viewer. The optional counts (COD-254) are present only when they are not
+ * zero, and `lines` only when it is false: a plain folder copy knows which files moved or were deleted but has no line
+ * counts. A backup keeps only these counts, never a path.
  */
-export const WorkspaceDiffSummary = z.object({
+export const WorkspaceDiffCounts = z.object({
   files: z.number().int().nonnegative(),
   additions: z.number().int().nonnegative(),
   deletions: z.number().int().nonnegative(),
@@ -24,6 +24,36 @@ export const WorkspaceDiffSummary = z.object({
   /** Folders created or removed. */
   folders: z.number().int().positive().optional(),
   lines: z.literal(false).optional(),
+}).strict();
+export type WorkspaceDiffCounts = z.infer<typeof WorkspaceDiffCounts>;
+
+/** Entries a summary keeps; a run that changed more says how many it left out in `moreEntries`. */
+export const DIFF_SUMMARY_ENTRY_LIMIT = 200;
+/**
+ * One changed file or folder in a summary, counted once when the run finishes so the chat's card never diffs on a
+ * render. `added` and `removed` are lines; a plain copy and a folder have none.
+ */
+export const WorkspaceDiffEntry = z.object({
+  path: z.string().min(1).max(1024),
+  previousPath: z.string().min(1).max(1024).optional(),
+  status: z.enum(['modified', 'added', 'deleted', 'renamed']),
+  /** A folder the copy created or removed. */
+  folder: z.literal(true).optional(),
+  /** Git could not read the file as text, so it has no line counts. */
+  binary: z.literal(true).optional(),
+  added: z.number().int().nonnegative(),
+  removed: z.number().int().nonnegative(),
+}).strict();
+export type WorkspaceDiffEntry = z.infer<typeof WorkspaceDiffEntry>;
+
+/**
+ * The counts with the files behind them; saved with the copy when the run finishes. A run from before the files were
+ * kept has the counts alone and shows the single line.
+ */
+export const WorkspaceDiffSummary = WorkspaceDiffCounts.extend({
+  entries: z.array(WorkspaceDiffEntry).max(DIFF_SUMMARY_ENTRY_LIMIT).optional(),
+  /** Files and folders beyond the entries kept. */
+  moreEntries: z.number().int().positive().optional(),
 }).strict();
 export type WorkspaceDiffSummary = z.infer<typeof WorkspaceDiffSummary>;
 
@@ -87,6 +117,33 @@ export const DIFF_LINE_CHARACTER_LIMIT = 4000;
 /** Bytes of Git patch output read before the rest is dropped. */
 export const DIFF_OUTPUT_BYTE_LIMIT = 4 * 1024 * 1024;
 
+/** Files first, then folders, at most the limit; the rest is only counted. */
+export function summaryEntries(diff: Pick<WorkspaceDiff, 'files' | 'folders'>): Pick<WorkspaceDiffSummary, 'entries' | 'moreEntries'> {
+  const fits = (entry: WorkspaceDiffEntry) => entry.path.length <= 1024 && (entry.previousPath?.length ?? 0) <= 1024;
+  const everything: WorkspaceDiffEntry[] = [
+    ...diff.files.map(file => ({
+      path: file.path,
+      ...(file.previousPath ? { previousPath: file.previousPath } : {}),
+      status: file.status,
+      ...(file.binary ? { binary: true as const } : {}),
+      added: file.additions,
+      removed: file.deletions,
+    })),
+    ...(diff.folders ?? []).map(folder => ({ path: folder.path, status: folder.status, folder: true as const, added: 0, removed: 0 })),
+  ];
+  if (everything.length === 0) return {};
+  // A path too long to store is left out with the rest and only counted.
+  const kept = everything.filter(fits).slice(0, DIFF_SUMMARY_ENTRY_LIMIT);
+  const left = everything.length - kept.length;
+  return { ...(kept.length ? { entries: kept } : {}), ...(left > 0 ? { moreEntries: left } : {}) };
+}
+
+/** The counts alone, which is all a backup carries. */
+export function countsOf(summary: WorkspaceDiffSummary): WorkspaceDiffCounts {
+  const { entries: _entries, moreEntries: _moreEntries, ...counts } = summary;
+  return counts;
+}
+
 export function summarize(diff: Pick<WorkspaceDiff, 'files' | 'additions' | 'deletions' | 'folders' | 'lines'>): WorkspaceDiffSummary {
   const moved = diff.files.filter(file => file.status === 'renamed').length;
   const removed = diff.files.filter(file => file.status === 'deleted').length;
@@ -95,5 +152,6 @@ export function summarize(diff: Pick<WorkspaceDiff, 'files' | 'additions' | 'del
     files: diff.files.length, additions: diff.additions, deletions: diff.deletions,
     ...(moved ? { moved } : {}), ...(removed ? { removed } : {}), ...(folders ? { folders } : {}),
     ...(diff.lines === false ? { lines: false as const } : {}),
+    ...summaryEntries(diff),
   };
 }

@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { ChangedFilesLine, DiffBody, changedFilesLabel } from '../../apps/desktop/src/renderer/components/DiffViewer';
 import { changedFilesOf } from '../../apps/desktop/src/renderer/components/TaskThread';
-import type { WorkspaceDiff } from '../../apps/desktop/src/shared/workspace-diff';
+import { ChangedFilesCard } from '../../apps/desktop/src/renderer/components/ChangedFilesCard';
+import { CARD_FILE_ROWS, cardRowsOf, entryCountsKind } from '../../apps/desktop/src/renderer/changedFiles';
+import { DIFF_SUMMARY_ENTRY_LIMIT, WorkspaceDiffSummary, countsOf, summarize, type WorkspaceDiff, type WorkspaceDiffEntry } from '../../apps/desktop/src/shared/workspace-diff';
+import { ChangedFilesRecord } from '../../apps/desktop/src/shared/workspace-recovery';
 import type { WorkspaceRecoveryView } from '../../apps/desktop/src/shared/workspace-recovery';
 import type { Run } from '../../apps/desktop/src/shared/contracts';
 
@@ -144,4 +147,99 @@ it('words the turn line with moves, deletions and folders, and drops line counts
   const recovery: WorkspaceRecoveryView = { taskId, attempts: [], processes: [], uncertainCalls: [], truncated: false,
     copies: [copy(runIds[0], { files: 0, additions: 0, deletions: 0, folders: 1, lines: false })] };
   expect(changedFilesOf(runs, recovery)).toHaveLength(1);
+});
+
+const fileEntry = (path: string, added = 1, removed = 0): WorkspaceDiffEntry => ({ path, status: 'modified', added, removed });
+const fiveFiles: WorkspaceDiffSummary = { files: 5, additions: 155, deletions: 0, entries: [
+  { path: 'src/app.ts', status: 'added', added: 80, removed: 0 }, fileEntry('src/util.ts', 40), fileEntry('README.md', 20),
+  fileEntry('package.json', 10), fileEntry('src/index.css', 5),
+] };
+
+it('keeps one entry per file and folder in the summary, caps them, and counts what it left out', () => {
+  const file = (path: string) => ({ path, status: 'modified' as const, binary: false, additions: 2, deletions: 1, truncated: false, hunks: [] });
+  const small = summarize({ additions: 3, deletions: 1, files: [file('a.ts'), { ...file('b.png'), binary: true, additions: 0, deletions: 0 }], folders: [{ path: 'assets', status: 'added' }] });
+  expect(small.entries).toEqual([
+    { path: 'a.ts', status: 'modified', added: 2, removed: 1 },
+    { path: 'b.png', status: 'modified', binary: true, added: 0, removed: 0 },
+    { path: 'assets', status: 'added', folder: true, added: 0, removed: 0 },
+  ]);
+  expect(small.moreEntries).toBeUndefined();
+  const many = Array.from({ length: DIFF_SUMMARY_ENTRY_LIMIT + 7 }, (_, index) => file(`f${String(index).padStart(3, '0')}.ts`));
+  const capped = summarize({ additions: 0, deletions: 0, files: many });
+  expect(capped.files).toBe(DIFF_SUMMARY_ENTRY_LIMIT + 7);
+  expect(capped.entries).toHaveLength(DIFF_SUMMARY_ENTRY_LIMIT);
+  expect(capped.moreEntries).toBe(7);
+  expect(WorkspaceDiffSummary.parse(capped)).toEqual(capped);
+  // A path too long to store is counted, never allowed to fail the save.
+  const tooLong = summarize({ additions: 0, deletions: 0, files: [file('x'.repeat(2000)), file('ok.ts')] });
+  expect(tooLong.entries?.map(entry => entry.path)).toEqual(['ok.ts']);
+  expect(tooLong.moreEntries).toBe(1);
+  expect(summarize({ additions: 0, deletions: 0, files: [] })).toEqual({ files: 0, additions: 0, deletions: 0 });
+});
+
+it('keeps the paths out of a backup: only the counts travel', () => {
+  const summary = summarize({ additions: 1, deletions: 0, files: [{ path: 'secret/plan.md', status: 'added', binary: false, additions: 1, deletions: 0, truncated: false, hunks: [] }] });
+  expect(countsOf(summary)).toEqual({ files: 1, additions: 1, deletions: 0 });
+  expect(() => ChangedFilesRecord.parse({ runId: runIds[0], diff: summary })).toThrow();
+  expect(ChangedFilesRecord.parse({ runId: runIds[0], diff: countsOf(summary) }).diff).not.toHaveProperty('entries');
+  // A summary stored before the entries existed still reads.
+  expect(WorkspaceDiffSummary.parse({ files: 2, additions: 5, deletions: 1 })).toEqual({ files: 2, additions: 5, deletions: 1 });
+});
+
+it('shows three file rows and folds the rest behind "Show more"', () => {
+  expect(cardRowsOf({ summary: fiveFiles }, false)).toEqual({ shown: fiveFiles.entries!.slice(0, CARD_FILE_ROWS), hidden: 2, unlisted: 0 });
+  expect(cardRowsOf({ summary: fiveFiles }, true)).toEqual({ shown: fiveFiles.entries, hidden: 0, unlisted: 0 });
+  const three: WorkspaceDiffSummary = { ...fiveFiles, files: 3, entries: fiveFiles.entries!.slice(0, 3) };
+  expect(cardRowsOf({ summary: three }, false)?.hidden).toBe(0);
+  // Files past the core's cap are only in the viewer.
+  expect(cardRowsOf({ summary: { ...fiveFiles, moreEntries: 9 } }, true)?.unlisted).toBe(9);
+  // Counts alone (a run from before the files were kept), a restored line and carried changes stay the single line.
+  expect(cardRowsOf({ summary: { files: 5, additions: 155, deletions: 0 } }, false)).toBeUndefined();
+  expect(cardRowsOf({ summary: fiveFiles, restored: true }, false)).toBeUndefined();
+  expect(cardRowsOf({ summary: fiveFiles, review: { state: 'carried' } }, false)).toBeUndefined();
+});
+
+it('says "+0 −0" for nothing: folders, plain copies and unchanged lines show no counts', () => {
+  expect(entryCountsKind({}, fileEntry('a.ts', 6, 2))).toBe('lines');
+  expect(entryCountsKind({}, { path: 'logo.png', status: 'added', binary: true, added: 0, removed: 0 })).toBe('binary');
+  expect(entryCountsKind({}, { path: 'assets', status: 'added', folder: true, added: 0, removed: 0 })).toBe('none');
+  expect(entryCountsKind({}, fileEntry('mode-only.sh', 0, 0))).toBe('none');
+  expect(entryCountsKind({ lines: false }, fileEntry('note.txt', 0, 0))).toBe('none');
+});
+
+it('draws the card: the headline, three rows with kind, path and their own counts, then "Show 2 more"', () => {
+  const html = renderToStaticMarkup(createElement(ChangedFilesCard, { summary: fiveFiles, onOpen: () => {} }));
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  expect(html).toContain('class="changed-files-card"');
+  expect(text).toContain('Changed 5 files · +155');
+  // The headline and a new file read "+155" and "+80" alone: a side that is zero is left out.
+  expect(html).toContain('<span class="diff-count-added">+80</span>');
+  expect(html.match(/class="[^"]*changed-file-row/g)).toHaveLength(3);
+  expect(text).toContain('New file');
+  expect(html).toContain('class="diff-path-folder">src/</span>');
+  expect(html).not.toContain('package.json');
+  expect(text).toContain('Show 2 more');
+});
+
+it('words a crew member\'s card, a move, a deletion and a folder without line counts', () => {
+  const plain: WorkspaceDiffSummary = { files: 2, additions: 0, deletions: 0, moved: 1, removed: 1, folders: 1, lines: false, entries: [
+    { path: 'receipts/march.pdf', previousPath: 'receipt 3.pdf', status: 'renamed', added: 0, removed: 0 },
+    { path: 'contract-old.pdf', status: 'deleted', added: 0, removed: 0 },
+    { path: 'receipts', status: 'added', folder: true, added: 0, removed: 0 },
+  ] };
+  const html = renderToStaticMarkup(createElement(ChangedFilesCard, { summary: plain, workerName: 'Writer', onOpen: () => {} }));
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  expect(text).toContain('Writer changed 2 files');
+  // The rows say what moved or went away, so the headline does not repeat it (the plain line still does).
+  expect(text).not.toContain('moved or renamed');
+  expect(changedFilesLabel(plain)).toContain('1 moved or renamed · 1 deleted');
+  expect(text).toContain('Moved');
+  expect(text).toContain('Deleted');
+  expect(text).toContain('New folder');
+  expect(html).not.toContain('diff-count-added');
+  expect(html).not.toContain('Show');
+  // A summary with counts only is still the one line, not a card.
+  const line = renderToStaticMarkup(createElement(ChangedFilesCard, { summary: { files: 3, additions: 42, deletions: 7 }, onOpen: () => {} }));
+  expect(line).not.toContain('changed-files-card');
+  expect(line).toContain('class="activity-summary changed-files"');
 });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { WorkspacePath, WorkspaceRead, WorkspaceHash, WorkspaceChangeKind } from './workspace-tools';
-import { WorkspaceDiffSummary } from './workspace-diff';
+import { WorkspaceDiffCounts, WorkspaceDiffSummary } from './workspace-diff';
 import { WorkspaceReview } from './workspace-review';
 
 export const TOOL_CALL_SUMMARY_LENGTH = 300;
@@ -34,9 +34,9 @@ export type ChangeOutcome = z.infer<typeof ChangeOutcome>;
 /**
  * A turn's files line without the files (COD-299): the counts and where the changes stood. A backup carries one for
  * each run whose working copy changed something, and a restore keeps it for a run whose working copy is not on this
- * computer, so the chat still says what the turn changed. No path, no content, no hunk.
+ * computer, so the chat still says what the turn changed. No path, no content, no hunk (the summary's file entries stay in the working copy's record).
  */
-export const ChangedFilesRecord = z.object({ runId: z.uuid(), diff: WorkspaceDiffSummary, outcome: ChangeOutcome.optional() }).strict();
+export const ChangedFilesRecord = z.object({ runId: z.uuid(), diff: WorkspaceDiffCounts, outcome: ChangeOutcome.optional() }).strict();
 export type ChangedFilesRecord = z.infer<typeof ChangedFilesRecord>;
 export const WorkspaceRecoveryView = z.object({
   taskId: z.uuid(),
