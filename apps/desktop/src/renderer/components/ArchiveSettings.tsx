@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Hash } from 'lucide-react';
 import { ArchiveRestore, EllipsisVertical, Trash } from './icons';
 import { Button } from './ui';
 import { t, translated } from '../i18n';
@@ -47,7 +48,7 @@ export function ArchivedRow({ name, mark, whose, archive, deleteQuestion, delete
     <RowMenu label={t('Tùy chọn {0}', [name])} icon={EllipsisVertical}
       items={[{ label: t('Xóa vĩnh viễn'), icon: Trash, danger: true, onSelect: deleteBlock ? deleteBlock.onAction : onDelete,
         confirm: deleteBlock
-          ? { question: deleteBlock.question, label: deleteBlock.actionLabel }
+          ? { question: deleteBlock.question, label: deleteBlock.actionLabel, icon: Hash, safe: true }
           : { question: deleteQuestion ?? t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
   </li>;
 }

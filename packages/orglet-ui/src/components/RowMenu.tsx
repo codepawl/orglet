@@ -17,7 +17,11 @@ export type RowMenuItem = {
   icon: RowMenuIcon;
   onSelect: () => void;
   danger?: boolean;
-  confirm?: { question: string; label: string };
+  /**
+   * `icon` replaces the item's own icon on the answer, and `safe` drops the danger colour: for a question whose answer
+   * is a way out (open the place that blocks a delete) rather than the destructive act itself.
+   */
+  confirm?: { question: string; label: string; icon?: RowMenuIcon; safe?: boolean };
   shortcut?: string;
 };
 
@@ -176,10 +180,11 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
     item.onSelect();
   };
 
-  const question = asking && <>
+  const AnswerIcon = asking?.confirm?.icon ?? asking?.icon;
+  const question = asking && AnswerIcon && <>
     <p className="org-row-menu-question">{asking.confirm!.question}</p>
-    <button type="button" role="menuitem" className="org-row-menu-danger" onClick={confirmAsked}>
-      <asking.icon size={16} aria-hidden="true" /><span>{asking.confirm!.label}</span>
+    <button type="button" role="menuitem" className={asking.confirm!.safe ? undefined : 'org-row-menu-danger'} onClick={confirmAsked}>
+      <AnswerIcon size={16} aria-hidden="true" /><span>{asking.confirm!.label}</span>
     </button>
     <button type="button" role="menuitem" onClick={() => setAsking(undefined)}>
       <CloseIcon /><span>{cancelLabel}</span>

@@ -2141,7 +2141,7 @@ export function App() {
   const workerDeleteItem = (worker: { id: string; name: string }) => {
     const block = deleteBlockedByChannels(workspace.teams, worker.id, worker.name);
     if (block) {
-      return { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => editCrewChannel(block.crewId), confirm: { question: block.question, label: block.actionLabel } };
+      return { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => editCrewChannel(block.crewId), confirm: { question: block.question, label: block.actionLabel, icon: Hash, safe: true } };
     }
     return { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', worker.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [worker.name]), label: t('Xóa') } };
   };
