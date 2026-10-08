@@ -49,6 +49,19 @@ export type ChartCheck = { ok: true; spec: ChartSpec } | { ok: false; problems: 
  * orglet can act on. Beyond the shape, it checks what the shape cannot: that the named columns exist, that every row
  * is as wide as the header, that values are numbers where they must be, and the limits of each kind of chart.
  */
+/**
+ * A histogram has one column of values, and models often name it only as "x" (measured 2026-10-09: gpt-6-luna did on
+ * one of twelve live requests, gpt-6.1-sol sent an empty "y" on another). That column is then the values; anything
+ * else is checked as written.
+ */
+function withHistogramValues(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const spec = value as Record<string, unknown>;
+  const noValues = spec.y === undefined || (Array.isArray(spec.y) && spec.y.length === 0);
+  if (spec.type !== 'histogram' || !noValues || typeof spec.x !== 'string') return value;
+  return { ...spec, y: [spec.x] };
+}
+
 export function checkChart(input: unknown): ChartCheck {
   let value = input;
   if (typeof input === 'string') {
@@ -58,7 +71,7 @@ export function checkChart(input: unknown): ChartCheck {
       return { ok: false, problems: ['The chart is not valid JSON.'] };
     }
   }
-  const parsed = ChartSpec.safeParse(value);
+  const parsed = ChartSpec.safeParse(withHistogramValues(value));
   if (!parsed.success) return { ok: false, problems: parsed.error.issues.slice(0, 8).map(issue => `${issue.path.join('.') || 'chart'}: ${issue.message}`) };
   const spec = parsed.data;
   const problems: string[] = [];

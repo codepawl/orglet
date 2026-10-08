@@ -84,3 +84,12 @@ it('lists the charts the answers of a chat carry, newest first, leaving out the 
   ]);
   expect(charts.map(chart => [chart.id, chart.spec.title])).toEqual([['a2:0', 'Second'], ['a2:2', 'Third'], ['a1:0', 'Revenue']]);
 });
+
+it('reads a histogram that names its one value column only as x', () => {
+  const checked = checkChart({ type: 'histogram', title: 'Response times', takeaway: 'Most requests take under 200 ms.', columns: ['ms'], rows: [[120], [135], [210], [300]], x: 'ms' });
+  expect(checked.ok).toBe(true);
+  if (checked.ok) expect(checked.spec.y).toEqual(['ms']);
+  expect(checkChart({ type: 'histogram', title: 'Response times', takeaway: 'Most requests take under 200 ms.', columns: ['ms'], rows: [[120], [300]], x: 'ms', y: [] }).ok).toBe(true);
+  // Another type without "y" is still told what is missing.
+  expect(checkChart({ type: 'bar', title: 'Sign-ups', takeaway: 'Vietnam leads.', columns: ['country', 'signups'], rows: [['VN', 420]], x: 'country' }).ok).toBe(false);
+});
