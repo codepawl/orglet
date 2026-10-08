@@ -9,7 +9,7 @@ import { Select } from './Select';
 import { Switch } from './Switch';
 import { RowMenu } from './RowMenu';
 import { StatusMark, type StatusMarkState } from './StatusMark';
-import { Input, Textarea } from '@codepawlhq/orglet-ui';
+import { FieldError, Input, Textarea } from '@codepawlhq/orglet-ui';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { toast } from './toast';
@@ -314,7 +314,7 @@ function McpServerEditor({ server, app, onClose }: { server?: McpServerView; app
         <Button type="button" variant="outline" onClick={() => setEntries(current => [...current, newEntry()])}><Plus size={15} />{kind === 'stdio' ? t('Thêm biến') : t('Thêm header')}</Button>
       </fieldset>
       <div className="sticky-actions">
-        {error && <p className="form-error" role="alert">{error}</p>}
+        {error && <FieldError className="form-error">{error}</FieldError>}
         <Button type="button" variant="outline" disabled={busy} onClick={onClose}>{t('Hủy')}</Button>
         <Button variant="primary" disabled={busy}>{t('Lưu máy chủ')}</Button>
       </div>

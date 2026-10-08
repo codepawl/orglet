@@ -13,6 +13,7 @@ import { useMarketModeration } from './MarketModeration';
 import { MARKET_SEED_BODIES } from '../../shared/market-seed';
 import { PageTabs } from './PageTabs';
 import { RowMenu } from './RowMenu';
+import { FieldError } from '@codepawlhq/orglet-ui';
 
 /**
  * What a listing is, told at a glance by a picture before its name (user, 2026-10-05): an orglet's face, two faces
@@ -91,7 +92,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     {tab === 'discover' ? <div className="marketplace-discover">
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
     {catalog?.error && <p className="muted" role="status">{tMessage(catalog.error)}</p>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <FieldError className="error">{error}</FieldError>}
     {catalog?.source === 'cache' && !!catalog.cachedPages?.length && <Select label={t('Mở trang đã lưu')} value={catalog.pageCursor ?? ''} disabled={busy} options={[
       { value: '', label: t('Trang đầu đã lưu') },
       ...catalog.cachedPages.map((page, index) => ({ value: page.cursor, label: t('Bản lưu {0}: {1}', [index + 1, page.name || t('Trang trống')]) })),
@@ -187,7 +188,7 @@ export function MarketProfileUpdate({ entityId, onUpdated }: { entityId: string;
       setError('');
       void orglet.call('marketPreviewUpdate', { entityId }).then(setUpdate).catch(reason => setError(tMessage(reason.message))).finally(() => setBusy(false));
     }}><ArrowDownToLine size={16} />{installation.updateAvailable ? t('Có bản cập nhật') : t('Kiểm tra bản cập nhật')}</Button>
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <FieldError className="error">{error}</FieldError>}
     {update && <MarketUpdateCard update={update} onClose={() => setUpdate(undefined)} onApplied={result => { addedNotice(result); setUpdate(undefined); onUpdated(); }} />}
   </div>;
 }
@@ -205,7 +206,7 @@ function MarketUpdateCard({ update, onClose, onApplied }: { update: MarketUpdate
         <h3>{change.name}</h3>
         <div className="marketplace-comparison-columns"><div><p className="muted">{t('Bản của bạn')}</p><pre>{change.before || t('Chưa có')}</pre></div><div><p className="muted">{t('Bản mới')}</p><pre>{change.after}</pre></div></div>
       </section>)}
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <FieldError className="error">{error}</FieldError>}
       <div className="actions"><Button type="button" variant="outline" disabled={busy} onClick={onClose}><X size={16} />{t('Hủy')}</Button><Button type="button" variant="primary" disabled={busy} onClick={() => {
         setBusy(true);
         void orglet.call('marketApplyUpdate', { entityId: update.entityId, token: update.token }).then(onApplied).catch(reason => setError(tMessage(reason.message))).finally(() => setBusy(false));

@@ -18,7 +18,7 @@ import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
 import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
-import { CommandBlock, Input, Textarea, Tooltip } from '@codepawlhq/orglet-ui';
+import { CommandBlock, FieldError, Input, Textarea, Tooltip } from '@codepawlhq/orglet-ui';
 import { isBlank, useFieldErrors } from '../fieldErrors';
 import { APP_TRIGGER_KEYWORD_LIMIT, APP_TRIGGER_MINUTES, triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
 import { permissionsForLevel, workspaceLevelOf, workspaceLevels, type WorkspaceLevel } from '../../shared/capability-status';
@@ -612,6 +612,6 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         : t('Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.', [destination])}</p>}
       <p className="muted">{browserLevel === 'read' ? t('Đổi Tí, skill, kênh, model, hồ sơ hay danh sách trang thì cần lưu lịch lại.') : t('Đổi Tí, skill, kênh hay model thì cần lưu lịch lại.')}</p>
     </section>
-    <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}>{t('Hủy')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
+    <div className="sticky-actions">{error && !zoneError ? <FieldError className="form-error">{error}</FieldError> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}>{t('Hủy')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;
 }

@@ -5,6 +5,7 @@ import { t, tMessage } from '../i18n';
 import { LocalOnlyControl } from './LocalOnlyControl';
 import { Button, Drawer } from './ui';
 import { toast } from './toast';
+import { FieldError } from '@codepawlhq/orglet-ui';
 
 /** A side thread can change its privacy without changing its inherited assignee or permissions. */
 export function LocalOnlyDialog({ task, workspace, onClose }: {
@@ -35,7 +36,7 @@ export function LocalOnlyDialog({ task, workspace, onClose }: {
   return <Drawer open onClose={onClose} title={t('Thiết lập chat')}>
     <form className="form local-only-form" onSubmit={event => { event.preventDefault(); if (!busy && !readOnly) void save(); }}>
       <LocalOnlyControl checked={checked} onChange={setChecked} inherited={inherited} permanent={permanent} orgletDeleted={orgletDeleted} />
-      {error && <p role="alert">{error}</p>}
+      {error && <FieldError>{error}</FieldError>}
       <div className="actions">
         <Button type="button" variant="outline" onClick={onClose} disabled={busy}>{readOnly ? t('Đóng') : t('Hủy')}</Button>
         {!readOnly && <Button type="submit" variant="primary" disabled={busy}>{t('Lưu chat')}</Button>}

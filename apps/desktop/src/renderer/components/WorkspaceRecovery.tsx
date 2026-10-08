@@ -8,6 +8,7 @@ import { t, tMessage, translated } from '../i18n';
 import { Button } from './ui';
 import { Select } from './Select';
 import { timeMarkLabel } from './TimeMark';
+import { FieldError } from '@codepawlhq/orglet-ui';
 
 /*
  * Files and processes in chat Details (COD-191): one row per attempt, newest first, saying who ran it, when, and
@@ -47,7 +48,7 @@ function PrivateFile({ runId, path, read, disabled }: { runId: string; path: str
     {page?.nextOffset != null && <Button disabled={disabled || busy} onClick={() => void load(page.nextOffset!)}>
       <ChevronRight size={15} />{t('Trang tiếp theo')}
     </Button>}
-    {error && <p role="alert">{tMessage(error)}</p>}
+    {error && <FieldError>{tMessage(error)}</FieldError>}
   </div>;
 }
 
@@ -70,7 +71,7 @@ function ProcessOutput({ processId, read }: { processId: string; read: ReadProce
     <Button disabled={busy} onClick={() => void load()}>{t('Xem đầu ra')}</Button>
     {output && <pre>{output.content || t('Chưa có đầu ra.')}</pre>}
     {output?.nextOffset != null && <Button disabled={busy} onClick={() => void load(output.nextOffset!)}>{t('Trang đầu ra tiếp theo')}</Button>}
-    {error && <p role="alert">{tMessage(error)}</p>}
+    {error && <FieldError>{tMessage(error)}</FieldError>}
   </div>;
 }
 

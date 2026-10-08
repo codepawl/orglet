@@ -5,7 +5,7 @@ import { Sparkles, FileText } from 'lucide-react';
 import { SkillReview } from './SkillReview';
 import { t } from '../i18n';
 import { orglet } from '../api';
-import { Input, Textarea } from '@codepawlhq/orglet-ui';
+import { FieldError, Input, Textarea } from '@codepawlhq/orglet-ui';
 import { isBlank, useFieldErrors } from '../fieldErrors';
 
 export function SkillEditor({ skill, done }: { skill?: Skill; done: () => void }) {
@@ -32,7 +32,7 @@ function PlainSkillEditor({ skill, done }: { skill?: Skill; done: () => void }) 
       <p className="muted">{t('Skill chỉ chứa hướng dẫn. Nội dung không cấp quyền chạy script hay mở thêm tệp.')}</p>
     </div>
     <div className="actions floating-actions">
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? <FieldError className="form-error">{error}</FieldError> : null}
       <Button variant="primary" disabled={busy}>{busy ? t('Đang lưu…') : t('Lưu skill')}</Button>
       {skill && <Button type="button" variant="outline" disabled={busy} onClick={async () => {
         setBusy(true); setError('');

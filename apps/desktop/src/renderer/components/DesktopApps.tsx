@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Camera, Check, ChevronsUpDown, Image, Keyboard, List, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldAlert, TextCursorInput, ToggleRight, X, type LucideIcon } from 'lucide-react';
-import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
+import { FieldError, Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { defaultDesktopChoice, type DesktopAction, type DesktopActionKind, type DesktopActKind, type DesktopApprovalView, type DesktopBorrowStep, type DesktopChoice, type DesktopWindowView } from '../../shared/desktop';
 import { Button, Drawer } from './ui';
@@ -44,7 +44,7 @@ function DesktopAppPicker({ granted, onAdd, onClose }: { granted: DesktopChoice;
     {!windows && !failed && <SkeletonGroup label={t('Đang tìm cửa sổ đang mở')}>
       <Skeleton width="60%" /><Skeleton width="45%" /><Skeleton width="52%" />
     </SkeletonGroup>}
-    {failed && <p className="error" role="alert">{failed}</p>}
+    {failed && <FieldError className="error">{failed}</FieldError>}
     {windows && programs.size === 0 && <p className="muted">{t('Không có cửa sổ nào đang mở.')}</p>}
     {programs.size > 0 && <ul className="desktop-picker" aria-label={t('Cửa sổ đang mở')}>
       {[...programs.entries()].map(([program, programWindows]) => {
