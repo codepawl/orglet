@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, FolderMinus, FolderPlus } from 'lucide-react';
 import { Button } from './ui';
 import { fileKindIcon } from './Attachment';
-import { ChangedFilesLine, DiffCounts, FilePath, entryStatusLabel, type ReviewStatus } from './DiffViewer';
+import { ChangedFilesLine, DiffCounts, FilePath, entryStatusLabel, reviewSuffix, type ReviewStatus } from './DiffViewer';
 import { CARD_FILE_ROWS, cardRowsOf, entryCountsKind } from '../changedFiles';
 import type { WorkspaceDiffEntry, WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import { currentLocale, t } from '../i18n';
@@ -26,6 +26,19 @@ export function ChangedFilesCard({ summary, workerName, review, restored = false
   const rows = cardRowsOf({ summary, review, restored }, expanded);
   const headline = <ChangedFilesLine summary={summary} workerName={workerName} review={review} restored={restored} compact={rows !== undefined} onOpen={() => onOpen()} />;
   if (!rows) return headline;
+  const only = summary.entries?.length === 1 && rows.unlisted === 0 && !workerName ? summary.entries[0] : undefined;
+  if (only) {
+    return <div className="changed-files-card changed-files-single">
+      <Button type="button" className={review?.state === 'pending' ? 'changed-file-row changed-files-review' : 'changed-file-row'} aria-haspopup="dialog" onClick={() => onOpen(only.folder ? undefined : only.path)}>
+        <EntryKind entry={only} />
+        <span className="changed-file-path">{only.folder ? <span className="diff-path"><span className="diff-path-name">{`${only.path}/`}</span></span> : <FilePath file={only} />}</span>
+        <EntryStatus entry={only} />
+        {review && <span className="changed-file-outcome">{reviewSuffix(review)}</span>}
+        <EntryCounts summary={summary} entry={only} />
+        <ChevronRight size={14} aria-hidden="true" className="changed-file-chevron" />
+      </Button>
+    </div>;
+  }
   const locale = currentLocale();
   const canFold = (summary.entries?.length ?? 0) > CARD_FILE_ROWS;
   // Entries past the core's cap are only in the viewer; say so once the listed ones are all showing.
@@ -46,10 +59,10 @@ export function ChangedFilesCard({ summary, workerName, review, restored = false
     {(canFold || showUnlisted) && <div className="changed-files-more">
       {canFold && (expanded
         ? <Button type="button" className="changed-files-toggle" aria-expanded onClick={() => setExpanded(false)}>
-          <ChevronUp size={14} aria-hidden="true" />{t('Thu gọn')}
+          <ChevronUp size={15} aria-hidden="true" />{t('Thu gọn')}
         </Button>
         : <Button type="button" className="changed-files-toggle" aria-expanded={false} onClick={() => setExpanded(true)}>
-          <ChevronDown size={14} aria-hidden="true" />{t('Hiện thêm {0}', [rows.hidden.toLocaleString(locale)])}
+          <ChevronDown size={15} aria-hidden="true" />{t('Hiện thêm {0}', [rows.hidden.toLocaleString(locale)])}
         </Button>)}
       {showUnlisted && <Button type="button" className="changed-files-toggle" aria-haspopup="dialog" onClick={() => onOpen()}>
         {t('Xem thêm {0} tệp trong trình xem', [rows.unlisted.toLocaleString(locale)])}
@@ -76,6 +89,6 @@ function EntryCounts({ summary, entry }: { summary: WorkspaceDiffSummary; entry:
   const kind = entryCountsKind(summary, entry);
   if (kind === 'none') return null;
   return <span className="diff-file-counts">
-    {kind === 'binary' ? t('Nhị phân') : <DiffCounts counts={{ additions: entry.added, deletions: entry.removed }} hideZero />}
+    {kind === 'binary' ? <span className="diff-binary">{t('Nhị phân')}</span> : <DiffCounts counts={{ additions: entry.added, deletions: entry.removed }} hideZero />}
   </span>;
 }

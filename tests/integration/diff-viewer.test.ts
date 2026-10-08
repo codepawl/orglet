@@ -221,6 +221,21 @@ it('draws the card: the headline, three rows with kind, path and their own count
   expect(text).toContain('Show 2 more');
 });
 
+it('shows one changed file as that file\'s row alone, with where it stands and its counts', () => {
+  const one: WorkspaceDiffSummary = { files: 1, additions: 4, deletions: 2, entries: [fileEntry('services/sync/src/account-object.ts', 4, 2)] };
+  const html = renderToStaticMarkup(createElement(ChangedFilesCard, { summary: one, review: { state: 'pending' }, onOpen: () => {} }));
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  expect(html).toContain('changed-files-single');
+  expect(html.match(/class="[^"]*changed-file-row/g)).toHaveLength(1);
+  expect(text).not.toContain('Changed 1 file');
+  expect(text).toContain('account-object.ts');
+  expect(text).toContain('Review');
+  expect(html).toContain('<span class="diff-count-added">+4</span>');
+  // A crew member's single file keeps the headline, so the card still names whose change it is.
+  const crew = renderToStaticMarkup(createElement(ChangedFilesCard, { summary: one, workerName: 'Writer', onOpen: () => {} }));
+  expect(crew).not.toContain('changed-files-single');
+});
+
 it('words a crew member\'s card, a move, a deletion and a folder without line counts', () => {
   const plain: WorkspaceDiffSummary = { files: 2, additions: 0, deletions: 0, moved: 1, removed: 1, folders: 1, lines: false, entries: [
     { path: 'receipts/march.pdf', previousPath: 'receipt 3.pdf', status: 'renamed', added: 0, removed: 0 },
