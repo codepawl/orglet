@@ -4,7 +4,7 @@ import { Button } from './ui';
 import { Checkbox } from './Checkbox';
 import { fileKindIcon } from './Attachment';
 import type { Run } from '../../shared/contracts';
-import type { DiffFile, DiffFolder, DiffHunk, WorkspaceDiff, WorkspaceDiffSummary } from '../../shared/workspace-diff';
+import type { DiffFile, DiffFolder, DiffHunk, WorkspaceDiff, WorkspaceDiffEntry, WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { ChangeOutcome } from '../../shared/workspace-recovery';
 import { SourceViewer } from './SourceViewer';
 import type { InfoTipRow } from './InfoTip';
@@ -29,13 +29,19 @@ const statusLabels: Partial<Record<DiffFile['status'], string>> = translated({ a
 const folderLabels: Record<DiffFolder['status'], string> = translated({ added: 'Thư mục mới', deleted: 'Đã xóa thư mục' });
 
 /** Git calls both a rename; a person tells a file that went to another folder apart from one that got a new name (COD-254). */
-function statusLabel(file: DiffFile): string | undefined {
+export function statusLabel(file: Pick<DiffFile, 'status' | 'path' | 'previousPath'>): string | undefined {
   if (file.status === 'renamed' && file.previousPath && folderOf(file.previousPath) !== folderOf(file.path)) return t('Đã chuyển');
   return statusLabels[file.status];
 }
 
+/** The small word for a card row: a folder's own words, otherwise the same words the viewer's list uses. */
+export function entryStatusLabel(entry: Pick<WorkspaceDiffEntry, 'status' | 'path' | 'previousPath' | 'folder'>): string | undefined {
+  if (entry.folder) return folderLabels[entry.status === 'added' ? 'added' : 'deleted'];
+  return statusLabel(entry);
+}
+
 const folderOf = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-const pathLabel = (file: DiffFile) => file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
+const pathLabel = (file: Pick<DiffFile, 'path' | 'previousPath'>) => file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
 
 /** "+42 −7" with the locale's digits; a binary file has no counts to show. */
 export function countsLabel(counts: Pick<WorkspaceDiffSummary, 'additions' | 'deletions'>): string {
@@ -72,16 +78,20 @@ export function changedFilesLabel(summary: WorkspaceDiffSummary, workerName?: st
   return parts.join(' · ');
 }
 
-/** The words of the changed-files line, without the line counts. */
-function changedParts(summary: WorkspaceDiffSummary, workerName?: string): string[] {
+/**
+ * The words of the changed-files line, without the line counts. The card's rows say for themselves which files moved
+ * or went away, so its headline leaves the breakdown out (`compact`) and keeps to one row.
+ */
+export function changedParts(summary: WorkspaceDiffSummary, workerName?: string, compact = false): string[] {
   const locale = currentLocale();
   const parts = [changedHead(summary, workerName)];
+  if (compact) return parts;
   if (summary.moved) parts.push(t('{0} chuyển hoặc đổi tên', [summary.moved.toLocaleString(locale)]));
   if (summary.removed) parts.push(t('{0} đã xóa', [summary.removed.toLocaleString(locale)]));
   return parts;
 }
 
-function hasLineCounts(summary: WorkspaceDiffSummary): boolean {
+export function hasLineCounts(summary: WorkspaceDiffSummary): boolean {
   return summary.lines !== false && summary.files > 0;
 }
 
@@ -109,7 +119,7 @@ export function DiffCounts({ counts, hideZero = false }: { counts: Pick<Workspac
 export type ReviewStatus = ChangeOutcome;
 
 /** The words after the counts that say where the changes stand. */
-function reviewSuffix(review: ReviewStatus): ReactNode {
+export function reviewSuffix(review: ReviewStatus): ReactNode {
   if (review.state === 'pending') return <>
     <span className="changed-files-pending">{t('Chưa áp dụng vào thư mục')}</span>
     {' · '}<span className="changed-files-open">{t('Xem lại')}</span>
@@ -130,11 +140,11 @@ function reviewSuffix(review: ReviewStatus): ReactNode {
  * own, so that line is plain text. So is a line a restore brought back without its working copy (COD-299): it keeps
  * its counts and outcome, and says the changes cannot be opened.
  */
-export function ChangedFilesLine({ summary, workerName, review, restored = false, onOpen }: { summary: WorkspaceDiffSummary; workerName?: string; review?: ReviewStatus; restored?: boolean; onOpen: () => void }) {
+export function ChangedFilesLine({ summary, workerName, review, restored = false, compact = false, onOpen }: { summary: WorkspaceDiffSummary; workerName?: string; review?: ReviewStatus; restored?: boolean; /** The headline of the changed-files card: without the moved and deleted breakdown its rows carry. */ compact?: boolean; onOpen: () => void }) {
   const content = <>
     <FileDiff size={14} aria-hidden="true" />
     <span>
-      {changedParts(summary, workerName).join(' · ')}{hasLineCounts(summary) && <> · <DiffCounts counts={summary} hideZero /></>}
+      {changedParts(summary, workerName, compact).join(' · ')}{hasLineCounts(summary) && <> · <DiffCounts counts={summary} hideZero /></>}
       {review && <> · {reviewSuffix(review)}</>}
       {restored && <> · {t('Khôi phục từ bản sao lưu, không mở lại được thay đổi')}</>}
     </span>
@@ -182,7 +192,7 @@ const fileElementId = (index: number) => `diff-file-${index}`;
  * `review`, the changes are still held (COD-279): the toolbar carries Discard and Apply, and with more than one file
  * each has a tick, so the person can leave some out. Apply names how many files it takes when not all.
  */
-export function DiffViewer({ diff, workerName, info, review, onClose }: { diff: WorkspaceDiff; workerName: string; info: InfoTipRow[]; review?: DiffReview; onClose: () => void }) {
+export function DiffViewer({ diff, workerName, info, review, focusPath, onClose }: { diff: WorkspaceDiff; workerName: string; info: InfoTipRow[]; review?: DiffReview; /** The file a click in the chat's card asked for; the viewer opens scrolled to it. */ focusPath?: string; onClose: () => void }) {
   const files = diff.files.length.toLocaleString(currentLocale());
   // The counts wear the diff's own colours here too, the way the chat's changed-files line does.
   const meta = diff.lines === false ? t('{0} tệp', [files]) : <>{t('{0} tệp', [files])} · <DiffCounts counts={diff} hideZero /></>;
@@ -220,7 +230,7 @@ export function DiffViewer({ diff, workerName, info, review, onClose }: { diff: 
     {review && <p className="preview-note diff-review-note">{t('Chưa có gì vào thư mục của bạn. Áp dụng để đưa thay đổi vào, hoặc bỏ nếu không cần.')}</p>}
     {diff.files.length === 0 && !diff.folders?.length
       ? <p className="preview-state">{t('Không có thay đổi nào trong bản làm việc.')}</p>
-      : <DiffBody diff={diff} selection={selection} />}
+      : <DiffBody diff={diff} selection={selection} focusPath={focusPath} />}
   </SourceViewer>;
 }
 
@@ -228,7 +238,7 @@ export function DiffViewer({ diff, workerName, info, review, onClose }: { diff: 
 export type DiffSelection = { isTicked: (path: string) => boolean; toggle: (path: string, ticked: boolean) => void };
 
 /** A path as a reviewer scans it: the folder quiet and allowed to shorten, the file's name in full weight. */
-function PathText({ path }: { path: string }) {
+export function PathText({ path }: { path: string }) {
   const cut = path.lastIndexOf('/') + 1;
   return <span className="diff-path" title={path}>
     {cut > 0 && <span className="diff-path-folder">{path.slice(0, cut)}</span>}
@@ -237,7 +247,7 @@ function PathText({ path }: { path: string }) {
 }
 
 /** Where a moved file came from, quiet, then where it is now. */
-function FilePath({ file }: { file: DiffFile }) {
+export function FilePath({ file }: { file: Pick<DiffFile, 'path' | 'previousPath'> }) {
   if (!file.previousPath) return <PathText path={file.path} />;
   return <span className="diff-path-move" title={pathLabel(file)}>
     <span className="diff-path-from">{file.previousPath}</span>
@@ -265,7 +275,7 @@ function FileCounts({ file }: { file: DiffFile }) {
  * and folds the file away. A plain folder copy has no hunks, so its list is the whole view.
  * With `selection`, every file starts with a tick for the files to apply, in the list and in its header.
  */
-export function DiffBody({ diff, selection }: { diff: WorkspaceDiff; selection?: DiffSelection }) {
+export function DiffBody({ diff, selection, focusPath }: { diff: WorkspaceDiff; selection?: DiffSelection; focusPath?: string }) {
   const withLines = diff.lines !== false;
   const folders = diff.folders ?? [];
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
@@ -289,6 +299,14 @@ export function DiffBody({ diff, selection }: { diff: WorkspaceDiff; selection?:
     });
     document.getElementById(fileElementId(index))?.scrollIntoView({ block: 'start' });
   };
+  // Opened from a file row of the chat's card: start at that file (a moved file matches by either of its paths).
+  useEffect(() => {
+    if (!focusPath) return;
+    const index = diff.files.findIndex(file => file.path === focusPath || file.previousPath === focusPath);
+    if (index < 0) return;
+    const frame = requestAnimationFrame(() => document.getElementById(fileElementId(index))?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   return <div className="diff-view">
     {!withLines && <p className="preview-note">{t('Thư mục này không phải Git repository nên chỉ hiện tệp nào đã thay đổi, không hiện từng dòng.')}</p>}
     {listed && <ul className={selection ? 'diff-files selectable' : 'diff-files'} aria-label={t('Tệp đã thay đổi')}>
@@ -397,7 +415,7 @@ function DiffShape() {
  * The viewer wired to the core for one run of a chat: the diff comes through the bridge, never from the file system.
  * A diff already seen this session is drawn at once (COD-218); the kept copy goes when the workspace changes.
  */
-export function DiffDialog({ taskId, run, review, onClose }: { taskId: string; run: Run; review?: DiffReview; onClose: () => void }) {
+export function DiffDialog({ taskId, run, review, focusPath, onClose }: { taskId: string; run: Run; review?: DiffReview; focusPath?: string; onClose: () => void }) {
   const key = `${taskId}:${run.id}`;
   const cached = useCached(workspaceDiffs, key);
   // Every workspace change drops the kept diffs. The one on screen stays while it is read again, so the viewer, and
@@ -426,5 +444,5 @@ export function DiffDialog({ taskId, run, review, onClose }: { taskId: string; r
       {loaded.loading ? <DiffShape /> : <p className="preview-state">{tMessage(loaded.error ?? '')}</p>}
     </SourceViewer>;
   }
-  return <DiffViewer diff={loaded.diff} workerName={workerName} info={info} review={review} onClose={onClose} />;
+  return <DiffViewer diff={loaded.diff} workerName={workerName} info={info} review={review} focusPath={focusPath} onClose={onClose} />;
 }

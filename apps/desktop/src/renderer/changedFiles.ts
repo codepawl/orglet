@@ -1,6 +1,6 @@
 import type { Run } from '../shared/contracts';
 import { changeOutcomeOf, type WorkspaceRecoveryView } from '../shared/workspace-recovery';
-import type { WorkspaceDiffSummary } from '../shared/workspace-diff';
+import type { WorkspaceDiffEntry, WorkspaceDiffSummary } from '../shared/workspace-diff';
 import type { ReviewStatus } from './components/DiffViewer';
 
 export type ChangedFilesLineOf = { run: Run; summary: WorkspaceDiffSummary; review?: ReviewStatus; restored?: true };
@@ -39,4 +39,38 @@ function restoredOutcome(outcome: ReviewStatus | undefined): ReviewStatus | unde
   if (outcome?.state === 'pending') return { state: 'unapplied' };
   if (outcome?.state === 'applying' || outcome?.state === 'stopped') return undefined;
   return outcome;
+}
+
+/** Rows the card shows before "Show more". */
+export const CARD_FILE_ROWS = 3;
+
+export type CardRows = {
+  /** The entries to draw, in the order the core kept them. */
+  shown: WorkspaceDiffEntry[];
+  /** Listed entries still folded away; "Show N more" reveals them. */
+  hidden: number;
+  /** Entries the core did not keep (past its cap); only the viewer lists them. */
+  unlisted: number;
+};
+
+/**
+ * The file rows of a turn's card, or undefined when the line stays a single line: a run from before the files were
+ * kept has only counts, and a line whose changes cannot be opened (carried on by a later turn, or restored from a
+ * backup that keeps no path) has nothing to click.
+ */
+export function cardRowsOf(line: Pick<ChangedFilesLineOf, 'summary' | 'review'> & { restored?: boolean }, expanded: boolean): CardRows | undefined {
+  const entries = line.summary.entries;
+  if (!entries?.length || line.restored || line.review?.state === 'carried') return undefined;
+  const shown = expanded ? entries : entries.slice(0, CARD_FILE_ROWS);
+  return { shown, hidden: entries.length - shown.length, unlisted: line.summary.moreEntries ?? 0 };
+}
+
+/**
+ * What a row says about lines: "+6 −2", "binary" for a file Git read no lines from, nothing for a folder, for a plain
+ * copy (it counts no lines, so "+0 −0" would be a false claim) or a file whose lines did not change.
+ */
+export function entryCountsKind(summary: Pick<WorkspaceDiffSummary, 'lines'>, entry: WorkspaceDiffEntry): 'lines' | 'binary' | 'none' {
+  if (entry.folder || summary.lines === false) return 'none';
+  if (entry.binary) return 'binary';
+  return entry.added > 0 || entry.removed > 0 ? 'lines' : 'none';
 }

@@ -262,7 +262,11 @@ describe.runIf(existsSync(gitExecutable))('workspace diff through the runtime (C
     expect(await runtime.finish(run, signal())).toEqual([]);
     expect(integrated.sort()).toEqual(['made.txt', 'note.txt']);
     const view = new WorkspaceRecovery(store).view(task.id);
-    expect(view.copies[0].diff).toEqual({ files: 2, additions: 3, deletions: 1 });
+    // The files are counted once, here, so the chat's card never diffs on a render.
+    expect(view.copies[0].diff).toEqual({ files: 2, additions: 3, deletions: 1, entries: [
+      { path: 'made.txt', status: 'added', added: 1, removed: 0 },
+      { path: 'note.txt', status: 'modified', added: 2, removed: 1 },
+    ] });
     const diff = await runtime.diff({ taskId: task.id, runId: run.id });
     expect(diff.runId).toBe(run.id);
     expect(diff.files.map(file => [file.path, file.status, file.additions, file.deletions])).toEqual([['made.txt', 'added', 1, 0], ['note.txt', 'modified', 2, 1]]);
@@ -302,6 +306,25 @@ describe.runIf(existsSync(gitExecutable))('workspace diff through the runtime (C
     expect(diff.folders).toEqual([{ path: 'archive', status: 'added' }, { path: 'archive/empty', status: 'added' }]);
     expect(diff.lines).toBeUndefined();
     await runtime.finish(run, signal());
-    expect(new WorkspaceRecovery(store).view(task.id).copies[0].diff).toEqual({ files: 2, additions: 0, deletions: 2, moved: 1, removed: 1, folders: 2 });
+    expect(new WorkspaceRecovery(store).view(task.id).copies[0].diff).toEqual({ files: 2, additions: 0, deletions: 2, moved: 1, removed: 1, folders: 2, entries: [
+      { path: 'archive/extra.txt', previousPath: 'extra.txt', status: 'renamed', added: 0, removed: 0 },
+      { path: 'note.txt', status: 'deleted', added: 0, removed: 2 },
+      { path: 'archive', status: 'added', folder: true, added: 0, removed: 0 },
+      { path: 'archive/empty', status: 'added', folder: true, added: 0, removed: 0 },
+    ] });
+  });
+
+  it('lists a plain copy\'s files with what happened to them and no line counts', async () => {
+    const plain = fixture('copy');
+    await edit(plain, 'note.txt', 'changed\n');
+    await plain.execute(run, id(), { operation: 'move', from: 'extra.txt', to: 'archive/extra.txt' }, signal());
+    await plain.finish(run, signal());
+    const summary = new WorkspaceRecovery(store).view(task.id).copies[0].diff!;
+    expect(summary.lines).toBe(false);
+    expect(summary.entries).toEqual([
+      { path: 'archive/extra.txt', previousPath: 'extra.txt', status: 'renamed', added: 0, removed: 0 },
+      { path: 'note.txt', status: 'modified', added: 0, removed: 0 },
+      { path: 'archive', status: 'added', folder: true, added: 0, removed: 0 },
+    ]);
   });
 });

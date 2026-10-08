@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { planIntegration, plainCopyDiff, TYPE_CHANGE_REFUSAL } from '../../apps/desktop/src/core/tools/workspace-plan';
-import { summarize } from '../../apps/desktop/src/shared/workspace-diff';
+import { countsOf, summarize } from '../../apps/desktop/src/shared/workspace-diff';
 import type { WorkspaceManifest } from '../../apps/desktop/src/shared/workspace-tools';
 
 const hashOf = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -114,6 +114,11 @@ it('describes a plain copy file by file without lines, and summarizes moves, del
     { path: 'contracts', status: 'added' }, { path: 'images', status: 'added' },
     { path: 'notes', status: 'added' }, { path: 'receipts', status: 'added' },
   ]);
-  expect(summarize(diff)).toEqual({ files: 7, additions: 0, deletions: 0, moved: 4, removed: 2, folders: 4, lines: false });
+  const summary = summarize(diff);
+  expect(countsOf(summary)).toEqual({ files: 7, additions: 0, deletions: 0, moved: 4, removed: 2, folders: 4, lines: false });
+  expect(summary.entries?.map(entry => [entry.path, entry.status, entry.folder ?? false])).toEqual([
+    ...diff.files.map(file => [file.path, file.status, false]),
+    ...diff.folders!.map(folder => [folder.path, folder.status, true]),
+  ]);
   expect(plainCopyDiff(inbox, inbox)).toEqual({ files: [], additions: 0, deletions: 0, truncated: false, lines: false });
 });

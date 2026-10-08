@@ -1,6 +1,7 @@
 import { _electron as electron } from 'playwright';
 import { createServer } from 'node:http';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import * as rules from './alignment/rules.ts';
@@ -198,6 +199,7 @@ async function seedWorkspace(page) {
   await waitForTask(page, crewTaskId);
   const chatTaskId = await callCore(page, 'createTask', { workerId: researcher.id, brief: 'Plan the launch of my weekly newsletter next month. Keep it short.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, chatTaskId);
+  await seedChangedFiles(page, chatTaskId);
   // A side thread of that chat, which opens in the right panel beside it (COD-365).
   // No closing period: the row is named by the chat's title, which drops one (the button's name is the title, not the brief).
   const sideThreadBrief = 'Draft three subject lines for it';
@@ -230,6 +232,50 @@ async function seedWorkspace(page) {
   const channels = await seedChannels(page, crew);
   await seedArchive(page, researcher);
   return { researcher, crew, islandCrew, heldOrglet, askingOrglet, earlierChatBrief, sideThreadBrief, channels };
+}
+
+/**
+ * What the first chat's run changed, as the core keeps it when a run finishes: a copy held for review whose summary lists
+ * five files (new code, an edit, a binary, a move and a deletion), so the card under the answer, its longest headline and
+ * its "Show more" can be measured. The row is written beside the core's own file; the chat reads it the way it reads a real run.
+ */
+async function seedChangedFiles(page, taskId) {
+  const detail = await callCore(page, 'task', { id: taskId });
+  const runId = detail.runs[0].id;
+  const entries = [
+    { path: 'apps/desktop/src/renderer/components/ChangedFilesCard.tsx', status: 'added', added: 118, removed: 0 },
+    { path: 'apps/desktop/src/renderer/styles.css', status: 'modified', added: 24, removed: 3 },
+    { path: 'assets/logo.png', status: 'added', binary: true, added: 0, removed: 0 },
+    { path: 'archive/plan.md', previousPath: 'notes/old-plan.md', status: 'renamed', added: 0, removed: 0 },
+    { path: 'tmp/scratch.txt', status: 'deleted', added: 0, removed: 14 },
+  ];
+  const diff = { files: 5, additions: 142, deletions: 17, moved: 1, removed: 1, entries };
+  const copy = { runId, state: 'ready', kind: 'git-worktree', directory: null, changes: [], diff, review: { state: 'pending', heldAt: new Date().toISOString() } };
+  const databasePath = await findFile(dataFolder, 'orglet.sqlite');
+  const database = new DatabaseSync(databasePath);
+  database.exec('PRAGMA busy_timeout = 5000');
+  database.prepare('INSERT OR REPLACE INTO workspace_copies(run_id,data) VALUES(?,?)').run(runId, JSON.stringify(copy));
+  database.close();
+}
+
+/** Opens or folds the card's rows, whichever it is in now, so a screen starts from the state it asks for. */
+async function foldChangedFiles(page, folded) {
+  const toggle = page.locator('.changed-files-toggle[aria-expanded]').first();
+  if (await toggle.count() === 0) return;
+  const open = (await toggle.getAttribute('aria-expanded')) === 'true';
+  if (open === folded) await toggle.click();
+}
+
+async function findFile(folder, name) {
+  for (const entry of await readdir(folder, { withFileTypes: true })) {
+    const path = join(folder, entry.name);
+    if (entry.isFile() && entry.name === name) return path;
+    if (entry.isDirectory()) {
+      const found = await findFile(path, name);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -408,6 +454,9 @@ async function openArea(page, vietnamese) {
 const SCREENS = [
   { name: 'chat', open: async () => {} },
   // An answer pointed at: its toolbar floats at its top right (COD-365).
+  // The card under an answer that changed files, with its folded rows opened.
+  { name: 'chat-changed-files-expanded', open: async page => { await foldChangedFiles(page, false); await page.locator('.changed-file-row').nth(4).waitFor(); },
+    close: page => foldChangedFiles(page, true) },
   { name: 'chat-message-toolbar', open: async page => { await page.locator('.main-pane .assistant-message').first().hover(); await page.locator('.main-pane .assistant-message .message-actions').first().waitFor(); } },
   // A side thread opened from its row: in the right panel beside its main chat, or in the main card when the window has no room for the panel.
   { name: 'side-thread-panel', open: async (page, context) => {

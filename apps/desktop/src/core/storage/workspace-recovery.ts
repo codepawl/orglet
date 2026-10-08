@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ChangedFilesRecord, ReadRecoveryOutput, RetireWorkspaceAttempt, WorkspaceRecoveryView, changeOutcomeOf, type RecoveryOutput } from '../../shared/workspace-recovery';
 import { WorkspaceProcess, describeCommand } from '../../shared/workspace-processes';
-import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
+import { countsOf, type WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { Run, Task } from '../../shared/contracts';
 import { Store, now } from './database';
 
@@ -21,7 +21,8 @@ function recordOfCopy(copy: StoredCopy): ChangedFilesRecord | undefined {
   if (!copy.diff) return undefined;
   if (copy.diff.files === 0 && (copy.diff.folders ?? 0) === 0) return undefined;
   const outcome = changeOutcomeOf({ state: copy.state, review: copy.review, carried: Boolean(copy.carriedTo) });
-  const record = outcome ? { runId: copy.runId, diff: copy.diff, outcome } : { runId: copy.runId, diff: copy.diff };
+  const diff = countsOf(copy.diff);
+  const record = outcome ? { runId: copy.runId, diff, outcome } : { runId: copy.runId, diff };
   return ChangedFilesRecord.parse(record);
 }
 
