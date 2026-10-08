@@ -490,9 +490,10 @@ describe('on screen', () => {
     const service = await heldRun();
     const held = renderThread();
     expect(held).toContain(ANSWER);
-    expect(held).toMatch(/class="activity-summary changed-files changed-files-review"[^>]*>.*Changed 1 file.*Not in your folder yet.*Review/s);
+    // One changed file is that file's row alone, ending with where it stands (see the changed-files card).
+    expect(held).toMatch(/class="[^"]*changed-file-row changed-files-review"[^>]*>.*note.txt.*Not in your folder yet.*Review/s);
     await service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id });
-    expect(renderThread()).toMatch(/Changed 1 file.*· Applied</s);
+    expect(renderThread().replace(/<[^>]+>/g, '')).toMatch(/note.txt.*Applied/s);
   });
 
   it('never says applied while an apply is stopped at a conflict', async () => {
@@ -501,7 +502,7 @@ describe('on screen', () => {
     await expect(service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id })).rejects.toThrow('Workspace có xung đột');
     const html = renderThread();
     expect(html).toContain('Stopped at a conflict, see Details');
-    expect(html).not.toMatch(/· Applied</);
+    expect(html).not.toMatch(/(?:· |>)Applied</);
   });
 
   it('says Applied when the changes handed in at once, with review off (COD-291)', async () => {
@@ -510,7 +511,7 @@ describe('on screen', () => {
     run = newRun({}, { toolCapabilities: REVIEW_OFF });
     await core().runner.run(task, run);
     const line = renderThread().replace(/<[^>]+>/g, '');
-    expect(line).toContain('Changed 1 file · Applied');
+    expect(line).toMatch(/note.txt.*Applied/s);
     expect(line).not.toContain('Not in your folder yet');
   });
 
