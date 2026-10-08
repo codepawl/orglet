@@ -95,7 +95,7 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
           <div className="account-choice-options" data-align-ignore="column-start icon-slot">
             <Button variant="primary" className="account-choice-card" disabled={saving} onClick={() => void signIn()}>
               <span className="account-choice-icon" aria-hidden="true"><LogIn size={18} /></span>
-              <span className="account-choice-text"><span className="account-choice-label">{phase === 'failed' ? t('Thử lại lần nữa') : t('Đăng nhập')}</span><span className="account-choice-hint">{t('Miễn phí, đồng bộ sắp có')}</span></span>
+              <span className="account-choice-text"><span className="account-choice-label">{phase === 'failed' ? t('Thử lại lần nữa') : t('Đăng nhập')}</span><span className="account-choice-hint">{t('Miễn phí, đồng bộ giữa các máy')}</span></span>
             </Button>
             <Button variant="outline" className="account-choice-card" disabled={saving} onClick={() => void useLocally()}>
               <span className="account-choice-icon" aria-hidden="true"><Laptop size={18} /></span>

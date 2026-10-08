@@ -65,11 +65,11 @@ export function AnalyticsDisclosure({ signedIn }: { signedIn: boolean }) {
   </>;
 }
 
-/** What an account gives: free and shared today, sync and a phone later, each said as it stands. */
+/** What an account gives: free, shared and syncing today, a phone later, each said as it stands. */
 function Benefits() {
   const items: { icon: ReactNode; text: string }[] = [
     { icon: <Gift size={16} />, text: t('Miễn phí, một tài khoản cho mọi sản phẩm CodePawl') },
-    { icon: <RefreshCw size={16} />, text: t('Sắp có: đồng bộ giữa các máy') },
+    { icon: <RefreshCw size={16} />, text: t('Đồng bộ giữa các máy của bạn') },
     { icon: <Smartphone size={16} />, text: t('Sau này: Orglet trên điện thoại') },
   ];
   return <ul className="account-benefits" aria-label={t('Tài khoản mang lại gì')}>
@@ -133,7 +133,8 @@ function syncText(status: SyncStatus): string {
   if (status.state === 'synced') return t('Đã đồng bộ. Mục "Chỉ trên máy này" ở lại máy.');
   if (status.state === 'offline') return t('Không kết nối được. Orglet sẽ tự thử lại.');
   if (status.state === 'paused') return pauseText(status.reason);
-  return t('Sắp có. Chưa có gì rời khỏi máy này.');
+  // Off while signed in means this install names no sync server (ORGLET_SYNC_URL=off or a development accounts service).
+  return t('Đồng bộ đang tắt trên bản cài này. Dữ liệu ở lại máy này.');
 }
 
 const conflictKind = (conflict: SyncConflict) => conflict.entity === 'worker' ? t('Tí') : conflict.entity === 'skill' ? t('Kỹ năng') : conflict.entity === 'team' ? t('Kênh') : t('Ghi chú');

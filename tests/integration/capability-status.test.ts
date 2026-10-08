@@ -62,7 +62,7 @@ it('renders a blocker as a disabled control with one reason, never as a third po
   expect(html).not.toContain(grant.id);
   expect(html).not.toContain('disabled=""');
   const demoOnly = render({ workers: [demo] });
-  expect(demoOnly).toContain('A Demo worker uses no tools, so access cannot be turned on.');
+  expect(demoOnly).toContain('A Demo orglet uses no tools, so access cannot be turned on.');
   // Four capability switches, plus review before apply, which an editable folder brings (COD-279).
   expect(demoOnly.match(/role="switch"[^>]*disabled=""/g)).toHaveLength(5);
   expect(demoOnly).toMatch(/role="combobox"[^>]*disabled=""/);
