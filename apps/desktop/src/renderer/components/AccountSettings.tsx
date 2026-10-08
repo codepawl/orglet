@@ -274,7 +274,7 @@ export function AccountSettings({ account, busy, act }: { account: AccountState 
       <span className="setting-title">{t('Đang đăng nhập')}</span>
       <span className="setting-description" role="status">{t('Đăng nhập trong trình duyệt, rồi quay lại.')}</span>
     </div>
-    <div className="setting-control account-waiting-actions"><SignInWaitActions /><Button variant="outline" onClick={cancel}><ArrowLeft size={14} />{t('Hủy')}</Button></div>
+    <div className="setting-control account-waiting-actions"><SignInWaitActions /><Button variant="ghost" onClick={cancel}><ArrowLeft size={14} />{t('Hủy')}</Button></div>
   </div>;
 
   if (account.status === 'local') return <>

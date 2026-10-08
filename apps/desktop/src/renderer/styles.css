@@ -661,7 +661,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* An orglet's or a channel's empty chat (user, 2026-10-04): the same shape as a chat with messages. The greeting and
    the starters end the thread's column, on its left edge, and the prompt bar is at the bottom where it always is. */
 .team-chat-start { justify-content:flex-end; overflow:hidden; }
-.team-chat-start > .fresh-chat { flex:1; min-height:0; max-width:960px; padding:22px var(--page-x) 12px; justify-content:flex-end; overflow:auto; }
+.team-chat-start > .fresh-chat { flex:1; min-height:0; max-width:960px; padding:22px var(--page-x) 12px; justify-content:safe flex-end; overflow:auto; }
 .team-chat-start .fresh-faces { justify-content:flex-start; margin-bottom:14px; }
 .team-chat-start .welcome { margin-bottom:4px; text-align:left; font-size:1.75rem; font-weight:700; letter-spacing:-.5px; line-height:1.2; overflow-wrap:anywhere; }
 .welcome-about { margin:0 0 6px; max-width:var(--bubble-max, 80ch); font-size:15px; text-wrap:pretty; }
@@ -1731,6 +1731,8 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .attachment-list { display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:0; list-style:none; }
 .routine-group .org-attachment { background:var(--bg); }
 .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+/* An app with no read-only tool leaves the app picker alone in its row; it takes the width the other fields have. */
+.routine-app .field-grid > :only-child { grid-column:1 / -1; }
 .routine-editor-actions { justify-content:flex-end; margin-top:0; }
 @media(max-width:560px) { .field-grid { grid-template-columns:minmax(0,1fr); } .form .routine-group { padding:12px; } }
 /* Sidebar tree: teams open to their workers, workers open to their tasks. */
@@ -3397,6 +3399,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .notice-filters .notice-clear { margin-left:auto; }
 
 /* Curated friends and explicit template updates. */
+.marketplace-heading .org-panel-heading-text { gap: 0; }
 .marketplace-source { margin: 0; font-size: 12px; }
 .marketplace-discover { display: grid; gap: 12px; min-width: 0; }
 .marketplace-listing { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
