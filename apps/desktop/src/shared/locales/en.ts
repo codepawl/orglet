@@ -4047,7 +4047,7 @@ export const en: Dictionary = {
   'Bỏ lựa chọn {0}': 'Remove option {0}',
   'ChatGPT (Codex)': 'ChatGPT (Codex)',
   'ChatGPT (Codex) chạy theo gói ChatGPT của bạn, không tính tiền, nhưng mất cỡ 10 giây nên chỉ làm việc ở nền như báo lịch hằng giờ.': 'ChatGPT (Codex) runs on your ChatGPT plan at no charge, but takes about 10 seconds, so it only does background work such as flagging hourly schedules.',
-  'Chưa có lựa chọn nào: các việc nhỏ này chạy theo quy tắc như trước.': 'No options: these small things follow the rules alone, as before.',
+  'Chưa thêm lựa chọn nào: Orglet quyết định các việc nhỏ này bằng quy tắc cố định.': 'No options added: Orglet decides these small things with fixed rules.',
   'Chỉ chạy nền · chậm': 'Background only · slow',
   'Chỉ chạy nền: bỏ qua cho việc cần trả lời nhanh.': 'Background only: skipped for anything that needs a quick answer.',
   'Codex chưa sẵn sàng trên máy này.': 'Codex is not ready on this computer.',
@@ -4547,6 +4547,30 @@ export const en: Dictionary = {
   "Định danh revision đã có nội dung khác.": "This revision identity already has different contents.",
   "Định danh tin nhắn không khớp lượt.": "The message identity does not match its turn.",
   "Định danh tin nhắn thiếu lượt đã lưu.": "The message identity has no saved turn.",
+  // Messages under a field, where the browser's own "fill out this field" bubble used to be.
+  'Đặt tên cho lịch.': 'Name the schedule.',
+  'Viết việc lịch cần làm mỗi lần chạy.': 'Write what the schedule should do on each run.',
+  'Chọn giờ chạy.': 'Pick a time to run.',
+  'Chọn giờ bắt đầu.': 'Pick a start time.',
+  'Chọn giờ kết thúc.': 'Pick an end time.',
+  'Nhập số phút giữa hai lần xem.': 'Enter the minutes between checks.',
+  'Nhập giới hạn cho mỗi lần chạy.': 'Enter a limit for each run.',
+  'Đặt tên cho skill.': 'Name the skill.',
+  'Viết hướng dẫn cho skill.': 'Write the skill\'s instructions.',
+  'Đặt tiêu đề cho knowledge.': 'Give the note a title.',
+  'Viết nội dung cho knowledge.': 'Write the note.',
+  'Đặt tên cho máy chủ.': 'Name the server.',
+  'Nhập lệnh để chạy máy chủ.': 'Enter the command that starts the server.',
+  'Nhập địa chỉ của máy chủ.': 'Enter the server\'s address.',
+  // A space's own page, right after it is made.
+  '1 Tí trong không gian này.': '1 orglet in this space.',
+  '{0} Tí trong không gian này.': '{0} orglets in this space.',
+  'Chưa có kênh nào. Tạo kênh đầu tiên để các Tí bắt đầu làm việc cùng nhau.': 'No channels yet. Create the first one so the orglets can start working together.',
+  'Chọn một kênh ở thanh bên, hoặc tạo kênh mới.': 'Pick a channel in the sidebar, or create a new one.',
+  // Deleting an archived orglet that is still in a channel.
+  '{0} đang ở trong {1}. Bỏ Tí này khỏi kênh trước khi xóa.': '{0} is in {1}. Remove this orglet from the channel before deleting it.',
+  '{0} đang ở trong {1} kênh: {2}. Bỏ Tí này khỏi các kênh đó trước khi xóa.': '{0} is in {1} channels: {2}. Remove this orglet from those channels before deleting it.',
+  'Mẫu Tí': 'Orglet',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.

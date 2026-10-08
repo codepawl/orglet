@@ -770,6 +770,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .demo-note, .usage-note { margin:10px 0 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 10px; color:var(--muted); font-size:12px; }
 .demo-note p, .usage-note p { margin:0; text-align:center; }
 .demo-note .org-button, .usage-note .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
+.usage-note p { display:flex; align-items:center; justify-content:center; gap:6px; }
+.usage-note p svg { flex:none; }
 .usage-note[data-tone=warning] p { color:var(--warning); }
 .usage-note[data-tone=out] p { color:var(--error); }
 /* The permission a message seems to need (PermissionHint, COD-305): the control's own icon, the sentence, a link that
@@ -867,8 +869,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
    (the pointer over the toolbar is over its message), where `pointer-events:none` let that half fall through to the
    message above and hid it again under the pointer. It appears and goes without a fade: motion belongs to the orglets. */
 :is(.person-message, .assistant-message) .message-actions { position:absolute; top:-14px; right:12px; z-index:3; width:auto; margin:0; padding:2px; gap:0; border-radius:10px; background:var(--bg); box-shadow:0 0 0 1px var(--border), 0 4px 12px #00000014; opacity:0; }
-:is(.person-message, .assistant-message):is(:hover, :has(:focus-visible), :has([aria-expanded=true])) .message-actions,
-:is(.person-message, .assistant-message) .message-actions:focus-within { opacity:1; }
+/* Not :focus-within: a click on React leaves focus on its button once the picker closes, and the toolbar would stay
+   shown beside the one the pointer is over. A visible focus ring (the keyboard) or an open menu keeps it. */
+:is(.person-message, .assistant-message):is(:hover, :has(:focus-visible), :has([aria-expanded=true])) .message-actions { opacity:1; }
 /* Under a message: its reactions and, at the line's end, the faces of who has read this far. */
 /* It is as wide as the text column at most, so the read faces end where the message's lines end, as they ended at the
    bubble's edge before (user, 2026-09-20). */
@@ -1093,7 +1096,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Forward picker (COD-257): the Send to palette with a tick on every row, so several places can be picked, and a foot
    on a faint tint for the files, the note and Send, so the list scrolls above it without a rule between them. The row
    keeps Send to's height and edge; the tick sits where the row starts, then the faces in their two-face slot. */
-.forward-dialog .send-to-search .org-input { flex:1; min-width:0; min-height:0; height:100%; padding:0; border:0; border-radius:0; outline:none; background:transparent; font-size:15px; }
+.forward-dialog .send-to-search .org-input { flex:1; min-width:0; min-height:0; height:100%; padding:0; border:0; border-radius:0; outline:none; background:transparent; box-shadow:none; font-size:15px; }
+/* The ring belongs to the whole search box, magnifier included, not to the bare field inside it. */
+.forward-dialog .send-to-search .org-input:focus-visible { border:0; outline:none; box-shadow:none; }
+.forward-dialog .send-to-search:has(:focus-visible) { box-shadow:0 0 0 1px var(--focus), 0 0 0 4px color-mix(in srgb, var(--focus) 22%, transparent); }
 .forward-options { flex:1 1 auto; min-height:120px; }
 .forward-option.org-checkbox { align-items:center; gap:14px; min-height:44px; margin:0; padding:6px 14px 6px 16px; border-radius:10px; color:var(--text); }
 .forward-option.org-checkbox:hover:not(.org-checkbox-disabled) { background:var(--row-hover); }
@@ -1594,7 +1600,8 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .source-preview.source-document { font-family:var(--font); font-size:13.5px; line-height:1.55; white-space:normal; }
 /* CSV and TSV as a table: sticky header, zebra rows, no rules (house rule: no divider lines). */
 .preview-table-scroll { --table-bg:var(--surface); --table-zebra:color-mix(in srgb, var(--bg) 45%, var(--surface)); max-width:100%; max-height:480px; overflow:auto; border-radius:10px; background:var(--table-bg); }
-.preview-table-scroll table { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-size:12.5px; font-variant-numeric:tabular-nums; }
+/* Columns are as wide as their content, up to the cell maximum below. A min-width of the whole box handed the spare room to the widest text column and pushed the numbers to the far edge. */
+.preview-table-scroll table { border-collapse:separate; border-spacing:0; width:max-content; font-size:12.5px; font-variant-numeric:tabular-nums; }
 .preview-table-scroll th,.preview-table-scroll td { padding:7px 12px; text-align:left; vertical-align:top; white-space:nowrap; max-width:300px; overflow:hidden; text-overflow:ellipsis; background:var(--table-bg); }
 .preview-table-scroll thead th { position:sticky; top:0; z-index:2; background:color-mix(in srgb, var(--surface) 70%, var(--bg)); font-weight:600; }
 .preview-table-scroll tbody tr:nth-child(even)>* { background:var(--table-zebra); }
@@ -2721,6 +2728,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* A file's viewer is as tall as what it shows, up to the window (user, 2026-10-05: a three-row table sat in a dialog as
    tall as the window, most of it empty). An edit keeps the full height it works in. */
 .source-viewer:not(.source-editing) { height:fit-content; min-height:200px; max-height:calc(100dvh - 40px); }
+/* Held at the top, where the full-height viewer sits: centred, it moved every time the content got shorter or taller
+   (filtering a table's rows), and the field being typed in moved with it. */
+.source-viewer:not(.source-editing) { inset:20px 0 auto 0; }
 .source-viewer:not(.source-editing) .org-viewer-scroll { min-height:0; padding-bottom:24px; }
 .source-viewer .source-open-external .source-action-label { display:none; }
 .source-viewer .source-open-external { width:34px; padding:0; justify-content:center; }
@@ -3296,7 +3306,7 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 
 /* The sidebar's head and the lists the areas put in it (COD-366): a title with its buttons, Home's search box and Friends
    item, Activity's views, and the channels without a category, which sit above the categories. */
-.sidebar-head { display:flex; align-items:center; gap:8px; min-height:34px; padding:0 6px 10px; }
+.sidebar-head { display:flex; align-items:center; gap:2px; min-height:34px; padding:0 6px 10px; }
 .sidebar-title { min-width:0; margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:600; letter-spacing:-.4px; }
 .sidebar-head > .org-button { flex-shrink:0; }
 .sidebar-search { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; margin:0 0 8px; padding:0 10px; border:0; border-radius:var(--radius); background:var(--row-hover); color:var(--muted); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
@@ -3537,3 +3547,10 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .chart-invalid pre { max-height:160px; overflow:auto; margin:0; font-size:11.5px; }
 .chart-shape { display:block; margin:10px 0; max-width:760px; }
 .chart-shape-plot { height:340px; border-radius:12px; }
+
+/* A space's own page (right after it is made): a centred column, the mark, the name, then what to do next. */
+.space-home { display:flex; flex-direction:column; align-items:center; gap:10px; margin:12vh auto 0; max-width:420px; text-align:center; }
+.space-home .space-mark { width:48px; height:48px; border-radius:14px; margin-bottom:6px; }
+.space-home h2 { margin:0; font-size:20px; font-weight:600; overflow-wrap:anywhere; }
+.space-home p { margin:0; }
+.space-home-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:12px; }

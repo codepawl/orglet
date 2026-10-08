@@ -905,7 +905,7 @@ export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (work
   </p>;
 }
 
-function ForwardedTurn({ forwarded, elementId, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+export function ForwardedTurn({ forwarded, elementId, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const author = forwardedAuthor(forwarded);
   const sameName = forwarded.authorKind === 'orglet' && author === forwarded.from;
   let origin = t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
@@ -918,7 +918,9 @@ function ForwardedTurn({ forwarded, elementId, openOrigin, mentionPeople, mentio
       {openOrigin
         ? <button type="button" className="message-reply-context" onClick={openOrigin}><Forward size={13} aria-hidden="true" />{origin}</button>
         : <p className="message-reply-context"><Forward size={13} aria-hidden="true" />{origin}</p>}
-      {forwarded.authorKind === 'orglet' ? <Markdown className="prose" text={forwarded.text} /> : <p>{forwarded.text}</p>}
+      {/* An answer is saved as the app wrote it, in its Vietnamese source (a sample reply, a notice), and shown translated
+          like the original in its own chat; what a person typed is shown as typed. */}
+      {forwarded.authorKind === 'orglet' ? <Markdown className="prose" text={tMessage(forwarded.text)} /> : <p>{forwarded.text}</p>}
       {unshared.length > 0 && <p className="forwarded-files"><FileX size={13} aria-hidden="true" />{t('Không gửi kèm: {0}', [unshared.join(', ')])}</p>}
     </div>
     {forwarded.note && <div className="user-message forward-note"><MentionMarkdown text={forwarded.note} people={mentionPeople ?? []} allNames={mentionAllNames} /></div>}
