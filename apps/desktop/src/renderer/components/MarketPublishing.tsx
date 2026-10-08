@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Input, Textarea, Checkbox } from '@codepawlhq/orglet-ui';
+import { Checkbox, FieldError, Input, Textarea } from '@codepawlhq/orglet-ui';
 import { ChevronRight, Cpu, Eye, FileText, Globe, Languages, RefreshCw, Send, Tags, Type, Upload, X } from 'lucide-react';
 import { BuiltInProviderId, type Workspace } from '../../shared/contracts';
 import { isMemory } from '../../shared/knowledge';
@@ -187,7 +187,7 @@ export function MarketPublishingDialog({ source, sourceRevision, requiresSuggest
   return <Drawer open title={t('Xuất bản lên marketplace')} description={source.name} onClose={onClose}>
     <div className="market-publishing form">
       {operation && <p role="status">{operationLabel(operation)}</p>}
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <FieldError className="error">{error}</FieldError>}
       {!preview ? <>
         <label className="field"><FieldLabel icon={Type} required>{t('Tên công khai')}</FieldLabel><Input value={name} maxLength={80} onChange={event => setName(event.target.value)} /></label>
         <label className="field"><FieldLabel icon={FileText} required>{t('Mô tả ngắn')}</FieldLabel><Textarea value={summary} rows={3} maxLength={240} placeholder={t('Mẫu này giúp làm việc gì?')} onChange={event => setSummary(event.target.value)} /></label>
@@ -276,7 +276,7 @@ export function MarketOwnListings() {
     <p className="muted">{t('Để chia sẻ mẫu, mở menu của một Tí, một crew hoặc một không gian rồi chọn Xuất bản lên marketplace. Bạn luôn xem trước nội dung trước khi gửi.')}</p>
     <Button type="button" variant="outline" disabled={busy} onClick={() => void run({ action: 'listOwn' })}><RefreshCw size={16} />{t('Làm mới mục của tôi')}</Button>
     {!view && busy && <div className="marketplace-loading" aria-label={t('Đang tải mục của tôi')}><div /><div /></div>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <FieldError className="error">{error}</FieldError>}
     {view?.capability.status !== undefined && view.capability.status !== 'available' && <p className="muted">{capabilityLabel(view.capability.status)}</p>}
     {view?.summaries && <p className="muted">{t('{0}/{1} mục; {2}/5 lần gửi trong giờ qua.', [view.summaries.allowance.listingCount, view.summaries.allowance.listingLimit, view.summaries.allowance.submissionsInHour])}</p>}
     {view?.summaries?.listings.length === 0 && view.operations.length === 0 && <p className="muted">{t('Chưa có mục xuất bản. Mở menu của một Tí hoặc crew để xem trước và gửi mẫu.')}</p>}

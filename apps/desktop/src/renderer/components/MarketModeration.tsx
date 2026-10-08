@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Textarea, Checkbox } from '@codepawlhq/orglet-ui';
+import { Checkbox, FieldError, Textarea } from '@codepawlhq/orglet-ui';
 import { ChevronRight, FileText, Flag, RefreshCw, ShieldCheck } from 'lucide-react';
 import { MarketDecisionInput, MarketReportInput, MarketResolveInput, type MarketModerationAction, type MarketModerationResult, type MarketReviewDetail, type MarketModerationWrite } from '../../shared/market-moderation';
 import type { MarketListingV2 } from '../../shared/market';
@@ -156,7 +156,7 @@ function MarketReportDialog({ listing, capability, onClose }: { listing: MarketL
     <p><strong>{listing.name}</strong> · v{listing.version}</p>
     <p className="muted">{t('Report chỉ gửi cho người duyệt; không tự ẩn mục. Đừng đưa thông tin riêng tư hoặc khóa truy cập vào lý do.')}</p>
     {!canReport && <p role="status" className="muted">{capability?.status === 'accountRequired' ? t('Đăng nhập tài khoản đã xác minh để tiếp tục.') : t('Dịch vụ duyệt và report chưa sẵn sàng. Hãy thử lại sau.')}</p>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <FieldError className="error">{error}</FieldError>}
     <Outcome unknown={unknown} receipt={receipt} />
     <Select label={t('Lý do report')} value={reason} disabled={busy || !!pending || receipt} onChange={value => setReason(value as typeof reason)} options={[
       { value: 'security', label: t('An toàn') }, { value: 'privacy', label: t('Riêng tư') }, { value: 'license', label: t('Giấy phép') }, { value: 'other', label: t('Khác') },
@@ -193,7 +193,7 @@ function MarketReviewQueue({ active, resume, onClose, onSelect }: { active: bool
   return <Drawer open={active} title={t('Duyệt marketplace')} onClose={onClose}><div className="market-publishing">
     <p className="muted">{t('Xem phiên bản chờ duyệt và phiên bản có report chưa xử lý, kể cả mục đã gỡ.')}</p>
     <Button type="button" variant="outline" disabled={busy} onClick={() => void load()}><RefreshCw size={16} />{t('Làm mới')}</Button>
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <FieldError className="error">{error}</FieldError>}
     {!page ? busy && <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : page.items.length === 0 ? <p role="status">{t('Không có phiên bản chờ duyệt trên trang này.')}</p> : <ul className="friends-sources">
       {page.items.map(item => <li className="friend-source" key={`${item.listing.listingId}-${item.listing.version}`}><span className="friend-source-text"><strong>{item.listing.name}</strong><span className="friend-status">v{item.listing.version} · {item.listing.author.displayName} · {item.state === 'pending' ? t('Đang chờ duyệt') : item.state === 'approved' ? t('Đã duyệt') : t('Đã từ chối')} · {t('Report của phiên bản')}: {item.reportCount}</span><span className="friend-status">{item.listing.summary}</span></span><Button ref={element => { const id = `${item.listing.listingId}:${item.listing.version}`; if (element) buttons.current.set(id, element); else buttons.current.delete(id); }} type="button" variant="outline" disabled={busy} onClick={() => onSelect(item.expected)}>{t('Xem để duyệt')}</Button></li>)}
     </ul>}
@@ -263,7 +263,7 @@ function MarketReviewDialog({ selected, canWrite, onClose }: { selected: { listi
     </>}
   </div>;
   return <Drawer open title={t('Xem để duyệt')} onClose={onClose}><div className="market-publishing form">
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <FieldError className="error">{error}</FieldError>}
     <Outcome unknown={unknown} receipt={receipt} />
     {!view ? busy ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <Button type="button" variant="outline" onClick={() => void load()}>{t('Mở lại phiên bản')}</Button> : <>
       <ReviewVersion detail={view.detail} />
@@ -279,7 +279,7 @@ function MarketReviewDialog({ selected, canWrite, onClose }: { selected: { listi
         {audit?.nextCursor && <Button type="button" variant="outline" disabled={busy || !!pending} onClick={() => void loadAudit(audit.nextCursor!)}>{t('Trang tiếp theo')}</Button>}
       </details>
       <section className="market-review-reports"><h3>{t('Report của phiên bản')} · {view.detail.reportCount}</h3>
-        {reportsError && <><p className="error" role="alert">{t('Không tải được report. Thử lại để kiểm tra trước khi quyết định.')}</p><Button type="button" variant="outline" disabled={busy} onClick={() => void loadReports(reportsCursor)}>{t('Tải lại report')}</Button></>}
+        {reportsError && <><FieldError className="error">{t('Không tải được report. Thử lại để kiểm tra trước khi quyết định.')}</FieldError><Button type="button" variant="outline" disabled={busy} onClick={() => void loadReports(reportsCursor)}>{t('Tải lại report')}</Button></>}
         {!reports ? reportsBusy && <div className="marketplace-loading" aria-label={t('Đang tải report')}><div /><div /></div> : reports.items.length === 0 ? <p className="muted">{t('Chưa có report.')}</p> : reports.items.map(report => <article key={report.id} className="market-review-report">
           <p><strong>{reportReason(report.reason)}</strong> · {report.state === 'open' ? t('Chưa xử lý') : report.state === 'dismissed' ? t('Không cần xử lý') : t('Đã xử lý')}</p><pre className="market-public-prose">{report.explanation}</pre>
           {report.reference && <p className="muted">{report.reference.path}:{report.reference.line}</p>}
@@ -304,7 +304,7 @@ function MarketPendingOperations({ operations, capability, onChanged }: { operat
     <p className="muted">{t('Nội dung đã lưu trên máy. Chỉ thử lại khi bạn chọn; mỗi lần giữ nguyên nội dung và mã yêu cầu.')}</p>
     <ul className="friends-sources">{operations.map(operation => <li className="friend-source" key={operation.key}><span className="friend-source-text">{operation.action === 'report' ? t('Report phiên bản') : operation.action === 'resolve' ? t('Report đã lưu') : t('Quyết định đã lưu')}{operation.action !== 'resolve' && ` · v${operation.action === 'report' ? operation.input.version : operation.input.expected.version}`}</span><Button type="button" variant="outline" onClick={() => setSelected(operation)}>{t('Xem thao tác đã lưu')}</Button></li>)}</ul>
     {selected && <Drawer open title={t('Thao tác chưa rõ kết quả')} onClose={() => setSelected(undefined)}><div className="market-publishing">
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <FieldError className="error">{error}</FieldError>}
       <p className="muted">{t('Chưa rõ kết quả. Thử lại sẽ dùng đúng nội dung đã gửi.')}</p>
       <pre className="market-public-prose">{JSON.stringify(selected.input, null, 2)}</pre>
       <div className="actions sticky-actions"><Button type="button" disabled={busy || !allowed} onClick={() => void run({ action: 'retry', operationId: selected.key }).then(async result => {

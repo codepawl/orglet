@@ -1441,6 +1441,7 @@ export const en: Dictionary = {
   'Chat, Tí, kênh; giữ số liệu chi phí.': 'Chats, orglets, channels; costs are kept.',
   'Đã khôi phục': 'Restored',
   'Đã lưu trữ': 'Archived',
+  'Đã lưu trữ · chọn để khôi phục': 'Archived · choose to restore',
   'Đã xóa': 'Deleted',
   'Đợi công việc đang chạy xong rồi thử lại.': 'Wait for the running task to finish, then try again.',
   '(đã xóa)': '(deleted)',

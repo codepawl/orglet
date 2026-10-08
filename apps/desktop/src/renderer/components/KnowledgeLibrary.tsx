@@ -11,7 +11,7 @@ import { Select } from './Select';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { SwitchField } from './Switch';
-import { Input, Textarea } from '@codepawlhq/orglet-ui';
+import { FieldError, Input, Textarea } from '@codepawlhq/orglet-ui';
 import { isBlank, useFieldErrors } from '../fieldErrors';
 
 export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
@@ -113,7 +113,7 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
       <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu khớp với nó.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
     </div>
     <div className="actions floating-actions">
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? <FieldError className="form-error">{error}</FieldError> : null}
       {proposed && !changed && <Button type="button" variant="primary" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'approve' }))}>{t('Duyệt')}</Button>}
       {(!proposed || changed) && <Button variant="primary" disabled={busy}>{proposed ? t('Lưu chỉnh sửa và duyệt') : item ? t('Lưu revision mới') : t('Lưu knowledge')}</Button>}
       {item && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'archive' }))}>{proposed ? t('Từ chối') : t('Lưu trữ')}</Button>}

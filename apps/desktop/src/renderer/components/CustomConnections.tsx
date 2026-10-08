@@ -7,7 +7,7 @@ import {
 } from '../../shared/custom-connections';
 import { connectionTestOutcome, pricingLabel } from '../customConnections';
 import { toAmount, toMicros } from './money';
-import { Input } from '@codepawlhq/orglet-ui';
+import { FieldError, Input } from '@codepawlhq/orglet-ui';
 import { AnchoredPopover } from './AnchoredPopover';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { ProviderMark } from './ProviderMark';
@@ -218,7 +218,7 @@ function CustomConnectionForm({ initial, hasKey, onDone, onConnections, disabled
       <span className={priceError ? 'error' : 'muted'}>{priceError || `${t('Giá cho mỗi 1M token.')} ${priceCheck.ok && priceCheck.price ? t('Tính như API trả phí: giữ chỗ trước, chốt theo số token thật.') : emptyPriceNote(draft.baseUrl)}`}</span>
     </div>
     <div className="custom-connection-actions">
-      {error ? <p className="form-error" role="alert">{error}</p> : <span className="dialog-footer-spacer" />}
+      {error ? <FieldError className="form-error">{error}</FieldError> : <span className="dialog-footer-spacer" />}
       <Button type="button" variant="ghost" disabled={saving} onClick={onDone}>{t('Hủy')}</Button>
       <Button type="submit" variant="primary" disabled={busy}>{t('Lưu')}</Button>
     </div>

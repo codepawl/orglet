@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppWindow, Ban, Camera, Check, Hourglass, Image, Keyboard, ListChecks, LogIn, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldCheck, TextCursorInput, Trash2, UserRound, X, type LucideIcon } from 'lucide-react';
-import { Input } from '@codepawlhq/orglet-ui';
+import { FieldError, Input } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { CLEAN_BROWSER_PROFILE, defaultBrowserChoice, normalizeBrowserSite, type BrowserAction, type BrowserActionKind, type BrowserChoice, type BrowserSite, type BrowserSiteDecision, type BrowserState } from '../../shared/browser';
 import { Button, Drawer, FieldLabel } from './ui';
@@ -78,7 +78,7 @@ export function BrowserSitesEditor({ sites, disabled, onChange }: { sites: reado
         options={[{ value: 'allowed', label: decisionNames.allowed }, { value: 'blocked', label: decisionNames.blocked }]} />
       <Button type="button" variant="outline" disabled={disabled || !text.trim()} onClick={add}><Plus size={14} />{t('Thêm')}</Button>
     </div>
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <FieldError className="error">{error}</FieldError>}
   </div>;
 }
 
