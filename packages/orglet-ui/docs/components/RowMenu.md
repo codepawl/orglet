@@ -58,7 +58,7 @@ const items: RowMenuItem[] = [
 | `icon` | `RowMenuIcon` | required | An icon component that takes `size`, such as one from lucide-react. Sits left of the label. |
 | `onSelect` | `() => void` | required | Runs after the menu closes, or after the question is confirmed. |
 | `danger` | `boolean` | | Draws the item in the danger colour. |
-| `confirm` | `{ question: string; label: string }` | | Asks inside the panel before running `onSelect`. |
+| `confirm` | `{ question: string; label: string; icon?: Icon; safe?: boolean }` | | Asks inside the panel before running `onSelect`. `icon` replaces the item's icon on the answer; `safe` drops the danger colour when the answer is a way out (open the channel that blocks a delete) rather than the destructive act. |
 | `shortcut` | `string` | | The keys that do the same thing, shown quietly at the item's end and announced on the trigger. |
 
 ### RowMenuIcon
