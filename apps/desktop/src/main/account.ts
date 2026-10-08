@@ -43,6 +43,11 @@ const SavedAccount = z.object({
   refreshToken: z.string().min(1).max(4096).optional(),
   resources: z.array(AccountResource).min(1).max(2).refine(resources => new Set(resources).size === resources.length).optional(),
   profile: AccountProfile,
+  /**
+   * This install agreed to sync: a sign-in finished on a build that syncs, or the person started sync. A sign-in saved
+   * by an earlier build has none, because that build said nothing would leave this computer (0.13.0).
+   */
+  syncAgreed: z.boolean().optional(),
 }).strict();
 type SavedAccount = z.infer<typeof SavedAccount>;
 
@@ -267,6 +272,17 @@ export class AccountService {
     const { accountKey, generation } = this.publishingContext();
     if (!accountKey || !this.saved?.refreshToken || this.persistenceError) return undefined;
     return { accountKey, generation };
+  }
+
+  /** Whether this install agreed to sync, by signing in on a build that syncs or by starting sync. */
+  syncAgreed(): boolean {
+    return this.saved?.syncAgreed === true;
+  }
+
+  /** Remembers, beside the saved sign-in, that the person started sync. Signing out forgets it with the sign-in. */
+  async agreeToSync(): Promise<void> {
+    if (!this.saved?.refreshToken || this.saved.syncAgreed) return;
+    await this.keep(saved => ({ ...saved!, syncAgreed: true }), this.generation);
   }
 
   /**
@@ -530,7 +546,7 @@ export class AccountService {
         await this.revoke(tokens.refresh_token).catch(() => undefined);
         return false;
       }
-      const generation = await this.commitSignIn({ refreshToken: tokens.refresh_token, profile, resources: [ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE] }, pending);
+      const generation = await this.commitSignIn({ refreshToken: tokens.refresh_token, profile, resources: [ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE], syncAgreed: true }, pending);
       committedGeneration = generation;
       if (this.pending !== pending || generation !== this.generation) throw new Error(NOT_SIGNED_IN);
       this.rememberAccessToken(tokens, ACCOUNT_RESOURCE);

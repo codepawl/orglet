@@ -29,7 +29,7 @@ export function activityTabLabel(tab: ActivityTab): string {
  * to review. Running: what works or waits in line. Done: what the app told you after its toast was gone. Saved: the
  * messages saved for later with "Lưu để xem sau".
  */
-export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, onOpenArchive, updateReady, onRestartUpdate }: {
+export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedules, notesToReview, onOpenChat, onOpenMessage, chatExists, onOpenSchedules, onOpenLibrary, onOpenArchive, onOpenAccount, updateReady, onRestartUpdate }: {
   /** The part of Activity on screen, chosen in the sidebar. */
   tab: ActivityTab;
   running: readonly RunningItem[];
@@ -44,6 +44,7 @@ export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedul
   onOpenSchedules: () => void;
   onOpenLibrary: () => void;
   onOpenArchive: () => void;
+  onOpenAccount: () => void;
   updateReady: boolean;
   onRestartUpdate: () => void;
 }) {
@@ -56,7 +57,7 @@ export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedul
         <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyIcon={CircleCheck} emptyLine={pendingSchedules + notesToReview > 0 ? undefined : t('Không có gì đang chờ bạn.')} />
       </>}
       {tab === 'running' && <RunningGroups items={working} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={t('Không có gì đang chạy.')} />}
-      {tab === 'done' && <NoticeList open onOpenChat={(taskId, messageId) => messageId ? onOpenMessage(taskId, messageId) : onOpenChat(taskId)} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} />}
+      {tab === 'done' && <NoticeList open onOpenChat={(taskId, messageId) => messageId ? onOpenMessage(taskId, messageId) : onOpenChat(taskId)} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} onOpenAccount={onOpenAccount} />}
       {tab === 'saved' && <SavedList saved={saved} chatExists={chatExists} onOpen={onOpenMessage} />}
   </PanelPage>;
 }

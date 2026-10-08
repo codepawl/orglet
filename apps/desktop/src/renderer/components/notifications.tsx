@@ -48,6 +48,8 @@ export type Notice = {
   update?: true;
   /** Something was archived (COD-375): the row carries a way to Settings → Lưu trữ, where it can be restored. */
   archive?: true;
+  /** Sync waits for the person's choice (0.13.0): the row carries a way to Settings → Account. */
+  account?: true;
 };
 
 export const noticeKindNames: Record<NoticeKind, string> = translated({ error: 'Lỗi', done: 'Đã xong', info: 'Thông tin' });
@@ -79,7 +81,7 @@ const save = () => {
   try { localStorage.setItem(storageKey, JSON.stringify(notices)); } catch { /* a blocked store costs the note, not the app */ }
 };
 
-export type NoticeDetails = { confirmation?: boolean; taskId?: string; messageId?: string; group?: string; groupSize?: number; update?: boolean; archive?: boolean };
+export type NoticeDetails = { confirmation?: boolean; taskId?: string; messageId?: string; group?: string; groupSize?: number; update?: boolean; archive?: boolean; account?: boolean };
 
 /** Records one message. Called by `toast`, so nothing has to remember to do both. */
 export function recordNotice(text: string, kind: NoticeKind, about?: string, details: NoticeDetails = {}) {
@@ -97,6 +99,7 @@ export function recordNotice(text: string, kind: NoticeKind, about?: string, det
     ...(details.group && details.groupSize && details.groupSize > 1 ? { groupSize: details.groupSize } : {}),
     ...(details.update ? { update: true as const } : {}),
     ...(details.archive ? { archive: true as const } : {}),
+    ...(details.account ? { account: true as const } : {}),
   };
   const next = withNotice(notices, seenAt, notice);
   if (next === notices) return;

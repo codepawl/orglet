@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, ChartNoAxesColumn, Copy, ExternalLink, Gem, Gift, LogIn, LogOut, RefreshCw, RotateCw, Smartphone, UserRound, UserRoundCheck, UserRoundX } from 'lucide-react';
 import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import type { AccountState } from '../../shared/account';
-import type { SyncPauseReason, SyncStatus } from '../../shared/sync-status';
+import type { SyncChoice, SyncPauseReason, SyncStatus } from '../../shared/sync-status';
 import type { SyncConflict, SyncConflictVersion } from '../../shared/sync-conflicts';
 import { useSync } from '../account';
 import type { AnalyticsState } from '../../shared/analytics';
@@ -12,6 +12,7 @@ import { t } from '../i18n';
 import { toast } from './toast';
 import { Avatar } from './Avatar';
 import { Button, Drawer } from './ui';
+import { confirmAction } from './confirm';
 import { StatusMark, type StatusMarkState } from './StatusMark';
 import { InfoTip } from './InfoTip';
 import { Switch } from './Switch';
@@ -128,6 +129,7 @@ function pauseText(reason: SyncPauseReason | undefined): string {
 }
 
 function syncText(status: SyncStatus): string {
+  if (status.state === 'link_required' && status.askedBecauseNew) return t('Đồng bộ giờ đã có. Chọn có đồng bộ dữ liệu trên máy này không.');
   if (status.state === 'link_required') return t('Dữ liệu trên máy này đã xóa. Bấm Đồng bộ ngay để lấy lại từ tài khoản.');
   if (status.state === 'syncing') return t('Đang đồng bộ…');
   if (status.state === 'synced') return t('Đã đồng bộ. Mục "Chỉ trên máy này" ở lại máy.');
@@ -204,10 +206,21 @@ function SyncRow({ busy }: { busy: boolean }) {
     const timer = setTimeout(() => setResting(false), SYNC_COOLDOWN_MS);
     return () => clearTimeout(timer);
   }, [resting]);
-  const syncNow = () => {
+  const syncNow = (choice?: SyncChoice) => {
     setResting(true);
-    void orglet.syncStart().catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Đồng bộ')));
+    void orglet.syncStart(choice).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Đồng bộ')));
   };
+  // Replacing erases this computer's workspace (a copy is saved beside the database), so it is asked first.
+  const takeFromAccount = async () => {
+    const confirmed = await confirmAction({
+      title: t('Thay dữ liệu trên máy này bằng dữ liệu của tài khoản?'),
+      description: t('Orglet lưu một bản sao dữ liệu hiện tại cạnh cơ sở dữ liệu, rồi xóa nó khỏi máy này.'),
+      confirmLabel: t('Thay bằng tài khoản'),
+      tone: 'danger',
+    });
+    if (confirmed) syncNow('replace');
+  };
+  const choosing = status.state === 'link_required' && status.askedBecauseNew;
   const stuck = status.reason === 'update_required' || status.reason === 'device_released' || status.reason === 'account_deleted';
   const canSync = status.state !== 'off' && !(status.state === 'paused' && stuck);
   const description = <span role="status">
@@ -216,7 +229,10 @@ function SyncRow({ busy }: { busy: boolean }) {
   </span>;
   return <>
     <Row icon={<StatusMark {...syncMark(status)} decorative />} title={t('Đồng bộ')} description={description}>
-      {canSync ? <Button variant="outline" disabled={busy || resting || status.state === 'syncing'} onClick={syncNow}><RefreshCw size={14} />{t('Đồng bộ ngay')}</Button> : null}
+      {choosing ? <>
+        <Button variant="outline" disabled={busy || resting} onClick={() => void takeFromAccount()}>{t('Chỉ lấy từ tài khoản')}</Button>
+        <Button variant="primary" disabled={busy || resting} onClick={() => syncNow()}><RefreshCw size={14} />{t('Đồng bộ máy này')}</Button>
+      </> : canSync ? <Button variant="outline" disabled={busy || resting || status.state === 'syncing'} onClick={() => syncNow()}><RefreshCw size={14} />{t('Đồng bộ ngay')}</Button> : null}
     </Row>
     <ConflictsRow busy={busy} />
   </>;
