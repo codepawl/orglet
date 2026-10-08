@@ -3307,8 +3307,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 /* The sidebar's head and the lists the areas put in it (COD-366): a title with its buttons, Home's search box and Friends
    item, Activity's views, and the channels without a category, which sit above the categories. */
 .sidebar-head { display:flex; align-items:center; gap:2px; min-height:34px; padding:0 6px 10px; }
-.sidebar-title { min-width:0; margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:600; letter-spacing:-.4px; }
+.sidebar-title { min-width:0; margin-right:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:17px; font-weight:600; letter-spacing:-.4px; }
 .sidebar-head > .org-button { flex-shrink:0; }
+/* The head's buttons are a size down from the 32px default, and the title a point smaller, so a space's name of two short
+   words ("Marketing plan") fits beside its three buttons in the 220px sidebar instead of ending in an ellipsis. */
+.sidebar-head .org-button-icon { width:28px; min-width:28px; height:28px; min-height:28px; padding:0; }
 .sidebar-search { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; margin:0 0 8px; padding:0 10px; border:0; border-radius:var(--radius); background:var(--row-hover); color:var(--muted); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
 .sidebar-search > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sidebar-search:hover { color:var(--text); }
