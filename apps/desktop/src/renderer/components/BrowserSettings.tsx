@@ -269,7 +269,7 @@ export function BrowserProfilesSettings({ busy, act, creating, onCreating }: { b
           </span>
           {/* The heading above already says orglets never use the person's own profile. */}
           {!browser && <span className="setting-description">{t('Cài Chrome hoặc Edge để Tí đọc được trang.')}</span>}
-          {browser?.version && <span className="setting-description">{t('Phiên bản {0}.', [browser.version])}</span>}
+          {browser?.version && <span className="setting-description">{t('Phiên bản {0}', [browser.version])}</span>}
           {browser?.kind === 'edge' && <span className="setting-description">{t('Edge tự đăng nhập các trang Microsoft bằng tài khoản Windows trong hồ sơ có tên. Hồ sơ Sạch thì không. Có Chrome thì Orglet dùng Chrome.')}</span>}
         </div>
       </div>

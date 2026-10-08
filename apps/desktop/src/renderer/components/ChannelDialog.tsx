@@ -170,7 +170,7 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
       {mode === 'lead' && orgletIds.length > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Mỗi Tí là một lượt gọi model, nên kênh đông hơn thì mỗi tin nhắn tốn hơn.')}</p>}
     </>}
     {tab === 'how' && <>
-      <Select label={<FieldLabel icon={Workflow} required>{t('Cách làm việc')}</FieldLabel>} value={mode} onChange={value => setMode(value as ChannelMode)} menuMinWidth={320}
+      <Select ariaLabel={t('Cách làm việc')} value={mode} onChange={value => setMode(value as ChannelMode)} menuMinWidth={320}
         options={[
           { value: 'turns', label: t('Lần lượt trả lời'), detail: t('Mỗi Tí trả lời rồi đến Tí tiếp theo'), icon: <MessagesSquare size={16} /> },
           { value: 'lead', label: t('Tí trưởng chia việc'), detail: t('Tí trưởng nhận việc, giao và kiểm tra'), icon: <Combine size={16} /> },

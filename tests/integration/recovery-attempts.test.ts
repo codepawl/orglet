@@ -187,7 +187,7 @@ it('shows each hand-in step with its action, why it stopped, and a restore for a
   expect(html).toContain(row('receipt 3.pdf → receipts/march.pdf', 'Move · Applied'));
   expect(html).toContain(row('contract-old.pdf', 'Delete · Applied'));
   expect(html).toContain(row('notes-old.txt', 'Delete · Restored'));
-  expect(html).toContain('The file in your folder was edited after the worker started; it was not overwritten.');
+  expect(html).toContain('The file in your folder was edited after the orglet started; it was not overwritten.');
   // Only the deleted file not yet restored offers a restore, and only a written file has private bytes to read.
   expect(html.match(/aria-label="Restore [^"]+"/g)).toEqual(['aria-label="Restore contract-old.pdf"']);
   expect(html.match(/View private changes/g)).toHaveLength(1);
