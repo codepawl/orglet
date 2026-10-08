@@ -33,7 +33,7 @@ import { rememberCustomConnections } from './customConnections';
 import { Startup } from './components/Startup';
 import { NoOrglets } from './components/NoOrglets';
 import { AccountChooser } from './components/AccountChooser';
-import { useAccount } from './account';
+import { useAccount, useSync } from './account';
 import { needsAccountChoice } from '../shared/account';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
@@ -223,6 +223,7 @@ export function App() {
   // Undefined until the first detection finishes: it runs each CLI and takes about three seconds cold, so nothing waits on it.
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>();
   const account = useAccount();
+  const sync = useSync();
   const [selected, setSelected] = useState<string | null>(null); const [detail, setDetail] = useState<TaskDetail>();
   // Chats opened this session keep their last detail in `taskDetails`, and a sidebar row prefetches its chat while
   // the pointer rests on it (COD-198, COD-218), so opening shows the kept copy at once instead of a blank pane
@@ -311,6 +312,16 @@ export function App() {
   };
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const openSettings = (tab: SettingsTab = 'general') => { setSettingsTab(tab); setPanel('settings'); };
+  // A sign-in made before sync existed waits for the person's choice (0.13.0); say so once per start, outside the chat.
+  const waitingForSyncChoice = sync?.state === 'link_required' && sync.askedBecauseNew === true;
+  useEffect(() => {
+    if (!waitingForSyncChoice) return;
+    toast(t('Đồng bộ giờ đã có. Chọn có đồng bộ dữ liệu trên máy này không.'), 'info', t('Đồng bộ'), {
+      unread: true,
+      account: true,
+      action: { label: t('Mở tài khoản'), onSelect: () => openSettings('account') },
+    });
+  }, [waitingForSyncChoice]);
   // Chat details sit in the shell next to the conversation, not over it.
   const detailsOpen = panel === 'activity';
   // A side thread opens in the same right panel, beside its main chat, and takes Details' place while open (COD-365).
@@ -2304,7 +2315,7 @@ export function App() {
     ? <ActivityPage tab={activityTab} running={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} saved={savedMessages}
       pendingSchedules={pendingRoutines} notesToReview={knowledgeToReview} onOpenChat={taskId => { setPanel(null); openTask(taskId); }} onOpenMessage={(taskId, messageId) => { setPanel(null); openChatAt(taskId, messageId); }}
       chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} onOpenSchedules={() => openRoutines()}
-      onOpenArchive={() => openSettings('archive')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
+      onOpenArchive={() => openSettings('archive')} onOpenAccount={() => openSettings('account')} onOpenLibrary={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     : area === 'home' && friendsOpen
       ? <MarketplacePage onMarketAdded={async result => {
           await refresh();

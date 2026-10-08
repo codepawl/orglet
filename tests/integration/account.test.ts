@@ -366,6 +366,51 @@ describe('signed in', () => {
   });
 });
 
+describe('agreeing to sync', () => {
+  it('is set when a sign-in finishes and survives a restart', async () => {
+    const account = service();
+    expect(account.syncAgreed()).toBe(false);
+    await signIn(account);
+    expect(account.syncAgreed()).toBe(true);
+    expect(store.saved).toMatchObject({ syncAgreed: true });
+    const restarted = service();
+    await restarted.load();
+    expect(restarted.syncAgreed()).toBe(true);
+  });
+
+  it('is missing from a sign-in saved by an earlier build until the person starts sync', async () => {
+    const first = service();
+    await signIn(first);
+    const { syncAgreed: _removed, ...earlierBuild } = store.saved as { syncAgreed?: boolean };
+    store.saved = earlierBuild;
+    const account = service();
+    await account.load();
+    expect(account.syncAgreed()).toBe(false);
+    // A refresh rotation and a profile refresh keep the account as it was.
+    clock += 16 * 60 * 1000;
+    await account.getAccessToken();
+    await account.refreshProfile();
+    expect(account.syncAgreed()).toBe(false);
+    await account.agreeToSync();
+    expect(account.syncAgreed()).toBe(true);
+    expect(store.saved).toMatchObject({ syncAgreed: true });
+    const restarted = service();
+    await restarted.load();
+    expect(restarted.syncAgreed()).toBe(true);
+  });
+
+  it('is forgotten on sign-out and set again by the next sign-in', async () => {
+    const account = service();
+    await signIn(account);
+    await account.signOut();
+    expect(account.syncAgreed()).toBe(false);
+    await account.agreeToSync();
+    expect(account.syncAgreed()).toBe(false);
+    await signIn(account);
+    expect(account.syncAgreed()).toBe(true);
+  });
+});
+
 describe('the token file', () => {
   it('keeps the account encrypted and reads nothing back from a file it cannot decrypt', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orglet-account-'));

@@ -101,6 +101,16 @@ export class LocalSync {
       return Boolean(policy.local_only || policy.deleted);
     });
   }
+  /**
+   * Chats still on this computer, read-only, whose orglet was deleted. Deleting an orglet is permanent for the account
+   * (every synced copy that names it is erased and fenced), and a chat names its orglets, so these never sync.
+   */
+  chatsKeptByDeletedOrglet(): string[] {
+    return this.store.all<Task>('tasks')
+      .filter(task => !task.deletedAt && !this.visibility({ kind: 'task', id: task.id }).deleted
+        && this.roots('task', task.id).some(root => root.kind === 'worker' && Boolean(this.visibility(root).deleted)))
+      .map(task => task.id);
+  }
   localOnlyState() {
     const rows = this.store.db.prepare('SELECT kind,entity_id,deleted FROM sync_visibility WHERE local_only=1 OR deleted=1').all();
     const tasks = this.store.all<Task>('tasks');
@@ -109,6 +119,7 @@ export class LocalSync {
     return { workers: rows.filter(row => row.kind === 'worker' && workerIds.has(String(row.entity_id))).map(row => String(row.entity_id)),
       tasks: rows.filter(row => row.kind === 'task' && taskIds.has(String(row.entity_id))).map(row => String(row.entity_id)),
       permanentWorkers: rows.filter(row => row.kind === 'worker' && row.deleted && workerIds.has(String(row.entity_id))).map(row => String(row.entity_id)),
+      deletedOrgletTasks: this.chatsKeptByDeletedOrglet(),
       permanentTasks: tasks.filter(task => this.roots('task', task.id).some(root => this.visibility(root).deleted)).map(task => task.id),
       inheritedTasks: tasks.filter(task => this.roots('task', task.id).some(root => {
         if (root.kind === 'task' && root.id === task.id) return false;

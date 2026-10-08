@@ -1201,6 +1201,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    the text of every tab line up; the alignment check compares them (family-lead). */
 .account-benefits li { display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.45; }
 /* The mark that leads an Account row: the same 26px slot as the other Settings lists, so text starts in one column. */
+/* The sync choice sits under its sentence, in line with the text, so the sentence keeps the row's width. */
+.sync-choice { padding-top:0; padding-left:calc(var(--setting-mark) + var(--setting-mark-gap)); margin-top:-6px; }
 .account-row-icon { flex:none; display:inline-grid; place-items:center; width:var(--setting-mark); height:20px; color:var(--muted); }
 .account-benefit-icon { flex:none; display:inline-grid; place-items:center; width:26px; height:20px; color:var(--muted); }
 .account-disclosure { margin:16px 0 0; font-size:12px; line-height:1.5; color:var(--muted); }

@@ -744,6 +744,14 @@ const SCREENS = [
     await openSettingsTab(page, 'Tài khoản');
     await page.getByRole('switch', { name: startsWith('Thống kê sử dụng và báo lỗi') }).waitFor();
   }, close: async page => { await page.evaluate(() => window.orglet.accountSignOut()); } },
+  // A sign-in from before sync existed, holding data: main's status is sent by hand because this run has no sync server.
+  { name: 'settings-account-sync-choice', family: 'settings', open: async page => {
+    await signInWithoutBrowser(page);
+    await openSettingsTab(page, 'Tài khoản');
+    await page.getByRole('switch', { name: startsWith('Thống kê sử dụng và báo lỗi') }).waitFor();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('orglet:sync', { state: 'link_required', askedBecauseNew: true }));
+    await page.getByRole('button', { name: label('Đồng bộ máy này'), exact: true }).waitFor();
+  }, close: async page => { await page.evaluate(() => window.orglet.accountSignOut()); } },
   { name: 'settings-about', family: 'settings', open: page => openSettingsTab(page, 'Giới thiệu') },
 ];
 

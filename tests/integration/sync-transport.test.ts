@@ -256,6 +256,37 @@ describe.skipIf(!installed && !required)('account sync through the local Worker'
     for (const secret of ['token-', accountKey(owner), first.store.sync.deviceId(), second.store.sync.deviceId()]) expect(shown).not.toContain(secret);
   }, 120_000);
 
+  it('keeps the chats of a deleted orglet on this computer and says so, while every other chat reaches a new computer', async () => {
+    const owner = randomUUID();
+    const first = device(owner);
+    const skill: Skill = { id: randomUUID(), name: 'Second skill', revision: 1, content: 'For the orglet that is deleted.' };
+    first.store.version('skills', skill);
+    const doomed: Worker = { id: randomUUID(), name: 'Doomed', revision: 1, provider: 'demo', skillId: skill.id, instructions: 'Will be deleted.' };
+    first.store.version('workers', doomed);
+    const kept = [chat(first.store, 'Kept one'), chat(first.store, 'Kept two')];
+    const orphaned = [1, 2, 3].map(index => {
+      const task: Task = { ...chat(first.store, `Orphaned ${index}`), workerId: doomed.id };
+      first.store.update('tasks', task);
+      return task;
+    });
+    // Deleting an orglet is permanent for the account, and a chat names its orglet, so its chats stay here, read-only.
+    const state = first.store.entityState();
+    state.workers[doomed.id] = { deletedAt: new Date().toISOString() };
+    first.store.setSetting('entityState', state);
+
+    await converge(first);
+    expect(first.transport.state().withheld).toBe(orphaned.length);
+    expect(first.store.workspace().syncLocalOnly?.deletedOrgletTasks?.slice().sort()).toEqual(orphaned.map(task => task.id).sort());
+    expect(first.store.workspace().syncLocalOnly?.deletedOrgletTasks).not.toContain(kept[0].id);
+
+    const second = device(owner);
+    await converge(second, first);
+    expect(liveChats(second.store)).toEqual(kept.map(task => task.id).sort());
+    expect(second.transport.state().withheld).toBeUndefined();
+    // Nothing about the deleted orglet's chats reached the account.
+    expect(liveChats(first.store)).toHaveLength(kept.length + orphaned.length);
+  }, 120_000);
+
   it('merges edits two computers made while apart, including a new orglet and a conflicting rename', async () => {
     const owner = randomUUID();
     const first = device(owner);

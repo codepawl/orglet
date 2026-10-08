@@ -79,6 +79,6 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
       <p className="muted">{t('Đã dùng {0}; mọi người được giao dùng chung giới hạn này.', [formatMoney(usedMicros)])}</p>
     </>}
     {running && <p role="status">{t('Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.')}</p>}
-    <LocalOnlyControl checked={localOnly} onChange={setLocalOnly} inherited={workspace.syncLocalOnly?.inheritedTasks.includes(task.id)} permanent={workspace.syncLocalOnly?.permanentTasks?.includes(task.id)} />
+    <LocalOnlyControl checked={localOnly} onChange={setLocalOnly} inherited={workspace.syncLocalOnly?.inheritedTasks.includes(task.id)} permanent={workspace.syncLocalOnly?.permanentTasks?.includes(task.id)} orgletDeleted={workspace.syncLocalOnly?.deletedOrgletTasks?.includes(task.id)} />
   </TabbedFormDialog>;
 }

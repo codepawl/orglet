@@ -51,6 +51,8 @@ export const SyncReplicaBatch = z.object({
   records: z.array(SyncRecord).max(100),
   /** Queued changes over the server's size limit; they are never sent. */
   skipped: z.number().int().nonnegative(),
+  /** Chats kept on this computer because an orglet in them was deleted: deleting an orglet is permanent for the account. */
+  withheld: z.number().int().nonnegative(),
   /** Set when a newer Orglet wrote data this build cannot read: sending stops until the app is updated. */
   updateRequired: z.boolean(),
 }).strict();

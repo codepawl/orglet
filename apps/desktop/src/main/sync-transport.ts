@@ -40,6 +40,10 @@ export type SyncTransportDependencies = {
   account: {
     syncContext(): SyncRecordingContext | undefined;
     getAccessToken(): Promise<string>;
+    /** Whether this install agreed to sync. Absent counts as agreed. */
+    syncAgreed?(): boolean;
+    /** Remembers that the person started sync here. */
+    agreeToSync?(): Promise<void>;
   };
   core: (action: SyncReplicaAction) => Promise<unknown>;
   /** Saves a copy of the database, then erases this computer's workspace. Rejects, erasing nothing, when it cannot. */
@@ -47,7 +51,8 @@ export type SyncTransportDependencies = {
   /**
    * A signed-in computer joins without being asked, merging what it holds with the account (owner, 2026-10-04). The
    * one that still waits is a computer erased on purpose, so Erase all data is not undone by the next sync; Sync
-   * there joins it again. Without this, any computer that holds data waits for `start`.
+   * there joins it again. A sign-in saved before this build synced never agreed, so it waits too when it holds data.
+   * Without this, any computer that holds data waits for `start`.
    */
   joinsOnItsOwn?: boolean;
   fetch?: typeof fetch;
@@ -139,6 +144,8 @@ type Session = {
   uploadRefused?: SyncPauseReason;
   uploadHeldUntil: number;
   skipped: number;
+  /** Chats kept here because an orglet in them was deleted. */
+  withheld: number;
 };
 
 /**
@@ -300,6 +307,7 @@ export class SyncTransport {
     if (session) {
       session.waitingForConsent = false;
       session.stopped = false;
+      await this.dependencies.account.agreeToSync?.().catch(() => undefined);
       session.wantPull = true;
       session.uploadHeldUntil = 0;
       this.failures = 0;
@@ -322,7 +330,7 @@ export class SyncTransport {
     if (!context) return;
     const session: Session = {
       context, controller: new AbortController(), deviceId: '', cursor: null, waitingForConsent: false, stopped: false, reclaimed: false, wantPull: true,
-      uploadHeldUntil: 0, skipped: 0,
+      uploadHeldUntil: 0, skipped: 0, withheld: 0,
     };
     this.session = session;
     let state: SyncReplicaState;
@@ -335,10 +343,11 @@ export class SyncTransport {
     if (!this.alive(session)) return;
     session.deviceId = state.deviceId;
     session.cursor = state.cursor;
-    const waits = this.dependencies.joinsOnItsOwn ? state.held : state.ownData;
+    const neverAgreed = !(this.dependencies.account.syncAgreed?.() ?? true) && state.ownData;
+    const waits = this.dependencies.joinsOnItsOwn ? state.held || neverAgreed : state.ownData;
     if (!state.linked && waits) {
       session.waitingForConsent = true;
-      this.set({ state: 'link_required' });
+      this.set(neverAgreed && !state.held ? { state: 'link_required', askedBecauseNew: true } : { state: 'link_required' });
       return;
     }
     this.trigger();
@@ -371,6 +380,7 @@ export class SyncTransport {
       ...status,
       ...(this.lastSyncedAt && status.state !== 'off' ? { lastSyncedAt: this.lastSyncedAt } : {}),
       ...(this.session?.skipped ? { skipped: this.session.skipped } : {}),
+      ...(this.session?.withheld ? { withheld: this.session.withheld } : {}),
     });
     if (JSON.stringify(next) === JSON.stringify(this.status)) return;
     this.status = next;
@@ -578,6 +588,7 @@ export class SyncTransport {
     for (;;) {
       const batch = SyncReplicaBatch.parse(await this.core({ action: 'outbox', context: session.context }, session));
       session.skipped = batch.skipped;
+      session.withheld = batch.withheld;
       if (batch.updateRequired) {
         session.uploadRefused = 'update_required';
         session.uploadHeldUntil = 0;

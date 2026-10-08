@@ -17,9 +17,13 @@ export type SyncPauseReason = z.infer<typeof SyncPauseReason>;
 export const SyncStatus = z.object({
   state: z.enum(['off', 'link_required', 'syncing', 'synced', 'offline', 'paused']),
   reason: SyncPauseReason.optional(),
+  /** With `link_required`: this sign-in was made before sync existed, so the person is asked once whether to sync what is here. */
+  askedBecauseNew: z.literal(true).optional(),
   lastSyncedAt: z.iso.datetime().optional(),
   /** Changes too large for the server; they stay on this computer. */
   skipped: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  /** Chats that stay on this computer because an orglet in them was deleted, which is permanent for the account. */
+  withheld: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
 }).strict();
 export type SyncStatus = z.infer<typeof SyncStatus>;
 

@@ -65,7 +65,7 @@ Reading map:
 - A notice about the chat's or app's state (unfinished work, retry, limits) sits outside the message thread, by the prompt bar or on its own surface, never styled as something the assistant said.
 - Notices sit on a plain surface, not a tinted wash with a dark button.
 - A nav icon must not look like the product logo; use an icon that says where it goes.
-- A wait is a `Skeleton` in the shape of what is coming. No spinners after the first frame.
+- A wait is a `Skeleton` in the shape of what is coming. No spinners after the first frame. Exception: a wait with no shape to show, where the person acts elsewhere (sign-in in the browser), keeps the kit's turning `StatusMark variant="busy"` so it reads as live (owner, 2026-10-09).
 - Missing evidence, unknown usage and partial failure stay visible; never paint them as success.
 - Emails and similar personal values shown on screen are partly masked through `shared/pii.ts`.
 
