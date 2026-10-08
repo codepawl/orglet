@@ -10,9 +10,9 @@ import { webNetwork } from '../tools/web-network';
 import type { WebSearchSettings } from '../tools/web-search';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, mcpToolOf, mcpToolsOffered, offeredToolNames, toolCallProblem, type ToolCallProblem, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals, isPlanFirst, PLAN_FIRST_INSTRUCTION } from '../tools/catalog';
+import { assertToolCall, mcpToolOf, mcpToolsOffered, offeredToolNames, toolCallProblem, type ToolCallProblem, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, ModelTeamPlan, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals, isPlanFirst, PLAN_FIRST_INSTRUCTION } from '../tools/catalog';
 import { z } from 'zod';
-import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type RunContextUse, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, type Run, type RunContextUse, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, affordableOutputTokens, holdFor } from '../budgets/ledger';
 import { Sources, fingerprint, imageWithheldMessage, unreadableSourceMessage } from '../tools/sources';
@@ -2195,7 +2195,7 @@ export class Runner {
       const withMemories = memoriesAllowed(run, this.store.get<Task>('tasks', task.id));
       const withSelfImprovement = !!this.appProposals && selfImprovementAllowed(run, this.store.get<Task>('tasks', task.id));
       const withReactions = reactionsAllowed(run, this.store.get<Task>('tasks', task.id));
-      const answerSchema = z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
+      const answerSchema = z.toJSONSchema(run.stage === 'plan' ? ModelTeamPlan : needsReport(run) ? ModelReportSchema
         : harnessAnswerSchema(run, withProposals, withMemories, withSelfImprovement, withReactions), { target: 'draft-7' });
       this.event(run.id, `Đang chạy ${tool.name} ${tool.version} trên máy · chỉ đọc bản sao nguồn của task`);
       const progress = new ProgressSender(task.id, run.id, update => this.onProgress(update));

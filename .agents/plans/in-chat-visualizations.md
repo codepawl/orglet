@@ -139,3 +139,4 @@ vẽ được từ tệp.
     được và đóng trình xem.
   - **Tab Tệp**: `chartsOfChat` (`chatViews.ts`) lấy biểu đồ từ nội dung các câu trả lời, không thêm bảng; số trên menu Tệp
     cộng cả biểu đồ.
+- 2026-10-09: benchmark vẽ biểu đồ trên model thật (`tests/live/chart-replies.test.ts`, 12 yêu cầu, chỉ có hướng dẫn chart của công cụ reply): `gpt-6-luna` và `gpt-6.1-sol` đều 12/12 gửi biểu đồ hợp lệ ngay lần đầu, đúng dạng, giữ nguyên số. Hai lần đầu lộ ra histogram chỉ ghi cột giá trị ở `x` (hoặc `y` rỗng); app giờ tự hiểu cột đó là giá trị (`shared/charts.ts`). Hai đại lượng khác thang được model tách thành hai biểu đồ, đúng hướng dẫn.

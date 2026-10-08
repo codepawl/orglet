@@ -201,6 +201,16 @@ export const TeamPlan = z.object({
   synthesisBrief: z.string().trim().min(1).max(4000).optional(),
 }).strict();
 export type TeamPlan = z.infer<typeof TeamPlan>;
+/**
+ * A strict model schema lists every field, so a model sends null for a plan with no note or synthesis brief
+ * (OpenAI refuses an optional field in a strict schema, 2026-10-09). Null means the field was left out.
+ */
+export function withoutPlanNulls(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const plan = { ...(value as Record<string, unknown>) };
+  for (const field of ['note', 'synthesisBrief']) if (plan[field] === null) delete plan[field];
+  return plan;
+}
 /** Queued member run skipped because the orchestrator did not assign that worker this turn. */
 export const UNASSIGNED_PLAN_ERROR = 'Không được phân việc cho lượt này.';
 export const MISSING_PLAN_ERROR = 'Phân việc không có kết quả. Không chạy thành viên và không bịa báo cáo.';

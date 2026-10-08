@@ -1,5 +1,5 @@
 import { validateDependencies } from './assignments';
-import { TeamPlan, INVALID_PLAN_ERROR, type Team } from '../../shared/contracts';
+import { TeamPlan, INVALID_PLAN_ERROR, withoutPlanNulls, type Team } from '../../shared/contracts';
 import { mentionedPeople, type MentionPerson } from '../../shared/mentions';
 
 export { UNASSIGNED_PLAN_ERROR, MISSING_PLAN_ERROR, INVALID_PLAN_ERROR } from '../../shared/contracts';
@@ -22,7 +22,7 @@ export function defaultTeamPlan(team: Team, brief: string, members: readonly Men
 
 /** Rejects unknown ids. Does not add missing members. */
 export function assertTeamPlan(team: Team, plan: unknown) {
-  const parsed = TeamPlan.parse(plan);
+  const parsed = TeamPlan.parse(withoutPlanNulls(plan));
   for (const assignment of parsed.assignments) {
     if (!team.memberIds.includes(assignment.workerId)) throw new Error(INVALID_PLAN_ERROR);
   }

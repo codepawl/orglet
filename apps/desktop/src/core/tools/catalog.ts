@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { FontFamily } from '../../shared/fonts';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { ChatMessage, Finding, FindingCategory, Id, MAX_CREW_MEMBERS, StructuredReport, SourceLocation, TeamPlan, PlanAssignment, type Run, type Task } from '../../shared/contracts';
+import { ChatMessage, Finding, FindingCategory, Id, MAX_CREW_MEMBERS, StructuredReport, SourceLocation, TeamPlan, PlanAssignment, withoutPlanNulls, type Run, type Task } from '../../shared/contracts';
 import { ProfileArgs, ProfileModelArgs } from '../../shared/profiles';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { Review } from '../../shared/review';
@@ -28,9 +28,16 @@ import {
   DESKTOP_BORROW_LIMIT_MS, DESKTOP_SNAPSHOT_CHARACTERS, DesktopBorrowArgs, DesktopElementArgs, DesktopExpandArgs, DesktopFindArgs, DesktopSetValueArgs, DesktopSnapshotArgs, DesktopWindowArgs, DesktopWindowsArgs,
   MAX_BORROW_STEPS, MAX_BORROW_TEXT_CHARACTERS, MAX_DESKTOP_SCREENSHOTS, MAX_DESKTOP_TEXT_CHARACTERS,
 } from '../../shared/desktop';
-const ModelTeamPlan = TeamPlan.extend({ assignments: z.array(PlanAssignment.required({
-  expectedOutput: true, dependsOn: true, writeResources: true,
-})).min(1).max(MAX_CREW_MEMBERS) });
+// OpenAI's strict function schemas need every property in "required" (a 400 otherwise, measured 2026-10-09), so the
+// model-facing copies list them all: null for no note or synthesis brief, an empty processIds when a check cites no
+// command. The parsed values are the stored contracts again (withoutPlanNulls, Review's optional processIds).
+export const ModelTeamPlan = TeamPlan.extend({
+  assignments: z.array(PlanAssignment.required({ expectedOutput: true, dependsOn: true, writeResources: true })).min(1).max(MAX_CREW_MEMBERS),
+  note: z.string().trim().max(2000).nullable(),
+  synthesisBrief: z.string().trim().min(1).max(4000).nullable(),
+});
+const ParsedTeamPlan = z.preprocess(withoutPlanNulls, TeamPlan);
+const ModelReview = Review.extend({ checks: z.array(Review.shape.checks.element.extend({ processIds: z.array(Id).max(20) })).max(50) });
 
 export const needsReport = (run: Run) => run.stage === 'synthesis' && !!run.snapshot.team?.reviewPolicy?.requiredChecks.length;
 const Recommendation = z.string().min(1).max(2000).nullable();
@@ -38,7 +45,7 @@ const CheckerIds = z.array(Id).max(20);
 export const Proposals = z.array(KnowledgeProposal).max(3);
 const Locations = z.array(SourceLocation).max(20);
 const ModelFindingSchema = Finding.omit({ provenance: true }).extend({ category: FindingCategory, recommendation: Recommendation, checkerIds: CheckerIds, locations: Locations, workspaceEvidenceIds: z.array(Id).max(20) });
-export const ModelReportSchema = StructuredReport.omit({ format: true }).extend({ review: Review, findings: z.array(ModelFindingSchema).max(50), limitations: z.array(z.string().min(1).max(2000)).max(30), knowledgeProposals: Proposals });
+export const ModelReportSchema = StructuredReport.omit({ format: true }).extend({ review: ModelReview, findings: z.array(ModelFindingSchema).max(50), limitations: z.array(z.string().min(1).max(2000)).max(30), knowledgeProposals: Proposals });
 export const MemberReportSchema = ModelReportSchema.extend({ assignmentOutcome: z.enum(['completed', 'blocked']) });
 // Old persisted replies predate these fields. Defaults do not fabricate a recommendation or evidence.
 const ModelFinding = ModelFindingSchema.extend({ category: FindingCategory.default('other'), recommendation: Recommendation.default(null), checkerIds: CheckerIds.default([]), locations: Locations.default([]), workspaceEvidenceIds: z.array(Id).max(20).default([]) });
@@ -193,7 +200,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
   read_source: defineTool('read_source', 'Read an explicitly allowed source by ID: UTF-8 text, the text layer of a PDF with a [Page n of N] line before each page, or an image, which is shown to you when its source entry says read_source shows it. No path or code execution.', ReadArgs, ReadArgs, 'source.read', 20000, 'cooperative'),
   submit_report: defineTool('submit_report', SUBMIT_REPORT_DESCRIPTION, ModelReport, ModelReportSchema, undefined, 20000, 'synchronous'),
   reply: defineTool('reply', REPLY_DESCRIPTION, ChatReply, ChatReplySchema, undefined, 20000, 'synchronous'),
-  submit_plan: defineTool('submit_plan', SUBMIT_PLAN_DESCRIPTION, TeamPlan, ModelTeamPlan, undefined, 20000, 'synchronous'),
+  submit_plan: defineTool('submit_plan', SUBMIT_PLAN_DESCRIPTION, ParsedTeamPlan, ModelTeamPlan, undefined, 20000, 'synchronous'),
 };
 
 /**
