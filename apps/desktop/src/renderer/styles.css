@@ -972,6 +972,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .account-choice-disclosure > svg { flex:none; margin-top:2px; }
 .account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:12px; }
 .account-choice-waiting p { display:flex; align-items:center; gap:8px; margin:0; color:var(--muted); font-size:13px; }
+.account-choice-waiting-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; }
+.account-waiting-actions { flex-wrap:wrap; justify-content:flex-end; }
 .row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
 .row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */

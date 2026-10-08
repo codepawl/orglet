@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, ChartNoAxesColumn, ExternalLink, Gem, Gift, LogIn, LogOut, RefreshCw, Smartphone, UserRound, UserRoundCheck, UserRoundX } from 'lucide-react';
+import { ArrowLeft, ChartNoAxesColumn, Copy, ExternalLink, Gem, Gift, LogIn, LogOut, RefreshCw, RotateCw, Smartphone, UserRound, UserRoundCheck, UserRoundX } from 'lucide-react';
 import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import type { AccountState } from '../../shared/account';
 import type { SyncPauseReason, SyncStatus } from '../../shared/sync-status';
@@ -221,6 +221,29 @@ function SyncRow({ busy }: { busy: boolean }) {
   </>;
 }
 
+/**
+ * The two quiet ways out of a browser that did not come forward while a sign-in waits: open the sign-in page again, or
+ * copy its address for another browser. The address holds only the sign-in's state and PKCE challenge, no secret.
+ */
+export function SignInWaitActions() {
+  const about = t('Tài khoản CodePawl');
+  const reopen = () => void orglet.accountReopenSignIn().catch(error => toast(error instanceof Error ? error.message : String(error), 'error', about));
+  const copyLink = async () => {
+    try {
+      const link = await orglet.accountSignInLink();
+      if (!link) return;
+      await orglet.copyText(link);
+      toast(t('Đã sao chép liên kết đăng nhập'), 'success', about);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error), 'error', about);
+    }
+  };
+  return <>
+    <Button variant="ghost" onClick={reopen}><RotateCw size={14} />{t('Mở lại trình duyệt')}</Button>
+    <Button variant="ghost" onClick={() => void copyLink()}><Copy size={14} />{t('Sao chép liên kết')}</Button>
+  </>;
+}
+
 export function AccountSettings({ account, busy, act }: { account: AccountState | undefined; busy: boolean; act: Act }) {
   const about = t('Tài khoản CodePawl');
   // The browser may stay open for minutes, so this waits on its own instead of holding the other tabs busy.
@@ -250,7 +273,7 @@ export function AccountSettings({ account, busy, act }: { account: AccountState 
       <span className="setting-title">{t('Đang đăng nhập')}</span>
       <span className="setting-description" role="status">{t('Đăng nhập trong trình duyệt, rồi quay lại.')}</span>
     </div>
-    <div className="setting-control"><Button variant="outline" onClick={cancel}><ArrowLeft size={14} />{t('Hủy')}</Button></div>
+    <div className="setting-control account-waiting-actions"><SignInWaitActions /><Button variant="outline" onClick={cancel}><ArrowLeft size={14} />{t('Hủy')}</Button></div>
   </div>;
 
   if (account.status === 'local') return <>
