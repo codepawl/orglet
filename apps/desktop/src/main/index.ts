@@ -1225,11 +1225,17 @@ else {
     }
     void receiveLaunch(argv, true);
   });
-  app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
+  // Quitting while the window is still loading rejects that load; it is not a failed start and gets no error box.
+  let quitRequested = false;
+  app.whenReady().then(start).catch(error => {
+    if (!quitRequested) dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.');
+    app.quit();
+  });
   app.on('activate', () => { if (started) void showWindow(); });
   app.on('browser-window-focus', () => syncTransport?.windowFocused());
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', event => {
+    quitRequested = true;
     // Analytics gets one short last flush (at most 3 seconds) before anything else closes.
     if (analytics && !analyticsFlushed) {
       analyticsFlushed = true;
