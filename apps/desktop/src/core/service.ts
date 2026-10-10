@@ -755,6 +755,10 @@ export class CoreService {
         this.notify();
         return;
       }
+      case 'recoveryDeletedFile': {
+        if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
+        return this.workspaceRuntime.deletedFileSize(commands.recoveryDeletedFile.parse(args));
+      }
       case 'restoreWorkspaceFile': {
         if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
         await this.workspaceRuntime.restore(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
