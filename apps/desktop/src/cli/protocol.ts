@@ -210,7 +210,7 @@ export const CliRequest = z.discriminatedUnion('op', [
     autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(),
     copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(),
     archiveRetentionDays: z.union([z.literal(0), z.literal(7), z.literal(30)]).optional(),
-    autoUpdate: z.boolean().optional(), backgroundNotifications: z.boolean().optional(),
+    autoUpdate: z.boolean().optional(), marketAutoUpdate: z.boolean().optional(), backgroundNotifications: z.boolean().optional(),
     accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
     /** A font family, or `null` for the font the app ships with. */
     interfaceFont: FontFamily.nullable().optional(), codeFont: FontFamily.nullable().optional(),
@@ -413,7 +413,7 @@ export type PreferencesValue = {
   language: string; theme: string;
   /** The rest are absent from an app older than the preferences listing. */
   autoTitles?: boolean; confirmOpenTask?: boolean; copyFormat?: string; downloadFormat?: string; archiveRetentionDays?: number;
-  autoUpdate?: boolean; backgroundNotifications?: boolean; accentColor?: string; interfaceFont?: string | null; codeFont?: string | null;
+  autoUpdate?: boolean; marketAutoUpdate?: boolean; backgroundNotifications?: boolean; accentColor?: string; interfaceFont?: string | null; codeFont?: string | null;
 };
 /** What `market update` found, and whether this call applied it: `code` is what `--confirm` takes to apply exactly this update. */
 export type MarketUpdateValue = { name: string; installedVersion: number; version: number; changes: { name: string; before: string; after: string }[]; code: string; applied: boolean };
@@ -423,7 +423,12 @@ export type ShowValue = { what: ShowTopic; rows: ShowRow[]; note?: string };
 export type ChatSettingsValue = { taskId: string; name: string; with: string[]; budgetMicros: number };
 export type NoteValue = { id: string; short: string; title: string };
 export type ScheduleNoticeValue = { schedule: { id: string; name: string }; action: 'dismiss' | 'catch-up'; taskId?: string };
-export type UpdateCheckValue = { status: string; version?: string; message?: string; checkedAt?: string };
+/** What things added from the Marketplace have waiting, and what the automatic path did with them. */
+export type MarketUpdatesValue = {
+  available: { id: string; name: string; kind: 'orglet' | 'crew' | 'space'; version: number; latestVersion?: number }[];
+  records: { name: string; status: 'applied' | 'failed' | 'needs-review'; version: number; reason?: string; block?: 'customized' | 'unknown' | 'widening'; changed: string[] }[];
+};
+export type UpdateCheckValue = { status: string; version?: string; message?: string; checkedAt?: string; market?: MarketUpdatesValue };
 export type ScheduleValue = { schedule: CliScheduleRow };
 export type OpenValue = { chat?: CliChat };
 /** The schedule `run` started and the chat its run opened. */

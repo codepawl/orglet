@@ -1,4 +1,4 @@
-import type { ChatSettingsValue, MarketUpdateValue, ScheduleNoticeValue, ShowRow, ShowValue, UpdateCheckValue } from './protocol';
+import type { ChatSettingsValue, MarketUpdatesValue, MarketUpdateValue, ScheduleNoticeValue, ShowRow, ShowValue, UpdateCheckValue } from './protocol';
 import type { CliListedChannel, CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, ChannelCreatedValue, MarketAddValue, MarketInstalledValue, MarketListValue, SearchValue, SpaceChangeValue, SpacesValue, UsageValue } from './protocol';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliChatKind, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
@@ -310,6 +310,7 @@ export function formatPreferences(value: PreferencesValue): string {
     value.downloadFormat === undefined ? '' : t('Định dạng khi tải xuống: {0}', value.downloadFormat),
     value.archiveRetentionDays === undefined ? '' : t('Giữ chat đã lưu trữ: {0}', value.archiveRetentionDays === 0 ? t('đến khi xóa') : t('{0} ngày', value.archiveRetentionDays)),
     value.autoUpdate === undefined ? '' : t('Tự cập nhật: {0}', yesNo(value.autoUpdate)),
+    value.marketAutoUpdate === undefined ? '' : t('Tự cập nhật mục từ marketplace: {0}', yesNo(value.marketAutoUpdate)),
     value.backgroundNotifications === undefined ? '' : t('Thông báo khi chạy nền: {0}', yesNo(value.backgroundNotifications)),
     value.accentColor === undefined ? '' : t('Màu nhấn: {0}', value.accentColor),
     value.interfaceFont === undefined ? '' : t('Phông giao diện: {0}', value.interfaceFont ?? t('mặc định')),
@@ -340,7 +341,30 @@ export function formatScheduleNotice(value: ScheduleNoticeValue): string {
 
 export function formatUpdateCheck(value: UpdateCheckValue): string {
   const detail = value.version ?? value.message ?? value.checkedAt ?? '';
-  return detail ? t('Cập nhật: {0} ({1}).', value.status, detail) : t('Cập nhật: {0}.', value.status);
+  const app = detail ? t('Cập nhật: {0} ({1}).', value.status, detail) : t('Cập nhật: {0}.', value.status);
+  return value.market ? [app, ...formatMarketUpdates(value.market)].join('\n') : app;
+}
+
+/** The Marketplace part of `orglet update`: what is waiting, then what the automatic path did or left to the person. */
+function formatMarketUpdates(value: MarketUpdatesValue): string[] {
+  const lines: string[] = [];
+  for (const item of value.available) {
+    const latest = item.latestVersion ? ` -> v${item.latestVersion}` : '';
+    lines.push(t('Marketplace: {0} (v{1}{2}) có bản cập nhật. Xem: orglet market update "{0}"', item.name, item.version, latest));
+  }
+  if (value.available.length === 0) lines.push(t('Marketplace: không có bản cập nhật nào.'));
+  for (const record of value.records) {
+    if (record.status === 'applied') lines.push(t('Marketplace: đã tự cập nhật {0} lên v{1}{2}.', record.name, record.version, record.changed.length ? ` (${record.changed.join(', ')})` : ''));
+    else if (record.status === 'failed') lines.push(t('Marketplace: tự cập nhật {0} lên v{1} không thành: {2}', record.name, record.version, record.reason ?? ''));
+    else lines.push(t('Marketplace: {0} lên v{1} chờ bạn xem: {2}', record.name, record.version, blockReason(record.block)));
+  }
+  return lines;
+}
+
+function blockReason(block: 'customized' | 'unknown' | 'widening' | undefined): string {
+  if (block === 'widening') return t('bản mới mở rộng ngân sách, số bạn làm việc hoặc tệp kỹ năng');
+  if (block === 'customized') return t('bạn đã chỉnh sửa bản này');
+  return t('không rõ bạn đã chỉnh sửa chưa');
 }
 
 export function formatTemplate(value: TemplateValue): string {

@@ -3,7 +3,8 @@ import type { HarnessInfo } from '../shared/harness';
 import type { BrowserAction } from '../shared/browser';
 import type { DesktopAction } from '../shared/desktop';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
-import type { CliRequest, ShowRow, ShowValue, UpdateCheckValue } from '../cli/protocol';
+import type { MarketInstallation, MarketUpdateRecord } from '../shared/market';
+import type { CliRequest, MarketUpdatesValue, ShowRow, ShowValue, UpdateCheckValue } from '../cli/protocol';
 import type { UpdateState } from '../shared/updates';
 import { CliFailure, targetChat } from './cli-chats';
 import type { CliDependencies } from './cli-turns';
@@ -44,8 +45,23 @@ export class CliInspect {
   }
 
   /** Looks for an update and says what it found. Installing the one it downloads stays a click in the window. */
-  checkForUpdates(): UpdateCheckValue {
-    return updateRow(this.app().checkForUpdates()) as UpdateCheckValue;
+  async checkForUpdates(): Promise<UpdateCheckValue> {
+    const app = updateRow(this.app().checkForUpdates()) as UpdateCheckValue;
+    return { ...app, market: await this.marketUpdates() };
+  }
+
+  /** The Marketplace items with a newer version, and what the automatic path did; a core that cannot say adds nothing. */
+  private async marketUpdates(): Promise<MarketUpdatesValue> {
+    const installations = await this.dependencies.request('marketInstallations', {}) as MarketInstallation[];
+    const records = await this.dependencies.request('marketUpdateRecords', {}) as MarketUpdateRecord[];
+    return {
+      available: installations.filter(item => item.updateAvailable).map(item => ({ id: item.listingId, name: item.name, kind: item.kind, version: item.version, ...(item.latestVersion ? { latestVersion: item.latestVersion } : {}) })),
+      records: records.map(record => ({
+        name: record.name, status: record.status, version: record.toVersion, changed: record.changed,
+        ...(record.reason ? { reason: this.dependencies.translate(record.reason) } : {}),
+        ...(record.block ? { block: record.block } : {}),
+      })),
+    };
   }
 
   private app() {
