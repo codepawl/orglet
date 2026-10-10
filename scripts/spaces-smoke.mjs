@@ -189,9 +189,12 @@ try {
   await page.waitForTimeout(400);
   await page.getByRole('button', { name: label('Ẩn danh sách thành viên'), exact: true }).click();
   await page.locator('.members-pane').waitFor({ state: 'detached' });
+  // The fold-in is short; slowed down here so a busy machine cannot finish it before it is looked at.
+  await page.evaluate(() => document.documentElement.style.setProperty('--motion-base', '900ms'));
   await page.getByRole('button', { name: label('Hiện danh sách thành viên'), exact: true }).click();
   await page.locator('.members-pane').waitFor();
   assert.ok((await rightColumnMotion()).includes('pane-in'), 'the column still folds in when the person asks for it');
+  await page.evaluate(() => document.documentElement.style.removeProperty('--motion-base'));
   await page.waitForTimeout(300);
 
   // Deleting the space keeps its channel, outside every space.
