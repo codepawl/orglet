@@ -89,7 +89,8 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   reconcileBudget: elevated('orglet reconcile', 'decisions'),
   revoke: elevated('orglet grant file-revoke', 'setup'),
   setToolCapabilities: elevated('orglet grant tools', 'setup'),
-  workspaceAccess: windowOnly('shows which folder a chat may use; ' + NOT_BUILT),
+  // Read by the grant commands to know what Undo would restore; no command shows it yet.
+  workspaceAccess: reached('orglet grant folder'),
   // Listed without the review token that applies or discards a hand-in, which stays in the window.
   workspaceRecovery: reached('orglet show changes'),
   retireWorkspaceAttempt: windowOnly('closes a recovery view; ' + NOT_BUILT),

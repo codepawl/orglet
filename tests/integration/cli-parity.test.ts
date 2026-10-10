@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BRIDGE_PARITY, COMMAND_PARITY, elevatedKeys, heldActionScope, type Parity } from '../../apps/desktop/src/cli/parity';
-import { HELD_ACTIONS, type HeldAction } from '../../apps/desktop/src/cli/held-protocol';
+import { BRIDGE_PARITY, COMMAND_PARITY, elevatedKeys, heldActionScope, NEVER_FROM_TERMINAL, type Parity } from '../../apps/desktop/src/cli/parity';
+import { HELD_ACTIONS, SETUP_ACTIONS, type HeldAction } from '../../apps/desktop/src/cli/held-protocol';
 import { commands } from '../../apps/desktop/src/shared/contracts';
 
 const SOURCE_FOLDER = join(__dirname, '../../apps/desktop/src');
@@ -88,9 +88,19 @@ describe('the parity table of the orglet terminal command', () => {
     expect(elevatedKeys().sort()).toEqual(fromActions);
   });
 
-  it('gives every held action the scope its keys say, and never a scope above decisions in stage B', () => {
+  it('gives every held action the scope its keys say: grants and secrets are setup, decisions are decisions', () => {
     for (const action of Object.keys(HELD_ACTIONS) as HeldAction[]) {
-      expect(heldActionScope(action)).toBe('decisions');
+      expect(heldActionScope(action), action).toBe(SETUP_ACTIONS.has(action) ? 'setup' : 'decisions');
+    }
+  });
+
+  it('never makes anything on the never-from-the-terminal list elevated', () => {
+    const table = { ...COMMAND_PARITY, ...BRIDGE_PARITY } as Record<string, Parity>;
+    for (const key of NEVER_FROM_TERMINAL) {
+      expect(table[key], key).toBeDefined();
+      expect(table[key].status, key).not.toBe('elevated');
+      expect(table[key].status, key).not.toBe('reached');
+      expect(elevatedKeys(), key).not.toContain(key);
     }
   });
 

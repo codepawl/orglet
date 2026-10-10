@@ -79,7 +79,7 @@ export const HeldBody = z.discriminatedUnion('action', [
 ]);
 export type HeldBody = z.infer<typeof HeldBody>;
 export type SetupBody = z.infer<(typeof SetupBodies)[number]>;
-const SETUP_ACTIONS: ReadonlySet<string> = new Set(SetupBodies.map(schema => schema.shape.action.value));
+export const SETUP_ACTIONS: ReadonlySet<string> = new Set(SetupBodies.map(schema => schema.shape.action.value));
 /** Grants and secrets (stages C and D), as opposed to the decisions of stage B. */
 export function isSetupBody(body: HeldBody): body is SetupBody {
   return SETUP_ACTIONS.has(body.action);

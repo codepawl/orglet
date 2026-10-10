@@ -3576,6 +3576,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .terminal-access-mark, .terminal-access-mark:hover:not(:disabled) { color:var(--accent); }
 .terminal-journal { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
 .terminal-journal-row { display:flex; align-items:flex-start; gap:10px; padding:6px 0; }
+.terminal-journal-row > .org-button { margin-left:auto; flex-shrink:0; }
 .terminal-journal-row > svg { flex-shrink:0; margin-top:2px; }
 .terminal-journal-done { color:var(--success); }
 .terminal-journal-failed { color:var(--error); }
