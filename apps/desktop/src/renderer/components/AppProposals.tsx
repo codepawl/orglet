@@ -39,7 +39,7 @@ const editTitles: Record<AppProposalKind, string> = translated({
 const fieldNames: Record<string, string> = translated({
   name: 'Tên', description: 'Mô tả', instructions: 'Hướng dẫn', provider: 'Model', modelId: 'ID model', effort: 'Mức suy nghĩ', skillId: 'Kỹ năng', taskBudgetMicros: 'Giới hạn mỗi task',
   memberIds: 'Thành viên', synthesizerId: 'Tí trưởng', workflow: 'Cách chạy', monthlyBudgetMicros: 'Ngân sách tháng', content: 'Nội dung',
-  brief: 'Tin nhắn', schedule: 'Lịch', target: 'Giao cho', enabled: 'Bật lịch', team: 'Kênh được xuất',
+  brief: 'Tin nhắn', schedule: 'Lịch', dailyCapMicros: 'Giới hạn mỗi ngày', trigger: 'Bắt đầu', target: 'Giao cho', enabled: 'Bật lịch', team: 'Kênh được xuất',
   theme: 'Giao diện', language: 'Ngôn ngữ', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Font giao diện', codeFont: 'Font code',
   copyFormat: 'Định dạng sao chép', downloadFormat: 'Định dạng tải xuống', autoTitles: 'Tự đặt tên chat', confirmOpenTask: 'Hỏi trước khi mở công việc',
 });
@@ -48,6 +48,7 @@ const holdReasons: Record<ProposalHold, string> = translated({
   budget: 'Chờ bạn bấm: đề xuất nâng một giới hạn chi tiêu.',
   template: 'Chờ bạn bấm: cần chọn nơi lưu tệp template.',
   self: 'Chờ bạn bấm: đề xuất này đổi cách Tí làm việc.',
+  enable: 'Chờ bạn bấm: bật lịch là cho phép nó chạy và tiêu tiền.',
 });
 /** The feedback a self-improvement answers, as a short chip: "Yêu cầu sửa ×2". */
 const signalLabels: Record<ImprovementSignalKind, string> = translated({

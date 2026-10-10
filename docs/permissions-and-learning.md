@@ -64,7 +64,7 @@ Ask an orglet, in its chat, to set the app up: "make a research crew of three", 
 | A new crew, or an edit to one | Drawn as its members, the lead with a crown |
 | A crew template file | Applying asks where to save it |
 | A new skill, or a new revision of one | Not for imported packages |
-| A schedule, new or edited | Saved switched off; enabling it is your approval |
+| A schedule, new or edited, or switching one on or off | A new one is saved switched off; turning one on always waits for your click. Never deleting one: you do that on its card |
 | Settings | Theme, language, accent colour, fonts, copy and download format, automatic titles |
 
 **Apply** makes the change; **Dismiss** drops it; **Apply all** applies a reply's cards in order, so an orglet lands before the crew that names it. Every applied change is announced in **Notifications**.

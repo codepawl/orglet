@@ -89,6 +89,13 @@ export class RoutineFolders {
     return { directory: folder.directory, device: folder.device, inode: folder.inode, birth: folder.birth, name: folder.name };
   }
 
+  /** Every folder the picker granted, as an id and a name and never a path: what a worker may name in a proposal. */
+  list(): WatchFolderView[] {
+    return this.store.db.prepare('SELECT data FROM routine_folders ORDER BY rowid').all()
+      .map(row => StoredFolder.parse(JSON.parse(String(row.data))))
+      .map(folder => WatchFolderView.parse({ folderId: folder.id, name: folder.name }));
+  }
+
   /** The folder's name for a routine being saved; refuses an id the picker never granted. */
   nameOf(folderId: string): string {
     const folder = this.find(folderId);

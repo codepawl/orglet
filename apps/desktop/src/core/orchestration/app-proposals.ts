@@ -5,7 +5,10 @@ import {
 } from '../../shared/app-proposals';
 import { ProposeSelfImprovement, type ImprovementSignal } from '../../shared/self-improvement';
 import { MAX_CREW_MEMBERS, RoutineInput, SkillInput, TeamInput, WorkerInput, type Routine, type WorkerAvatar, type Run, type Skill, type Task, type Team, type Worker } from '../../shared/contracts';
+import { Schedule, normalizedSchedule } from '../../shared/schedule';
+import { triggerOf, type RoutineTrigger, type WatchFolderView } from '../../shared/routine-triggers';
 import { Store, id, now } from '../storage/database';
+import { CAP_BELOW_RUN_LIMIT } from './routines';
 import { SelfImprovement } from './self-improvement';
 
 /** The one spending cap a worker chat starts with when its worker has none of its own (WorkerDialog's default). */
@@ -27,6 +30,8 @@ export type ProposalApplier = {
   saveTeam(input: z.infer<typeof TeamInput>): Team;
   saveSkill(input: z.infer<typeof SkillInput>): Skill;
   saveRoutine(input: z.infer<typeof RoutineInput>): Routine;
+  /** The folders the person already granted for a schedule to watch: an id and a name, never a path. */
+  watchFolders(): WatchFolderView[];
   /** Builds a crew's template text, so a template that cannot be exported fails here rather than at the save dialog. */
   templateText(teamId: string): string;
   currentSettings(): CurrentSettings;
@@ -44,7 +49,7 @@ type MemberReference = { id: string } | { ref: string };
 type CrewPayload = { fields: Partial<Omit<z.infer<typeof TeamInput>, 'memberIds' | 'synthesizerId'>>; members?: MemberReference[]; lead?: MemberReference };
 type TemplatePayload = { team: MemberReference };
 type SkillPayload = { fields: Partial<z.infer<typeof SkillInput>> };
-type SchedulePayload = { fields: { name?: string; schedule?: Routine['schedule']; brief?: string; budgetMicros?: number; target?: { worker: MemberReference } | { team: MemberReference } } };
+type SchedulePayload = { fields: { name?: string; schedule?: Routine['schedule']; trigger?: RoutineTrigger; brief?: string; budgetMicros?: number; enabled?: boolean; target?: { worker: MemberReference } | { team: MemberReference } } };
 type SettingsPayload = { patch: Partial<CurrentSettings> };
 
 /** `null` and a missing key both mean the model left the field alone. */
@@ -101,6 +106,45 @@ function describeSchedule(schedule: Routine['schedule']): string {
   return `${schedule.frequency} ${schedule.time}${day} · ${schedule.timeZone}`;
 }
 
+/** How a trigger is written on a card: the renderer turns it into words, like the schedule line. */
+function describeTrigger(trigger: RoutineTrigger): string {
+  if (trigger.kind === 'folder') return `folder:${trigger.folderName}`;
+  if (trigger.kind === 'app') return `app:${trigger.serverName}`;
+  return trigger.kind;
+}
+
+type ScheduleArguments = z.infer<ReturnType<typeof ProposeSchedule.partial>>;
+type ReferenceResolver = (ref: string | null | undefined, kind: RefKind) => { ref: string; title: string } | undefined;
+
+const HOURLY_FIELDS_NEED_HOURS = 'everyHours, windowFrom, windowTo và weekdaysOnly chỉ dùng khi frequency là "hours".';
+const WINDOW_NEEDS_BOTH_ENDS = 'Khung giờ cần cả windowFrom và windowTo.';
+const NEW_SCHEDULE_IS_OFF = 'Lịch mới luôn được lưu ở trạng thái tắt; chỉ bật hoặc tắt được lịch có sẵn (targetId).';
+
+/**
+ * The clock the arguments describe, laid over the schedule it edits (or the defaults for a new one), and checked with
+ * the same `Schedule` the stored routine is checked with. Undefined when the arguments say nothing about the clock.
+ */
+function proposedSchedule(args: ScheduleArguments, current: Routine['schedule'] | undefined): Routine['schedule'] | undefined {
+  const windowFrom = given(args.windowFrom);
+  const windowTo = given(args.windowTo);
+  const hourlyFields = { everyHours: given(args.everyHours), weekdaysOnly: given(args.weekdaysOnly) };
+  const hourlyGiven = Object.values(hourlyFields).some(value => value !== undefined) || windowFrom !== undefined || windowTo !== undefined;
+  const clockFields = { frequency: given(args.frequency), time: given(args.time), weekday: given(args.weekday), timeZone: given(args.timeZone), dailyCapMicros: given(args.dailyCapMicros) };
+  if (!hourlyGiven && Object.values(clockFields).every(value => value === undefined)) return undefined;
+  const base: Routine['schedule'] = current ?? { frequency: 'daily', time: '09:00', weekday: 1, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  const merged: Record<string, unknown> = { ...base, ...compact({ ...clockFields, ...hourlyFields }) };
+  if (windowFrom !== undefined || windowTo !== undefined) {
+    const from = windowFrom ?? base.window?.from;
+    const to = windowTo ?? base.window?.to;
+    if (!from || !to) throw new ProposalError(WINDOW_NEEDS_BOTH_ENDS);
+    merged.window = { from, to };
+  }
+  if (hourlyGiven && merged.frequency !== 'hours') throw new ProposalError(HOURLY_FIELDS_NEED_HOURS);
+  const checked = Schedule.safeParse(merged);
+  if (!checked.success) throw new ProposalError(checked.error.issues.map(issue => issue.message).join(' '));
+  return normalizedSchedule(checked.data);
+}
+
 const workerFields = (worker: Worker): WorkerInput => WorkerInput.parse(worker);
 const teamFields = (team: Team): z.infer<typeof TeamInput> => TeamInput.parse(team);
 const skillFields = (skill: Skill): z.infer<typeof SkillInput> => SkillInput.parse({ id: skill.id, name: skill.name, content: skill.content });
@@ -155,13 +199,32 @@ export class AppProposals {
     const providers = [...new Set([run.snapshot.worker.provider, ...workspace.workers.map(worker => worker.provider)])].filter(provider => provider !== 'demo');
     return {
       orglets: workspace.workers.slice(0, 50).map(worker => ({ id: worker.id, name: worker.name, description: worker.description ?? '', provider: worker.provider, skillId: worker.skillId })),
-      crews: workspace.teams.slice(0, 50).map(team => ({ id: team.id, name: team.name, memberIds: team.memberIds, leadId: team.synthesizerId, workflow: team.workflow })),
+      crews: workspace.teams.slice(0, 50).map(team => ({ id: team.id, name: team.name, memberIds: team.memberIds, leadId: team.synthesizerId, workflow: team.workflow, ...(team.workHours ? { workHours: team.workHours } : {}) })),
       skills: workspace.skills.slice(0, 50).map(skill => ({ id: skill.id, name: skill.name })),
-      schedules: workspace.routines.slice(0, 50).map(routine => ({ id: routine.id, name: routine.name, enabled: routine.enabled })),
+      schedules: workspace.routines.slice(0, 50).map(routine => this.scheduleSummary(routine)),
+      watchFolders: this.applier.watchFolders().slice(0, 50).map(folder => ({ id: folder.folderId, name: folder.name })),
+      computerTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       providersInUse: providers,
       thisChat: { workerId: run.snapshot.worker.id, ...(task.teamId ? { teamId: task.teamId } : {}) },
       settings: this.applier.currentSettings(),
-      instruction: 'When the user asks you to set up or change something in Orglet (an orglet, a crew, a template, a skill, a schedule, or one of the listed settings), call the matching propose_* tool once per change, then answer with reply. Each proposal is stored as a card the user applies or dismisses; nothing changes until they do. Use the ids above for existing things; give a new orglet, crew or skill a short ref and point at it with the *Ref fields when a later proposal in this same reply needs it. Null leaves a field alone; effort accepts low, medium, high, max or auto to reset the override; an edit needs targetId. You cannot change API keys, connections, harness accounts, backups, tool permissions, working folders, budgets above the current caps, or the auto-apply switch; say so instead of trying.',
+      instruction: 'When the user asks you to set up or change something in Orglet (an orglet, a crew, a template, a skill, a schedule, or one of the listed settings), call the matching propose_* tool once per change, then answer with reply. Each proposal is stored as a card the user applies or dismisses; nothing changes until they do. Use the ids above for existing things; give a new orglet, crew or skill a short ref and point at it with the *Ref fields when a later proposal in this same reply needs it. Null leaves a field alone; effort accepts low, medium, high, max or auto to reset the override; an edit needs targetId. To place a schedule well, read schedules (what already runs and when, so a new one does not pile on the same minute), crews (their workHours, in the crew\'s own time zone), watchFolders (the folders the person already granted) and computerTimeZone. A schedule you propose is saved switched off; for an existing one you may also propose turning it on or off with enabled, which the person applies with a click. You cannot delete a schedule or anything else: if asked to delete one, say the person does it themselves with "Delete schedule" in the three-dot menu on the schedule\'s card in Schedules. You cannot change API keys, connections, harness accounts, backups, tool permissions, working folders, budgets above the current caps, or the auto-apply switch; say so instead of trying.',
+    };
+  }
+
+  /**
+   * One schedule as the worker reads it to place a new one well: when it runs, what starts it, who runs it, whether it
+   * is on and what it may spend. The brief, sources and folders' paths are left out; this is read-only context.
+   */
+  private scheduleSummary(routine: Routine) {
+    const trigger = triggerOf(routine);
+    const { frequency, time, weekday, timeZone, everyHours, window, weekdaysOnly, dailyCapMicros } = routine.schedule;
+    return {
+      id: routine.id, name: routine.name, enabled: routine.enabled,
+      start: trigger.kind === 'folder' ? { kind: trigger.kind, folderName: trigger.folderName } : { kind: trigger.kind },
+      clock: { frequency, time, weekday, timeZone, ...(everyHours ? { everyHours } : {}), ...(window ? { window } : {}), ...(weekdaysOnly ? { weekdaysOnly } : {}) },
+      ...(dailyCapMicros !== undefined ? { dailyCapMicros } : {}),
+      runsAs: routine.task.teamId ? { crewId: routine.task.teamId } : { orgletId: routine.task.workerId },
+      perRunBudgetMicros: routine.task.budgetMicros,
     };
   }
 
@@ -283,41 +346,7 @@ export class AppProposals {
         if (!chosen.name || !chosen.content) throw new ProposalError('Tạo skill mới cần name và content.');
         return { kind: 'skill', action: 'create', ref: given(args.ref), title: chosen.name, changes: creationChanges(chosen), payload: { fields: chosen }, hold: null };
       }
-      case 'propose_schedule': {
-        const args = ProposeSchedule.partial().parse(rawArguments);
-        const workerId = given(args.workerId);
-        const workerRef = refOf(args.workerRef, 'orglet');
-        const teamId = given(args.teamId);
-        const teamRef = refOf(args.teamRef, 'crew');
-        if ([workerId, workerRef, teamId, teamRef].filter(Boolean).length > 1) throw new ProposalError('Một lịch chạy cho đúng một Tí hoặc một kênh.');
-        const target: SchedulePayload['fields']['target'] = workerId ? { worker: { id: workerId } } : workerRef ? { worker: { ref: workerRef.ref } }
-          : teamId ? { team: { id: teamId } } : teamRef ? { team: { ref: teamRef.ref } } : undefined;
-        const targetName = workerId ? this.liveWorker(workerId).name : workerRef ? `ref:${workerRef.ref}` : teamId ? this.liveTeam(teamId).name : teamRef ? `ref:${teamRef.ref}` : undefined;
-        const frequency = given(args.frequency);
-        const time = given(args.time);
-        const weekday = given(args.weekday);
-        const timeZone = given(args.timeZone);
-        const targetId = given(args.targetId);
-        if (targetId) {
-          const current = this.store.get<Routine>('routines', targetId);
-          const schedule = frequency || time || weekday !== undefined || timeZone
-            ? { ...current.schedule, ...(frequency ? { frequency } : {}), ...(time ? { time } : {}), ...(weekday !== undefined ? { weekday } : {}), ...(timeZone ? { timeZone } : {}) } : undefined;
-          const fields: SchedulePayload['fields'] = { name: given(args.name), brief: given(args.brief), schedule, target };
-          const currentView = { name: current.name, brief: current.task.brief, schedule: describeSchedule(current.schedule), target: current.task.teamId ? this.teamName(current.task.teamId) : this.workerName(current.task.workerId), enabled: current.enabled ? 'true' : 'false' };
-          const changes = editChanges(currentView, { name: fields.name, brief: fields.brief, schedule: schedule ? describeSchedule(schedule) : undefined, target: targetName, enabled: current.enabled ? 'false' : undefined });
-          if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở lịch này.');
-          return { kind: 'schedule', action: 'edit', title: fields.name ?? current.name, changes, payload: { fields, targetId }, hold: null };
-        }
-        const name = given(args.name);
-        const brief = given(args.brief);
-        if (!name || !brief || !frequency || !time) throw new ProposalError('Tạo lịch mới cần name, brief, frequency và time.');
-        const schedule: Routine['schedule'] = { frequency, time, weekday: weekday ?? 1, timeZone: timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone };
-        const chatTarget: SchedulePayload['fields']['target'] = target ?? (task.teamId ? { team: { id: task.teamId } } : { worker: { id: proposer.id } });
-        const budgetMicros = 'team' in chatTarget && 'id' in chatTarget.team ? this.liveTeam(chatTarget.team.id).taskBudgetMicros ?? proposerCap : proposerCap;
-        const fields: SchedulePayload['fields'] = { name, brief, schedule, target: chatTarget, budgetMicros };
-        const changes = creationChanges({ name, brief, schedule: describeSchedule(schedule), target: targetName ?? (task.teamId ? this.teamName(task.teamId) : proposer.name), enabled: 'false' });
-        return { kind: 'schedule', action: 'create', title: name, changes, payload: { fields }, hold: null };
-      }
+      case 'propose_schedule': return this.draftSchedule(run, task, rawArguments, refOf);
       case 'propose_self_improvement': return this.draftSelfImprovement(run, rawArguments);
       case 'propose_settings': {
         const args = ProposeSettings.partial().parse(rawArguments);
@@ -333,6 +362,93 @@ export class AppProposals {
         return { kind: 'settings', action: 'edit', title: 'Cài đặt', changes, payload, hold: null };
       }
     }
+  }
+
+  /**
+   * A new schedule, or an edit of one, or turning one on or off. It covers what the editor covers: the clock, the
+   * daily cap and the folder trigger. A new schedule is saved switched off; `enabled` belongs to an existing one,
+   * and turning it on is held for a click, since it lets the schedule run and spend. Nothing here deletes.
+   */
+  private draftSchedule(run: Run, task: Task, rawArguments: unknown, refOf: ReferenceResolver): ReturnType<AppProposals['draft']> {
+    const args = ProposeSchedule.partial().parse(rawArguments);
+    const { target, targetName } = this.scheduleTarget(args, refOf);
+    const targetId = given(args.targetId);
+    if (targetId) return this.draftScheduleEdit(targetId, args, target, targetName);
+    return this.draftScheduleCreation(run, task, args, target, targetName);
+  }
+
+  private scheduleTarget(args: ScheduleArguments, refOf: ReferenceResolver): { target: SchedulePayload['fields']['target']; targetName: string | undefined } {
+    const workerId = given(args.workerId);
+    const workerRef = refOf(args.workerRef, 'orglet');
+    const teamId = given(args.teamId);
+    const teamRef = refOf(args.teamRef, 'crew');
+    if ([workerId, workerRef, teamId, teamRef].filter(Boolean).length > 1) throw new ProposalError('Một lịch chạy cho đúng một Tí hoặc một kênh.');
+    const target: SchedulePayload['fields']['target'] = workerId ? { worker: { id: workerId } } : workerRef ? { worker: { ref: workerRef.ref } }
+      : teamId ? { team: { id: teamId } } : teamRef ? { team: { ref: teamRef.ref } } : undefined;
+    const targetName = workerId ? this.liveWorker(workerId).name : workerRef ? `ref:${workerRef.ref}` : teamId ? this.liveTeam(teamId).name : teamRef ? `ref:${teamRef.ref}` : undefined;
+    return { target, targetName };
+  }
+
+  /** What starts the schedule, when the arguments say: the clock, or a folder the person already granted. */
+  private proposedStart(args: ScheduleArguments, currentTrigger: RoutineTrigger | undefined): RoutineTrigger | undefined {
+    const start = given(args.start);
+    const folderId = given(args.watchFolderId);
+    if (start === 'clock') {
+      if (folderId) throw new ProposalError('watchFolderId chỉ dùng khi start là "folder".');
+      return { kind: 'schedule' };
+    }
+    if (start === undefined && folderId === undefined) return undefined;
+    const chosenId = folderId ?? (currentTrigger?.kind === 'folder' ? currentTrigger.folderId : undefined);
+    if (!chosenId) throw new ProposalError('Lịch theo thư mục cần watchFolderId, lấy từ watchFolders trong ngữ cảnh app.');
+    const folder = this.applier.watchFolders().find(candidate => candidate.folderId === chosenId);
+    if (!folder) throw new ProposalError('Thư mục này chưa được cấp quyền. Chỉ chọn thư mục trong watchFolders; người dùng cấp thư mục mới trong màn hình Lịch.');
+    return { kind: 'folder', folderId: folder.folderId, folderName: folder.name };
+  }
+
+  private draftScheduleEdit(targetId: string, args: ScheduleArguments, target: SchedulePayload['fields']['target'], targetName: string | undefined): ReturnType<AppProposals['draft']> {
+    const current = this.store.get<Routine>('routines', targetId);
+    const schedule = proposedSchedule(args, current.schedule);
+    if (schedule?.dailyCapMicros !== undefined && schedule.dailyCapMicros < current.task.budgetMicros) throw new ProposalError(CAP_BELOW_RUN_LIMIT);
+    const trigger = this.proposedStart(args, current.trigger);
+    const enabled = given(args.enabled);
+    const fields: SchedulePayload['fields'] = { name: given(args.name), brief: given(args.brief), schedule, trigger, target, enabled };
+    const currentView = {
+      name: current.name, brief: current.task.brief, schedule: describeSchedule(current.schedule), dailyCapMicros: current.schedule.dailyCapMicros,
+      trigger: describeTrigger(triggerOf(current)), target: current.task.teamId ? this.teamName(current.task.teamId) : this.workerName(current.task.workerId),
+      enabled: current.enabled ? 'true' : 'false',
+    };
+    // Without a word on it, a change to an enabled schedule is saved switched off: turning it on again is the approval.
+    const nextEnabled = enabled === undefined ? (current.enabled ? 'false' : undefined) : String(enabled);
+    const changes = editChanges(currentView, {
+      name: fields.name, brief: fields.brief, schedule: schedule ? describeSchedule(schedule) : undefined, dailyCapMicros: schedule?.dailyCapMicros,
+      trigger: trigger ? describeTrigger(trigger) : undefined, target: targetName, enabled: nextEnabled,
+    });
+    if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở lịch này.');
+    return { kind: 'schedule', action: 'edit', title: fields.name ?? current.name, changes, payload: { fields, targetId }, hold: enabled === true ? 'enable' : null };
+  }
+
+  private draftScheduleCreation(run: Run, task: Task, args: ScheduleArguments, target: SchedulePayload['fields']['target'], targetName: string | undefined): ReturnType<AppProposals['draft']> {
+    if (given(args.enabled) !== undefined) throw new ProposalError(NEW_SCHEDULE_IS_OFF);
+    const proposer = run.snapshot.worker;
+    const proposerCap = proposer.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
+    const name = given(args.name);
+    const brief = given(args.brief);
+    const trigger = this.proposedStart(args, undefined);
+    const startsOnFolder = trigger?.kind === 'folder';
+    // A schedule that starts on a folder never reads its clock, so it may leave the clock out; an hourly one has no time of day.
+    const frequency = given(args.frequency);
+    const clockStated = frequency !== undefined && (frequency === 'hours' || given(args.time) !== undefined);
+    if (!name || !brief || (!startsOnFolder && !clockStated)) throw new ProposalError('Tạo lịch mới cần name, brief, frequency và time.');
+    const schedule = proposedSchedule(args, undefined) ?? proposedSchedule({ ...args, frequency: 'daily', time: '09:00' }, undefined)!;
+    const chatTarget: SchedulePayload['fields']['target'] = target ?? (task.teamId ? { team: { id: task.teamId } } : { worker: { id: proposer.id } });
+    const budgetMicros = 'team' in chatTarget && 'id' in chatTarget.team ? this.liveTeam(chatTarget.team.id).taskBudgetMicros ?? proposerCap : proposerCap;
+    if (schedule.dailyCapMicros !== undefined && schedule.dailyCapMicros < budgetMicros) throw new ProposalError(CAP_BELOW_RUN_LIMIT);
+    const fields: SchedulePayload['fields'] = { name, brief, schedule, target: chatTarget, budgetMicros, ...(trigger ? { trigger } : {}) };
+    const changes = creationChanges({
+      name, brief, schedule: describeSchedule(schedule), dailyCapMicros: schedule.dailyCapMicros, trigger: trigger ? describeTrigger(trigger) : undefined,
+      target: targetName ?? (task.teamId ? this.teamName(task.teamId) : proposer.name), enabled: 'false',
+    });
+    return { kind: 'schedule', action: 'create', title: name, changes, payload: { fields }, hold: null };
   }
 
   /**
@@ -459,13 +575,15 @@ export class AppProposals {
           const current = this.store.get<Routine>('routines', payload.targetId);
           const task = { ...current.task, ...(chat ?? {}), ...(payload.fields.brief ? { brief: payload.fields.brief } : {}) };
           if (chat && !chat.teamId) delete (task as { teamId?: string }).teamId;
-          // A change to an enabled schedule is saved switched off: enabling it is the user's approval of what will run.
-          // The trigger is kept as it is: a proposal cannot pick a folder to watch or change what starts a routine.
-          const saved = this.applier.saveRoutine(RoutineInput.parse({ id: current.id, name: payload.fields.name ?? current.name, enabled: false, schedule: payload.fields.schedule ?? current.schedule, ...(current.trigger ? { trigger: current.trigger } : {}), task }));
+          // A change to an enabled schedule is saved switched off unless the card says on or off: enabling it is the
+          // user's approval of what will run. The trigger stays as it is unless the card changes it, and it can only
+          // name a folder the person already granted.
+          const trigger = payload.fields.trigger ?? current.trigger;
+          const saved = this.applier.saveRoutine(RoutineInput.parse({ id: current.id, name: payload.fields.name ?? current.name, enabled: payload.fields.enabled ?? false, schedule: payload.fields.schedule ?? current.schedule, ...(trigger ? { trigger } : {}), task }));
           return { target: { kind: 'routine', id: saved.id } };
         }
         const saved = this.applier.saveRoutine(RoutineInput.parse({
-          name: payload.fields.name, enabled: false, schedule: payload.fields.schedule,
+          name: payload.fields.name, enabled: false, schedule: payload.fields.schedule, ...(payload.fields.trigger ? { trigger: payload.fields.trigger } : {}),
           task: { ...chat, brief: payload.fields.brief, sourceIds: [], consent: false, budgetMicros: payload.fields.budgetMicros ?? DEFAULT_TASK_BUDGET_MICROS },
         }));
         return { target: { kind: 'routine', id: saved.id } };
