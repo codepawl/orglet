@@ -509,7 +509,7 @@ describe('an MCP server from a file', () => {
       const parsed = parseSetupArguments(['grant', 'mcp-import', directoryFile]);
       expect(parsed.mcpSecrets).toEqual([{ server: 'Notes', name: 'API_KEY' }, { server: 'Remote', name: 'Authorization' }, { server: 'Remote', name: 'X-Team' }]);
       expect(JSON.stringify(parsed.body)).not.toContain('value');
-      expect(() => parseSetupArguments(['grant', 'mcp-save', directoryFile])).toThrow('2 máy chủ');
+      expect(() => parseSetupArguments(['grant', 'mcp-save', directoryFile])).toThrow(/\b2\b.*mcp-import/);
     });
   });
 
