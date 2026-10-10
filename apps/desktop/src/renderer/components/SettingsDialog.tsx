@@ -961,7 +961,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               </Row>
               <Row title={t('Terminal đã làm')} description={t('Mới nhất ở trên. Terminal đọc lại danh sách này bằng orglet show terminal.')} />
               <TerminalJournal />
-              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Tài khoản CodePawl là tùy chọn và chưa đồng bộ gì.')} />
+              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Tài khoản CodePawl là tùy chọn. Khi đăng nhập, trò chuyện và Tí được đồng bộ giữa các máy của bạn.')} />
             </>}
 
             {tab === 'account' && <AccountSettings account={account} busy={busy} act={act} />}

@@ -15,7 +15,7 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 
 ## 1. Get the app
 
-Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is also available. You do not need an account. The first start asks whether to sign in to a CodePawl account or use Orglet without one; either works, and nothing syncs yet ([CodePawl account](account.md)).
+Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is also available. You do not need an account. The first start asks whether to sign in to a CodePawl account or use Orglet without one; either works, and signing in syncs your chats and orglets between your computers ([CodePawl account](account.md)).
 
 ### With one command (Windows)
 
