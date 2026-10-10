@@ -18,6 +18,7 @@ import { cleanEnv, commandLine, harnessAccountEnv, type Probe } from '../harness
 import { claudeAccessToken, codexAppServer, type CodexAppServer } from '../harness/usage';
 import { harnessNames, type HarnessInfo } from '../../shared/harness';
 import { OPENCODE_BASE_URLS, type OpenCodePlan } from '../../shared/opencode';
+import { routerApiUrl } from '../../shared/router';
 import { CLAUDE_CODE_ALIASES, claudeCodeEntries, claudeStartProbe, type ClaudeStartProbe } from './claudeCode';
 
 export { CLAUDE_CODE_ALIASES };
@@ -44,13 +45,16 @@ export const GEMINI_CLI_ALIASES: ReadonlyArray<{ id: string; displayName: string
   { id: 'flash-lite', displayName: 'Flash-Lite' },
 ];
 
+/** The router has no fixed address, so it is not in `MODEL_LIST_ENDPOINTS`; tests name a fake one here. */
+export type ModelListEndpoints = Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS | 'codepawl', string>>;
+
 export type ModelListFetchOptions = {
   selectedOllamaModels?: () => string[];
   readKey: (provider: CredentialProvider) => Promise<string | null>;
   /** The saved connection behind a `custom:<id>` provider; the service reads it from settings. */
   customConnection?: (provider: CustomProviderId) => CustomConnection | undefined;
   fetch?: typeof fetch;
-  endpoints?: Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS, string>>;
+  endpoints?: ModelListEndpoints;
   probe?: Probe;
   harnesses: () => Promise<HarnessInfo[]>;
   timeoutMs?: number;
@@ -71,7 +75,7 @@ type HarnessListRuntime = {
 export type ModelListRuntime = {
   readKey?: (provider: CredentialProvider) => Promise<string | null>;
   fetch?: typeof fetch;
-  endpoints?: Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS, string>>;
+  endpoints?: ModelListEndpoints;
   probe?: Probe;
   timeoutMs?: number;
 } & HarnessListRuntime;
@@ -312,6 +316,26 @@ export function parseOpenCodeModels(plan: OpenCodePlan, payload: unknown): Model
     if (!id || seen.has(id)) continue;
     seen.add(id);
     models.push({ provider: plan, id, source: 'native' });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  return models;
+}
+
+/**
+ * The router's `GET /v1/models` is an OpenAI-style list; each row also says whether the model is free and its published
+ * price. The app has no mark for a free model and the price is not one Orglet reserves against, so only the IDs are kept.
+ */
+export function parseCodepawlModels(payload: unknown): ModelEntry[] {
+  const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : undefined;
+  if (!Array.isArray(data)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of data) {
+    if (!row || typeof row !== 'object') continue;
+    const id = pickId((row as { id?: unknown }).id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    models.push({ provider: 'codepawl', id, source: 'native' });
     if (models.length >= MODEL_LIST_MAX) break;
   }
   return models;
@@ -581,6 +605,16 @@ async function fetchOpenCode(plan: OpenCodePlan, options: ModelListFetchOptions)
   return withCatalogHint(plan, parseOpenCodeModels(plan, payload), 'native');
 }
 
+/** Reads only the router's own key, from the address this build names; a build with none has no list to fetch. */
+async function fetchCodepawl(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const base = options.endpoints?.codepawl ?? routerApiUrl(process.env.ORGLET_ROUTER_URL);
+  if (!base) return withCatalogHint('codepawl', [], 'native', 'Bản này không có CodePawl router.');
+  const key = await options.readKey('codepawl');
+  if (!key) return withCatalogHint('codepawl', [], 'native', missingKey(apiName('codepawl')));
+  const payload = await readJson(`${base}/models`, { Authorization: `Bearer ${key}` }, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
+  return withCatalogHint('codepawl', parseCodepawlModels(payload), 'native');
+}
+
 async function fetchOllama(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
   const key = await options.readKey('ollama');
   if (!key) return withCatalogHint('ollama', [], 'native', missingKey(apiName('ollama')));
@@ -701,6 +735,7 @@ export async function fetchProviderList(provider: ModelListProvider, options: Mo
   if (provider === 'xai') return { fetchedAt, ...await fetchXai(options) };
   if (provider === 'openrouter') return { fetchedAt, ...await fetchOpenRouter(options) };
   if (provider === 'opencode-zen' || provider === 'opencode-go') return { fetchedAt, ...await fetchOpenCode(provider, options) };
+  if (provider === 'codepawl') return { fetchedAt, ...await fetchCodepawl(options) };
   if (provider === 'ollama') return { fetchedAt, ...await fetchOllama(options) };
   if (provider === 'claude-code') return { fetchedAt, ...await fetchClaudeCode(options) };
   if (provider === 'gemini') return { fetchedAt, ...withCatalogHint('gemini', geminiCliModels(), 'alias') };

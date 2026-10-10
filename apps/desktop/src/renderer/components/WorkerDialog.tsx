@@ -99,6 +99,8 @@ export function workerProviderOptions(ready: Readiness, harnesses: HarnessInfo[]
     choice('openrouter', 'OpenRouter', t('gợi ý {0}', [CATALOG_HINT_IDS.openrouter]), t('API trả phí'), ready.openrouter),
     choice('opencode-zen', 'OpenCode Zen', t('trả theo mức dùng'), t('API trả phí'), ready['opencode-zen']),
     choice('opencode-go', 'OpenCode Go', t('gói đăng ký có hạn mức'), t('API theo gói'), ready['opencode-go']),
+    // Only a computer with a router key lists CodePawl, and only a build that names a router can have one.
+    ...(ready.codepawl ? [choice('codepawl', 'CodePawl', t('mô hình miễn phí và theo gói'), t('API theo gói'), true)] : []),
     choice('ollama', 'Ollama', t('gợi ý {0}', [CATALOG_HINT_IDS.ollama]), t('Local trên máy này'), ready.ollama),
     // Connections the person added in Settings (COD-242), under the name they gave each one.
     ...customConnections.map(connection => choice(customProviderId(connection.id), connection.name, `${baseUrlHost(connection.baseUrl)} · ${pricingLabel(connection)}`, t('Kết nối tùy chỉnh'), true)),
@@ -257,6 +259,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}
       {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}
       {customConnection && <p className="muted">{customConnectionCostNote(customConnection)}</p>}
+      {provider === 'codepawl' && <p className="muted">{t('CodePawl router có hạn mức miễn phí mỗi ngày và gói riêng; Orglet không giữ chỗ ngân sách cho khoản này.')}</p>}
       {provider === 'opencode-go' && <p className="muted">{t('Tính vào hạn mức gói Go, không qua ngân sách Orglet. Bật Use balance thì phần vượt trừ vào số dư Zen.')}</p>}
       {capped && <label><FieldLabel icon={Wallet} required={paid}>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} placeholder={paid ? undefined : t('Không giới hạn')} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} />{fieldMessage('budget', invalid, error)}</label>}
       {provider === 'claude-code' && <p className="muted">{t('Claude Code dừng khi ước tính của nó cho một lượt chạm số này. Để trống để chạy theo gói, không giới hạn.')}</p>}

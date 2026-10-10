@@ -1,3 +1,4 @@
+import { routerBaseUrl } from '../shared/router';
 import { API_PROVIDER_NAMES, BuiltInProviderId, WorkerInput, type Worker, type Workspace } from '../shared/contracts';
 import { harnessNames, isHarness } from '../shared/harness';
 import { CrewConfig, ManagementCatalog, OrgletConfig, type ManagementResult } from '../cli/management';
@@ -20,7 +21,7 @@ export async function manageCli(request: ManagementRequest, dependencies: CliDep
   const core = dependencies.request;
   const workspace = await core('workspace', {}) as Workspace;
   if (request.op === 'config') {
-    const providers = BuiltInProviderId.options.filter(provider => provider !== 'demo').map(provider => ({
+    const providers = BuiltInProviderId.options.filter(provider => provider !== 'demo' && (provider !== 'codepawl' || routerBaseUrl(process.env.ORGLET_ROUTER_URL))).map(provider => ({
       id: provider,
       name: isHarness(provider) ? harnessNames[provider] : API_PROVIDER_NAMES[provider as keyof typeof API_PROVIDER_NAMES],
     }));

@@ -23,6 +23,7 @@ export function providerName(provider: Worker['provider']) {
   if (provider === 'openrouter') return 'OpenRouter';
   if (provider === 'opencode-zen') return 'OpenCode Zen';
   if (provider === 'opencode-go') return 'OpenCode Go';
+  if (provider === 'codepawl') return 'CodePawl';
   if (provider === 'ollama') return 'Ollama';
   if (isHarness(provider)) return harnessNames[provider];
   return customConnectionName(provider) ?? provider;
@@ -48,7 +49,7 @@ export function startingModelId(provider: Worker['provider'], models: readonly M
   if (provider === 'demo' || isHarness(provider)) return '';
   const offered = models.filter(entry => runnable(entry.id));
   const first = offered[0]?.id ?? '';
-  if (isCustomProvider(provider) || isOpenCodePlan(provider)) return first;
+  if (isCustomProvider(provider) || isOpenCodePlan(provider) || provider === 'codepawl') return first;
   if (isLocalApi(provider)) {
     const suggestion = CATALOG_HINT_IDS.ollama;
     const suggestionInstalled = offered.some(entry => entry.id === suggestion || entry.id.startsWith(`${suggestion}:`));
@@ -59,5 +60,5 @@ export function startingModelId(provider: Worker['provider'], models: readonly M
 
 /** Whether a worker on this connection cannot be saved without a model ID: nothing to fall back on. */
 export function modelIdRequired(provider: Worker['provider']): boolean {
-  return isCustomProvider(provider) || isOpenCodePlan(provider);
+  return isCustomProvider(provider) || isOpenCodePlan(provider) || provider === 'codepawl';
 }

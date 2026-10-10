@@ -6,6 +6,8 @@ import { CoreService, localHarnessRuntime } from './service';
 import { OpenAIAdapter } from './adapters/openai';
 import { AnthropicAdapter } from './adapters/anthropic';
 import { OpenCodeAdapter } from './adapters/opencode';
+import { routerApiUrl } from '../shared/router';
+import { CodepawlAdapter } from './adapters/codepawl';
 import { API_PROVIDER_NAMES, ApiProvider, CredentialProvider, Id, type Command } from '../shared/contracts';
 import { isCustomProvider } from '../shared/custom-connections';
 import { customConnectionAdapter } from './adapters/custom';
@@ -142,6 +144,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   const apiProvider = ApiProvider.safeParse(provider);
   if (!apiProvider.success) throw new Error('Provider chưa được hỗ trợ.');
   const key = await requestKey(provider);
+  if (!key && provider === 'codepawl') throw new Error('Chưa kết nối CodePawl. Mở Cài đặt → Kết nối để kết nối bằng tài khoản CodePawl.');
   if (!key) throw new Error(`Chưa kết nối ${API_PROVIDER_NAMES[apiProvider.data]}. Mở Cài đặt để nhập API key.`);
   if (provider === 'anthropic') return new AnthropicAdapter(key, undefined, model, effort);
   if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai', model, effort });
@@ -150,6 +153,11 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
     defaultHeaders: { 'HTTP-Referer': 'https://github.com/codepawl/orglet', 'X-Title': 'Orglet' },
   });
   if (provider === 'opencode-zen' || provider === 'opencode-go') return new OpenCodeAdapter(provider, key, model);
+  if (provider === 'codepawl') {
+    const routerUrl = routerApiUrl(process.env.ORGLET_ROUTER_URL);
+    if (!routerUrl) throw new Error('Bản này không có CodePawl router.');
+    return new CodepawlAdapter(key, routerUrl, model);
+  }
   if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama, effort });
   return new OpenAIAdapter(key, { model, effort });
 }, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts'), url => port.postMessage({ type: 'openSignInPage', url })), undefined, {

@@ -77,6 +77,8 @@ export class CliInspect {
     const rows: ShowRow[] = [];
     for (const [provider, isSaved] of Object.entries(saved)) {
       if (provider === 'custom' || provider === 'search') continue;
+      // The router connection exists only in a build that names a router; the window is where it is set up.
+      if (provider === 'codepawl' && !isSaved) continue;
       rows.push({ connection: provider, kind: 'key', saved: Boolean(isSaved) });
     }
     for (const connection of workspace.customConnections ?? []) {

@@ -2,6 +2,7 @@ import { safeStorage } from 'electron';
 import { readdir, readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ApiProvider, emptyConnections, type Connections, type CredentialProvider } from '../shared/contracts';
+import { ROUTER_KEY_PATTERN } from '../shared/router';
 import { connectionIdOf, CUSTOM_PROVIDER_PREFIX, CustomProviderId } from '../shared/custom-connections';
 
 /** Marker stored when the user turns on local Ollama (no billed key). */
@@ -15,6 +16,8 @@ const keyPattern: Record<ApiProvider, RegExp> = {
   // The OpenCode docs do not publish a key format, so accept any plain token of a plausible length.
   'opencode-zen': /^[A-Za-z0-9_\-]{16,500}$/,
   'opencode-go': /^[A-Za-z0-9_\-]{16,500}$/,
+  // Made by the router for this computer (main/router-connection.ts); nobody pastes it.
+  codepawl: ROUTER_KEY_PATTERN,
   ollama: /^(?:ollama-local|[A-Za-z0-9_\-]{8,500})$/,
 };
 /** A custom connection may be any server, so any visible token without spaces goes: Groq, Mistral, a proxy's own. */

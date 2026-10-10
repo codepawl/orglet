@@ -16,6 +16,7 @@ import {
   AccountState,
   accountEndpoints,
 } from '../shared/account';
+import { ACCOUNT_ROUTER_RESOURCE, ACCOUNT_ROUTER_SCOPE } from '../shared/router';
 import type { SecretEncryption } from './mcp-secrets';
 
 /**
@@ -170,7 +171,10 @@ type TokenResponse = z.infer<typeof TokenResponse>;
 
 /** The token endpoint said no to this grant for good (RFC 6749 §5.2), as opposed to the network failing. */
 class GrantRefused extends Error {}
-class ResourceRefused extends Error {}
+/** The service does not know the resource (or the scope asked for it): not a refusal of the sign-in itself. */
+export class ResourceRefused extends Error {}
+/** The audiences an access token can be asked for: the two a sign-in is granted, and the router, asked for on its own. */
+type TokenResource = AccountResource | typeof ACCOUNT_ROUTER_RESOURCE;
 
 /**
  * The registered redirect is `com.codepawl.orglet:/auth/callback`, but the service sends the browser back to
@@ -216,8 +220,8 @@ export function accountPayload(state: AccountState): AccountState {
 
 export class AccountService {
   private saved: SavedAccount | undefined;
-  private accessTokens = new Map<AccountResource, { value: string; expiresAt: number }>();
-  private refreshing = new Map<AccountResource, Promise<string>>();
+  private accessTokens = new Map<TokenResource, { value: string; expiresAt: number }>();
+  private refreshing = new Map<TokenResource, Promise<string>>();
   private rotationTail: Promise<void> = Promise.resolve();
   private persistenceTail: Promise<void> = Promise.resolve();
   private generation = 0;
@@ -424,11 +428,14 @@ export class AccountService {
    * Main-only access to a fixed resource; sync remains the default. Refresh rotations are serialized across resources
    * and persisted before another dispatch, because reusing a rotated token revokes the client family.
    */
-  async getAccessToken(resource: AccountResource = ACCOUNT_RESOURCE): Promise<string> {
-    AccountResource.parse(resource);
+  async getAccessToken(resource: TokenResource = ACCOUNT_RESOURCE): Promise<string> {
+    // The router is never part of the sign-in's grant: the service decides on the refresh whether it knows it, and
+    // answers invalid_target when it does not, which reaches the caller as a ResourceRefused.
+    const grantedWithSignIn = resource !== ACCOUNT_ROUTER_RESOURCE;
+    if (grantedWithSignIn) AccountResource.parse(resource);
     if (this.persistenceError) throw this.persistenceError;
     const resources = this.saved?.resources ?? [ACCOUNT_RESOURCE];
-    if (!resources.includes(resource)) throw new Error(MARKET_SIGN_IN_REQUIRED);
+    if (grantedWithSignIn && !resources.includes(resource as AccountResource)) throw new Error(MARKET_SIGN_IN_REQUIRED);
     const token = this.accessTokens.get(resource);
     if (token && token.expiresAt - ACCESS_TOKEN_MARGIN_MS > this.now()) return token.value;
     return this.refresh(resource);
@@ -466,7 +473,7 @@ export class AccountService {
     return this.state();
   }
 
-  private refresh(resource: AccountResource): Promise<string> {
+  private refresh(resource: TokenResource): Promise<string> {
     const existing = this.refreshing.get(resource);
     if (existing) return existing;
     const generation = this.generation;
@@ -479,14 +486,14 @@ export class AccountService {
     return pending;
   }
 
-  private async refreshOnce(resource: AccountResource, generation: number): Promise<string> {
+  private async refreshOnce(resource: TokenResource, generation: number): Promise<string> {
     if (generation !== this.generation) throw new Error(NOT_SIGNED_IN);
     if (this.persistenceError) throw this.persistenceError;
     const saved = this.saved;
     if (!saved?.refreshToken) throw new Error(saved ? SIGN_IN_EXPIRED : NOT_SIGNED_IN);
     let tokens: TokenResponse;
     try {
-      tokens = await this.tokenRequest({ grant_type: 'refresh_token', refresh_token: saved.refreshToken, client_id: ACCOUNT_CLIENT_ID, resource });
+      tokens = await this.tokenRequest({ grant_type: 'refresh_token', refresh_token: saved.refreshToken, client_id: ACCOUNT_CLIENT_ID, resource, ...(resource === ACCOUNT_ROUTER_RESOURCE ? { scope: ACCOUNT_ROUTER_SCOPE } : {}) });
     } catch (error) {
       if (error instanceof GrantRefused && generation === this.generation) await this.expire(saved, generation);
       throw error;
@@ -577,7 +584,7 @@ export class AccountService {
     this.pending = undefined;
   }
 
-  private rememberAccessToken(tokens: TokenResponse, resource: AccountResource) {
+  private rememberAccessToken(tokens: TokenResponse, resource: TokenResource) {
     const lifetime = (tokens.expires_in ?? 900) * 1000;
     this.accessTokens.set(resource, { value: tokens.access_token, expiresAt: this.now() + lifetime });
   }
@@ -661,7 +668,7 @@ export class AccountService {
     if (!response.ok) {
       const refused = response.status === 400 || response.status === 401;
       const code = typeof body?.error === 'string' ? body.error : '';
-      if (refused && code === 'invalid_target') throw new ResourceRefused(MARKET_SIGN_IN_REQUIRED);
+      if (refused && (code === 'invalid_target' || code === 'invalid_scope')) throw new ResourceRefused(MARKET_SIGN_IN_REQUIRED);
       if (refused && ['invalid_grant', 'invalid_client', 'unauthorized_client', 'invalid_request', 'invalid_token'].includes(code)) throw new GrantRefused(code);
       throw new Error(SIGN_IN_FAILED);
     }
