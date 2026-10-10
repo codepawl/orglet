@@ -59,7 +59,7 @@ import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
 import { AccountFile, AccountService, accountPayload, listenOnLoopback } from './account';
 import { RouterConnection, RouterKeyIdFile, routerKeyName } from './router-connection';
-import { CodepawlState, CodepawlUsage, routerBaseUrl } from '../shared/router';
+import { CodepawlBillingOutcome, CodepawlBillingRequest, CodepawlState, CodepawlUsage, routerBaseUrl } from '../shared/router';
 import { SyncTransport } from './sync-transport';
 import { SyncChoice, syncBaseUrl } from '../shared/sync-status';
 import { MarketPublishingTransport, publishingRelayAllowed } from './market-publishing';
@@ -720,6 +720,7 @@ async function start() {
     keys: { read: () => credentials.read('codepawl'), save: key => credentials.save('codepawl', key), remove: () => credentials.remove('codepawl') },
     keyIds: new RouterKeyIdFile(directory),
     deviceName: routerKeyName(osHostname()),
+    openExternal: address => shell.openExternal(address),
     onChange: () => {
       void request('invalidateModelList', 'codepawl').catch(() => {});
     },
@@ -977,6 +978,7 @@ async function start() {
     return state;
   });
   handle('orglet:codepawl-usage', async () => CodepawlUsage.parse(await routerConnection.usage()));
+  handle('orglet:codepawl-billing', async raw => CodepawlBillingOutcome.parse(await routerConnection.billing(CodepawlBillingRequest.parse(raw))));
   // Analytics (COD-344): the window can read and flip the switch, name a feature from a fixed list, and report an error
   // of its own, which is scrubbed here. It never learns the install id, the queue or the token.
   handle('orglet:analytics-state', async () => analytics.state());

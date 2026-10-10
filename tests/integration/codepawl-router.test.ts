@@ -22,8 +22,11 @@ import { ApiProvider, isPaidApi, isPlanApi } from '../../apps/desktop/src/shared
 import {
   ACCOUNT_ROUTER_RESOURCE,
   ACCOUNT_ROUTER_SCOPE,
+  CodepawlBillingOutcome,
+  CodepawlBillingRequest,
   CodepawlState,
   CodepawlUsage,
+  isBillingPage,
   ROUTER_KEY_PATTERN,
   routerApiUrl,
   routerBaseUrl,
@@ -40,6 +43,8 @@ type RouterBehavior = {
   revokeStatus: number;
   usage: unknown;
   usageStatus: number;
+  /** What the two billing routes answer: a status and a body. */
+  billing: { status: number; body: unknown };
   chat: 'tool' | { status: number; message: string };
 };
 
@@ -51,6 +56,7 @@ async function fakeRouter() {
     revokeStatus: 200,
     usage: { free: { tokensLeft: 41_000, tokensLimit: 50_000, resetsAt: '2026-10-11T00:00:00.000Z' }, starter: null },
     usageStatus: 200,
+    billing: { status: 200, body: { url: 'https://sandbox.polar.sh/checkout/polar_c_fixture' } },
     chat: 'tool',
   };
   let keysMade = 0;
@@ -75,6 +81,7 @@ async function fakeRouter() {
     }
     if (url.startsWith('/v1/keys/') && request.method === 'DELETE') return json(behavior.revokeStatus, { revoked: true });
     if (url === '/v1/usage') return json(behavior.usageStatus, behavior.usage);
+    if (url === '/v1/billing/checkout' || url === '/v1/billing/portal') return json(behavior.billing.status, behavior.billing.body);
     if (url === '/v1/models') {
       return json(200, { object: 'list', data: [
         { id: 'codepawl/free-small', object: 'model', owned_by: 'codepawl', pricing: { free: true } },
@@ -162,9 +169,14 @@ function connection(overrides: { baseUrl?: string | undefined; account?: ReturnT
   const keyIds = memoryKeyIds();
   const account = overrides.account ?? fakeAccount();
   const changes: number[] = [];
+  const opened: string[] = [];
   const baseUrl = 'baseUrl' in overrides ? overrides.baseUrl : router.origin;
-  const subject = new RouterConnection({ baseUrl, account, keys, keyIds, deviceName: 'Orglet on LAPTOP', onChange: () => changes.push(changes.length) });
-  return { subject, keys, keyIds, account, changes };
+  const subject = new RouterConnection({
+    baseUrl, account, keys, keyIds, deviceName: 'Orglet on LAPTOP',
+    onChange: () => changes.push(changes.length),
+    openExternal: async address => { opened.push(address); },
+  });
+  return { subject, keys, keyIds, account, changes, opened };
 }
 
 describe('where the router is', () => {
@@ -565,6 +577,65 @@ describe('usage', () => {
     refused.refuse = true;
     expect(await connection({ account: refused }).subject.usage()).toEqual(unknown);
     expect(await connection({ account: fakeAccount('local') }).subject.usage()).toEqual(unknown);
+  });
+});
+
+describe('buying and managing a plan', () => {
+  it('reads pay by use beside the included usage', async () => {
+    router.behavior.usage = {
+      free: { tokensLeft: 10, tokensLimit: 50_000, resetsAt: '2026-10-11T00:00:00.000Z' },
+      starter: null,
+      payByUse: { active: true, costThisMonthMicros: 420_000 },
+    };
+    expect(await connection().subject.usage()).toMatchObject({ known: true, payByUseActive: true, payByUseCostMicros: 420_000 });
+  });
+
+  it('asks the router for a checkout page of the chosen plan with the account token and opens it in the browser', async () => {
+    const { subject, opened } = connection();
+    expect(await subject.billing({ kind: 'checkout', plan: 'starter' })).toBe('opened');
+    expect(router.received.at(-1)).toMatchObject({ method: 'POST', url: '/v1/billing/checkout', authorization: `Bearer ${ACCESS_TOKEN}`, body: { plan: 'starter' } });
+    expect(opened).toEqual(['https://sandbox.polar.sh/checkout/polar_c_fixture']);
+
+    router.behavior.billing = { status: 200, body: { url: 'https://polar.sh/codepawl/portal?customer_session_token=fixture' } };
+    expect(await subject.billing({ kind: 'portal' })).toBe('opened');
+    expect(router.received.at(-1)).toMatchObject({ method: 'POST', url: '/v1/billing/portal' });
+    expect(opened).toHaveLength(2);
+  });
+
+  it('opens nothing that is not a page of the payment provider', async () => {
+    const { subject, opened } = connection();
+    for (const url of ['https://polar.sh.example.com/checkout', 'http://polar.sh/checkout', 'https://example.com/?next=polar.sh', 'file:///C:/Windows/system32/calc.exe', 'not an address']) {
+      router.behavior.billing = { status: 200, body: { url } };
+      expect(await subject.billing({ kind: 'checkout', plan: 'pay_by_use' })).toBe('unavailable');
+    }
+    expect(opened).toEqual([]);
+    expect(isBillingPage('https://sandbox.polar.sh/checkout/x')).toBe(true);
+    expect(isBillingPage('https://buy.polar.sh/x')).toBe(true);
+  });
+
+  it('tells apart a router that sells nothing yet, an account with nothing to manage, and a failure', async () => {
+    const { subject, opened } = connection();
+    router.behavior.billing = { status: 503, body: { error: { message: 'Billing is not open yet.', code: 'billing_not_open' } } };
+    expect(await subject.billing({ kind: 'checkout', plan: 'starter' })).toBe('not_open');
+    router.behavior.billing = { status: 404, body: { error: { message: 'Subscribe first.', code: 'no_billing_customer' } } };
+    expect(await subject.billing({ kind: 'portal' })).toBe('no_billing_account');
+    router.behavior.billing = { status: 502, body: '<html>bad gateway</html>' };
+    expect(await subject.billing({ kind: 'portal' })).toBe('unavailable');
+    expect(opened).toEqual([]);
+  });
+
+  it('asks for no page without a signed-in account, a router, or a way to open a browser', async () => {
+    expect(await connection({ account: fakeAccount('local') }).subject.billing({ kind: 'portal' })).toBe('unavailable');
+    expect(await connection({ baseUrl: undefined }).subject.billing({ kind: 'portal' })).toBe('unavailable');
+    const headless = new RouterConnection({ baseUrl: router.origin, account: fakeAccount(), keys: memoryKeys(), keyIds: memoryKeyIds(), deviceName: 'Orglet on LAPTOP' });
+    expect(await headless.billing({ kind: 'portal' })).toBe('unavailable');
+    expect(router.received).toEqual([]);
+  });
+
+  it('lets the window ask only for a known plan, and tells it only how it went', () => {
+    expect(() => CodepawlBillingRequest.parse({ kind: 'checkout', plan: 'enterprise' })).toThrow();
+    expect(() => CodepawlBillingRequest.parse({ kind: 'portal', url: 'https://example.com' })).toThrow();
+    expect(() => CodepawlBillingOutcome.parse('https://sandbox.polar.sh/checkout/x')).toThrow();
   });
 });
 

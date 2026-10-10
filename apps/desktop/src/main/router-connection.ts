@@ -10,6 +10,9 @@ import {
   ROUTER_TOO_MANY_KEYS,
   ROUTER_UNREACHABLE,
   UNKNOWN_CODEPAWL_USAGE,
+  isBillingPage,
+  type CodepawlBillingOutcome,
+  type CodepawlBillingRequest,
   type CodepawlState,
 } from '../shared/router';
 import { ResourceRefused, RouterSignInRequired } from './account';
@@ -67,6 +70,9 @@ export class RouterKeyIdFile implements RouterKeyIdStore {
   }
 }
 
+const BillingPage = z.object({ url: z.string().max(2_000) });
+const RouterRefusal = z.object({ error: z.object({ code: z.string().max(80) }) });
+
 const CreatedKey = z.object({
   id: z.string().regex(KEY_ID_PATTERN),
   secret: z.string().regex(ROUTER_KEY_PATTERN),
@@ -90,6 +96,8 @@ export type RouterConnectionDependencies = {
   fetch?: typeof fetch;
   /** The saved connection changed: the model list the core holds for it is no longer right. */
   onChange?: () => void;
+  /** Opens a billing page in the person's browser. Without it no page is asked for. */
+  openExternal?: (address: string) => Promise<void>;
 };
 
 export class RouterConnection {
@@ -204,17 +212,41 @@ export class RouterConnection {
       if (!response.ok) return UNKNOWN_CODEPAWL_USAGE;
       const parsed = RouterUsageAnswer.safeParse(await response.json().catch(() => undefined));
       if (!parsed.success) return UNKNOWN_CODEPAWL_USAGE;
-      const { free, starter } = parsed.data;
+      const { free, starter, payByUse } = parsed.data;
       return {
         known: true,
         freeTokensLeft: free.tokensLeft,
         freeTokensLimit: free.tokensLimit,
         freeResetsAt: free.resetsAt,
         ...(starter ? { includedLeftMicros: starter.leftMicros, includedPeriodEnd: starter.periodEnd } : {}),
+        ...(payByUse ? { payByUseActive: payByUse.active, payByUseCostMicros: payByUse.costThisMonthMicros } : {}),
       };
     } catch {
       return UNKNOWN_CODEPAWL_USAGE;
     }
+  }
+
+  /**
+   * Asks the router for a checkout page or the page where a plan is managed, and opens it in the browser. The page is
+   * the payment provider's: Orglet never sees a card, and an address anywhere else is not opened.
+   */
+  async billing(request: CodepawlBillingRequest): Promise<CodepawlBillingOutcome> {
+    const openExternal = this.dependencies.openExternal;
+    if (!this.configured || !openExternal || this.dependencies.account.state().status !== 'signed_in') return 'unavailable';
+    const token = await this.routerToken();
+    if (token === 'not_open' || token === 'sign_in_again') return 'unavailable';
+    const checkout = request.kind === 'checkout';
+    const response = await this.send(checkout ? '/v1/billing/checkout' : '/v1/billing/portal', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(checkout ? { plan: request.plan } : {}),
+    });
+    const answer: unknown = await response.json().catch(() => undefined);
+    if (!response.ok) return billingRefusal(answer);
+    const page = BillingPage.safeParse(answer);
+    if (!page.success || !isBillingPage(page.data.url)) return 'unavailable';
+    await openExternal(page.data.url);
+    return 'opened';
   }
 
   private async revokeAtRouter(keyId: string): Promise<void> {
@@ -248,6 +280,15 @@ export class RouterConnection {
       throw new Error(ROUTER_UNREACHABLE);
     }
   }
+}
+
+/** Reads the router's refusal of a billing request by its code. A refusal it does not know is "not this time". */
+function billingRefusal(answer: unknown): CodepawlBillingOutcome {
+  const refusal = RouterRefusal.safeParse(answer);
+  const code = refusal.success ? refusal.data.error.code : '';
+  if (code === 'billing_not_open') return 'not_open';
+  if (code === 'no_billing_customer') return 'no_billing_account';
+  return 'unavailable';
 }
 
 /** The key's name: the computer's own name, short enough for the router's limit. */

@@ -221,6 +221,7 @@ export const BRIDGE_PARITY: Record<keyof Bridge, Parity> = {
   accountSignOut: elevated('orglet grant account sign-out', 'setup'),
   codepawlState: windowOnly('Settings, API connections; ' + NOT_BUILT),
   codepawlUsage: windowOnly('Settings, API connections; ' + NOT_BUILT),
+  codepawlBilling: held('opens a payment page for the signed-in account, and buying a plan is the person\'s own act'),
   codepawlConnect: held('makes a key for this computer with the signed-in account, and a key is a secret'),
   codepawlDisconnect: held('revokes the key at the router; orglet disconnect codepawl reaches the same code with an elevation'),
   onAccount: windowOnly('an event the window subscribes to'),
