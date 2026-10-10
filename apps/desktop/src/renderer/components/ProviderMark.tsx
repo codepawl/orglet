@@ -23,7 +23,7 @@ const paths = {
 /** The X mark, shared with the About tab's link to the company's X account. */
 export const xMarkPath = paths.x;
 
-type Mark = { name: string; path?: string; shade?: string; color?: string; letter?: string };
+type Mark = { name: string; path?: string; shade?: string; evenOdd?: boolean; color?: string; letter?: string };
 const marks: Record<BuiltInProviderId | HarnessCatalogId, Mark> = {
   demo: { name: 'Demo' },
   openai: { name: 'OpenAI API', path: paths.openai },
@@ -33,8 +33,9 @@ const marks: Record<BuiltInProviderId | HarnessCatalogId, Mark> = {
   // Zen and Go share OpenCode's mark; the name beside it (and the tooltip) tells the plans apart.
   'opencode-zen': { name: 'OpenCode Zen API', path: paths.opencode, shade: paths.opencodeBlock },
   'opencode-go': { name: 'OpenCode Go API', path: paths.opencode, shade: paths.opencodeBlock },
-  // CodePawl has no mark in the app yet, so the router wears a letter, like a custom connection.
-  codepawl: { name: 'CodePawl router', letter: 'C' },
+  // CodePawl's own mark (the face of codepawl.com's favicon), redrawn as one even-odd path in the 24-unit box: the
+  // face, with the prompt chevron and the cursor dash cut out of it.
+  codepawl: { name: 'CodePawl router', path: 'M8.1 1.8C10.35 1.35 13.8 2.85 16.8 4.95C20.1 7.05 22.5 9.9 22.5 14.1C22.5 19.2 18.45 22.5 12 22.5C5.55 22.5 1.5 19.2 1.5 14.1C1.5 10.35 3.3 6.6 5.1 4.2C5.85 3.15 6.75 2.1 8.1 1.8ZM7.955 10.566L12.027 14.25L7.955 17.934L6.445 16.266L8.673 14.25L6.445 12.234ZM15.45 13.125H18.9A1.125 1.125 0 0 1 18.9 15.375H15.45A1.125 1.125 0 0 1 15.45 13.125Z', evenOdd: true },
   ollama: { name: 'Ollama', path: paths.ollama },
   'claude-code': { name: 'Claude Code', path: paths.claude, color: '#D97757' },
   codex: { name: 'Codex', path: paths.openai },
@@ -59,7 +60,7 @@ export function ProviderMark({ provider, size = 'default', decorative = false }:
 
 function MarkGlyph({ mark }: { mark: Mark }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}>
-    <path d={mark.path} fill="currentColor" fillRule={mark.shade ? 'evenodd' : undefined} />
+    <path d={mark.path} fill="currentColor" fillRule={mark.shade || mark.evenOdd ? 'evenodd' : undefined} />
     {mark.shade && <path d={mark.shade} fill="currentColor" opacity={0.35} />}
   </svg>;
 }
