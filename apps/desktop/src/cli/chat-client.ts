@@ -20,6 +20,9 @@ export type ChatClient = {
   actions?: ChatActionClient;
 };
 
+/** What a one-shot command printed and how it ended: 0 is success. */
+export type CommandLineResult = { code: number; stdout: string; stderr: string };
+
 /**
  * What the terminal chat does to a chat's messages and its latest turn, and to the chats themselves (COD-354).
  * Optional so a test can hand the session an app without them; each call is the request the matching one-shot
@@ -33,10 +36,12 @@ export type ChatActionClient = {
   control: (to: string, action: ChatControl, signal: AbortSignal) => Promise<ControlValue>;
   revise?: (to: string, message: string, text: string, signal: AbortSignal) => Promise<ControlValue>;
   answer: (to: string, answer: string, signal: AbortSignal) => Promise<ControlValue>;
-  chats: (archived: boolean) => Promise<ChatsValue>;
+  chats: (archived: boolean, space?: string) => Promise<ChatsValue>;
   side: (to: string, message: string, signal: AbortSignal) => Promise<SendValue>;
   bring: (chat: string, message?: string) => Promise<BringValue>;
-  channel: (names: string[], message: string, signal: AbortSignal) => Promise<SendValue>;
+  channel: (names: string[], message: string, signal: AbortSignal, place?: { space?: string; category?: string }) => Promise<SendValue>;
+  /** Runs `orglet <argv>` as the one-shot command would and returns what it printed: the slash commands that are those commands. */
+  commandLine?: (argv: readonly string[]) => Promise<CommandLineResult>;
   members: (chat: string, names: string[]) => Promise<MembersValue>;
   rename: (to: string, title: string) => Promise<ChatChangeValue>;
   archive: (to: string) => Promise<ChatChangeValue>;
@@ -98,10 +103,10 @@ export function appChatClient(userData: string, executable: string | undefined):
       control: (to, action, signal) => request<ControlValue>({ op: 'control', ...chatFields(to), action, ...WAIT }, signal),
       revise: (to, message, text, signal) => request<ControlValue>({ op: 'revise', ...chatFields(to), message, text, ...WAIT }, signal),
       answer: (to, answer, signal) => request<ControlValue>({ op: 'answer', ...chatFields(to), answer, ...WAIT }, signal),
-      chats: archived => request<ChatsValue>({ op: 'chats', archived }),
+      chats: (archived, space) => request<ChatsValue>({ op: 'chats', archived, ...(space ? { space } : {}) }),
       side: (to, message, signal) => request<SendValue>({ op: 'side-thread', ...chatFields(to), message, ...WAIT }, signal),
       bring: (chat, message) => request<BringValue>({ op: 'bring', chat, ...(message ? { message } : {}) }),
-      channel: (names, message, signal) => request<SendValue>({ op: 'channel', names, message, ...WAIT }, signal),
+      channel: (names, message, signal, place) => request<SendValue>({ op: 'channel', names, message, ...(place?.space ? { space: place.space } : {}), ...(place?.category ? { category: place.category } : {}), ...WAIT }, signal),
       members: (chat, names) => request<MembersValue>({ op: 'members', chat, names }),
       rename: (to, title) => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'rename', title }),
       archive: to => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'archive' }),

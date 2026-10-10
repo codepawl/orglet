@@ -8,6 +8,8 @@ import { CliOperations } from '../../apps/desktop/src/main/cli-operations';
 import type { CliAppState, CliDependencies } from '../../apps/desktop/src/main/cli-turns';
 import { CliRequest, type ShowValue } from '../../apps/desktop/src/cli/protocol';
 import { parseArguments, UsageError } from '../../apps/desktop/src/cli/arguments';
+import { ManagementCatalog } from '../../apps/desktop/src/cli/management';
+import { ManagementEditor } from '../../apps/desktop/src/cli/management-editor';
 import { formatChatSettings, formatMarket, formatPreferences, formatScheduleNotice, formatShow, formatSpaceChange } from '../../apps/desktop/src/cli/output';
 import { COMMAND_PARITY } from '../../apps/desktop/src/cli/parity';
 import type { Task, Worker } from '../../apps/desktop/src/shared/contracts';
@@ -294,6 +296,31 @@ describe('looking at the app', () => {
     const desktop = await show('desktop', { chat: chat.id.slice(0, 8) }, { desktopActions: () => [] });
     expect(desktop.rows).toEqual([]);
     expect(formatShow(shown)).toContain('src/a.ts');
+  });
+});
+
+describe('the terminal editor for a channel that takes turns', () => {
+  it('lists it, edits its name, topic and members, and saves them as a channel patch', async () => {
+    const [first] = store.all<Worker>('workers');
+    const second = await core.command('saveWorker', { ...first, id: undefined, name: 'Second orglet' }) as Worker;
+    const operations = operationsWith();
+    const catalog = ManagementCatalog.parse(await operations.run({ op: 'config', token }, signal));
+    const channelId = await core.command('createChannel', { name: 'ideas', topic: 'Old', members: [{ kind: 'orglet', id: first.id }, { kind: 'orglet', id: second.id }] }) as string;
+    const withChannel = ManagementCatalog.parse(await operations.run({ op: 'config', token }, signal));
+    expect(catalog.channels).toEqual([]);
+    const editor = new ManagementEditor('edit', withChannel, 'team', 'ideas');
+    expect(editor.target).toEqual({ id: channelId });
+    expect(editor.choices().map(choice => choice.label)).toEqual(['Name  ideas', 'Topic  Old', 'Members  2 selected', 'Save', 'Cancel']);
+    editor.submit('Topic');
+    editor.submit('New topic');
+    editor.submit('Members');
+    editor.submit(second.name);
+    editor.submit('Done choosing');
+    const saved = editor.submit('Save');
+    expect(saved).toEqual({ action: 'save', kind: 'team', target: { id: channelId }, config: { name: 'ideas', topic: 'New topic', memberIds: [first.id], mode: 'turns' } });
+    const result = await operations.run({ op: 'save-crew', token, config: (saved as { config: Record<string, unknown> }).config, target: { id: channelId } } as never, signal);
+    expect(result).toMatchObject({ name: 'ideas', channelId });
+    expect(store.workspace().emptyChannels.find(channel => channel.id === channelId)).toMatchObject({ topic: 'New topic', members: [{ kind: 'orglet', id: first.id }] });
   });
 });
 

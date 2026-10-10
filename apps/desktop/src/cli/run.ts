@@ -3,7 +3,7 @@ import { completionScript } from './completion';
 import { COMMAND_NAMES, VALUE_OPTIONS } from './arguments';
 import packageJson from '../../../../package.json';
 import { COMMAND_HELP, MAIN_HELP, parseArguments, UsageError, type ChatTarget, type ManagementCommand, type ParsedCommand } from './arguments';
-import { AppRefusal, appChatClient } from './chat-client';
+import { AppRefusal, appChatClient, type CommandLineResult } from './chat-client';
 import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
@@ -419,8 +419,16 @@ function reportStopped(command: RequestCommand, output: Output): number {
   return EXIT_CODES.failure;
 }
 
+/** Runs `orglet <argv>` as a one-shot command and keeps what it printed, for the slash commands that are those commands. */
+async function commandLineResult(argv: readonly string[], environment: NodeJS.ProcessEnv): Promise<CommandLineResult> {
+  const printed = { stdout: [] as string[], stderr: [] as string[] };
+  const code = await runCli(argv, { stdout: text => printed.stdout.push(text), stderr: text => printed.stderr.push(text) }, environment);
+  return { code, stdout: printed.stdout.join('\n'), stderr: printed.stderr.join('\n') };
+}
+
 function runChat(to: string | undefined, environment: NodeJS.ProcessEnv, terminal: InteractiveTerminal): Promise<number> {
-  const client = appChatClient(resolveUserData(environment), appExecutable(environment));
+  const appClient = appChatClient(resolveUserData(environment), appExecutable(environment));
+  const client = appClient.actions ? { ...appClient, actions: { ...appClient.actions, commandLine: (argv: readonly string[]) => commandLineResult(argv, environment) } } : appClient;
   return runInteractive({ input: terminal.input, output: terminal.output, client, mode: terminal.mode, version: packageJson.version,
     reducedMotion: environment.ORGLET_REDUCED_MOTION === '1', ...(to ? { to } : {}),
   });

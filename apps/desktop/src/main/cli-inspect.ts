@@ -91,7 +91,7 @@ export class CliInspect {
   private async changelog(refresh: boolean): Promise<ShowValue> {
     const changelog = await this.app().changelog(refresh);
     const rows = changelog.releases.slice(0, MAX_RELEASES).map(release => ({ version: release.version, name: release.name, publishedAt: release.publishedAt, url: release.url }));
-    const note = changelog.error ?? (changelog.stale ? 'Danh sách có thể đã cũ.' : undefined);
+    const note = changelog.error ?? (changelog.stale ? this.dependencies.translate('Danh sách có thể đã cũ.') : undefined);
     return { what: 'changelog', rows, ...(note ? { note } : {}) };
   }
 
@@ -115,7 +115,7 @@ export class CliInspect {
     const { task } = targetChat(workspace, request);
     const sources = task.sourceIds.length ? await this.dependencies.request('sourceMetadata', { ids: task.sourceIds.slice(0, 20) }) as Source[] : [];
     const rows = sources.map(source => ({ name: source.name, bytes: source.bytes, revoked: source.revoked, format: source.format ?? source.media ?? null }));
-    return { what: 'sources', rows, ...(task.sourceIds.length > 20 ? { note: `Chỉ hiện 20 trên ${task.sourceIds.length} nguồn.` } : {}) };
+    return { what: 'sources', rows, ...(task.sourceIds.length > 20 ? { note: this.dependencies.translate(`Chỉ hiện 20 trên ${task.sourceIds.length} nguồn.`) } : {}) };
   }
 
   /**
@@ -132,10 +132,11 @@ export class CliInspect {
         rows.push({ run: copy.runId.slice(0, 8), copy: null, kind: change.kind ?? 'write', review: null, files: null, path: change.path, status: change.status });
       }
     }
+    const translate = this.dependencies.translate;
     const notes = [
-      view.processes.length ? `${view.processes.length} lệnh đã chạy` : '',
-      view.uncertainCalls.length ? `${view.uncertainCalls.length} lệnh chưa rõ kết quả` : '',
-      view.truncated ? 'Danh sách bị cắt bớt.' : '',
+      view.processes.length ? translate(`${view.processes.length} lệnh đã chạy`) : '',
+      view.uncertainCalls.length ? translate(`${view.uncertainCalls.length} lệnh chưa rõ kết quả`) : '',
+      view.truncated ? translate('Danh sách bị cắt bớt.') : '',
     ].filter(Boolean);
     return { what: 'changes', rows, ...(notes.length ? { note: notes.join('; ') } : {}) };
   }

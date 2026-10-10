@@ -6,7 +6,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CliOperations } from '../../apps/desktop/src/main/cli-operations';
 import { CliRequest } from '../../apps/desktop/src/cli/protocol';
-import { ManagementCatalog, type ManagementClient, type ManagementResult } from '../../apps/desktop/src/cli/management';
+import { ManagementCatalog, type ManagementClient, type ManagementResult, type ManagementTarget } from '../../apps/desktop/src/cli/management';
 import { ManagementEditor, parseDollarLimit } from '../../apps/desktop/src/cli/management-editor';
 import { parseArguments, type ManagementCommand } from '../../apps/desktop/src/cli/arguments';
 import { runManagementCommand } from '../../apps/desktop/src/cli/management-command';
@@ -177,7 +177,7 @@ describe('terminal editor and script inputs', () => {
     expect(editor.values.avatar).toEqual({ emoji: '🐾', color: '#8899aa' });
     editor.submit('Color');
     editor.submit('');
-    const saved = await operations.run({ op: 'save-orglet', token, target: editor.target, config: editor.values }, signal) as ManagementResult;
+    const saved = await operations.run({ op: 'save-orglet', token, target: editor.target as ManagementTarget, config: editor.values }, signal) as ManagementResult;
     expect(store.get<Worker>('workers', saved.id).avatar).toEqual({ emoji: '🐾' });
     expect(parseDollarLimit('0.100001', 100_000_000)).toBe(100_001);
     expect(() => parseDollarLimit('0.000001', 100_000_000)).toThrow();
