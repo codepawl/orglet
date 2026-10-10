@@ -264,11 +264,12 @@ export class CliHeld {
     const body = request.request;
     const words = this.say(heldWords(body));
     // A grant's row says what it touched; `describe` never reads `secret`.
-    const journalWords = isSetupBody(body) ? this.describe(body) : words;
+    // A row holds at most 300 characters; a long path must not make the journal throw after the grant was made.
+    const journalWords = (isSetupBody(body) ? this.describe(body) : words).slice(0, 300);
     let subject: string | undefined;
     try {
       const outcome = await this.perform(body);
-      subject = outcome.subject;
+      subject = outcome.subject?.slice(0, 200);
       const setupFields = isSetupBody(body) ? { notice: true, ...(outcome.undo ? { undo: outcome.undo } : {}) } : {};
       await this.access().journal.record({ scope: grant.scope, operation: journalWords, ...(subject ? { subject } : {}), outcome: 'done', ...setupFields });
       return { action: body.action, summary: words };
