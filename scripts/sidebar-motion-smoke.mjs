@@ -110,6 +110,16 @@ try {
   await page.waitForTimeout(800);
   assert.equal(await sidebarTitle(), openAreaTitle, 'the opened sidebar lists the area on screen');
 
+  // A folded sidebar always shows how to open it: the rail starts with a button that pins it open.
+  await page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true }).click();
+  await page.waitForTimeout(800);
+  const openButton = page.getByRole('button', { name: label('Mở sidebar'), exact: true });
+  await openButton.waitFor({ state: 'visible' });
+  await openButton.click();
+  await page.waitForTimeout(800);
+  assert.equal(await page.locator('.sidebar').evaluate(element => element.inert), false, 'the open button pins the sidebar open');
+  assert.equal(await openButton.count(), 0, 'the open button goes while the sidebar is open');
+
   await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).click();
   await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
   await page.waitForTimeout(800);

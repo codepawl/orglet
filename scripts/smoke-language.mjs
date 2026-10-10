@@ -49,9 +49,10 @@ export async function useEnglish(page) {
 }
 
 /**
- * A new profile starts on the rail (COD-340), and the smokes were written against the full sidebar, with its section
- * menus and row actions, so each opens it once. A wide window remembers that for the rest of the run, restarts
- * included; a narrow one would only lay it over the chat, so there it stays folded.
+ * A new profile starts on the full sidebar in a window wider than 780 px and on the rail in a narrower one. The smokes
+ * were written against the full sidebar, with its section menus and row actions, so each makes sure it is open. A wide
+ * window remembers that for the rest of the run, restarts included; a narrow one would only lay it over the chat, so
+ * there it stays folded.
  */
 export async function useFullSidebar(page) {
   const wide = await page.evaluate(() => innerWidth > 780);
