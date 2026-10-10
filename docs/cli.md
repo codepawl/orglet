@@ -258,25 +258,35 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/answer <n\|text>` | Answers the question the orglet is waiting on |
 | `/stop`, `/pause` | Stops the running turn, or pauses it after its current step; both act at once |
 | `/resume`, `/retry`, `/continue` | Resumes, runs again or continues the latest turn, and waits for the answer |
-| `/chats [archived]` | Lists chats with their short ids; `/to #id` opens one |
+| `/chats [archived] [--space <name>]` | Lists chats with their short ids, only those of one space with `--space`; `/to #id` opens one |
+| `/restore #<id>`, `/restore orglet\|channel "<name>"` | Brings an archived chat, orglet or channel back; `/chats archived` lists the chats |
 | `/side <message>` | Sends the message in a new side thread of this orglet |
 | `/bring [#n]` | In a side thread, brings its latest answer or answer `#n` into the main chat |
-| `/channel <name, …> -- <message>` | Creates a channel of those orglets and channels; `/group` is the older name |
+| `/channel [--space <name> [--category <name>]] <name, …> -- <message>` | Creates a channel of those orglets and channels, in a space if one is named; `/group` is the older name |
 | `/members <name, …>` | In a channel, changes who is in it |
 | `/rename <title>`, `/archive` | Renames or archives the open chat |
 | `/schedules` | Lists schedules |
 | `/schedule on\|off\|run <name>` | Switches a schedule on or off, or starts it now |
+| `/schedule dismiss\|catch-up "<name>"`, `/schedule delete "<name>" --confirm "<name>"` | Closes the missed-run notice, runs the missed time once, or deletes a schedule; adding and editing one is `orglet schedule` |
+| `/spaces` | Lists the spaces with their orglets and channels |
+| `/space <verb> …` | The same as `orglet space`: add, edit, category, uncategory, move, out, folder, color, order, delete |
+| `/market [installed\|add <id>\|update "<name>" [--confirm <code>]]` | The same as `orglet market` |
 | `/search <words>` | Searches every chat |
 | `/running` | Lists every run working or waiting |
 | `/memory` | Lists this orglet's or channel's memories |
+| `/memory edit <id> --text "<text>"`, `/memory delete <id> --confirm "<id or text>"` | The same as `orglet memory`; a delete needs its confirmation here too |
 | `/usage` | Shows plan usage of the CLI accounts |
 | `/models` | Lists the models of this orglet's connection |
 | `/language vi\|en\|en-GB`, `/theme system\|light\|dark` | Changes the app's language or theme |
+| `/preferences [--titles on\|off …]` | The same as `orglet preferences` |
+| `/show <topic>`, `/update` | The same as `orglet show` and `orglet update`; `browser`, `desktop`, `sources` and `changes` are about the open chat |
 | `/new [orglet|channel]` | Creates an orglet or channel in a keyboard form |
 | `/edit [name]` | Edits the current chat’s orglet or channel; without a current chat, choose an entry |
 | `/delete [name]` | Removes an orglet or channel after exact-name confirmation |
 | `/help` | Lists these commands |
 | `/exit` | Leaves |
+
+A command that says "the same as" runs the one-shot command as typed, quoting as a shell does, and prints what it prints, so its checks and confirmations apply: a delete in the chat needs the same `--confirm` as `orglet delete`. `/edit` and `/delete` open the keyboard form for an orglet or any channel; for a channel that takes turns the form has its name, topic and members.
 
 Chat mode needs a terminal you type into. In a script, or with input or output redirected, use `send` and `read` instead: `orglet chat` then stops with exit code 2, and plain `orglet` prints the usual usage error.
 
