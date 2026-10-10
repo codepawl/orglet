@@ -15,7 +15,7 @@ import { CodepawlAdapter } from '../../apps/desktop/src/core/adapters/codepawl';
 import { ProviderRequestError } from '../../apps/desktop/src/core/adapters/opencode';
 import { fetchProviderList, parseCodepawlModels } from '../../apps/desktop/src/core/models/fetch';
 import { resolveWorkerModel } from '../../apps/desktop/src/core/models/resolve';
-import { AccountService, ResourceRefused, type AccountStore } from '../../apps/desktop/src/main/account';
+import { AccountService, ResourceRefused, RouterSignInRequired, type AccountStore } from '../../apps/desktop/src/main/account';
 import { RouterConnection, RouterKeyIdFile, routerKeyName, type RouterKeyIdStore, type RouterKeyStore } from '../../apps/desktop/src/main/router-connection';
 import type { AccountState } from '../../apps/desktop/src/shared/account';
 import { ApiProvider, isPaidApi, isPlanApi } from '../../apps/desktop/src/shared/contracts';
@@ -135,7 +135,9 @@ function fakeAccount(status: AccountState['status'] = 'signed_in') {
     refuse: false,
     failure: undefined as Error | undefined,
     resources: [] as string[],
+    coversRouter: true,
     state: (): AccountState => ({ status: account.status }),
+    signInCoversRouter: () => account.coversRouter,
     getAccessToken: async (resource: typeof ACCOUNT_ROUTER_RESOURCE) => {
       account.resources.push(resource);
       if (account.refuse) throw new ResourceRefused('invalid_target');
@@ -321,11 +323,13 @@ describe('no router address', () => {
 });
 
 describe('the account asks for the router audience', () => {
-  async function accountAgainst(identity: (fields: URLSearchParams) => Response) {
+  const SYNC_RESOURCE = 'https://sync.orglet.codepawl.com';
+
+  async function accountAgainst(identity: (fields: URLSearchParams) => Response, resources: Parameters<AccountStore['save']>[0]['resources'] = [SYNC_RESOURCE, ACCOUNT_ROUTER_RESOURCE]) {
     const requests: URLSearchParams[] = [];
     let saved: Parameters<AccountStore['save']>[0] | undefined = {
       refreshToken: 'fixture-refresh-0',
-      resources: ['https://sync.orglet.codepawl.com'],
+      resources,
       profile: { id: 'fixture-account', email: 'a@example.test', name: undefined, plan: 'free', entitlements: {} },
     };
     const store: AccountStore = { read: async () => saved, save: async value => { saved = structuredClone(value); }, remove: async () => { saved = undefined; } };
@@ -346,7 +350,7 @@ describe('the account asks for the router audience', () => {
     expect(await service.getAccessToken(ACCOUNT_ROUTER_RESOURCE)).toBe('fixture-access-1');
     expect(requests[0].get('resource')).toBe(ACCOUNT_ROUTER_RESOURCE);
     expect(requests[0].get('scope')).toBe(ACCOUNT_ROUTER_SCOPE);
-    expect(saved()?.resources).toEqual(['https://sync.orglet.codepawl.com']);
+    expect(saved()?.resources).toEqual([SYNC_RESOURCE, ACCOUNT_ROUTER_RESOURCE]);
   });
 
   it('turns invalid_target into a refusal that keeps the sign-in', async () => {
@@ -362,6 +366,93 @@ describe('the account asks for the router audience', () => {
     expect(await subject.connect()).toEqual({ status: 'not_open' });
     expect(router.received).toHaveLength(0);
     expect(keys.value).toBeNull();
+  });
+
+  it('does not ask the accounts service at all for a sign-in that did not ask for the router, and says to sign in again', async () => {
+    const { service, requests } = await accountAgainst(() => Response.json({ access_token: 'unused' }), [SYNC_RESOURCE]);
+    await expect(service.getAccessToken(ACCOUNT_ROUTER_RESOURCE)).rejects.toBeInstanceOf(RouterSignInRequired);
+    expect(requests).toHaveLength(0);
+
+    const keys = memoryKeys();
+    const subject = new RouterConnection({ baseUrl: router.origin, account: service, keys, keyIds: memoryKeyIds(), deviceName: 'Orglet on LAPTOP' });
+    expect(await subject.state()).toEqual({ status: 'sign_in_again' });
+    expect(await subject.connect()).toEqual({ status: 'sign_in_again' });
+    expect(await subject.usage()).toEqual({ known: false });
+    expect(requests).toHaveLength(0);
+    expect(router.received).toHaveLength(0);
+    expect(keys.value).toBeNull();
+  });
+
+});
+
+describe('signing in on a build with and without a router', () => {
+  /** Behaves like the real service: a router refresh works only when the authorization request listed the router and its scope. */
+  async function signedInAgainst(routerConfigured: boolean | undefined) {
+    const opened: string[] = [];
+    const refreshes: URLSearchParams[] = [];
+    let askedForRouter = false;
+    let saved: Parameters<AccountStore['save']>[0] | undefined;
+    const store: AccountStore = { read: async () => saved, save: async value => { saved = structuredClone(value); }, remove: async () => { saved = undefined; } };
+    const service = new AccountService({
+      baseUrl: 'https://accounts.example.test', store, ...(routerConfigured === undefined ? {} : { routerConfigured }),
+      openExternal: async address => { opened.push(address); },
+      fetch: async (input, options) => {
+        const address = String(input);
+        if (address.endsWith('/me')) return Response.json({ id: 'fixture-account', email: 'a@example.test', plan: 'free', entitlements: {} });
+        const fields = new URLSearchParams(String(options?.body));
+        if (fields.get('grant_type') === 'refresh_token') {
+          refreshes.push(fields);
+          if (fields.get('resource') === ACCOUNT_ROUTER_RESOURCE && !askedForRouter) return Response.json({ error: 'invalid_target' }, { status: 400 });
+        }
+        return Response.json({ access_token: 'fixture-access', refresh_token: 'fixture-refresh', expires_in: 900 });
+      },
+    });
+    const finished = service.signIn();
+    while (opened.length === 0) await new Promise(resolve => setTimeout(resolve, 5));
+    const authorize = new URL(opened[0]);
+    askedForRouter = authorize.searchParams.getAll('resource').includes(ACCOUNT_ROUTER_RESOURCE) && authorize.searchParams.get('scope')!.split(' ').includes(ACCOUNT_ROUTER_SCOPE);
+    const callback = new URL(authorize.searchParams.get('redirect_uri')!);
+    callback.searchParams.set('code', 'fixture-code');
+    callback.searchParams.set('state', authorize.searchParams.get('state')!);
+    expect(service.handleCallback(callback.toString())).toBe(true);
+    await finished;
+    return { service, authorize, refreshes, saved: () => saved };
+  }
+
+  it('asks for the router resource and scope, and saves that the sign-in did, when the build names a router', async () => {
+    const { service, authorize, saved } = await signedInAgainst(true);
+    expect(authorize.searchParams.get('scope')).toBe('openid profile email offline_access router:manage');
+    expect(authorize.searchParams.getAll('resource')).toEqual([
+      'https://sync.orglet.codepawl.com', 'https://market.orglet.codepawl.com', ACCOUNT_ROUTER_RESOURCE,
+    ]);
+    expect(saved()?.resources).toEqual(['https://sync.orglet.codepawl.com', 'https://market.orglet.codepawl.com', ACCOUNT_ROUTER_RESOURCE]);
+    expect(service.signInCoversRouter()).toBe(true);
+  });
+
+  it('asks exactly what it always did, and saves no router, when the build names none', async () => {
+    for (const routerConfigured of [undefined, false]) {
+      const { service, authorize, saved } = await signedInAgainst(routerConfigured);
+      expect(authorize.searchParams.get('scope')).toBe('openid profile email offline_access');
+      expect(authorize.searchParams.getAll('resource')).toEqual(['https://sync.orglet.codepawl.com', 'https://market.orglet.codepawl.com']);
+      expect(saved()?.resources).toEqual(['https://sync.orglet.codepawl.com', 'https://market.orglet.codepawl.com']);
+      expect(service.signInCoversRouter()).toBe(false);
+    }
+  });
+
+  it('is told to sign in again by an old sign-in, and after signing in again the refresh carries the resource and scope and the connection is made', async () => {
+    const old = await signedInAgainst(false);
+    const oldConnection = new RouterConnection({ baseUrl: router.origin, account: old.service, keys: memoryKeys(), keyIds: memoryKeyIds(), deviceName: 'Orglet on LAPTOP' });
+    expect(await oldConnection.connect()).toEqual({ status: 'sign_in_again' });
+    expect(old.refreshes).toHaveLength(0);
+
+    const renewed = await signedInAgainst(true);
+    const keys = memoryKeys();
+    const connection = new RouterConnection({ baseUrl: router.origin, account: renewed.service, keys, keyIds: memoryKeyIds(), deviceName: 'Orglet on LAPTOP' });
+    expect(await connection.state()).toEqual({ status: 'ready' });
+    expect(await connection.connect()).toMatchObject({ status: 'connected' });
+    expect(renewed.refreshes[0].get('resource')).toBe(ACCOUNT_ROUTER_RESOURCE);
+    expect(renewed.refreshes[0].get('scope')).toBe(ACCOUNT_ROUTER_SCOPE);
+    expect(keys.value).toBe(ROUTER_KEY);
   });
 });
 

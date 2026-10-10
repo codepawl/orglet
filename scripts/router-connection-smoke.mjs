@@ -43,14 +43,26 @@ const { publicKey, privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519
 const publicJwk = { ...await exportJWK(publicKey), kid: 'smoke', alg: 'EdDSA', use: 'sig' };
 let accountsUrl = '';
 const tokenRequests = [];
+// Like the real service, a refresh gets the router's audience and scope only when the authorization request listed both.
+let signInAskedForRouter = false;
 const accounts = createServer(async (request, response) => {
+  if (request.method === 'GET' && new URL(request.url, 'http://stand-in').searchParams.has('response_type')) {
+    const asked = new URL(request.url, 'http://stand-in').searchParams;
+    signInAskedForRouter = asked.getAll('resource').includes(ROUTER_AUDIENCE) && (asked.get('scope') ?? '').split(' ').includes('router:manage');
+    return sendJson(response, {});
+  }
   if (request.method === 'GET' && request.url.startsWith('/api/auth/jwks')) return sendJson(response, { keys: [publicJwk] });
   if (request.method === 'GET' && request.url.startsWith('/me')) return sendJson(response, { id: 'smoke', email: 'an@example.com', name: 'An Nguyen', plan: 'free' });
   if (request.method === 'POST' && request.url.startsWith('/api/auth/oauth2/token')) {
     const form = new URLSearchParams(await readBody(request));
     tokenRequests.push({ grant: form.get('grant_type'), resource: form.getAll('resource'), scope: form.get('scope') });
     let accessToken = 'smoke-access';
-    if (form.getAll('resource').includes(ROUTER_AUDIENCE)) {
+    const asksForRouter = form.getAll('resource').includes(ROUTER_AUDIENCE);
+    if (asksForRouter && form.get('grant_type') === 'refresh_token' && !signInAskedForRouter) {
+      response.writeHead(400, { 'content-type': 'application/json' });
+      return response.end(JSON.stringify({ error: 'invalid_target' }));
+    }
+    if (asksForRouter) {
       const now = Math.floor(Date.now() / 1000);
       accessToken = await new SignJWT({ azp: 'orglet-desktop', scope: 'router:manage' })
         .setProtectedHeader({ alg: 'EdDSA', kid: 'smoke' })
@@ -141,6 +153,8 @@ try {
   // Sign in through the real flow with the browser left out: the callback comes straight back.
   await app.evaluate(({ app: electronApp, shell }) => {
     shell.openExternal = async address => {
+      // The stand-in records what the authorization request asked for, as the real service does.
+      await fetch(address).catch(() => undefined);
       const state = new URL(address).searchParams.get('state');
       const redirect = new URL(address).searchParams.get('redirect_uri');
       if (redirect && redirect.startsWith('http://127.0.0.1')) {

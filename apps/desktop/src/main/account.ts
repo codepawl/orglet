@@ -16,7 +16,7 @@ import {
   AccountState,
   accountEndpoints,
 } from '../shared/account';
-import { ACCOUNT_ROUTER_RESOURCE, ACCOUNT_ROUTER_SCOPE } from '../shared/router';
+import { ACCOUNT_ROUTER_RESOURCE, ACCOUNT_ROUTER_SCOPE, ROUTER_SIGN_IN_AGAIN } from '../shared/router';
 import type { SecretEncryption } from './mcp-secrets';
 
 /**
@@ -39,10 +39,13 @@ const SIGN_IN_EXPIRED = 'Phiên đăng nhập đã hết. Đăng nhập lại.';
 const NOT_SIGNED_IN = 'Chưa đăng nhập tài khoản CodePawl.';
 export const MARKET_SIGN_IN_REQUIRED = 'Đăng nhập lại trong trình duyệt để dùng tài khoản với marketplace.';
 
+/** What a sign-in can have asked for: the two audiences every sign-in asks for, and the router when the build names one. */
+const SavedResource = z.union([AccountResource, z.literal(ACCOUNT_ROUTER_RESOURCE)]);
+
 /** What the token file holds: the profile last read, and the refresh token while the sign-in is still good. */
 const SavedAccount = z.object({
   refreshToken: z.string().min(1).max(4096).optional(),
-  resources: z.array(AccountResource).min(1).max(2).refine(resources => new Set(resources).size === resources.length).optional(),
+  resources: z.array(SavedResource).min(1).max(3).refine(resources => new Set(resources).size === resources.length).optional(),
   profile: AccountProfile,
   /**
    * This install agreed to sync: a sign-in finished on a build that syncs, or the person started sync. A sign-in saved
@@ -159,6 +162,8 @@ export type AccountDependencies = {
    * fails to listen, the sign-in returns through the custom scheme instead.
    */
   loopback?: LoopbackStarter;
+  /** This build names a CodePawl router, so the sign-in asks for its audience and scope too (a refresh cannot add them later). */
+  routerConfigured?: boolean;
 };
 
 const TokenResponse = z.object({
@@ -173,6 +178,8 @@ type TokenResponse = z.infer<typeof TokenResponse>;
 class GrantRefused extends Error {}
 /** The service does not know the resource (or the scope asked for it): not a refusal of the sign-in itself. */
 export class ResourceRefused extends Error {}
+/** The saved sign-in did not ask for the router, so the service is not asked: it could only refuse. */
+export class RouterSignInRequired extends Error {}
 /** The audiences an access token can be asked for: the two a sign-in is granted, and the router, asked for on its own. */
 type TokenResource = AccountResource | typeof ACCOUNT_ROUTER_RESOURCE;
 
@@ -200,6 +207,8 @@ type PendingSignIn = {
   reject: (error: Error) => void;
   /** Set once a callback with the right state arrived, so a second copy of the link cannot spend the code again. */
   exchanging: boolean;
+  /** Whether the sign-in page was asked for the router too, which decides what the saved sign-in records. */
+  askedForRouter: boolean;
 };
 
 export function base64Url(bytes: Buffer): string {
@@ -271,6 +280,11 @@ export class AccountService {
     return { accountKey, generation: this.generation, status };
   }
 
+  /** Whether the saved sign-in asked for the router, so a token for it can be had without signing in again. */
+  signInCoversRouter(): boolean {
+    return this.saved?.resources?.includes(ACCOUNT_ROUTER_RESOURCE) === true;
+  }
+
   /** Main/core binding only: the account local changes are recorded for, or nothing while no sign-in is usable. */
   syncContext(): { accountKey: string; generation: number } | undefined {
     const { accountKey, generation } = this.publishingContext();
@@ -302,7 +316,7 @@ export class AccountService {
     const state = base64Url(randomBytes(16));
     const finished = new Promise<AccountState>((resolve, reject) => {
       const timer = setTimeout(() => this.fail(state, new Error(SIGN_IN_TIMED_OUT)), this.dependencies.signInTimeoutMs ?? SIGN_IN_TIMEOUT_MS);
-      this.pending = { state, verifier, redirectUri: ACCOUNT_REDIRECT_URI, authorizeUrl: '', timer, resolve, reject, exchanging: false, generation };
+      this.pending = { state, verifier, redirectUri: ACCOUNT_REDIRECT_URI, authorizeUrl: '', timer, resolve, reject, exchanging: false, generation, askedForRouter: this.dependencies.routerConfigured === true };
     });
     const pending = this.pending!;
     this.announce();
@@ -368,13 +382,14 @@ export class AccountService {
       response_type: 'code',
       client_id: ACCOUNT_CLIENT_ID,
       redirect_uri: pending.redirectUri,
-      scope: ACCOUNT_SCOPES,
+      scope: pending.askedForRouter ? `${ACCOUNT_SCOPES} ${ACCOUNT_ROUTER_SCOPE}` : ACCOUNT_SCOPES,
       state,
       code_challenge: challenge,
       code_challenge_method: 'S256',
       resource: ACCOUNT_RESOURCE,
     }).toString();
     address.searchParams.append('resource', ACCOUNT_MARKET_RESOURCE);
+    if (pending.askedForRouter) address.searchParams.append('resource', ACCOUNT_ROUTER_RESOURCE);
     return address.toString();
   }
 
@@ -429,13 +444,14 @@ export class AccountService {
    * and persisted before another dispatch, because reusing a rotated token revokes the client family.
    */
   async getAccessToken(resource: TokenResource = ACCOUNT_RESOURCE): Promise<string> {
-    // The router is never part of the sign-in's grant: the service decides on the refresh whether it knows it, and
-    // answers invalid_target when it does not, which reaches the caller as a ResourceRefused.
-    const grantedWithSignIn = resource !== ACCOUNT_ROUTER_RESOURCE;
-    if (grantedWithSignIn) AccountResource.parse(resource);
+    // A refresh can only give an audience and scope the sign-in asked for. The router is asked for only by a build that
+    // names one; for a sign-in that did not, the service is not called. A service that does not know the router
+    // answers invalid_target even so, which reaches the caller as a ResourceRefused.
+    const isRouter = resource === ACCOUNT_ROUTER_RESOURCE;
+    if (!isRouter) AccountResource.parse(resource);
     if (this.persistenceError) throw this.persistenceError;
     const resources = this.saved?.resources ?? [ACCOUNT_RESOURCE];
-    if (grantedWithSignIn && !resources.includes(resource as AccountResource)) throw new Error(MARKET_SIGN_IN_REQUIRED);
+    if (!resources.includes(resource)) throw isRouter ? new RouterSignInRequired(ROUTER_SIGN_IN_AGAIN) : new Error(MARKET_SIGN_IN_REQUIRED);
     const token = this.accessTokens.get(resource);
     if (token && token.expiresAt - ACCESS_TOKEN_MARGIN_MS > this.now()) return token.value;
     return this.refresh(resource);
@@ -553,7 +569,7 @@ export class AccountService {
         await this.revoke(tokens.refresh_token).catch(() => undefined);
         return false;
       }
-      const generation = await this.commitSignIn({ refreshToken: tokens.refresh_token, profile, resources: [ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE], syncAgreed: true }, pending);
+      const generation = await this.commitSignIn({ refreshToken: tokens.refresh_token, profile, resources: pending.askedForRouter ? [ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE, ACCOUNT_ROUTER_RESOURCE] : [ACCOUNT_RESOURCE, ACCOUNT_MARKET_RESOURCE], syncAgreed: true }, pending);
       committedGeneration = generation;
       if (this.pending !== pending || generation !== this.generation) throw new Error(NOT_SIGNED_IN);
       this.rememberAccessToken(tokens, ACCOUNT_RESOURCE);

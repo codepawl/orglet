@@ -4968,7 +4968,7 @@ export const en: Dictionary = {
   // The CodePawl AI router connection (issue 532).
   'CodePawl router': 'CodePawl router',
   'CodePawl router chưa mở. Thử lại sau.': 'The CodePawl router is not open yet. Try again later.',
-  'Không kết nối được CodePawl router. Kiểm tra mạng rồi thử lại.': 'Could not reach the CodePawl router. Check your network and try again.',
+  'Đăng nhập lại tài khoản CodePawl để dùng CodePawl router.': 'Sign in again to use the CodePawl router.',  'Không kết nối được CodePawl router. Kiểm tra mạng rồi thử lại.': 'Could not reach the CodePawl router. Check your network and try again.',
   'Tài khoản đã có đủ số key của CodePawl router. Thu hồi bớt một key rồi thử lại.': 'This account already has the most router keys it can hold. Revoke one and try again.',
   'Bản này không có CodePawl router.': 'This build has no CodePawl router.',
   'Chưa kết nối CodePawl. Mở Cài đặt → Kết nối để kết nối bằng tài khoản CodePawl.': 'CodePawl is not connected. Open Settings → Connections to connect with your CodePawl account.',
