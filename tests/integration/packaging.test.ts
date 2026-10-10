@@ -54,11 +54,11 @@ describe('forge packaging', () => {
       identity: DEVELOPER_ID_APPLICATION_IDENTITY,
       preEmbedProvisioningProfile: false,
     }));
-    expect(sign?.optionsForFile?.('/out/Orglet.app/Contents/MacOS/Orglet')).toEqual({
+    expect(sign?.optionsForFile?.('/out/Orglet.app/Contents/MacOS/Orglet', { platform: 'darwin' })).toEqual({
       hardenedRuntime: true,
       entitlements: MACOS_ENTITLEMENTS,
     });
-    expect(sign?.optionsForFile?.('/out/Orglet.app/Contents/Frameworks/Orglet Helper (GPU).app/Contents/MacOS/Orglet Helper (GPU)')).toEqual({
+    expect(sign?.optionsForFile?.('/out/Orglet.app/Contents/Frameworks/Orglet Helper (GPU).app/Contents/MacOS/Orglet Helper (GPU)', { platform: 'darwin' })).toEqual({
       hardenedRuntime: true,
       entitlements: MACOS_ENTITLEMENTS_INHERIT,
     });
