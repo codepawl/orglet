@@ -1,5 +1,7 @@
-import type { NotaryToolCredentials } from '@electron/notarize/lib/types';
-import type { OsxSignOptions } from '@electron/packager/dist/types';
+import type { Options, PackagerOsxSignOptions } from '@electron/packager';
+
+/** The notarization credentials the packager takes, named here so no transitive package is imported for a type. */
+type NotaryToolCredentials = NonNullable<Options['osxNotarize']>;
 
 /** Public Developer ID Application identity from the leaf certificate (Team ID D884WZQ6N4). */
 export const DEVELOPER_ID_APPLICATION_IDENTITY =
@@ -17,7 +19,7 @@ function trim(value: string | undefined): string | undefined {
  * CI sets APPLE_SIGNING_ENABLED=true after importing the Developer ID P12.
  * Local `pnpm make` stays unsigned unless that flag is set and the identity is in the keychain.
  */
-export function resolveOsxSign(env: NodeJS.ProcessEnv = process.env): OsxSignOptions | undefined {
+export function resolveOsxSign(env: NodeJS.ProcessEnv = process.env): PackagerOsxSignOptions | undefined {
   if (env.APPLE_SIGNING_ENABLED !== 'true') {
     return undefined;
   }

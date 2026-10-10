@@ -1,3 +1,4 @@
+import type { ChatSettingsValue, MarketUpdateValue, ScheduleNoticeValue, ShowRow, ShowValue, UpdateCheckValue } from './protocol';
 import type { CliListedChannel, CliScheduleRow, LibraryValue, ModelsValue, PreferencesValue, RunningValue, SchedulesValue, ScheduleValue, ChannelCreatedValue, MarketAddValue, MarketInstalledValue, MarketListValue, SearchValue, SpaceChangeValue, SpacesValue, UsageValue } from './protocol';
 import type { ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliAnswer, CliChat, CliChatKind, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, MembersValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue, TemplateValue } from './protocol';
 import { t } from './text';
@@ -195,7 +196,8 @@ export function formatSpaces(value: SpacesValue): string {
 const MARKET_KIND_NAMES = { orglet: 'orglet', crew: 'channel', space: 'space' } as const;
 
 /** The catalog, what was added from it, or what one `add` made. */
-export function formatMarket(value: MarketListValue | MarketInstalledValue | MarketAddValue): string {
+export function formatMarket(value: MarketListValue | MarketInstalledValue | MarketAddValue | MarketUpdateValue): string {
+  if ('code' in value) return formatMarketUpdate(value);
   if ('installed' in value) {
     if (value.installed.length === 0) return t('Chưa thêm gì từ marketplace.');
     return padded(value.installed.map(item => [item.id, MARKET_KIND_NAMES[item.kind], item.name, `v${item.version}`, item.updateAvailable ? t('có bản cập nhật') : ''])).join('\n');
@@ -216,8 +218,20 @@ export function formatChannelCreated(value: ChannelCreatedValue): string {
   return value.space ? t('Đã tạo kênh #{0} trong không gian {1}.', value.channel, value.space) : t('Đã tạo kênh #{0}.', value.channel);
 }
 
+/** What an update changes and the code that applies exactly this update; once applied, only that it was. */
+function formatMarketUpdate(value: MarketUpdateValue): string {
+  if (value.applied) return t('Đã cập nhật {0} lên v{1}.', value.name, value.version);
+  const heading = t('{0}: v{1} lên v{2}.', value.name, value.installedVersion, value.version);
+  const changes = value.changes.map(change => `  ${change.name}: ${change.before} -> ${change.after}`);
+  const apply = t('Áp dụng đúng bản này: orglet market update "{0}" --confirm {1}', value.name, value.code);
+  return [heading, ...(changes.length ? changes : [t('  Không có thay đổi nào để hiện.')]), apply].join('\n');
+}
+
 export function formatSpaceChange(value: SpaceChangeValue): string {
   const orglets = (value.orglets ?? []).join(', ');
+  if (value.verb === 'folder') return value.value ? t('Không gian {0} nằm trong thư mục {1}.', value.space ?? '', value.value) : t('Không gian {0} không còn trong thư mục nào.', value.space ?? '');
+  if (value.verb === 'color') return value.value ? t('Không gian {0} có màu {1}.', value.space ?? '', value.value) : t('Không gian {0} dùng màu mặc định.', value.space ?? '');
+  if (value.verb === 'order') return t('Đã đưa {0} lên vị trí {1} trong không gian {2}.', value.channel ? `#${value.channel}` : value.category ?? '', value.position ?? 1, value.space ?? '');
   if (value.verb === 'add') return t('Đã tạo không gian {0} với {1}.', value.space ?? '', orglets);
   if (value.verb === 'edit') return t('Đã lưu không gian {0}: {1}.', value.space ?? '', orglets);
   if (value.verb === 'category' && value.existing) return t('Đã lưu mục {0} của không gian {1}.', value.category ?? '', value.space ?? '');
@@ -287,7 +301,46 @@ export function formatModels(value: ModelsValue): string {
 }
 
 export function formatPreferences(value: PreferencesValue): string {
-  return t('Ngôn ngữ: {0}. Giao diện: {1}.', value.language, value.theme);
+  const first = t('Ngôn ngữ: {0}. Giao diện: {1}.', value.language, value.theme);
+  const yesNo = (flag: boolean) => (flag ? t('bật') : t('tắt'));
+  const lines = [
+    value.autoTitles === undefined ? '' : t('Tự đặt tên chat: {0}', yesNo(value.autoTitles)),
+    value.confirmOpenTask === undefined ? '' : t('Hỏi trước khi mở chat: {0}', yesNo(value.confirmOpenTask)),
+    value.copyFormat === undefined ? '' : t('Định dạng khi sao chép: {0}', value.copyFormat),
+    value.downloadFormat === undefined ? '' : t('Định dạng khi tải xuống: {0}', value.downloadFormat),
+    value.archiveRetentionDays === undefined ? '' : t('Giữ chat đã lưu trữ: {0}', value.archiveRetentionDays === 0 ? t('đến khi xóa') : t('{0} ngày', value.archiveRetentionDays)),
+    value.autoUpdate === undefined ? '' : t('Tự cập nhật: {0}', yesNo(value.autoUpdate)),
+    value.backgroundNotifications === undefined ? '' : t('Thông báo khi chạy nền: {0}', yesNo(value.backgroundNotifications)),
+    value.accentColor === undefined ? '' : t('Màu nhấn: {0}', value.accentColor),
+    value.interfaceFont === undefined ? '' : t('Phông giao diện: {0}', value.interfaceFont ?? t('mặc định')),
+    value.codeFont === undefined ? '' : t('Phông mã: {0}', value.codeFont ?? t('mặc định')),
+  ].filter(Boolean);
+  return [first, ...lines].join('\n');
+}
+
+/** One line per row, the values in columns under the order the app sent them in; the note, if any, after. */
+export function formatShow(value: ShowValue): string {
+  if (value.rows.length === 0) return [t('Không có gì để hiện.'), ...(value.note ? [value.note] : [])].join('\n');
+  const keys = [...new Set(value.rows.flatMap(row => Object.keys(row)))];
+  const cell = (item: ShowRow[string] | undefined) => (item === null || item === undefined ? '' : typeof item === 'boolean' ? (item ? t('có') : t('không')) : String(item));
+  const header = keys.join('  ');
+  const rows = padded(value.rows.map(row => keys.map(key => cell(row[key]))));
+  return [`  ${header}`, ...rows, ...(value.note ? [value.note] : [])].join('\n');
+}
+
+export function formatChatSettings(value: ChatSettingsValue): string {
+  return t('Đã lưu chat {0}: {1}, giới hạn {2} mỗi lần.', value.name, value.with.join(', '), formatUsd(value.budgetMicros));
+}
+
+export function formatScheduleNotice(value: ScheduleNoticeValue): string {
+  return value.action === 'dismiss'
+    ? t('Đã đóng thông báo của lịch {0}.', value.schedule.name)
+    : t('Đã chạy lần bị lỡ của lịch {0}.', value.schedule.name);
+}
+
+export function formatUpdateCheck(value: UpdateCheckValue): string {
+  const detail = value.version ?? value.message ?? value.checkedAt ?? '';
+  return detail ? t('Cập nhật: {0} ({1}).', value.status, detail) : t('Cập nhật: {0}.', value.status);
 }
 
 export function formatTemplate(value: TemplateValue): string {

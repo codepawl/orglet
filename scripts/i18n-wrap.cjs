@@ -1,8 +1,9 @@
 // Wraps user-facing Vietnamese text in the renderer with t(): string literals, template literals (placeholders
 // become {0}, {1} params) and JSX text runs. Run from the repo root: node scripts/i18n-wrap.cjs [--dry]
 // Innermost text is wrapped first; the file is re-parsed until nothing is left, so nested strings are handled.
-// TypeScript 7 in this repo is native and has no JS API; use the 5.x compiler kept in the pnpm store.
-const ts = require(require('path').join(__dirname, '..', 'node_modules', '.pnpm', 'typescript@5.4.5', 'node_modules', 'typescript'));
+// The project compiles with TypeScript 7, which has no JavaScript compiler API. `typescript-compiler-api` is the 5.x
+// release under another name, installed only to parse source files in scripts.
+const ts = require('typescript-compiler-api');
 const fs = require('fs'), path = require('path');
 
 const root = path.join(__dirname, '..', 'apps', 'desktop', 'src', 'renderer');

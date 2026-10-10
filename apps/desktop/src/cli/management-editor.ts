@@ -1,5 +1,5 @@
 import { t } from './text';
-import type { CrewPatch, ManagementCatalog, ManagementTarget, OrgletPatch } from './management';
+import type { ChannelPatch, ChannelTarget, ManagementCatalog, ManagementTarget, OrgletPatch } from './management';
 import { displayWidth, layoutShortcutHint, muted, padEnd, paint, truncate, wrapSegments, type ColorMode } from './terminal';
 import { renderMiniFace } from './faces';
 import { normalizeRoleText } from '../shared/role-words';
@@ -12,8 +12,8 @@ type EditorState = 'kind' | 'entity' | 'menu' | 'fields' | 'value' | 'confirm' |
 export type EditorResult =
   | { action: 'cancel' }
   | { action: 'save'; kind: 'worker'; config: OrgletPatch; target?: ManagementTarget }
-  | { action: 'save'; kind: 'team'; config: CrewPatch; target?: ManagementTarget }
-  | { action: 'delete'; kind: EntityKind; target: ManagementTarget; confirmName: string };
+  | { action: 'save'; kind: 'team'; config: ChannelPatch; target?: ChannelTarget }
+  | { action: 'delete'; kind: EntityKind; target: ChannelTarget; confirmName: string };
 
 const ORGLET_FIELDS: Field[] = [
   { key: 'name', label: t("Tên") },
@@ -25,6 +25,14 @@ const ORGLET_FIELDS: Field[] = [
   { key: 'taskBudgetMicros', label: t("Giới hạn mỗi việc (USD)"), hint: t("Không bắt buộc · 0.001 đến 100 · tối đa sáu chữ số thập phân") },
   { key: 'color', label: t("Màu"), hint: t("Không bắt buộc · #rrggbb") },
 ];
+/** A channel whose orglets take turns has no lead and no limits: its name, topic and who is in it. */
+const TURN_FIELDS: Field[] = [
+  { key: 'name', label: t("Tên") },
+  { key: 'topic', label: t("Chủ đề"), hint: t("Không bắt buộc · tối đa 250 ký tự") },
+  { key: 'memberIds', label: t("Thành viên") },
+];
+const MAX_TURN_MEMBERS = 50;
+const MAX_LEAD_MEMBERS = 8;
 const CREW_FIELDS: Field[] = [
   { key: 'name', label: t("Tên") },
   { key: 'instructions', label: t("Hướng dẫn"), hint: t("Ctrl+J xuống dòng; Enter giữ hướng dẫn") },
@@ -48,7 +56,7 @@ export function parseDollarLimit(text: string, maximum: number): number {
 export class ManagementEditor {
   state: EditorState;
   kind: EntityKind | undefined;
-  target: ManagementTarget | undefined;
+  target: ChannelTarget | undefined;
   originalName = '';
   values: Record<string, unknown> = {};
   selected = 0;
@@ -62,7 +70,7 @@ export class ManagementEditor {
     this.state = action === 'new' ? kind ? 'fields' : 'kind' : 'entity';
     if (kind && action === 'new') this.initialize();
     if (name) {
-      const entities = [...catalog.orglets.map(entity => ({ ...entity, kind: 'worker' as const })), ...catalog.crews.map(entity => ({ ...entity, kind: 'team' as const }))];
+      const entities = [...catalog.orglets.map(entity => ({ ...entity, kind: 'worker' as const })), ...this.channelEntries().map(entity => ({ ...entity, config: { name: entity.name }, kind: 'team' as const }))];
       const matches = entities.filter(entity => (!kind || entity.kind === kind) && entity.config.name.toLocaleLowerCase() === name.toLocaleLowerCase());
       if (matches.length === 1) this.chooseEntity(matches[0].kind, matches[0].id);
       else {
@@ -96,7 +104,9 @@ export class ManagementEditor {
     if (this.target && this.state !== 'confirm' && this.state !== 'saving') {
       const detail = this.kind === 'worker'
         ? [this.catalog.providers.find(provider => provider.id === this.values.provider)?.name ?? String(this.values.provider), this.values.modelId ?? t('model mặc định')].join(' · ')
-        : `${t('Đã chọn {0}', (this.values.memberIds as string[]).length)} · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(entity => entity.id === this.values.synthesizerId)?.config.name ?? '—'} · ${this.values.workflow}`;
+        : this.values.mode === 'turns'
+          ? `${t('Đã chọn {0}', (this.values.memberIds as string[]).length)} · ${t('lần lượt')}`
+          : `${t('Đã chọn {0}', (this.values.memberIds as string[]).length)} · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(entity => entity.id === this.values.synthesizerId)?.config.name ?? '—'} · ${this.values.workflow}`;
       lines.push(muted(truncate(detail, width), mode));
     }
     if (this.error && this.state !== 'confirm') lines.push(truncate(this.error, width));
@@ -122,7 +132,7 @@ export class ManagementEditor {
     else if (this.state === 'entity') {
       choices = [
         ...(this.kind !== 'team' ? this.catalog.orglets.map(entity => ({ key: `worker:${entity.id}`, label: this.entityName(entity, this.catalog.orglets), detail: `${entity.config.provider}${entity.config.modelId ? `/${entity.config.modelId}` : ''}` })) : []),
-        ...(this.kind !== 'worker' ? this.catalog.crews.map(entity => ({ key: `team:${entity.id}`, label: this.entityName(entity, this.catalog.crews), detail: `channel · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(orglet => orglet.id === entity.config.synthesizerId)?.config.name ?? '—'}` })) : []),
+        ...(this.kind !== 'worker' ? this.channelEntries().map(entity => ({ key: `team:${entity.id}`, label: this.entityName({ id: entity.id, config: { name: entity.name } }, this.channelEntries().map(item => ({ id: item.id, config: { name: item.name } }))), detail: entity.values.mode === 'turns' ? `channel · ${t('lần lượt')}` : `channel · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(orglet => orglet.id === entity.values.synthesizerId)?.config.name ?? '—'}` })) : []),
         { key: 'cancel', label: t("Hủy") },
       ];
     } else if (this.state === 'fields') choices = [...this.fields().map(field => ({ key: field.key, label: `${field.label}  ${this.valueLabel(field)}` })), { key: 'save', label: t("Lưu") }, { key: 'cancel', label: t("Hủy") }];
@@ -203,14 +213,16 @@ export class ManagementEditor {
       this.chooseEntity(kind as EntityKind, id);
     } else if (this.state === 'fields' && choice) {
       if (choice.key === 'save') return this.kind === 'worker'
-        ? { action: 'save', kind: 'worker', config: this.values as OrgletPatch, target: this.target }
-        : { action: 'save', kind: 'team', config: this.values as CrewPatch, target: this.target };
+        ? { action: 'save', kind: 'worker', config: this.values as OrgletPatch, target: this.target as ManagementTarget | undefined }
+        : { action: 'save', kind: 'team', config: this.values as ChannelPatch, target: this.target };
       this.field = this.fields().find(field => field.key === choice.key);
       this.state = 'value';
     } else if (this.state === 'value' && this.field) {
       if (this.field.key === 'memberIds' && choice && choice.key !== 'done') {
         const members = this.values.memberIds as string[];
-        if (!members.includes(choice.key) && members.length >= 8) this.error = t("Một hội có tối đa tám thành viên.");
+        const turnsChannel = this.kind === 'team' && this.values.mode === 'turns';
+        if (!members.includes(choice.key) && turnsChannel && members.length >= MAX_TURN_MEMBERS) this.error = t("Một kênh có tối đa 50 thành viên.");
+        else if (!members.includes(choice.key) && !turnsChannel && members.length >= MAX_LEAD_MEMBERS) this.error = t("Một hội có tối đa tám thành viên.");
         else this.values.memberIds = members.includes(choice.key) ? members.filter(id => id !== choice.key) : [...members, choice.key];
         this.filter = '';
         return;
@@ -244,7 +256,8 @@ export class ManagementEditor {
   }
 
   private fields(): Field[] {
-    return this.kind === 'team' ? CREW_FIELDS : ORGLET_FIELDS;
+    if (this.kind !== 'team') return ORGLET_FIELDS;
+    return this.values.mode === 'turns' ? TURN_FIELDS : CREW_FIELDS;
   }
 
   private entityName(entity: { id: string; config: { name: string } }, entries: { id: string; config: { name: string } }[]): string {
@@ -258,12 +271,27 @@ export class ManagementEditor {
       : { name: '', instructions: '', provider: 'codex', skillId: this.catalog.skills[0]?.id };
   }
 
+  /**
+   * Every channel the app listed, with the values the form edits: the lead's settings flat, as the form always had them.
+   * An app older than the channels listing sends only the channels with a lead, as crews.
+   */
+  private channelEntries(): { id: string; revision?: number; name: string; values: Record<string, unknown> }[] {
+    if (!this.catalog.channels) return this.catalog.crews.map(entity => ({ id: entity.id, revision: entity.revision, name: entity.config.name, values: structuredClone(entity.config) }));
+    return this.catalog.channels.map(entity => {
+      const orgletIds = entity.config.members.filter(member => member.kind === 'orglet').map(member => member.id);
+      const values = { name: entity.config.name, topic: entity.config.topic ?? '', memberIds: orgletIds, mode: entity.config.mode, ...entity.config.lead };
+      return { id: entity.id, ...(entity.revision === undefined ? {} : { revision: entity.revision }), name: entity.config.name, values };
+    });
+  }
+
   private chooseEntity(kind: EntityKind, id: string): void {
-    const entity = (kind === 'worker' ? this.catalog.orglets : this.catalog.crews).find(candidate => candidate.id === id)!;
+    const entity = kind === 'worker'
+      ? this.catalog.orglets.find(candidate => candidate.id === id)!
+      : this.channelEntries().find(candidate => candidate.id === id)!;
     this.kind = kind;
-    this.target = { id, revision: entity.revision };
-    this.originalName = entity.config.name;
-    this.values = structuredClone(entity.config);
+    this.target = { id, ...(entity.revision === undefined ? {} : { revision: entity.revision }) };
+    this.originalName = 'values' in entity ? entity.name : entity.config.name;
+    this.values = 'values' in entity ? entity.values : structuredClone(entity.config);
     this.state = this.action === 'delete' ? 'confirm' : this.action === 'menu' ? 'menu' : 'fields';
     this.filter = '';
     this.selected = 0;

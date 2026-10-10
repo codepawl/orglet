@@ -1,5 +1,5 @@
 import type { Args, Routine, TaskInput, Workspace } from '../shared/contracts';
-import type { CliRequest, CliScheduleRow, SchedulesValue, ScheduleValue } from '../cli/protocol';
+import type { CliRequest, CliScheduleRow, ScheduleNoticeValue, SchedulesValue, ScheduleValue } from '../cli/protocol';
 import { chatsOf, CliFailure, crewRoster, matchChat, matchSchedule } from './cli-chats';
 import type { CliDependencies } from './cli-turns';
 
@@ -35,6 +35,22 @@ export class CliSchedules {
     const input: RoutineSave = { id: routine.id, name: routine.name, enabled: request.enabled, schedule: routine.schedule, ...(routine.trigger ? { trigger: routine.trigger } : {}), task: routine.task };
     const saved = await this.dependencies.request('saveRoutine', input) as Routine;
     return { schedule: scheduleRow(workspace, saved) };
+  }
+
+  /**
+   * Closes the notice a schedule shows after the app was closed over its time, or runs the missed time once, as the two
+   * buttons of that notice do. The core refuses when the schedule has no notice; running one is the same start as `run`.
+   */
+  async notice(request: Request<'schedule-notice'>): Promise<ScheduleNoticeValue> {
+    const workspace = await this.workspace();
+    const routine = findRoutine(workspace, request.schedule);
+    const schedule = { id: routine.id, name: routine.name };
+    if (request.action === 'dismiss') {
+      await this.dependencies.request('dismissRoutine', { id: routine.id });
+      return { schedule, action: 'dismiss' };
+    }
+    const taskId = String(await this.dependencies.request('catchUpRoutine', { id: routine.id }));
+    return { schedule, action: 'catch-up', taskId };
   }
 
   /** Deletes a schedule after its exact name; its past runs stay as chats. */

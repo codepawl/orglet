@@ -47,7 +47,10 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet memory edit <id>\|delete <id> --confirm "<id or text>"` | Edits, pins or deletes an approved memory |
 | `orglet usage` | Plan usage of the signed-in CLI accounts |
 | `orglet models <provider>` | The models a connection offers; `--to <orglet>` uses that orglet's |
-| `orglet preferences [--language …] [--theme …]` | Shows or changes the app's language and theme |
+| `orglet preferences [--language …] [--theme …] [--titles …]` | Shows or changes the app's language, theme and looks. See [preferences](#preferences). |
+| `orglet show <connections\|spend\|changelog\|update\|browser\|desktop\|sources\|changes>` | Looks at the app without changing it. See [show, update and assign](#show-update-and-assign). |
+| `orglet update` | Checks for a new version and says what it found |
+| `orglet assign --chat <id> [--with <name> …] [--budget <USD>]` | Changes who answers a chat and lowers its cost limit |
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category, how it answers and who is in it, in the order the space shows them |
 | `orglet space add\|edit\|category\|uncategory\|move\|out\|delete` | Creates, changes or deletes a space and its categories, and moves a channel into or out of one. See [Spaces](#spaces). |
@@ -65,7 +68,9 @@ These are trust decisions, so the terminal has no operation for them:
 - folder grants and the folder's level
 - a chat's permissions (tools, commands, web)
 - API keys and connections, and signing a harness CLI in
-- approving or archiving knowledge proposals, and applying app-change proposals
+- approving or archiving knowledge proposals, writing a note to the library (the core saves it as approved, with no review), and applying app-change proposals
+- applying or discarding the changes a run made, restoring a file from its working copy, and what a new channel in a space starts with (its tool permissions)
+- raising what a chat may spend
 - backups, restore and erase
 - the CodePawl account
 
@@ -192,9 +197,24 @@ An orglet configuration requires `name`, `instructions`, `provider` and `skillId
 }
 ```
 
-`create channel` makes a channel where a lead splits the work, which older versions called a crew; `crew` and `team` still work as names for it, and a channel made in the app shows up here too. A channel configuration requires `name`, `instructions`, `memberIds` (one to eight unique orglet IDs), `synthesizerId` (lead ID), `workflow` (`parallel` or `sequential`) and `monthlyBudgetMicros`. Optional fields are `taskBudgetMicros` and `maxConcurrentTasks` (one to eight). The lead may be outside the members. Budget fields are integer millionths of a USD: `100000` is $0.10.
+`create channel` makes a channel the way **New channel** in the app does, in the space named Channels; `crew` and `team` still work as names for `channel`, and a channel made in the app shows up here too. A channel configuration requires `name` and `members`, a list of `{"kind":"orglet","id":"<orglet ID>"}`. Optional fields are `topic` and `mode`: `turns` (the default) makes the orglets answer in turn, and `lead` makes one orglet split the work. When the lead splits the work, its settings are the field `lead`: `synthesizerId` (the lead's ID, the first member when left out), `instructions`, `workflow` (`parallel` or `sequential`), `monthlyBudgetMicros`, `maxConcurrentTasks` (one to eight) and `taskBudgetMicros`. The lead must be one of the members. Budget fields are integer millionths of a USD: `100000` is $0.10.
 
-An edit file is a patch: `{"description":"Reviews code"}` changes only that field. Omitted fields keep their value; `null` clears an optional model, description, task limit, avatar or concurrency setting. Avatar properties merge; changing just its color preserves its emoji, and `{"avatar":{"color":null}}` restores the automatic color without removing that emoji. Changing the connection without supplying a model clears the old connection’s model. Permission fields, connection creation and proposal auto-apply fields are refused. Edits and deletes require a unique full name within the chosen kind; use the TUI arrow picker for duplicate names. Scripts also refuse a configuration that changed between reading and writing. All four commands accept `--json`.
+```json
+{
+  "name": "launch",
+  "topic": "Ship the 0.14 release",
+  "members": [
+    { "kind": "orglet", "id": "11111111-1111-4111-8111-111111111111" },
+    { "kind": "orglet", "id": "22222222-2222-4222-8222-222222222222" }
+  ],
+  "mode": "lead",
+  "lead": { "synthesizerId": "11111111-1111-4111-8111-111111111111", "workflow": "parallel" }
+}
+```
+
+The names a crew file used still work for one release: `memberIds` (orglet IDs, with `synthesizerId` added to them), and `instructions`, `synthesizerId`, `workflow`, `monthlyBudgetMicros`, `maxConcurrentTasks` and `taskBudgetMicros` written beside `name` instead of inside `lead`. A new channel with any of them has a lead. A `null` for `maxConcurrentTasks` or `taskBudgetMicros` now keeps the value the channel has, since a channel with a lead always has both. `orglet config --json` lists every channel under `channels` (id, `config`, and for a channel with a lead its `revision`); `crews`, the channels with a lead in their older shape, is still there and is going away in a later release. The `id` in the result of a channel with a lead is still its crew's, and `channelId` is the channel's own; either names the channel in later edits.
+
+An edit file is a patch: `{"description":"Reviews code"}` changes only that field. Omitted fields keep their value; `null` clears an optional model, description, task limit or avatar of an orglet, and an empty `topic` clears a channel's topic. Avatar properties merge; changing just its color preserves its emoji, and `{"avatar":{"color":null}}` restores the automatic color without removing that emoji. Changing the connection without supplying a model clears the old connection’s model. Permission fields, connection creation and proposal auto-apply fields are refused. Edits and deletes require a unique full name within the chosen kind; use the TUI arrow picker for duplicate names. Scripts also refuse a configuration that changed between reading and writing. All four commands accept `--json`.
 
 ### Keys
 
@@ -238,25 +258,35 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/answer <n\|text>` | Answers the question the orglet is waiting on |
 | `/stop`, `/pause` | Stops the running turn, or pauses it after its current step; both act at once |
 | `/resume`, `/retry`, `/continue` | Resumes, runs again or continues the latest turn, and waits for the answer |
-| `/chats [archived]` | Lists chats with their short ids; `/to #id` opens one |
+| `/chats [archived] [--space <name>]` | Lists chats with their short ids, only those of one space with `--space`; `/to #id` opens one |
+| `/restore #<id>`, `/restore orglet\|channel "<name>"` | Brings an archived chat, orglet or channel back; `/chats archived` lists the chats |
 | `/side <message>` | Sends the message in a new side thread of this orglet |
 | `/bring [#n]` | In a side thread, brings its latest answer or answer `#n` into the main chat |
-| `/channel <name, …> -- <message>` | Creates a channel of those orglets and channels; `/group` is the older name |
+| `/channel [--space <name> [--category <name>]] <name, …> -- <message>` | Creates a channel of those orglets and channels, in a space if one is named; `/group` is the older name |
 | `/members <name, …>` | In a channel, changes who is in it |
 | `/rename <title>`, `/archive` | Renames or archives the open chat |
 | `/schedules` | Lists schedules |
 | `/schedule on\|off\|run <name>` | Switches a schedule on or off, or starts it now |
+| `/schedule dismiss\|catch-up "<name>"`, `/schedule delete "<name>" --confirm "<name>"` | Closes the missed-run notice, runs the missed time once, or deletes a schedule; adding and editing one is `orglet schedule` |
+| `/spaces` | Lists the spaces with their orglets and channels |
+| `/space <verb> …` | The same as `orglet space`: add, edit, category, uncategory, move, out, folder, color, order, delete |
+| `/market [installed\|add <id>\|update "<name>" [--confirm <code>]]` | The same as `orglet market` |
 | `/search <words>` | Searches every chat |
 | `/running` | Lists every run working or waiting |
 | `/memory` | Lists this orglet's or channel's memories |
+| `/memory edit <id> --text "<text>"`, `/memory delete <id> --confirm "<id or text>"` | The same as `orglet memory`; a delete needs its confirmation here too |
 | `/usage` | Shows plan usage of the CLI accounts |
 | `/models` | Lists the models of this orglet's connection |
 | `/language vi\|en\|en-GB`, `/theme system\|light\|dark` | Changes the app's language or theme |
+| `/preferences [--titles on\|off …]` | The same as `orglet preferences` |
+| `/show <topic>`, `/update` | The same as `orglet show` and `orglet update`; `browser`, `desktop`, `sources` and `changes` are about the open chat |
 | `/new [orglet|channel]` | Creates an orglet or channel in a keyboard form |
 | `/edit [name]` | Edits the current chat’s orglet or channel; without a current chat, choose an entry |
 | `/delete [name]` | Removes an orglet or channel after exact-name confirmation |
 | `/help` | Lists these commands |
 | `/exit` | Leaves |
+
+A command that says "the same as" runs the one-shot command as typed, quoting as a shell does, and prints what it prints, so its checks and confirmations apply: a delete in the chat needs the same `--confirm` as `orglet delete`. `/edit` and `/delete` open the keyboard form for an orglet or any channel; for a channel that takes turns the form has its name, topic and members.
 
 Chat mode needs a terminal you type into. In a script, or with input or output redirected, use `send` and `read` instead: `orglet chat` then stops with exit code 2, and plain `orglet` prints the usual usage error.
 
@@ -388,7 +418,7 @@ orglet members --chat c41d0e88 --with Researcher --with Writer --with Editor
 
 `channel` creates a channel of these orglets and sends its first message, the way **New channel** in the app does (COD-361): each orglet answers in turn. One member is enough. `--name` names it (the members' names otherwise) and `--topic` sets its topic. `--file <path>` attaches a file to the first message, so it needs a message. `--space <name>` puts the channel in that space, and `--category <name>` in one of its categories; a space is found by its name or the start of it. Without `--space` the channel goes to the space named Channels, which the app keeps for channels that arrive outside every space, and the command says which space it is in. With `--name` and no message the channel is only created, as **New channel** in the app does, and no chat starts. In a space `--with` can be left out: the channel then takes every orglet of its category or space and follows that list when it changes. With `--with` it keeps the orglets named. `orglet chats --space <name>` lists only the channels of that space. Each `channel` makes a new channel; the next message goes in with `send --chat`. `group`, the older name, does the same and takes the same options. `members` changes who is in the channel from the next message on, orglets and channels alike; it replaces the whole list, keeps the name and topic, and is refused while the channel is working. `orglet chats` lists a channel as `channel` with its `#name`, and `delete --chat <id> --confirm launch` takes the name with or without its `#`, since a shell reads an unquoted `#` as the start of a comment.
 
-There is one kind of channel. Its **lead** splits the work and combines the answers, or its orglets **take turns**; `orglet list` and `orglet spaces` say which (`lead Writer`, or `in turn`). A channel with a lead was once a crew, and `orglet create channel`, `edit channel`, `delete channel`, `archive channel` and `restore channel` still change that record: a channel you create that way appears in the space named Channels, and one you edit takes the new name and members. `crew` and `team` are accepted in place of `channel` in those commands, and `group` in place of the `channel` command; none of them appears in the output.
+There is one kind of channel. Its **lead** splits the work and combines the answers, or its orglets **take turns**; `orglet list` and `orglet spaces` say which (`lead Writer`, or `in turn`). A channel with a lead was once a crew. `orglet create channel`, `edit channel` and `delete channel` work on any channel, with or without a lead, through the same commands as the app's channel dialog: a channel you create appears in the space named Channels, and an edit patch changes only the fields it names, among them `name`, `topic`, `members`, and the lead's settings. A patch with lead settings changes a channel that takes turns only when it also says `"mode": "lead"`; the terminal never switches how a channel answers by accident. `delete channel` removes a channel nobody has written in. A channel with a lead that has messages leaves the list and keeps its chat history, as before; one that takes turns and has messages is deleted as a chat with `orglet delete --chat <id>`. `archive channel` and `restore channel` still archive and restore the record of a channel with a lead, because the app has no archive command for a channel itself. `crew` and `team` are accepted in place of `channel` in those commands, and `group` in place of the `channel` command; none of them appears in the output.
 
 `orglet list` shows every channel under its space, with the channels outside every space last. Inside a space, the channels directly in it come first, then each category in the order the app shows them, and in each place the channels keep the order you gave them in the app, with one you never moved after those you did, newest first. `orglet spaces` and `orglet chats --space <name>` use the same order. With `--json`, `list` has a `channels` list; its `crews` list, the channels with a lead only, is still there for scripts and is going away in a later release.
 
@@ -404,7 +434,13 @@ orglet space move "Launch" --chat cccc0000 --category Drafts
 orglet space move "Launch" --name ideas
 orglet space out --chat cccc0000
 orglet space delete "Launch" --confirm "Launch"
+orglet space folder "Launch" --value Work
+orglet space color "Launch" --value "#7c8be8"
+orglet space order "Launch" --name ideas --position 1
+orglet space order "Launch" --category Drafts --position 1
 ```
+
+`folder` puts a space's tile in a folder on the rail, `color` sets its colour; without `--value` the space leaves its folder or goes back to the default colour. `order` moves a channel to a place among the channels of its category (or the ones directly in the space), or a category to a place among the space's categories; the other channels keep their places. What a new channel in a space starts with is a set of tool permissions, so it is set in the app.
 
 The same as a space's settings in the app. `add` makes a space with these orglets. `edit` renames it with `--rename`, and with `--with` replaces the whole list of its orglets. `category` adds one category; for a category that exists, `--rename` renames it and `--with` sets the orglets of its own. `uncategory` removes a category and keeps its channels in the space. `move` puts a channel in the space, or in one of its categories with `--category`; `out` takes the channel out of every space. Both name the channel with `--chat <id>` or with `--name <channel name>`, which is the only way for a channel that has no message yet. `delete` needs the space's full name in `--confirm` and keeps its channels, which are then in no space. A space is found by its name or the start of it, except for `--confirm`. A space holds orglets, so `--with` does not take a channel's name. The command sets no permission and no folder.
 
@@ -416,7 +452,11 @@ The same as a space's settings in the app. `add` makes a space with these orglet
 orglet market
 orglet market installed
 orglet market add launch-space
+orglet market update "Launch space"
+orglet market update "Launch space" --confirm 1a2b3c4d
 ```
+
+`market update` shows what an update of something you added changes (each field, before and after) and prints an eight-character code for exactly that update. With the code in `--confirm` the update is applied, after the app previews it again and finds the same code; if the listing changed in between, nothing is applied and you read the new changes first.
 
 `orglet market` lists the catalog: each listing's id, whether it is an orglet, a channel or a space, its name, its author and its summary. It reads up to five pages and says when there are more. When the online catalog cannot be fetched it lists the saved copy, or the one that ships with the app, and says which. `--refresh` fetches it again. `installed` lists what was added from the marketplace, with the version of each and whether an update is waiting. `add <id>` adds the listing's current version, as **Add** on the Marketplace page does, with the same checks of its bytes: its orglets, and the channel or space it carries. It names the orglets it made, and the ones whose suggested connection this computer does not have. None of this needs an account. Publishing, reviewing and applying an update stay in the app, where you see the content before anything is sent or changed.
 
@@ -497,7 +537,11 @@ orglet schedule add "Morning review" --to Researcher --brief "Review yesterday's
 orglet schedule edit "Morning review" --at 09:15 --daily-cap 2
 orglet schedule off "Morning review"
 orglet schedule delete "Morning review" --confirm "Morning review"
+orglet schedule dismiss "Morning review"
+orglet schedule catch-up "Morning review"
 ```
+
+After the app was closed over a schedule's time, the schedule shows a notice with two buttons. `dismiss` closes the notice, and `catch-up` runs the missed time once, as the second button does; the app refuses either when the schedule has no notice.
 
 `schedules` lists each schedule with whether it is on, who runs it, when, in which time zone, and its limits. `schedule add` creates one, `edit` changes only the options given, `on` and `off` switch it the way the card's switch does, and `delete` removes it after its exact name; its past runs stay as chats.
 
@@ -548,9 +592,32 @@ orglet models --to Researcher
 
 ```sh
 orglet preferences --language en-GB --theme dark
+orglet preferences --titles off --retention 30 --copy-format markdown --accent "#7c8be8"
+orglet preferences --font "Fira Sans" --code-font default --auto-update on --notifications off
 ```
 
-Shows the app's language and theme, and changes either. Every other setting, provider permission included, stays in the app's Settings.
+Shows the app's looks and behaviour settings, and changes the ones given: the language, the theme, whether chats are named automatically (`--titles on|off`), whether opening a chat from a notification asks first (`--open-confirmation on|off`), the copy and download formats (`--copy-format`, `--download-format`: `ask`, `text` or `markdown`), how long an archived chat is kept (`--retention 0|7|30` days, 0 until you delete it), automatic updates (`--auto-update`), system notifications while the window is in the background (`--notifications`), the accent colour (`--accent #rrggbb`) and the two fonts (`--font`, `--code-font`; `default` goes back to the font the app ships with). Every other setting stays in the app's Settings: provider permission, the connection limit and the web search provider have no field in the request.
+
+### show, update and assign
+
+```sh
+orglet show connections
+orglet show spend
+orglet show changelog --refresh
+orglet show update
+orglet update
+orglet show changes --chat cccc0000
+orglet show browser --to Researcher
+orglet show desktop --to Researcher
+orglet show sources --chat cccc0000
+orglet assign --chat cccc0000 --with Writer --budget 0.25
+```
+
+`show` only looks. `connections` says yes or no for each API key, custom connection and web search key, and the sign-in status of each CLI account; it never returns a key, token or the account's address. `spend` prints what was charged and what is reserved for runs under way, in integer millionths of a USD, with the connection limit. `changelog` lists the latest releases (`--refresh` fetches them again) and `update` the updater's state; `orglet update` starts the same check as the window's button and prints the state right after. A downloaded update is installed from the window.
+
+`browser` and `desktop` print a chat's journal, what each step touched and how it ended. `sources` lists the chat's files by name and size, not where they were picked from. `changes` lists what the chat's runs changed in the working folder, by working copy, with each change's path and status, and notes how many commands ran and how many are uncertain. It does not return the review token: applying or discarding a hand-in, and restoring a file, stay in the window.
+
+`assign` is the chat dialog's assignee and limit. `--with` replaces the orglets that answer (name one channel with a lead alone to give the chat to it); in a channel, `--with` is refused and `orglet members` changes who is in it. `--budget` can only lower the limit: raising what a chat may spend is done in the app. A chat that is running is refused by the core.
 
 ### Names
 
@@ -578,6 +645,8 @@ Messages that come from the app are in the app's language.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
 - `react`, `forward`, `control` and `answer` name a chat by its orglet or channel and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
 - `chats`, `side-thread`, `bring`, `channel`, `members`, `chat-change`, `archive-entity` and `template` call `startSideThread`, `bringIntoMainChat`, `createChannel` and then `createTask` for the channel's first message, `updateChannel`, `renameTask`, `archiveTask`, `deleteTask`, `archiveEntity` and `createTemplate`. `channel` without `--space`, and `template`, then call `adoptLooseChannels` with the same word for Channels the window passes, so the new channel is in the space the app keeps for them before its first message runs. `side-thread`, `channel` and `revise` import `--file` paths the way `send` does and pass the source ids on (`sourceIds` of `startSideThread`, `createTask` and `reviseTask`). None of them carries a permission, folder, browser or MCP field; the protocol refuses a request that adds one.
+- `config`, `save-orglet`, `save-crew` and `delete-entity` are `orglet config`, `create`, `edit` and `delete`. For an orglet they call `saveWorker` and `deleteEntity`. For a channel `save-crew` calls `createChannel` (then `adoptLooseChannels`, as `channel` does) or `updateChannel`, with the lead's settings as the command's `lead` field, and `delete-entity` calls `deleteChannel` for a channel with no message, or `deleteEntity` for the crew record behind a channel with a lead that has messages. `updateChannel` has no revision check, so the app compares the revision of a channel with a lead just before it calls; an edit made in the window in between can still be overwritten.
+- `preferences` calls `settings` with the one field to change, `chat-settings` calls `updateTask`, `schedule-notice` calls `dismissRoutine` and `catchUpRoutine`, and `market update` calls `marketInstallations`, `marketPreviewUpdate` and, with the code, `marketApplyUpdate`. `show` reads `workspace`, `harnesses`, `browserActions`, `desktopActions`, `sourceMetadata` and `workspaceRecovery` from the core, and the saved keys, the release notes and the updater from main; `update` calls the updater's check. `space folder`, `color` and `order` call `updateSpace` and `reorder`.
 - `space-change` and `spaces` call `createSpace`, `updateSpace` and `deleteSpace` for a space, and `updateChannel` for a channel moved into or out of one or into a category. `spaces`, `list`, `status` and `chats --space` put channels in the order the window does: the workspace's `channelOrder`, a channel not in it after those that are, newest first, and categories in the order of each space's `categories`.
 - `market` calls `marketCatalog` and `marketInstallations`, and `marketAdd` for `add`. Publishing, moderation and applying an update have no operation here.
 - `schedules`, `schedule-enable`, `schedule-delete` and `schedule-save` read the workspace's routines and call `saveRoutine` and `deleteRoutine`. `schedule-save` has fields for the name, target, brief, timing, limits and a clock or called trigger only; the app fills consent and provider scopes from the target's providers, and refuses providers not in **Settings → Allowed providers** (`providerConsent`). An edit sends the routine's own task back with only the given fields changed.
