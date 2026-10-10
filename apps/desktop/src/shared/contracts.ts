@@ -685,5 +685,9 @@ export interface Bridge {
   endTerminalAccess(): Promise<void>;
   /** What the terminal did while acting for the person, newest first. */
   terminalJournal(): Promise<import('./terminal-access').TerminalJournalRow[]>;
+  /** Undo on a journal row of a grant the core can take back; it names the row and nothing else, and runs once. */
+  undoTerminalAction(rowId: string): Promise<void>;
+  /** A grant or a secret a terminal just set, for the notification list. */
+  onTerminalNotice(callback: (notice: import('./terminal-access').TerminalNotice) => void): () => void;
 }
 declare global { interface Window { orglet: Bridge } }

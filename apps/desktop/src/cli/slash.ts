@@ -44,6 +44,8 @@ export type SlashCommand =
   /** Pair with the app so this chat can answer what a chat waits on; `setup` is reserved for grants and secrets. */
   | { kind: 'unlock'; scope: 'decisions' | 'setup' }
   | { kind: 'lock' }
+  /** `/grant …`, `/connect <provider>`, `/disconnect <provider>`: the arguments of the same `orglet` command, after `/unlock setup`. */
+  | { kind: 'setup'; argv: string[] }
   | { kind: 'approve'; choice?: string; card?: string }
   | { kind: 'help' }
   | { kind: 'exit' }
@@ -56,7 +58,7 @@ export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/que
   '/history', '/revise', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
   '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/restore', '/schedules', '/schedule', '/spaces', '/space', '/market',
   '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme', '/preferences', '/show', '/update',
-  '/new', '/edit', '/delete', '/unlock', '/lock', '/approve', '/help', '/exit'] as const;
+  '/new', '/edit', '/delete', '/unlock', '/lock', '/approve', '/grant', '/connect', '/disconnect', '/help', '/exit'] as const;
 
 const CONTROLS: Record<string, ChatControl> = { '/stop': 'stop', '/pause': 'pause', '/resume': 'resume', '/retry': 'retry', '/continue': 'continue' };
 /** How many earlier turns one `/history` or Page Up at the top loads. */
@@ -114,6 +116,9 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/unlock [setup]', t('Mở khóa bằng mã hiện trong cửa sổ Orglet để trả lời thẻ đang chờ ngay trong terminal')],
   ['/lock', t('Khóa lại: quên quyền đã mở khóa')],
   ['/approve [<lựa chọn>] [<mã thẻ>]', t('Xem thẻ đang chờ của chat này, hoặc trả lời nó bằng một lựa chọn')],
+  ['/grant <việc> …', t('Cấp quyền (thư mục, công cụ, MCP, giới hạn…) sau /unlock setup; giống orglet grant')],
+  ['/connect [search] <nhà cung cấp>', t('Lưu khóa API, hỏi khóa và không hiện khi gõ, sau /unlock setup')],
+  ['/disconnect [search] <nhà cung cấp>', t('Xóa khóa đã lưu, sau /unlock setup')],
   ['/help', 'Show these commands'],
   ['/exit', 'Leave (Ctrl+D does the same)'],
 ];
@@ -167,6 +172,9 @@ export function parseSlash(line: string): SlashCommand {
     case '/show': return parseShow(rest, trimmed);
     case '/unlock': return rest === '' ? { kind: 'unlock', scope: 'decisions' } : rest === 'setup' ? { kind: 'unlock', scope: 'setup' } : { kind: 'unknown', command: trimmed };
     case '/lock': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'lock' };
+    case '/grant':
+    case '/connect':
+    case '/disconnect': return rest ? { kind: 'setup', argv: [command.slice(1), ...splitWords(rest)] } : { kind: 'usage', message: t('Gõ {0} rồi việc cần làm. /help liệt kê.', command) };
     case '/approve': {
       const [choice, card] = rest.split(/\s+/).filter(Boolean);
       return { kind: 'approve', ...(choice ? { choice } : {}), ...(card ? { card } : {}) };

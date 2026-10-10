@@ -13,6 +13,8 @@ import { completeSlash, HISTORY_PAGE, isSlashCommand, parseSlash, SLASH_HELP, ty
 import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
 import { formatCard, pairWithTerminal, shortCardId } from './held-command';
+import { parseSetupArguments } from './held-setup';
+import { UsageError } from './arguments';
 import type { WaitingCard } from './held-protocol';
 import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
@@ -112,6 +114,8 @@ class Session {
   private historyLoading = false;
   /** Set while a pairing waits for the code: the next submitted line goes here instead of into the chat, and is never echoed. */
   private codeReader: ((typed: string | undefined) => void) | undefined;
+  /** True while a key is being typed: the composer draws dots, and the line goes nowhere but the reader. */
+  private hidingInput = false;
 
   constructor(private readonly options: InteractiveOptions) {
     this.terminal = options.terminal ?? Boolean(options.input.isTTY && options.output.isTTY);
@@ -202,6 +206,7 @@ class Session {
         submit: text => this.enqueue(text),
         interrupt: () => this.interrupt(),
         confirmingExit: () => this.confirmingExit,
+        masked: () => this.hidingInput,
         confirmExit: leave => this.confirmExit(leave),
         close: () => this.end(EXIT_CODES.ok),
       });
@@ -390,7 +395,7 @@ class Session {
   }
 
   private currentPrompt(): string {
-    if (this.codeReader) return `${paint(t('Mã'), { bold: true }, this.mode)} › `;
+    if (this.codeReader) return `${paint(this.hidingInput ? t('Khóa') : t('Mã'), { bold: true }, this.mode)} › `;
     return this.view === 'picker' ? this.pickerPrompt() : this.chatPrompt();
   }
 
@@ -631,6 +636,7 @@ class Session {
       case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'unlock': return this.unlock(command.scope);
       case 'lock': return this.lock();
+      case 'setup': return this.setup(command.argv);
       case 'approve': return this.approve(command.choice, command.card);
       case 'help': return this.help();
       case 'exit': return this.end(EXIT_CODES.ok);
@@ -1107,16 +1113,64 @@ class Session {
   private async unlock(scope: 'decisions' | 'setup'): Promise<void> {
     const held = this.heldClient();
     if (!held) return;
-    if (scope === 'setup') {
-      this.printMuted(t('Mở khóa để cấp quyền và lưu khóa bí mật sẽ có ở một bản sau. /unlock mở khóa để trả lời thẻ đang chờ.'));
-      return;
-    }
     if (!this.terminal) {
       this.printError(t('Mở khóa cần một terminal thật; script không gõ được mã.'));
       return;
     }
     const print = { stdout: (text: string) => this.printMuted(text), stderr: (text: string) => this.printError(text) };
-    if (await pairWithTerminal(held, 'decisions', undefined, prompt => this.readCode(prompt), print)) this.printMuted(t('Đã mở khóa. /approve trả lời thẻ đang chờ; /lock khóa lại.'));
+    if (!await pairWithTerminal(held, scope, undefined, prompt => this.readCode(prompt), print)) return;
+    this.printMuted(scope === 'setup'
+      ? t('Đã mở khóa để cấp quyền và lưu khóa. /grant, /connect và /disconnect làm việc đó; /lock khóa lại.')
+      : t('Đã mở khóa. /approve trả lời thẻ đang chờ; /lock khóa lại.'));
+  }
+
+  /** A key typed in the chat: the prompt masks it and the line goes to the reader only, not the queue, the history or the transcript. */
+  private async readSecret(prompt: string): Promise<string | undefined> {
+    this.hidingInput = true;
+    try {
+      return (await this.readCode(prompt))?.trim();
+    } finally {
+      this.hidingInput = false;
+      this.showPrompt();
+    }
+  }
+
+  /** `/grant`, `/connect` and `/disconnect`: the same bodies as the commands, sent with the key `/unlock setup` gave. */
+  private async setup(argv: string[]): Promise<void> {
+    const held = this.heldClient();
+    if (!held) return;
+    let request;
+    try {
+      request = parseSetupArguments(argv);
+    } catch (error) {
+      if (error instanceof UsageError) this.printError(error.message);
+      else this.printFailure(error);
+      return;
+    }
+    if (!held.canSetup()) {
+      this.printMuted(t('Gõ /unlock setup để cấp quyền và lưu khóa ở đây.'));
+      return;
+    }
+    let body = request.body;
+    if (request.secretPrompt) {
+      if (!this.terminal) {
+        this.printError(t('Nhập khóa cần một terminal thật.'));
+        return;
+      }
+      const secret = await this.readSecret(request.secretPrompt.replace(/:\s*$/, ''));
+      if (!secret) {
+        this.printMuted(t('Đã hủy, không lưu khóa.'));
+        return;
+      }
+      body = { ...body, secret } as typeof body;
+    }
+    try {
+      const done = await held.act(body);
+      this.printMuted(t('Xong: {0}', done.summary));
+    } catch (error) {
+      if (error instanceof AppRefusal && error.code === 'locked') this.printMuted(t('Gõ /unlock setup để cấp quyền và lưu khóa ở đây.'));
+      else this.printFailure(error);
+    }
   }
 
   private async lock(): Promise<void> {

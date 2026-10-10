@@ -49,9 +49,14 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** The hash a `one` elevation is bound to: the operation and its exact arguments. */
+/**
+ * The hash a `one` elevation is bound to: the operation and its exact arguments, without a secret. A secret is typed
+ * after the pairing, so it cannot be bound to it; leaving it out also means no hash that is kept for the pairing's life
+ * could ever be used to test a guess at a key.
+ */
 export function operationHash(body: HeldBody): string {
-  return createHash('sha256').update(canonicalJson(body)).digest('hex');
+  const { secret: _secret, ...withoutSecret } = body as HeldBody & { secret?: unknown };
+  return createHash('sha256').update(canonicalJson(withoutSecret)).digest('hex');
 }
 
 function digestOf(text: string): Buffer {
