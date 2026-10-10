@@ -60,21 +60,49 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 
 It can create, edit and remove orglets and channels, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
 
+### Unlocking: answering what is waiting from the terminal
+
+The design is [cli-held-actions-design.md](cli-held-actions-design.md). A terminal gets the right to answer what a chat is waiting on in one way: **Orglet shows a short code in its window and you type it at the terminal that asked.** An orglet that runs through a coding CLI cannot see Orglet's window and cannot type at your keyboard, so it cannot do this; a flag such as `--yes` would not help it, because it can type that too.
+
+```
+orglet unlock                       opens the terminal chat already unlocked
+orglet approve --to Researcher      prints the card the chat waits on and its choices
+orglet approve --to Researcher once answers it (the choice's name, here an MCP approval)
+orglet approve                      the cards that belong to the app: memories to review, a downloaded update
+orglet reconcile <id> 1.50 invoice  records what the provider billed for an unsettled run
+orglet test mcp <name>|web-search|decision-model
+orglet install-update
+orglet show terminal                what the terminal did (read-only, needs no code)
+```
+
+What you can answer is the same as what the window's buttons do: an MCP, browser or desktop approval; applying or discarding what a run changed, and applying a working copy that a check command blocked; applying, dismissing or undoing an app-change proposal; approving or archiving what an orglet wanted to remember; recording the amount a provider billed; installing a downloaded update; and testing an MCP server, web search or the decision model. Each prints the same facts as the window's card first.
+
+1. The command needs a real terminal on input and output. In a script, or with either redirected, it exits with code 2 before it sends anything.
+2. It asks the app for a code. Orglet comes forward and shows a dialog: **A terminal is asking to act for you**, the code, what it allows and the time left. The only button is **Cancel**. Press it if you did not just run a command.
+3. You type the code at the terminal. It is read from the terminal only, never from an argument, an environment variable, a pipe or a file. A code lives 2 minutes and allows 5 wrong tries. One pairing is open at a time. After 3 pairings that ended without the right code in 10 minutes, pairing is held for 10 minutes.
+4. A one-shot command (`orglet approve … once`) pairs for exactly that operation with exactly those arguments; the key is spent by it and forgotten when the command exits. In the terminal chat, `/unlock` pairs for decisions: the key stays in memory for the session, lasts 15 minutes or 5 without use, and `/lock`, leaving the chat, a refused request or **End now** forget it. When a turn stops on a card, the chat prints the card and says `/unlock` (or `/open` to answer in the window); unlocked, `/approve <choice>` answers it. `/unlock setup` is reserved for grants and secrets and says it arrives in a later version.
+5. While a terminal is acting, the user panel shows a mark with **End now**. Every answer is listed in **Settings → Data → What the terminal did** and by `orglet show terminal`.
+
+**Settings → Data → Let a terminal act for me** (on by default) turns the whole path off: pairing and every one of these answers are refused, with a sentence that names the setting.
+
+Exit codes are the usual ones; a refused unlock or answer is 1, and a command with no terminal is 2. In `--json` form a request without a live unlock answers `{"ok": false, "code": "locked"}`.
+
 ### What stays in the desktop
 
 These are trust decisions, so the terminal has no operation for them:
 
-- browser, desktop and MCP approvals, the cards that ask before an orglet takes a consequential step
 - folder grants and the folder's level
 - a chat's permissions (tools, commands, web)
 - API keys and connections, and signing a harness CLI in
-- approving or archiving knowledge proposals, writing a note to the library (the core saves it as approved, with no review), and applying app-change proposals
-- applying or discarding the changes a run made, restoring a file from its working copy, and what a new channel in a space starts with (its tool permissions)
+- writing a note to the library (the core saves it as approved, with no review)
+- restoring a file from its working copy, trusting a skill package, choosing between two versions of a synced chat, noting that a run's evidence limit was seen, and what a new channel in a space starts with (its tool permissions)
 - raising what a chat may spend
 - backups, restore and erase
 - the CodePawl account
 
 The reason is where the pipe's token lives. It is a file in the data folder. An orglet that runs through a harness CLI such as Claude Code or Codex runs as you, the same user, and can read that folder. Anything the pipe could approve, an orglet could approve for itself. When a turn stops on one of these cards, `send`, `answer` and the chat stop waiting and say so; `/open` or `orglet open --to <name>` shows the card in the app.
+
+Decisions about work that is waiting for you are not in this list: a terminal reaches them after you type a code the window shows. That is the next section.
 
 File Explorer's **Send to** menu and `orglet://` links are other ways in, on [their own page](integrations.md).
 
@@ -631,7 +659,7 @@ Names match without regard to case. A unique start of a name is enough: `--to re
 |---|---|
 | 0 | It worked |
 | 1 | It failed: an unknown name, a turn that failed or ran out of time, a chat with no answer yet |
-| 2 | The command was typed wrong. Run `orglet --help` or `orglet <command> --help`. |
+| 2 | The command was typed wrong. Run `orglet --help` or `orglet <command> --help`. A command that needs you to type a code (`unlock`, `approve`, `reconcile`, `test`, `install-update`) also exits 2 when input or output is not a terminal. |
 | 3 | The app could not be reached, even after trying to start it |
 
 Messages that come from the app are in the app's language.
@@ -652,6 +680,7 @@ Messages that come from the app are in the app's language.
 - `schedules`, `schedule-enable`, `schedule-delete` and `schedule-save` read the workspace's routines and call `saveRoutine` and `deleteRoutine`. `schedule-save` has fields for the name, target, brief, timing, limits and a clock or called trigger only; the app fills consent and provider scopes from the target's providers, and refuses providers not in **Settings → Allowed providers** (`providerConsent`). An edit sends the routine's own task back with only the given fields changed.
 - `search`, `running`, `library`, `usage` and `models` read through `searchChats`, the workspace's `running`, `knowledge` and `searchKnowledge`, `harnessUsage` and `modelList`. `memory-edit` and `memory-delete` call `updateMemory` and `deleteMemory`, only for an approved memory, because `updateMemory` approves what it saves. A delete carries `--confirm` text that the app compares with the memory's id and text, or `--yes`; a request with neither is refused by the protocol. `preferences` sends `settings` with the current theme and connection limit and only the language or theme changed; main then updates its own language as for a save in the window.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
+- The operations that answer held decisions (`held`) carry an `elevation` key beside the token. The server checks the token first, then the key's SHA-256 in constant time, its life (15 minutes, 5 idle) and scope; a missing or dead key answers `locked`. The set of operations that need a key comes from `apps/desktop/src/cli/parity.ts` (the `elevated` answer), not from a second list, and a test fails when the two differ. `pair-start` asks for a code (main makes it from an alphabet without 0, O, 1, I and L and shows it in the window; the answer does not carry it), `pair-finish` sends the typed code and is the only answer that ever carries a key, `pair-cancel` and `elevation-end` end a pairing or a key, and `waiting` reads the cards a chat or the app is waiting on, with the same facts as the window and a ready request for each choice. Each answer calls the core command its window button calls; `held` also journals it in `terminal-journal.jsonl` in the data folder (words, never an argument; local, not synced, not in a backup). The key is never written to disk, a log or an environment variable, and the window never receives it.
 - Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.
 - Native harness step times are when Orglet first observes the start and completion. They are not exact internal harness timings. A step received before its channel member's run metadata keeps those observed times when the author is joined later.

@@ -5,6 +5,8 @@ import { createServer, type Server, type Socket } from 'node:net';
 import { CLI_TOKEN_FILE, CliRequest, MAX_CONNECTIONS, MAX_LINE_BYTES, type CliErrorCode, type CliResponse } from '../cli/protocol';
 import { CliFailure } from './cli-operations';
 import { CliProgressFrame } from '../cli/protocol';
+import { heldActionScope } from '../cli/parity';
+import { operationHash, type CliElevation, type ElevationGrant } from './cli-elevation';
 
 /**
  * The app's end of the `orglet` command (COD-234): a named pipe on Windows, a Unix socket elsewhere, answering one
@@ -12,7 +14,7 @@ import { CliProgressFrame } from '../cli/protocol';
  * someone who can read that folder can talk to the app. No Electron here, so tests run the real server.
  */
 
-export type CliHandler = (request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void) => Promise<unknown>;
+export type CliHandler = (request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void, grant?: ElevationGrant) => Promise<unknown>;
 
 export type CliServerOptions = {
   endpoint: string;
@@ -20,6 +22,8 @@ export type CliServerOptions = {
   handle: CliHandler;
   /** Turns a Vietnamese source message into the app's language. */
   translate: (message: string) => string;
+  /** Checks the elevation key of an operation in the elevated set; without it every such operation answers `locked`. */
+  elevation?: CliElevation;
   maxConnections?: number;
   maxLineBytes?: number;
 };
@@ -53,7 +57,7 @@ function failure(code: CliErrorCode, error: string): CliResponse {
 }
 
 /** Reads one request line and answers it; exported so the tests can call it without a socket. */
-export async function answerLine(line: string, options: Pick<CliServerOptions, 'token' | 'handle' | 'translate'>, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<CliResponse> {
+export async function answerLine(line: string, options: Pick<CliServerOptions, 'token' | 'handle' | 'translate' | 'elevation'>, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<CliResponse> {
   let raw: unknown;
   try {
     raw = JSON.parse(line);
@@ -65,16 +69,26 @@ export async function answerLine(line: string, options: Pick<CliServerOptions, '
   if (!tokensMatch(options.token, token)) {
     return failure('unauthorized', options.translate('Mã truy cập CLI không khớp. Chạy lại lệnh sau khi Orglet khởi động xong.'));
   }
-  const parsed = CliRequest.safeParse(raw);
+  // `elevation` rides beside the token and belongs to no operation's schema.
+  const { elevation: elevationKey, ...fields } = raw as Record<string, unknown>;
+  const parsed = CliRequest.safeParse(fields);
   if (!parsed.success) return failure('invalid', options.translate('Yêu cầu CLI không hợp lệ.'));
   try {
+    // The operations that need an elevation come from the parity table, never from a second list here.
+    const grant = parsed.data.op === 'held' ? await authorizeHeld(parsed.data, elevationKey, options.elevation) : undefined;
     const emit = parsed.data.op === 'send' && parsed.data.progress && parsed.data.wait ? progress : undefined;
-    return { ok: true, value: await options.handle(parsed.data, signal, emit) };
+    return { ok: true, value: await options.handle(parsed.data, signal, emit, grant) };
   } catch (error) {
     const code = error instanceof CliFailure ? error.code : 'failed';
     const message = error instanceof Error ? error.message : 'Không thể thực hiện thao tác.';
     return failure(code, options.translate(message));
   }
+}
+
+/** Checks the elevation of a held operation: the token is already checked, then the key, its life and its scope. */
+async function authorizeHeld(request: Extract<CliRequest, { op: 'held' }>, key: unknown, elevation: CliElevation | undefined): Promise<ElevationGrant> {
+  if (!elevation) throw new CliFailure('locked', 'Lệnh này cần bạn mở khóa từ cửa sổ Orglet.');
+  return elevation.authorize(heldActionScope(request.request.action), key, operationHash(request.request));
 }
 
 export class CliServer {

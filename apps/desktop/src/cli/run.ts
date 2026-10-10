@@ -15,6 +15,8 @@ import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
 import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type SpacesValue, type SpaceChangeValue, type ChannelCreatedValue, type MarketListValue, type MarketInstalledValue, type MarketAddValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
+import { createHeldClient, type HeldClient } from './held-client';
+import { isHeldCommand, runHeldCommand } from './held-command';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
 /**
@@ -426,17 +428,35 @@ async function commandLineResult(argv: readonly string[], environment: NodeJS.Pr
   return { code, stdout: printed.stdout.join('\n'), stderr: printed.stderr.join('\n') };
 }
 
-function runChat(to: string | undefined, environment: NodeJS.ProcessEnv, terminal: InteractiveTerminal): Promise<number> {
-  const appClient = appChatClient(resolveUserData(environment), appExecutable(environment));
-  const client = appClient.actions ? { ...appClient, actions: { ...appClient.actions, commandLine: (argv: readonly string[]) => commandLineResult(argv, environment) } } : appClient;
-  return runInteractive({ input: terminal.input, output: terminal.output, client, mode: terminal.mode, version: packageJson.version,
-    reducedMotion: environment.ORGLET_REDUCED_MOTION === '1', ...(to ? { to } : {}),
-  });
+/** `held` is the client `orglet unlock` already paired; otherwise the chat starts locked. Its key is forgotten when the chat ends. */
+async function runChat(to: string | undefined, environment: NodeJS.ProcessEnv, terminal: InteractiveTerminal, pairedHeld?: HeldClient): Promise<number> {
+  const userData = resolveUserData(environment);
+  const executable = appExecutable(environment);
+  const appClient = appChatClient(userData, executable);
+  const held = pairedHeld ?? createHeldClient(userData, executable);
+  const client = { ...appClient, held, ...(appClient.actions ? { actions: { ...appClient.actions, commandLine: (argv: readonly string[]) => commandLineResult(argv, environment) } } : {}) };
+  try {
+    return await runInteractive({ input: terminal.input, output: terminal.output, client, mode: terminal.mode, version: packageJson.version,
+      reducedMotion: environment.ORGLET_REDUCED_MOTION === '1', ...(to ? { to } : {}),
+    });
+  } finally {
+    held.forget();
+  }
 }
 
 export async function runCli(argumentList: readonly string[], output: Output, environment: NodeJS.ProcessEnv = process.env, workingDirectory = process.cwd(), extras: RunExtras = {}): Promise<number> {
   // Plain `orglet` in a terminal opens the chat; anywhere else it is the usage error it always was.
   if (argumentList.length === 0 && extras.terminal) return runChat(undefined, environment, extras.terminal);
+  if (isHeldCommand(argumentList)) {
+    return runHeldCommand({
+      argumentList,
+      print: output,
+      userData: resolveUserData(environment),
+      executable: appExecutable(environment),
+      terminal: extras.terminal,
+      openUnlockedChat: held => runChat(undefined, environment, extras.terminal!, held),
+    });
+  }
   let command: ParsedCommand;
   try {
     command = parseArguments(argumentList);

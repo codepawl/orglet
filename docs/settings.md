@@ -82,6 +82,8 @@ Each row refuses while a run, schedule or check is in progress, and reports what
 | **Delete imported sources** | Orglet's record of the files you attached. Your files are untouched; a source a chat still refers to is revoked instead so that chat still opens. |
 | **Erase all data** | Everything. Asks you to type `Orglet`. The workspace comes back as a fresh install with the Researcher. Browser profiles are kept, like API keys; delete them in **Settings → Browser**. |
 
+**Let a terminal act for me** (Data tab, on by default) lets the `orglet` command answer what a chat is waiting on, after you type a code this window shows. Off, every such command is refused. Below it, **What the terminal did** lists what it answered, newest first. See [The orglet command](cli.md#unlocking-answering-what-is-waiting-from-the-terminal).
+
 Where the data lives: `%APPDATA%\orglet\orglet.sqlite` on Windows, `~/Library/Application Support/Orglet/orglet.sqlite` on macOS. Opening the workspace with a newer build first saves a copy of the database; how to roll back is in [recovery.md](recovery.md).
 
 ## CodePawl account

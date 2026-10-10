@@ -12,6 +12,8 @@ import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
 import { completeSlash, HISTORY_PAGE, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
 import { renderTurns } from './pretty';
 import type { ChatActionClient } from './chat-client';
+import { formatCard, pairWithTerminal, shortCardId } from './held-command';
+import type { WaitingCard } from './held-protocol';
 import type { ChatControl, CliChatRow, CliProgressFrame, CliQuestion } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
 import { chatKindLabel, formatChats, formatLibrary, formatManagementResult, formatModels, formatPreferences, formatRun, formatRunning, formatScheduleChange, formatSchedules, formatSearch, formatSpaces, formatUsage } from './output';
@@ -108,6 +110,8 @@ class Session {
   private editorDraft = '';
   private managementOpening: { action: ManagementAction } | undefined;
   private historyLoading = false;
+  /** Set while a pairing waits for the code: the next submitted line goes here instead of into the chat, and is never echoed. */
+  private codeReader: ((typed: string | undefined) => void) | undefined;
 
   constructor(private readonly options: InteractiveOptions) {
     this.terminal = options.terminal ?? Boolean(options.input.isTTY && options.output.isTTY);
@@ -386,6 +390,7 @@ class Session {
   }
 
   private currentPrompt(): string {
+    if (this.codeReader) return `${paint(t('Mã'), { bold: true }, this.mode)} › `;
     return this.view === 'picker' ? this.pickerPrompt() : this.chatPrompt();
   }
 
@@ -482,6 +487,13 @@ class Session {
   }
 
   private enqueue(text: string): void {
+    if (this.codeReader) {
+      const reader = this.codeReader;
+      this.codeReader = undefined;
+      reader(text);
+      this.showPrompt();
+      return;
+    }
     if (this.managementOpening) {
       this.replaceLine(text);
       return;
@@ -617,6 +629,9 @@ class Session {
       case 'new': return this.manage('new', command.entity);
       case 'edit': return this.manage('edit', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
+      case 'unlock': return this.unlock(command.scope);
+      case 'lock': return this.lock();
+      case 'approve': return this.approve(command.choice, command.card);
       case 'help': return this.help();
       case 'exit': return this.end(EXIT_CODES.ok);
       case 'unknown': return this.printMuted(`Unknown command ${command.command}. /help lists the commands.`);
@@ -1074,6 +1089,101 @@ class Session {
     }
   }
 
+  private heldClient() {
+    const held = this.options.client.held;
+    if (!held) this.printError(t('Cập nhật Orglet và CLI để mở khóa từ terminal.'));
+    return held;
+  }
+
+  /** The line the person types for the code is read here and goes nowhere else: not the queue, not the transcript. */
+  private readCode(prompt: string): Promise<string | undefined> {
+    this.printMuted(prompt.trim());
+    return new Promise(resolve => {
+      this.codeReader = resolve;
+      this.showPrompt();
+    });
+  }
+
+  private async unlock(scope: 'decisions' | 'setup'): Promise<void> {
+    const held = this.heldClient();
+    if (!held) return;
+    if (scope === 'setup') {
+      this.printMuted(t('Mở khóa để cấp quyền và lưu khóa bí mật sẽ có ở một bản sau. /unlock mở khóa để trả lời thẻ đang chờ.'));
+      return;
+    }
+    if (!this.terminal) {
+      this.printError(t('Mở khóa cần một terminal thật; script không gõ được mã.'));
+      return;
+    }
+    const print = { stdout: (text: string) => this.printMuted(text), stderr: (text: string) => this.printError(text) };
+    if (await pairWithTerminal(held, 'decisions', undefined, prompt => this.readCode(prompt), print)) this.printMuted(t('Đã mở khóa. /approve trả lời thẻ đang chờ; /lock khóa lại.'));
+  }
+
+  private async lock(): Promise<void> {
+    const held = this.heldClient();
+    if (!held) return;
+    await held.lock().catch(() => undefined);
+    this.printMuted(t('Đã khóa lại.'));
+  }
+
+  /** Prints the cards the chat waits on with what the window's card shows, and how to answer them from here. */
+  private async offerCards(chat: ChatEntry): Promise<void> {
+    const held = this.options.client.held;
+    if (!held) return;
+    try {
+      const cards = await held.waiting(chat.target?.startsWith('#') ? { chat: chat.target.slice(1) } : { to: chat.name });
+      for (const card of cards) this.printCard(card, held.unlocked());
+    } catch {
+      // The plain hint above already said where to answer.
+    }
+    this.showPrompt();
+  }
+
+  private printCard(card: WaitingCard, unlocked: boolean): void {
+    for (const line of formatCard({ ...card, choices: [] }, '').split('\n')) this.printWrapped(line, {});
+    this.printMuted(card.choices.map(choice => `${choice.key}: ${choice.label}`).join(' · '));
+    this.printMuted(unlocked ? t('/approve <lựa chọn> {0} trả lời thẻ này.', shortCardId(card.cardId)) : t('Gõ /unlock để trả lời ở đây, hoặc /open để trả lời trong app.'));
+  }
+
+  private async approve(choiceKey: string | undefined, cardPrefix: string | undefined): Promise<void> {
+    const held = this.heldClient();
+    if (!held || !this.chat) return;
+    const chat = this.chat;
+    const target = chat.target?.startsWith('#') ? { chat: chat.target.slice(1) } : { to: chat.name };
+    let cards: WaitingCard[];
+    try {
+      cards = (await held.waiting(target)).filter(card => !cardPrefix || card.cardId.startsWith(cardPrefix));
+    } catch (error) {
+      this.printFailure(error);
+      return;
+    }
+    if (cards.length === 0) {
+      this.printMuted(t('Không có thẻ nào đang chờ ở chat này.'));
+      return;
+    }
+    if (!choiceKey || cards.length > 1) {
+      for (const card of cards) this.printCard(card, held.unlocked());
+      return;
+    }
+    const chosen = cards[0].choices.find(choice => choice.key === choiceKey);
+    if (!chosen) {
+      this.printError(t('Thẻ này không có lựa chọn "{0}".', choiceKey));
+      return;
+    }
+    if (!held.unlocked()) {
+      this.printMuted(t('Gõ /unlock để trả lời ở đây, hoặc /open để trả lời trong app.'));
+      return;
+    }
+    try {
+      const done = await held.act(chosen.request);
+      this.printMuted(t('Xong: {0}', done.summary));
+    } catch (error) {
+      // A refused key is already forgotten; the next step is /unlock.
+      if (error instanceof AppRefusal && error.code === 'locked') this.printMuted(t('Gõ /unlock để trả lời ở đây, hoặc /open để trả lời trong app.'));
+      else this.printFailure(error);
+    }
+  }
+
   private printQuestion(question: CliQuestion): void {
     this.printWrapped(question.question, { bold: true });
     question.options.forEach((option, index) => this.print(`  ${index + 1}. ${option}`));
@@ -1138,6 +1248,7 @@ class Session {
     if (value.answers.length > 0) this.printAnswers(value.answers, `${seconds}s`);
     if (value.needsDesktop) {
       this.printMuted(t('{0} đang chờ bạn duyệt một bước. /open mở chat này trong app.', chat.name));
+      void this.offerCards(chat);
       return;
     }
     if (value.question) {
@@ -1164,6 +1275,8 @@ class Session {
   private end(code: number): void {
     if (this.finished) return;
     this.finished = true;
+    this.codeReader?.(undefined);
+    this.options.client.held?.forget();
     this.waitingController?.abort();
     if (this.waitingTimer) clearInterval(this.waitingTimer);
     this.composer?.stop();

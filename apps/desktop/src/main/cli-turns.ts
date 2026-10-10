@@ -4,6 +4,8 @@ import type { Changelog, UpdateState } from '../shared/updates';
 import type { CliChat, SendValue } from '../cli/protocol';
 import type { CliActivityFeed, CliObserver } from './cli-activity';
 import type { CoreRequest } from './cli-chats';
+import type { CliElevation } from './cli-elevation';
+import type { CliJournal } from './cli-journal';
 import { isTurnRunning, pendingQuestion, turnAnswers, turnErrors, waitsForDesktop } from './cli-chat-history';
 
 /** What the CLI operations need from main, and waiting for a turn the way `send` does (COD-234, COD-354). */
@@ -15,6 +17,8 @@ export type CliAppState = {
   updateState: () => UpdateState;
   /** Starts a check the way the window's button does and returns the state right after. */
   checkForUpdates: () => UpdateState;
+  /** Restarts into a downloaded update, as the window's button does; only an elevated terminal reaches it. */
+  installUpdate?: () => void;
 };
 
 export type CliDependencies = {
@@ -30,6 +34,8 @@ export type CliDependencies = {
   /** What only main knows (the saved keys, the release notes, the updater), for the read-only `show` and `update`. */
   app?: CliAppState;
   /** Tells main the language or theme changed from a terminal, as a save in the window does (COD-354). */
+  /** Pairing, elevation and the journal behind the held operations (docs/cli-held-actions-design.md). */
+  terminalAccess?: { elevation: CliElevation; journal: CliJournal };
   settingsChanged?: (changes: { language?: Language; theme?: 'system' | 'light' | 'dark' }) => void;
 };
 
