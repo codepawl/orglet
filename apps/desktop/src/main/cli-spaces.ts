@@ -3,6 +3,7 @@ import type { Space } from '../shared/spaces';
 import type { Channel } from '../shared/channels';
 import type { CliRequest, SpaceChangeValue } from '../cli/protocol';
 import { chatsOf, CliFailure, matchChat, taskById } from './cli-chats';
+import { channelsBySpace } from './cli-channels';
 import type { CliDependencies } from './cli-turns';
 
 /**
@@ -60,6 +61,20 @@ export async function adoptLooseChannels(dependencies: CliDependencies): Promise
   }
 }
 
+/**
+ * The saved order of every channel with this one moved to a place among those that share its category (or sit directly
+ * in the space). The channels it passes keep their order and every other channel keeps its place.
+ */
+function movedWithin(workspace: Workspace, space: Space, channel: Channel, position: number): string[] {
+  const ordered = channelsBySpace(workspace).map(entry => entry.channel);
+  const group = ordered.filter(item => item.spaceId === space.id && item.categoryId === channel.categoryId);
+  const others = group.filter(item => item.id !== channel.id);
+  const moved = [...others.slice(0, position - 1), channel, ...others.slice(position - 1)];
+  const slots = new Set(group.map(item => item.id));
+  let next = 0;
+  return ordered.map(item => (slots.has(item.id) ? moved[next++].id : item.id));
+}
+
 /** The orglets these names mean, each once. A space holds orglets, so a channel's name here is a mistake. */
 function orgletIdsNamed(workspace: Workspace, names: readonly string[]): string[] {
   const orglets = chatsOf({ workers: workspace.workers, teams: [] });
@@ -88,7 +103,47 @@ export class CliSpaces {
       case 'uncategory': return this.removeCategory(workspace, request);
       case 'move': return this.moveChannel(workspace, request);
       case 'out': return this.takeOut(workspace, request);
+      case 'folder':
+      case 'color': return this.setLook(workspace, request);
+      case 'order': return this.reorder(workspace, request);
     }
+  }
+
+  /**
+   * The folder a space's tile sits in on the rail, or its colour; with no value the space leaves its folder or goes back
+   * to the default colour. Everything else about the space, including what a new channel starts with, stays as it is.
+   */
+  private async setLook(workspace: Workspace, request: Request): Promise<SpaceChangeValue> {
+    const space = spaceNamed(workspace, request.space!);
+    const colour = request.verb === 'color' ? request.value : space.color;
+    await this.dependencies.request('updateSpace', {
+      id: space.id,
+      name: space.name,
+      ...(colour ? { color: colour } : {}),
+      orgletIds: space.orgletIds,
+      categories: space.categories,
+      ...(request.verb === 'folder' ? { folder: request.value ?? null } : {}),
+    });
+    return { verb: request.verb, space: space.name, ...(request.value ? { value: request.value } : {}) };
+  }
+
+  /** Moves a channel to a place among the channels of its category, or a category to a place among its space's. */
+  private async reorder(workspace: Workspace, request: Request): Promise<SpaceChangeValue> {
+    const space = spaceNamed(workspace, request.space!);
+    const position = request.position!;
+    if (request.chat === undefined && request.channelName === undefined) return this.reorderCategory(space, categoryNamed(space, request.category!), position);
+    const channel = this.channelOf(workspace, request);
+    if (channel.spaceId !== space.id) throw new CliFailure('failed', `Kênh "${channel.name}" không nằm trong không gian "${space.name}".`);
+    const order = movedWithin(workspace, space, channel, position);
+    await this.dependencies.request('reorder', { kind: 'channels', ids: order });
+    return { verb: 'order', space: space.name, channel: channel.name, position };
+  }
+
+  private async reorderCategory(space: Space, category: Space['categories'][number], position: number): Promise<SpaceChangeValue> {
+    const others = space.categories.filter(item => item.id !== category.id);
+    const categories = [...others.slice(0, position - 1), category, ...others.slice(position - 1)];
+    await this.saveSpace(space, categories);
+    return { verb: 'order', space: space.name, category: category.name, position };
   }
 
   private async add(workspace: Workspace, request: Request): Promise<SpaceChangeValue> {

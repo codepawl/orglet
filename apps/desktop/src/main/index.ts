@@ -265,6 +265,12 @@ async function startCliServer(directory: string) {
       cliObservers.add(observer);
       return () => cliObservers.delete(observer);
     },
+    app: {
+      connections: async () => ({ ...await credentials.status(), search: await webSearchKeys.status() }),
+      changelog: refresh => changelog.read(refresh),
+      updateState: () => updater.state,
+      checkForUpdates: () => updater.check(),
+    },
     // A language set from a terminal reaches main's own dialogs and the spell checker, as one set in the window does.
     settingsChanged: changes => {
       if (!changes.language) return;

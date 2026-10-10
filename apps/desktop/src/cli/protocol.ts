@@ -5,11 +5,12 @@ import { RunActivity } from '../shared/run-activity';
 import { FORWARD_NOTE_CHARS, MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
 import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency } from '../shared/schedule';
-import { ProviderId } from '../shared/contracts';
+import { FormatPreference, ProviderId } from '../shared/contracts';
+import { FontFamily } from '../shared/fonts';
 import { Language } from '../shared/i18n';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { CHANNEL_TOPIC_LIMIT, ChannelName } from '../shared/channels';
-import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
+import { ChannelPatch, ChannelTarget, ManagementTarget, OrgletPatch } from './management';
 
 /**
  * The line protocol between the `orglet` command and the running app (COD-234). One JSON request per line, one JSON
@@ -64,6 +65,9 @@ export const ChatChange = z.enum(['rename', 'archive', 'restore', 'delete']);
 export type ChatChange = z.infer<typeof ChatChange>;
 /** A schedule (routine) is named the way the app names it: up to 80 characters. */
 const ScheduleName = z.string().trim().min(1).max(80);
+/** What `orglet show` can look at. All read-only; none of them carries a key, a token or a file's content. */
+export const SHOW_TOPICS = ['connections', 'spend', 'changelog', 'update', 'browser', 'desktop', 'sources', 'changes'] as const;
+export type ShowTopic = typeof SHOW_TOPICS[number];
 /** How many past turns one `read` returns at most (COD-354). */
 export const MAX_READ_TURNS = 50;
 /**
@@ -95,8 +99,8 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('list'), token: CliToken }).strict(),
   z.object({ op: z.literal('config'), token: CliToken }).strict(),
   z.object({ op: z.literal('save-orglet'), token: CliToken, config: OrgletPatch, target: ManagementTarget.optional() }).strict(),
-  z.object({ op: z.literal('save-crew'), token: CliToken, config: CrewPatch, target: ManagementTarget.optional() }).strict(),
-  z.object({ op: z.literal('delete-entity'), token: CliToken, kind: z.enum(['worker', 'team']), target: ManagementTarget, confirmName: ChatName }).strict(),
+  z.object({ op: z.literal('save-crew'), token: CliToken, config: ChannelPatch, target: ChannelTarget.optional() }).strict(),
+  z.object({ op: z.literal('delete-entity'), token: CliToken, kind: z.enum(['worker', 'team']), target: ChannelTarget, confirmName: ChatName }).strict(),
   z.object({
     op: z.literal('send'),
     token: CliToken,
@@ -146,12 +150,27 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('template'), token: CliToken, templateId: z.enum(TEMPLATE_IDS), provider: z.enum(['demo', 'openai']) }).strict(),
   z.object({ op: z.literal('schedules'), token: CliToken }).strict(),
   z.object({ op: z.literal('spaces'), token: CliToken }).strict(),
-  z.object({ op: z.literal('market'), token: CliToken, verb: z.enum(['list', 'installed', 'add']), listingId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/).optional(), refresh: z.boolean() }).strict(),
+  // `update` shows what an installed listing's update changes and a code for it; with that code in `confirmCode` it applies exactly that update.
   z.object({
-    op: z.literal('space-change'), token: CliToken, verb: z.enum(['add', 'edit', 'category', 'uncategory', 'move', 'out', 'delete']),
+    op: z.literal('market'), token: CliToken, verb: z.enum(['list', 'installed', 'add', 'update']),
+    listingId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/).optional(), installed: ChatName.optional(), confirmCode: z.string().regex(/^[a-f0-9]{8}$/).optional(), refresh: z.boolean(),
+  }).strict(),
+  z.object({
+    op: z.literal('space-change'), token: CliToken, verb: z.enum(['add', 'edit', 'category', 'uncategory', 'move', 'out', 'delete', 'folder', 'color', 'order']),
     space: ChatName.optional(), names: z.array(ChatName).max(50), rename: ChatName.optional(), category: ChatName.optional(),
     chat: ChatId.optional(), channelName: ChannelName.optional(), confirmName: ChatName.optional(),
+    /** `folder` and `color`: the new value; left out takes the space out of its folder, or back to the default colour. */
+    value: z.string().trim().min(1).max(40).optional(),
+    /** `order`: the 1-based place the channel or category moves to. */
+    position: z.number().int().min(1).max(1000).optional(),
   }).strict(),
+  z.object({ op: z.literal('schedule-notice'), token: CliToken, schedule: ScheduleName, action: z.enum(['dismiss', 'catch-up']) }).strict(),
+  // Who answers a chat and its cost limit. The limit may only go down here: raising what a chat may spend is a money limit the person sets in the window.
+  z.object({ op: z.literal('chat-settings'), token: CliToken, ...ChatTarget, names: z.array(ChatName).max(50).optional(), budgetMicros: z.number().int().min(1000).max(100_000_000).optional() }).strict(),
+  z.object({ op: z.literal('show'), token: CliToken, what: z.enum(SHOW_TOPICS), ...ChatTarget, refresh: z.boolean() }).strict(),
+  z.object({ op: z.literal('update-check'), token: CliToken }).strict(),
+  // A note waits for the person's review in the window before any orglet reads it.
+  z.object({ op: z.literal('note'), token: CliToken, title: z.string().trim().min(1).max(200), content: z.string().trim().min(1).max(8000), tags: z.array(z.string().trim().min(1).max(40)).max(10).optional(), pinned: z.boolean().optional() }).strict(),
   z.object({ op: z.literal('schedule-enable'), token: CliToken, schedule: ScheduleName, enabled: z.boolean() }).strict(),
   z.object({ op: z.literal('schedule-delete'), token: CliToken, schedule: ScheduleName, confirmName: ScheduleName }).strict(),
   /**
@@ -185,8 +204,17 @@ export const CliRequest = z.discriminatedUnion('op', [
     .refine(request => request.confirmed === true || request.confirm !== undefined, 'A delete must be confirmed.'),
   z.object({ op: z.literal('usage'), token: CliToken, refresh: z.boolean() }).strict(),
   z.object({ op: z.literal('models'), token: CliToken, provider: ProviderId.optional(), to: ChatName.optional(), refresh: z.boolean() }).strict(),
-  /** Language and theme only; every other setting, consent included, stays in the desktop. */
-  z.object({ op: z.literal('preferences'), token: CliToken, language: Language.optional(), theme: z.enum(['system', 'light', 'dark']).optional() }).strict(),
+  /** Looks and behaviour only; keys, consent, money limits and provider choices stay in the desktop. */
+  z.object({
+    op: z.literal('preferences'), token: CliToken, language: Language.optional(), theme: z.enum(['system', 'light', 'dark']).optional(),
+    autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(),
+    copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(),
+    archiveRetentionDays: z.union([z.literal(0), z.literal(7), z.literal(30)]).optional(),
+    autoUpdate: z.boolean().optional(), backgroundNotifications: z.boolean().optional(),
+    accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+    /** A font family, or `null` for the font the app ships with. */
+    interfaceFont: FontFamily.nullable().optional(), codeFont: FontFamily.nullable().optional(),
+  }).strict(),
   z.object({ op: z.literal('open'), token: CliToken, to: ChatName.optional() }).strict(),
   z.object({
     op: z.literal('run'),
@@ -353,7 +381,7 @@ export type MarketInstalledValue = { installed: { id: string; version: number; k
 /** What `orglet market add` made; `withoutModel` names the orglets whose suggested connection this computer lacks. */
 export type MarketAddValue = { id: string; version: number; kind: 'orglet' | 'crew' | 'space'; name: string; orglets: string[]; withoutModel: string[] };
 /** What `orglet space` changed: the space by its name now, and the channel or category the step was about. */
-export type SpaceChangeValue = { verb: 'add' | 'edit' | 'category' | 'uncategory' | 'move' | 'out' | 'delete'; space?: string; channel?: string; category?: string; orglets?: string[]; existing?: boolean };
+export type SpaceChangeValue = { verb: 'add' | 'edit' | 'category' | 'uncategory' | 'move' | 'out' | 'delete' | 'folder' | 'color' | 'order'; space?: string; channel?: string; category?: string; orglets?: string[]; existing?: boolean; value?: string; position?: number };
 /** A channel `orglet channel` made with no first message. */
 export type ChannelCreatedValue = { channel: string; space?: string };
 /** What `orglet search` found (COD-354): names that match, and one message per chat with the words around the match. */
@@ -381,7 +409,21 @@ export type CliUsageAccount = {
 };
 export type UsageValue = { accounts: CliUsageAccount[] };
 export type ModelsValue = { provider: string; models: { id: string; name?: string; deprecated?: boolean }[]; fetchedAt: string; stale: boolean; error?: string };
-export type PreferencesValue = { language: string; theme: string };
+export type PreferencesValue = {
+  language: string; theme: string;
+  /** The rest are absent from an app older than the preferences listing. */
+  autoTitles?: boolean; confirmOpenTask?: boolean; copyFormat?: string; downloadFormat?: string; archiveRetentionDays?: number;
+  autoUpdate?: boolean; backgroundNotifications?: boolean; accentColor?: string; interfaceFont?: string | null; codeFont?: string | null;
+};
+/** What `market update` found, and whether this call applied it: `code` is what `--confirm` takes to apply exactly this update. */
+export type MarketUpdateValue = { name: string; installedVersion: number; version: number; changes: { name: string; before: string; after: string }[]; code: string; applied: boolean };
+/** A row of `orglet show`: flat values the terminal prints as columns and `--json` keeps as they are. */
+export type ShowRow = Record<string, string | number | boolean | null>;
+export type ShowValue = { what: ShowTopic; rows: ShowRow[]; note?: string };
+export type ChatSettingsValue = { taskId: string; name: string; with: string[]; budgetMicros: number };
+export type NoteValue = { id: string; short: string; title: string };
+export type ScheduleNoticeValue = { schedule: { id: string; name: string }; action: 'dismiss' | 'catch-up'; taskId?: string };
+export type UpdateCheckValue = { status: string; version?: string; message?: string; checkedAt?: string };
 export type ScheduleValue = { schedule: CliScheduleRow };
 export type OpenValue = { chat?: CliChat };
 /** The schedule `run` started and the chat its run opened. */

@@ -1,9 +1,9 @@
-import type { Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
+import type { Args, Task, TaskInput, Team, Worker, Workspace } from '../shared/contracts';
 import { channelNameFrom, channelOrgletIds, type ChannelMember } from '../shared/channels';
 import { adoptLooseChannels, placeNamed, spaceNamed } from './cli-spaces';
 import { inSavedOrder } from './cli-channels';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
-import type { ChannelCreatedValue, ArchiveEntityValue, BringValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
+import type { ChannelCreatedValue, ArchiveEntityValue, BringValue, ChatSettingsValue, ChatChangeValue, ChatsValue, CliChatRow, CliRequest, MembersValue, SendValue, TemplateValue } from '../cli/protocol';
 import { chatKind, chatName, chatOfTask, chatsOf, CliFailure, matchChat, targetChat, taskById, taskRunners } from './cli-chats';
 import { resolveMessage } from './cli-chat-history';
 import { importFiles, readTask, turnResult, waitForTurn, type CliDependencies } from './cli-turns';
@@ -130,6 +130,25 @@ export class CliChatAdmin {
     return { taskId: task.id, names: members.map(member => memberNameOf(workspace, member)) };
   }
 
+  /**
+   * Who answers a chat and its cost limit, the two settings of the chat dialog that are not a grant. The limit may only
+   * go down: what a chat may spend is set in the window, where the person sees the figure. A channel keeps its members
+   * (`members` changes them) and takes only the limit.
+   */
+  async chatSettings(request: Request<'chat-settings'>): Promise<ChatSettingsValue> {
+    const workspace = await this.workspace();
+    const { task } = targetChat(workspace, request);
+    if (task.sideOf || task.routineId) throw new CliFailure('failed', 'Chỉ đổi được Tí và giới hạn của chat chính hoặc kênh.');
+    if (request.budgetMicros !== undefined && request.budgetMicros > task.budgetMicros) {
+      throw new CliFailure('failed', 'Terminal chỉ hạ được giới hạn của chat. Tăng giới hạn trong app.');
+    }
+    if (task.channel && request.names) throw new CliFailure('failed', 'Đổi thành viên của kênh bằng orglet members.');
+    const budgetMicros = request.budgetMicros ?? task.budgetMicros;
+    await this.dependencies.request('updateTask', { id: task.id, title: task.title ?? '', assignee: assigneeOf(workspace, task, request.names), budgetMicros });
+    const after = (await this.workspace()).tasks.find(item => item.id === task.id) ?? task;
+    return { taskId: task.id, name: chatName(workspace, after), with: taskRunners(workspace, after).map(runner => runner.name), budgetMicros };
+  }
+
   /** Renames, archives, restores or deletes one chat; deleting needs the chat's displayed name typed out. */
   async change(request: Request<'chat-change'>): Promise<ChatChangeValue> {
     const workspace = await this.workspace();
@@ -185,6 +204,22 @@ export class CliChatAdmin {
     const task = workspace.tasks.find(item => item.id === taskId) ?? detail.task;
     return turnResult(chatOfTask(workspace, task), detail, revision, wait, this.dependencies.translate);
   }
+}
+
+type TaskAssignee = Args<'updateTask'>['assignee'];
+
+/** The chat's assignee after the change: the orglets named, or one crew named alone, else what it has now. */
+function assigneeOf(workspace: Workspace, task: Task, names: readonly string[] | undefined): TaskAssignee {
+  if (!names) {
+    if (task.teamId) return { kind: 'team', teamId: task.teamId };
+    if (task.assignees === 'all') return { kind: 'all' };
+    return { kind: 'workers', workerIds: Array.isArray(task.assignees) ? task.assignees : [task.workerId] };
+  }
+  const members = uniqueMembers(workspace, names);
+  const crews = members.filter(member => member.kind === 'crew');
+  if (crews.length > 1 || (crews.length === 1 && members.length > 1)) throw new CliFailure('failed', 'Một chat giao cho một kênh có Tí trưởng thì chỉ giao cho kênh đó, không kèm Tí khác.');
+  if (crews.length === 1) return { kind: 'team', teamId: crews[0].id };
+  return { kind: 'workers', workerIds: members.map(member => member.id) };
 }
 
 /** The orglets and crews these names find, each once, in the order named (COD-361). */

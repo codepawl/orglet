@@ -23,6 +23,7 @@ export { answerText, isTurnRunning, latestAnsweredRevision, turnAnswers, turnErr
 export type { CliDependencies } from './cli-turns';
 import { CliSpaces } from './cli-spaces';
 import { CliMarket } from './cli-market';
+import { CliInspect } from './cli-inspect';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -39,6 +40,7 @@ export class CliOperations {
   private readonly library: CliLibrary;
   private readonly spaceChanges: CliSpaces;
   private readonly market: CliMarket;
+  private readonly inspect: CliInspect;
 
   constructor(private readonly dependencies: CliDependencies) {
     this.chatActions = new CliChatActions(dependencies);
@@ -47,6 +49,7 @@ export class CliOperations {
     this.library = new CliLibrary(dependencies);
     this.spaceChanges = new CliSpaces(dependencies);
     this.market = new CliMarket(dependencies);
+    this.inspect = new CliInspect(dependencies);
   }
 
   async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
@@ -70,6 +73,10 @@ export class CliOperations {
       case 'chat-change': return this.chatAdmin.change(request);
       case 'archive-entity': return this.chatAdmin.archiveEntity(request);
       case 'template': return this.chatAdmin.template(request);
+      case 'chat-settings': return this.chatAdmin.chatSettings(request);
+      case 'show': return this.inspect.show(request);
+      case 'update-check': return this.inspect.checkForUpdates();
+      case 'schedule-notice': return this.schedules.notice(request);
       case 'schedules': return this.schedules.list();
       case 'spaces': return this.spaces();
       case 'space-change': return this.spaceChanges.change(request);

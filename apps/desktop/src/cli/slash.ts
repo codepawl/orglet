@@ -20,10 +20,12 @@ export type SlashCommand =
   | { kind: 'forward'; targets: string[]; ref?: string }
   | { kind: 'answer'; answer: string }
   | { kind: 'control'; action: ChatControl }
-  | { kind: 'chats'; archived: boolean }
+  | { kind: 'chats'; archived: boolean; space?: string }
   | { kind: 'side'; message: string }
   | { kind: 'bring'; ref?: string }
-  | { kind: 'channel'; names: string[]; message: string }
+  | { kind: 'channel'; names: string[]; message: string; space?: string; category?: string }
+  /** A command that is the same as the one-shot `orglet <argv>`; `withChat` adds the chat this one is open on. */
+  | { kind: 'cli'; argv: string[]; withChat?: boolean }
   | { kind: 'members'; names: string[] }
   | { kind: 'rename'; title: string }
   | { kind: 'archive' }
@@ -48,8 +50,8 @@ export type SlashCommand =
 /** In the order `/help` lists them. */
 export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
   '/history', '/revise', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
-  '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule', '/spaces',
-  '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme',
+  '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/restore', '/schedules', '/schedule', '/spaces', '/space', '/market',
+  '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme', '/preferences', '/show', '/update',
   '/new', '/edit', '/delete', '/help', '/exit'] as const;
 
 const CONTROLS: Record<string, ChatControl> = { '/stop': 'stop', '/pause': 'pause', '/resume': 'resume', '/retry': 'retry', '/continue': 'continue' };
@@ -78,23 +80,30 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/resume', t("Tiếp tục lượt đã tạm dừng")],
   ['/retry', t("Chạy lại tin nhắn mới nhất")],
   ['/continue', t("Tiếp tục câu trả lời bị dừng vì hết bước")],
-  ['/chats [archived]', t("Liệt kê chat cùng mã; /to #mã mở một chat")],
+  ['/chats [archived] [--space <name>]', t("Liệt kê chat cùng mã; /to #mã mở một chat")],
   ['/side <message>', t("Gửi tin trong một chat phụ mới của Tí này")],
   ['/bring [#n]', t("Đưa câu trả lời của chat phụ này vào chat chính")],
-  ['/channel <name, …> -- <message>', t("Tạo kênh với các Tí này (/group là tên cũ)")],
+  ['/channel [--space <name> [--category <name>]] <name, …> -- <message>', t("Tạo kênh với các Tí này (/group là tên cũ)")],
   ['/members <name, …>', t("Đổi thành viên của kênh này")],
   ['/rename <title>', t("Đổi tên chat này")],
   ['/archive', t("Lưu trữ chat này")],
+  ['/restore #<id> | orglet|channel "<name>"', 'Restore an archived chat, orglet or channel (same as orglet restore)'],
   ['/schedules', t("Liệt kê lịch")],
   ['/schedule on|off|run <name>', t("Bật, tắt hoặc chạy ngay một lịch")],
+  ['/schedule dismiss|catch-up|delete …', 'Close a missed-run notice, run the missed time, or delete a schedule (--confirm "<name>"); add and edit are orglet schedule'],
   ['/spaces', t("Liệt kê không gian với Tí và kênh của chúng")],
+  ['/space <verb> …', 'Create or change a space, its categories, folder, colour and order (same as orglet space)'],
+  ['/market [installed|add <id>|update "<name>" [--confirm <code>]]', 'The marketplace (same as orglet market)'],
   ['/search <words>', t("Tìm trong mọi chat")],
   ['/running', t("Mọi lượt đang chạy hoặc đang chờ")],
-  ['/memory', t("Ghi nhớ của Tí hoặc kênh này")],
+  ['/memory [edit|delete <id> …]', t("Ghi nhớ của Tí hoặc kênh này")],
   ['/usage', t("Mức dùng gói của các tài khoản CLI")],
   ['/models', t("Các model của kết nối mà Tí này dùng")],
   ['/language vi|en|en-GB', t("Đổi ngôn ngữ của app")],
   ['/theme system|light|dark', t("Đổi giao diện của app")],
+  ['/preferences [--titles on|off …]', 'Show or change the looks and behaviour settings (same as orglet preferences)'],
+  ['/show <topic>', 'connections, spend, changelog, update, or for this chat: browser, desktop, sources, changes'],
+  ['/update', 'Check for a new version of Orglet'],
   ['/new [orglet|channel]', t("Tạo Tí hoặc kênh trong terminal này")],
   ['/edit [name]', t("Sửa cấu hình; bỏ tên để chọn trong danh sách")],
   ['/delete [name]', t("Xóa Tí hoặc kênh sau khi gõ tên đầy đủ")],
@@ -130,7 +139,7 @@ export function parseSlash(line: string): SlashCommand {
     case '/unreact': return parseReact(rest, command === '/react');
     case '/forward': return parseForward(rest);
     case '/answer': return rest ? { kind: 'answer', answer: rest } : { kind: 'usage', message: t("Gõ /answer rồi số của lựa chọn hoặc câu trả lời của bạn.") };
-    case '/chats': return rest === '' || rest === 'archived' ? { kind: 'chats', archived: rest === 'archived' } : { kind: 'unknown', command: trimmed };
+    case '/chats': return parseChats(rest, trimmed);
     case '/side': return rest ? { kind: 'side', message: rest } : { kind: 'usage', message: t("Gõ /side rồi tin nhắn cho chat phụ.") };
     case '/bring': return !rest ? { kind: 'bring' } : isMessageRef(rest) ? { kind: 'bring', ref: rest } : { kind: 'usage', message: t("Gõ /bring hoặc /bring #2.1.") };
     case '/channel':
@@ -143,7 +152,13 @@ export function parseSlash(line: string): SlashCommand {
     case '/schedule': return parseSchedule(rest);
     case '/search': return rest ? { kind: 'search', query: rest } : { kind: 'usage', message: t("Gõ /search rồi từ cần tìm.") };
     case '/running': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'running' };
-    case '/memory': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'memory' };
+    case '/memory': return rest ? passThrough('memory', rest, ['edit', 'delete'], trimmed) : { kind: 'memory' };
+    case '/space': return rest ? passThrough('space', rest, undefined, trimmed) : { kind: 'usage', message: t("Gõ /space rồi một lệnh như orglet space: add, edit, category, move, folder, color, order, delete.") };
+    case '/market': return passThrough('market', rest, undefined, trimmed);
+    case '/restore': return parseRestore(rest);
+    case '/preferences': return passThrough('preferences', rest, undefined, trimmed);
+    case '/show': return parseShow(rest, trimmed);
+    case '/update': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'cli', argv: ['update'] };
     case '/usage': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'plan-usage' };
     case '/models': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'models' };
     case '/language': return parseLanguage(rest);
@@ -208,11 +223,26 @@ function nameList(text: string): string[] {
 
 /** `/channel Writer, Launch crew -- Compare these`: orglet or crew names, then the first message after ` -- `. */
 function parseChannel(command: string, rest: string): SlashCommand {
-  const separator = rest.indexOf(' -- ');
-  const names = separator === -1 ? [] : nameList(rest.slice(0, separator));
-  const message = separator === -1 ? '' : rest.slice(separator + 4).trim();
+  const place = leadingPlace(rest);
+  const separator = place.rest.indexOf(' -- ');
+  const names = separator === -1 ? [] : nameList(place.rest.slice(0, separator));
+  const message = separator === -1 ? '' : place.rest.slice(separator + 4).trim();
   if (!names.length || !message) return { kind: 'usage', message: t("Gõ {0} Tí một, Tí hai -- tin nhắn đầu tiên.", command) };
-  return { kind: 'channel', names, message };
+  return { kind: 'channel', names, message, ...(place.space ? { space: place.space } : {}), ...(place.category ? { category: place.category } : {}) };
+}
+
+/** The `--space <name>` and `--category <name>` a `/channel` line may start with; a name with spaces is quoted. */
+function leadingPlace(rest: string): { space?: string; category?: string; rest: string } {
+  const place: { space?: string; category?: string } = {};
+  const optionPattern = /^--(space|category)\s+("[^"]*"|'[^']*'|\S+)\s*/;
+  let remaining = rest.trimStart();
+  let option = remaining.match(optionPattern);
+  while (option) {
+    place[option[1] as 'space' | 'category'] = splitWords(option[2])[0];
+    remaining = remaining.slice(option[0].length);
+    option = remaining.match(optionPattern);
+  }
+  return { ...place, rest: remaining };
 }
 
 function parseMembers(rest: string): SlashCommand {
@@ -221,11 +251,78 @@ function parseMembers(rest: string): SlashCommand {
   return { kind: 'members', names };
 }
 
-/** `/schedule on Morning review`: on, off or run, then the schedule's name. */
+/**
+ * Splits a line into words the way a shell does for the cases that matter here: spaces separate words, and a pair of
+ * double or single quotes keeps its spaces inside one word.
+ */
+export function splitWords(text: string): string[] {
+  const words: string[] = [];
+  let current = '';
+  let quote: string | undefined;
+  let started = false;
+  for (const character of text) {
+    if (quote) {
+      if (character === quote) quote = undefined;
+      else current += character;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+      started = true;
+    } else if (/\s/.test(character)) {
+      if (started || current) words.push(current);
+      current = '';
+      started = false;
+    } else {
+      current += character;
+    }
+  }
+  if (started || current) words.push(current);
+  return words;
+}
+
+/**
+ * A slash command that is `orglet <command> <the rest>` typed in the chat. With `verbs`, the first word must be one
+ * of them; the one-shot command's own parser then checks everything else when it runs.
+ */
+function passThrough(command: string, rest: string, verbs: readonly string[] | undefined, typed: string): SlashCommand {
+  const words = splitWords(rest);
+  if (verbs && !verbs.includes(words[0] ?? '')) return { kind: 'unknown', command: typed };
+  return { kind: 'cli', argv: [command, ...words] };
+}
+
+/** `/chats`, `/chats archived`, `/chats --space Launch`, or both. */
+function parseChats(rest: string, typed: string): SlashCommand {
+  const words = splitWords(rest);
+  const archived = words[0] === 'archived';
+  const options = archived ? words.slice(1) : words;
+  if (options.length === 0) return { kind: 'chats', archived };
+  if (options[0] !== '--space' || options.length !== 2) return { kind: 'unknown', command: typed };
+  return { kind: 'chats', archived, space: options[1] };
+}
+
+/** `/restore #3f2a` brings an archived chat back; `/restore orglet "Name"` or `/restore channel "Name"` an archived orglet or channel. */
+function parseRestore(rest: string): SlashCommand {
+  const words = splitWords(rest);
+  if (words.length === 1 && words[0].startsWith('#')) return { kind: 'cli', argv: ['restore', '--chat', words[0].slice(1)] };
+  if (words.length >= 2 && ['orglet', 'channel', 'crew', 'team'].includes(words[0])) return { kind: 'cli', argv: ['restore', ...words] };
+  return { kind: 'usage', message: t("Gõ /restore #mã để khôi phục một chat (/chats archived liệt kê chúng), hoặc /restore orglet \"tên\" hay /restore channel \"tên\".") };
+}
+
+const SHOW_NEEDING_A_CHAT = ['browser', 'desktop', 'sources', 'changes'];
+
+/** `/show spend`, or `/show changes` for the chat this one is open on. */
+function parseShow(rest: string, typed: string): SlashCommand {
+  const words = splitWords(rest);
+  if (words.length === 0) return { kind: 'usage', message: t("Gõ /show rồi một mục: connections, spend, changelog, update, browser, desktop, sources hoặc changes.") };
+  if (words.length > 1) return { kind: 'unknown', command: typed };
+  return { kind: 'cli', argv: ['show', words[0]], withChat: SHOW_NEEDING_A_CHAT.includes(words[0]) };
+}
+
+/** `/schedule on Morning review`: on, off or run, then the schedule's name; every other verb is `orglet schedule` as it is. */
 function parseSchedule(rest: string): SlashCommand {
   const space = rest.search(/\s/);
   const action = (space === -1 ? rest : rest.slice(0, space)).toLowerCase();
   const name = space === -1 ? '' : rest.slice(space).trim();
+  if (['delete', 'dismiss', 'catch-up'].includes(action)) return { kind: 'cli', argv: ['schedule', action, ...splitWords(name)] };
   if ((action !== 'on' && action !== 'off' && action !== 'run') || !name) return { kind: 'usage', message: t("Gõ /schedule on, off hoặc run rồi tên lịch. Tạo và sửa lịch bằng orglet schedule.") };
   return { kind: 'schedule', action, name };
 }

@@ -256,6 +256,21 @@ try {
   assert.ok(listed.channels.some(channel => channel.name === 'plain' && channel.space), 'list names a channel made without --space under a space');
   assert.ok(Array.isArray(listed.crews), 'list keeps its crews key for one release');
   assert.match(expectOk(orglet(userData, 'list'), 'orglet list with channels'), /Channels\n {2}\S[\s\S]*#plain/);
+  // Issue 554, phase 2: the channel commands with the lead as a field, and the read-only views.
+  const channelFile = join(directory, 'channel.json');
+  await writeFile(channelFile, JSON.stringify({ name: 'smoke-turns', topic: 'Made from a file', members: [{ kind: 'orglet', id: configurations.orglets[0].id }] }));
+  const turnsChannel = JSON.parse(expectOk(orglet(userData, 'create', 'channel', '--config', channelFile, '--json'), 'orglet create channel (takes turns)'));
+  assert.equal(turnsChannel.id, turnsChannel.channelId, 'A channel that takes turns is named by its own id');
+  await writeFile(channelFile, JSON.stringify({ topic: 'Changed' }));
+  expectOk(orglet(userData, 'edit', 'channel', 'smoke-turns', '--config', channelFile), 'orglet edit channel (takes turns)');
+  expectOk(orglet(userData, 'delete', 'channel', 'smoke-turns', '--confirm', 'smoke-turns'), 'orglet delete channel (nobody wrote in it)');
+  const spend = JSON.parse(expectOk(orglet(userData, 'show', 'spend', '--json'), 'orglet show spend'));
+  assert.equal(typeof spend.rows[0].chargedMicros, 'number', 'show spend prints the figures');
+  assert.doesNotMatch(expectOk(orglet(userData, 'show', 'connections', '--json'), 'orglet show connections'), /sk-|Bearer/i, 'show connections never prints a key');
+  assert.equal(typeof JSON.parse(expectOk(orglet(userData, 'show', 'update', '--json'), 'orglet show update')).rows[0].status, 'string');
+  const preferences = JSON.parse(expectOk(orglet(userData, 'preferences', '--json'), 'orglet preferences --json'));
+  assert.equal(typeof preferences.autoTitles, 'boolean', 'preferences lists the looks and behaviour settings');
+  expectOk(orglet(userData, 'preferences', '--titles', preferences.autoTitles ? 'on' : 'off'), 'orglet preferences --titles (unchanged)');
   assert.match(expectOk(orglet(userData, 'rename', '--help'), 'orglet rename --help'), /--rename/);
   assert.match(expectOk(orglet(userData, 'memory', '--help'), 'orglet memory --help'), /--confirm/);
   assert.match(expectOk(orglet(userData, 'completion', 'bash'), 'orglet completion'), /complete -o default -F _orglet_completion orglet/);

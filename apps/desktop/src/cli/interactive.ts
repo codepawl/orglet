@@ -596,9 +596,10 @@ class Session {
       case 'answer': return this.awaitAction(actions => signal => actions.answer(targetOf(this.chat!), command.answer, signal));
       case 'control': return this.control(command.action);
       case 'usage': return this.printMuted(command.message);
-      case 'chats': return this.listChats(command.archived);
+      case 'chats': return this.listChats(command.archived, command.space);
       case 'side': return this.awaitNewChat(actions => signal => actions.side(targetOf(this.chat!), command.message, signal));
-      case 'channel': return this.awaitNewChat(actions => signal => actions.channel(command.names, command.message, signal));
+      case 'channel': return this.awaitNewChat(actions => signal => actions.channel(command.names, command.message, signal, command.space || command.category ? { space: command.space, category: command.category } : undefined));
+      case 'cli': return this.runCommandLine(command.argv, command.withChat === true);
       case 'bring': return this.chatChange(actions => actions.bring(this.chatId(), command.ref), value => t('Đã đưa #{0} vào chat chính với {1}.', value.ref, value.chat.name));
       case 'members': return this.chatChange(actions => actions.members(this.chatId(), command.names), value => t('Từ tin nhắn sau, kênh gồm: {0}.', value.names.join(', ')));
       case 'rename': return this.chatChange(actions => actions.rename(targetOf(this.chat!), command.title), value => t('Đã đổi tên chat thành {0}.', value.title ?? value.name));
@@ -947,11 +948,37 @@ class Session {
   }
 
   /** Lists chats with their short ids, the way `orglet chats` does; `/to #id` opens one. */
-  private async listChats(archived: boolean): Promise<void> {
+  /**
+   * A slash command that is the one-shot command typed in the chat: it runs exactly that command, so the checks and the
+   * confirmation a delete needs are the one-shot command's. With `withChat` the chat this one is open on is added.
+   */
+  private async runCommandLine(argv: readonly string[], withChat: boolean): Promise<void> {
+    const actions = this.actions();
+    if (!actions) return;
+    if (!actions.commandLine) {
+      this.printError(t('Cập nhật Orglet và CLI để dùng lệnh này.'));
+      return;
+    }
+    if (withChat && !this.chat) {
+      this.printError(t('Mở một chat trước, rồi gõ lại lệnh này.'));
+      return;
+    }
+    const target = withChat ? targetOf(this.chat!) : undefined;
+    const chatOption = target === undefined ? [] : target.startsWith('#') ? ['--chat', target.slice(1)] : ['--to', target];
+    try {
+      const result = await actions.commandLine([...argv, ...chatOption]);
+      if (result.stdout) this.printLines(result.stdout.split('\n'));
+      if (result.stderr) this.printError(result.stderr);
+    } catch (error) {
+      this.printFailure(error);
+    }
+  }
+
+  private async listChats(archived: boolean, space?: string): Promise<void> {
     const actions = this.actions();
     if (!actions) return;
     try {
-      const value = await actions.chats(archived);
+      const value = await actions.chats(archived, space);
       this.printLines(formatChats(value).split('\n'));
       if (value.chats.length) this.printMuted(t('/to #mã mở một chat.'));
     } catch (error) {
