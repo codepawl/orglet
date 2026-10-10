@@ -68,7 +68,7 @@ export type ChatChange = z.infer<typeof ChatChange>;
 /** A schedule (routine) is named the way the app names it: up to 80 characters. */
 const ScheduleName = z.string().trim().min(1).max(80);
 /** What `orglet show` can look at. All read-only; none of them carries a key, a token or a file's content. */
-export const SHOW_TOPICS = ['connections', 'spend', 'changelog', 'update', 'browser', 'desktop', 'sources', 'changes', 'terminal'] as const;
+export const SHOW_TOPICS = ['connections', 'spend', 'changelog', 'update', 'browser', 'desktop', 'sources', 'changes', 'terminal', 'desktop-programs'] as const;
 export type ShowTopic = typeof SHOW_TOPICS[number];
 /** How many past turns one `read` returns at most (COD-354). */
 export const MAX_READ_TURNS = 50;

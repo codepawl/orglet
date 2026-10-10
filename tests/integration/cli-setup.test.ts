@@ -37,12 +37,13 @@ let coreCalls: [string, unknown][] = [];
 let appCalls: [string, unknown[]][] = [];
 let notices: TerminalNotice[] = [];
 let failApp = false;
+let openWindows: { title: string; program: string; elevated: boolean; minimized: boolean }[] = [];
 let workerName = '';
 let ids = { server: '', custom: '', profile: '', source: '', task: '' };
 
 const MUTATIONS = ['setToolCapabilities', 'grantWorkspace', 'setWorkspaceLevel', 'revokeWorkspace', 'revoke', 'setMcpServerEnabled', 'setMcpGrant', 'updateTask', 'updateSpace',
   'saveDecisionModelSetting', 'saveHarnessAccount', 'removeHarnessAccount', 'selectHarnessAccount', 'startHarnessSignIn', 'cancelHarnessSignIn', 'signOutHarness',
-  'saveCustomConnection', 'deleteCustomConnection'];
+  'saveCustomConnection', 'deleteCustomConnection', 'setBrowser', 'setDesktop'];
 
 function sequentialRandom(): (size: number) => Buffer {
   let counter = 3;
@@ -63,6 +64,7 @@ function fakeSetupApp(): CliSetupApp {
     saveSearchKey: recorded('saveSearchKey'), removeSearchKey: recorded('removeSearchKey'),
     removeMcpServer: recorded('removeMcpServer'), signInMcpServer: recorded('signInMcpServer'),
     cancelMcpSignIn: (serverId: string) => { appCalls.push(['cancelMcpSignIn', [serverId]]); },
+    saveMcpServer: recorded('saveMcpServer'),
     setSwitch: recorded('setSwitch'), writeText: recorded('writeText'),
     account: { label: () => 'An Nguyen', signIn: recorded('signIn'), signOut: recorded('signOut'), cancelSignIn: () => { appCalls.push(['cancelSignIn', []]); }, reopenSignIn: recorded('reopenSignIn') },
     startSync: recorded('startSync'),
@@ -87,6 +89,7 @@ async function harness(): Promise<Setup> {
       return command === 'grantWorkspace' ? { id: randomUUID(), taskId, revision: 1, permissions: ['read'], name: 'notes', revoked: false } : undefined;
     }
     if (command === 'backupExport') return 'BACKUP-JSON';
+    if (command === 'desktopWindows') return { available: true, windows: openWindows };
     if (command === 'workspaceAccess') return null;
     if (command === 'harnesses') return [{ id: 'codex', accounts: [{ id: 'acc-1', label: 'Work' }] }];
     if (command === 'workspace') {
@@ -120,6 +123,7 @@ beforeEach(async () => {
   appCalls = [];
   notices = [];
   failApp = false;
+  openWindows = [];
 });
 afterEach(async () => {
   await core.runner.shutdown();
@@ -167,7 +171,16 @@ function operationsTable(): { name: string; body: HeldBody; core?: string; app?:
     { name: 'search-key-remove', body: { action: 'search-key-remove', provider: 'exa' }, app: 'removeSearchKey' },
     { name: 'connect', body: { action: 'connect', provider: 'openai', secret: SECRET }, app: 'connect' },
     { name: 'search-key', body: { action: 'search-key', provider: 'exa', secret: SECRET }, app: 'saveSearchKey' },
+    { name: 'browser-choice', body: { action: 'browser-choice', ...chat, profile: 'work', mode: 'read', allow: ['Example.com'], block: ['bad.example'] }, core: 'setBrowser' },
+    { name: 'desktop-choice', body: { action: 'desktop-choice', ...chat, mode: 'read', add: ['Notepad'] }, core: 'setDesktop' },
+    { name: 'mcp-save', body: { action: 'mcp-save', servers: [stdioServer('Notes')], secrets: { Notes: { API_KEY: SECRET } } }, app: 'saveMcpServer' },
+    { name: 'mcp-import', body: { action: 'mcp-import', servers: [stdioServer('Notes'), stdioServer('Other')], secrets: { Notes: { API_KEY: SECRET }, Other: { API_KEY: SECRET } } }, app: 'saveMcpServer' },
   ];
+}
+
+/** A server as the terminal's file names it: the secret's name is there and its value never is. */
+function stdioServer(name: string) {
+  return { name, enabled: true, transport: { kind: 'stdio' as const, command: 'npx', args: ['-y', 'notes-server'], env: [{ name: 'API_KEY' }] } };
 }
 
 function expectDone(row: { core?: string; app?: string }): void {
@@ -447,5 +460,119 @@ describe('the grant, connect and disconnect commands', () => {
     expect(() => parseSetupArguments(['grant', 'folder', 'D:\\notes'])).toThrow();
     expect(() => parseSetupArguments(['grant', 'folder', '--to', 'A', '--chat', 'b', 'D:\\notes'])).toThrow();
     expect(() => parseSetupArguments(['grant', 'nonsense'])).toThrow();
+  });
+});
+
+describe('the browser and desktop a chat may use', () => {
+  it('keeps the profile by name, normalises sites like the window and sends one setBrowser with the edited list', async () => {
+    const { send, elevation } = await harness();
+    const key = await pair(elevation, 'setup');
+    const body = { action: 'browser-choice', to: workerName, profile: 'WORK', allow: ['https://Example.com/pricing'], block: ['localhost:3000'] };
+    expect(await send({ op: 'held', request: body }, key)).toMatchObject({ ok: true });
+    const [command, args] = coreCalls.find(([name]) => name === 'setBrowser')!;
+    expect(command).toBe('setBrowser');
+    expect(args).toMatchObject({ taskId: ids.task, browser: { profileId: ids.profile, sites: [{ site: 'example.com', decision: 'allowed' }, { site: 'localhost:3000', decision: 'blocked' }] } });
+  });
+
+  it('refuses a profile main does not keep, an address that is not a site, and a list the window would refuse', async () => {
+    const { send, elevation } = await harness();
+    const key = await pair(elevation, 'setup');
+    expect(await send({ op: 'held', request: { action: 'browser-choice', to: workerName, profile: 'Nope' } }, key)).toMatchObject({ ok: false, code: 'not_found' });
+    expect(await send({ op: 'held', request: { action: 'browser-choice', to: workerName, allow: ['not a site'] } }, key)).toMatchObject({ ok: false, code: 'invalid' });
+    expect(await send({ op: 'held', request: { action: 'browser-choice', to: workerName, allow: ['ftp://files.example'] } }, key)).toMatchObject({ ok: false, code: 'invalid' });
+    expect(coreCalls).toEqual([]);
+    // The clean profile needs no entry in main's list.
+    expect(await send({ op: 'held', request: { action: 'browser-choice', to: workerName, profile: 'clean' } }, key)).toMatchObject({ ok: true });
+  });
+
+  it('refuses the fixed never-list, an administrator program, and a name that is not an executable; accepts a name without .exe', async () => {
+    const { send, elevation } = await harness();
+    const key = await pair(elevation, 'setup');
+    openWindows = [{ title: 'Admin tool', program: 'admin.exe', elevated: true, minimized: false }, { title: 'Untitled - Notepad', program: 'notepad.exe', elevated: false, minimized: false }];
+    for (const program of ['1password.exe', 'Orglet', 'ApplicationFrameHost', 'admin', 'bad/name']) {
+      expect(await send({ op: 'held', request: { action: 'desktop-choice', to: workerName, add: [program] } }, key), program).toMatchObject({ ok: false });
+    }
+    expect(coreCalls).toEqual([]);
+    expect(await send({ op: 'held', request: { action: 'desktop-choice', to: workerName, add: ['Notepad'] } }, key)).toMatchObject({ ok: true });
+    expect(coreCalls[0]).toMatchObject([ 'setDesktop', { taskId: ids.task, desktop: { apps: [{ program: 'notepad.exe', name: 'Untitled - Notepad' }] } }]);
+  });
+});
+
+describe('an MCP server from a file', () => {
+  const named = { env: { API_KEY: '' } };
+
+  it('is read for names only: a value in the file refuses the whole file without repeating it', () => {
+    const directoryFile = join(directory, 'servers.json');
+    return Promise.all([
+      writeFile(directoryFile, JSON.stringify({ mcpServers: { Notes: { command: 'npx', args: ['-y', 'x'], ...named }, Remote: { url: 'https://example.com/mcp', headers: { Authorization: '', 'X-Team': '' } } } })),
+    ]).then(() => {
+      const parsed = parseSetupArguments(['grant', 'mcp-import', directoryFile]);
+      expect(parsed.mcpSecrets).toEqual([{ server: 'Notes', name: 'API_KEY' }, { server: 'Remote', name: 'Authorization' }, { server: 'Remote', name: 'X-Team' }]);
+      expect(JSON.stringify(parsed.body)).not.toContain('value');
+      expect(() => parseSetupArguments(['grant', 'mcp-save', directoryFile])).toThrow('2 máy chủ');
+    });
+  });
+
+  it('refuses a file that holds a secret value, and never repeats the value', async () => {
+    const file = join(directory, 'leaky.json');
+    await writeFile(file, JSON.stringify({ mcpServers: { Notes: { command: 'npx', env: { API_KEY: SECRET } } } }));
+    let message = '';
+    try {
+      parseSetupArguments(['grant', 'mcp-save', file]);
+    } catch (error) {
+      message = String(error instanceof Error ? error.message : error);
+    }
+    expect(message).toContain('API_KEY');
+    expect(message).not.toContain(SECRET);
+    await writeFile(file, JSON.stringify({ mcpServers: { Remote: { url: 'https://example.com/mcp', headers: { Authorization: `Bearer ${SECRET}` } } } }));
+    expect(() => parseSetupArguments(['grant', 'mcp-save', file])).toThrow('Authorization');
+  });
+
+  it('keeps the typed values out of the body, the hash, the pairing, the answer, the journal, the notices and every error', async () => {
+    const { send, elevation, journal } = await harness();
+    const withoutValues: HeldBody = { action: 'mcp-save', servers: [stdioServer('Fresh')] };
+    const withValues: HeldBody = { ...withoutValues, secrets: { Fresh: { API_KEY: SECRET } } };
+    expect(operationHash(withValues)).toBe(operationHash(withoutValues));
+    expect(await send({ op: 'pair-start', scope: 'one', operation: withValues })).toMatchObject({ ok: false, code: 'invalid' });
+    expect(await send({ op: 'pair-start', scope: 'one', operation: { ...withoutValues, servers: [{ ...stdioServer('Fresh'), transport: { ...stdioServer('Fresh').transport, env: [{ name: 'API_KEY', value: SECRET }] } }] } })).toMatchObject({ ok: false, code: 'invalid' });
+    const key = await pair(elevation, 'one', withoutValues);
+    const answers = [JSON.stringify(await send({ op: 'held', request: withValues }, key))];
+    expect(appCalls).toHaveLength(1);
+    const draft = JSON.stringify(appCalls[0][1]);
+    expect(draft).toContain(SECRET);
+    failApp = true;
+    const second = await pair(elevation, 'one', withoutValues);
+    answers.push(JSON.stringify(await send({ op: 'held', request: withValues }, second)));
+    expect(answers[1]).toContain('"ok":false');
+    expect(answers.join('\n')).not.toContain(SECRET);
+    expect(await readFile(join(directory, TERMINAL_JOURNAL_FILE), 'utf8')).not.toContain(SECRET);
+    expect(JSON.stringify(await journal.list())).not.toContain(SECRET);
+    expect(JSON.stringify(notices)).not.toContain(SECRET);
+    expect(JSON.stringify(elevation.state())).not.toContain(SECRET);
+  });
+
+  it('refuses a new server whose secret was not typed, and an import saves the others and reports the skipped one', async () => {
+    const { send, elevation } = await harness();
+    const key = await pair(elevation, 'setup');
+    const missing = await send({ op: 'held', request: { action: 'mcp-save', servers: [stdioServer('Brand new')] } }, key);
+    expect(missing).toMatchObject({ ok: false });
+    expect(JSON.stringify(missing)).toContain('API_KEY');
+    expect(appCalls).toEqual([]);
+    const mixed = await send({ op: 'held', request: { action: 'mcp-import', servers: [stdioServer('Brand new'), stdioServer('Notes')], secrets: { Notes: { API_KEY: SECRET } } } }, key) as { ok: true; value: { report: string[] } };
+    expect(mixed.ok).toBe(true);
+    expect(mixed.value.report.join('\n')).toContain('! Brand new');
+    expect(mixed.value.report.join('\n')).toContain('+ Notes');
+    expect(appCalls.map(([name]) => name)).toEqual(['saveMcpServer']);
+  });
+
+  it('refuses a body whose servers carry a value, and a save of several servers', async () => {
+    const { send, elevation } = await harness();
+    const key = await pair(elevation, 'setup');
+    const withValue = { ...stdioServer('Notes'), transport: { ...stdioServer('Notes').transport, env: [{ name: 'API_KEY', value: SECRET }] } };
+    const refused = await send({ op: 'held', request: { action: 'mcp-save', servers: [withValue] } }, key);
+    expect(refused).toMatchObject({ ok: false, code: 'invalid' });
+    expect(JSON.stringify(refused)).not.toContain(SECRET);
+    expect(await send({ op: 'held', request: { action: 'mcp-save', servers: [stdioServer('A'), stdioServer('B')], secrets: { A: { API_KEY: SECRET }, B: { API_KEY: SECRET } } } }, key)).toMatchObject({ ok: false });
+    expect(appCalls).toEqual([]);
   });
 });

@@ -44,7 +44,6 @@ function held(reason: string): Parity {
   return { status: 'held', reason };
 }
 
-const AN_APPROVAL = 'an approval or review decision the person makes in the window';
 const A_GRANT = 'a grant of access, so the person gives it in the window';
 const A_DELETION = 'deletes data for good; the terminal deletes only with a typed name where it does at all';
 const VISUAL = 'visual: a picture, a diff or a live view that needs the window';
@@ -70,13 +69,15 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   answerDecision: reached('orglet answer'),
   saveWorker: reached('orglet create orglet'),
   setSyncLocalOnly: windowOnly('a switch on the account page; ' + NOT_BUILT),
-  syncConflicts: windowOnly('the side-by-side choice of two versions; ' + NOT_BUILT),
-  resolveSyncConflict: held('chooses which version of a chat or orglet is kept, and the other is dropped'),
+  // Read to print both versions before a choice is taken.
+  syncConflicts: reached('orglet approve'),
+  resolveSyncConflict: elevated('orglet approve', 'decisions'),
   saveTeam: windowOnly('the crew record behind a channel with a lead; the terminal changes it through createChannel and updateChannel'),
   createTemplate: reached('orglet template'),
   saveSkill: windowOnly('skills are edited as files in the editor; ' + NOT_BUILT),
-  inspectSkill: windowOnly('shows a skill package for review; ' + NOT_BUILT),
-  reviewSkill: held('trusts a skill package after the person has read it'),
+  // Elevated because showing a package is what lets the same elevation approve exactly that package.
+  inspectSkill: elevated('orglet skill show', 'decisions'),
+  reviewSkill: elevated('orglet skill show', 'decisions'),
   saveRoutine: reached('orglet schedule add'),
   dismissRoutine: reached('orglet schedule dismiss'),
   catchUpRoutine: reached('orglet schedule catch-up'),
@@ -96,7 +97,9 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   retireWorkspaceAttempt: windowOnly('closes a recovery view; ' + NOT_BUILT),
   recoveryProcessOutput: windowOnly(VISUAL),
   recoveryFile: windowOnly(VISUAL),
-  restoreWorkspaceFile: held('writes a file into the granted folder'),
+  // Read to print the size of the saved copy before the file is restored.
+  recoveryDeletedFile: reached('orglet approve'),
+  restoreWorkspaceFile: elevated('orglet approve', 'decisions'),
   workspaceDiff: windowOnly(VISUAL),
   applyBlockedHandIn: elevated('orglet approve', 'decisions'),
   applyWorkspaceReview: elevated('orglet approve', 'decisions'),
@@ -113,10 +116,12 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   auditRunLog: windowOnly('the data checker and its charts need the window'),
   scoreExactMatch: windowOnly('the data checker and its charts need the window'),
   cancelCheckers: windowOnly('stops the data checker the window started'),
-  accept: held(AN_APPROVAL),
+  // The window's "Chấp nhận báo cáo" button on the latest report; the design note thought no card waited for it.
+  accept: elevated('orglet approve', 'decisions'),
   markTaskSeen: windowOnly('read marks follow what the window shows'),
-  acknowledgeEvidence: held(AN_APPROVAL),
-  saveKnowledge: held('saves a note as approved with no review, so any orglet that can read the pipe token could write guidance for the others'),
+  acknowledgeEvidence: elevated('orglet approve', 'decisions'),
+  // A note saved approved with no review: only a code the person typed lets a terminal write guidance for the orglets.
+  saveKnowledge: elevated('orglet note', 'decisions'),
   applyAppProposal: elevated('orglet approve', 'decisions'),
   dismissAppProposal: elevated('orglet approve', 'decisions'),
   undoAppProposal: elevated('orglet approve', 'decisions'),
@@ -162,13 +167,13 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   testWebSearch: elevated('orglet test web-search', 'decisions'),
   setMcpServerEnabled: elevated('orglet grant mcp-enable', 'setup'),
   setMcpGrant: elevated('orglet grant mcp', 'setup'),
-  setBrowser: held('the browser profile and site list of a chat need the profiles main keeps and the site form; no terminal command yet'),
+  setBrowser: elevated('orglet grant browser', 'setup'),
   browserActions: reached('orglet show browser'),
   browserScreenshot: windowOnly(VISUAL),
   answerBrowserApproval: elevated('orglet approve', 'decisions'),
   browserTakeOver: held(A_GRANT),
-  setDesktop: held('the granted programs come from the list of windows open now, which only the window shows; no terminal command yet'),
-  desktopWindows: windowOnly('the list of windows the person granted; ' + NOT_BUILT),
+  setDesktop: elevated('orglet grant desktop', 'setup'),
+  desktopWindows: reached('orglet show desktop-programs'),
   desktopActions: reached('orglet show desktop'),
   desktopScreenshot: windowOnly(VISUAL),
   answerDesktopApproval: elevated('orglet approve', 'decisions'),
@@ -238,11 +243,11 @@ export const BRIDGE_PARITY: Record<keyof Bridge, Parity> = {
   onNavigate: windowOnly('an event the window subscribes to'),
   cliState: windowOnly('the Settings row for this very command'),
   setCliOnPath: elevated('orglet grant cli-path', 'setup'),
-  saveMcpServer: held('the server form (transport, arguments, header names, secret values) is too large for one prompt; no terminal command yet'),
+  saveMcpServer: elevated('orglet grant mcp-save', 'setup'),
   removeMcpServer: elevated('orglet grant mcp-remove', 'setup'),
   signInMcpServer: elevated('orglet grant mcp-sign-in', 'setup'),
   cancelMcpSignIn: elevated('orglet grant mcp-sign-in --cancel', 'setup'),
-  importMcpServers: held('imports servers with their secret values from a file the person picks; no terminal command yet'),
+  importMcpServers: elevated('orglet grant mcp-import', 'setup'),
   saveWebSearchKey: elevated('orglet connect search', 'setup'),
   removeWebSearchKey: elevated('orglet disconnect search', 'setup'),
   onOpenChat: windowOnly('an event the window subscribes to'),

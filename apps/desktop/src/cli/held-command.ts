@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { AppRefusal } from './chat-client';
 import { UnreachableError } from './client';
@@ -8,6 +9,7 @@ import { EXIT_CODES } from './protocol';
 import { t } from './text';
 import { UsageError } from './arguments';
 import type { ElevationScope } from '../shared/terminal-access';
+import type { McpNamedSecret } from '../shared/mcp';
 import { isSetupCommand, parseSetupArguments, SETUP_COMMANDS, SETUP_HELP, type SetupRequest } from './held-setup';
 
 /**
@@ -16,7 +18,7 @@ import { isSetupCommand, parseSetupArguments, SETUP_COMMANDS, SETUP_HELP, type S
  * from the terminal only, never from an argument, an environment variable, a pipe or a file.
  */
 
-export const HELD_COMMANDS = ['unlock', 'approve', 'reconcile', 'test', 'install-update', ...SETUP_COMMANDS] as const;
+export const HELD_COMMANDS = ['unlock', 'approve', 'reconcile', 'test', 'install-update', 'skill', 'note', ...SETUP_COMMANDS] as const;
 export type HeldCommandName = typeof HELD_COMMANDS[number];
 
 export function isHeldCommand(argumentList: readonly string[]): boolean {
@@ -32,6 +34,10 @@ export const HELD_HELP = [
   '  orglet reconcile <id> <USD> dashboard|invoice',
   '  orglet test mcp <name> | web-search | decision-model',
   '  orglet install-update',
+  '  orglet skill show <name>',
+  '      ' + t('in các tệp của gói skill, rồi hỏi có tin gói đó không (phải gõ lại 8 ký tự đầu của mã băm)'),
+  '  orglet note --title <title> (--file <markdown> | --text <text>) [--tag <tag>…] [--pin] [--to <orglet>]',
+  '      ' + t('lưu một ghi chú đã duyệt, như form ghi chú trong cửa sổ'),
 ].join('\n');
 
 export type HeldTerminal = { input: InteractiveInput; output: InteractiveOutput };
@@ -131,13 +137,52 @@ function parseApprove(argumentList: readonly string[]): ApproveArguments {
   return parsed;
 }
 
+function parseSkillShow(argumentList: readonly string[]): string {
+  const name = argumentList.slice(2).join(' ').trim();
+  if (argumentList[1] !== 'show' || !name) throw new UsageError(t('Gõ orglet skill show <tên skill>.'));
+  return name;
+}
+
 function parseUsdMicros(text: string): number {
   if (!/^\d{1,7}(\.\d{1,6})?$/.test(text)) throw new UsageError(t('Số tiền USD không hợp lệ: {0}.', text));
   return Math.round(Number(text) * 1_000_000);
 }
 
+const MAX_NOTE_FILE_BYTES = 64 * 1024;
+
+/** The note form's fields as flags: a title, the text from a Markdown file or the command line, tags, pinned, and an orglet. */
+function noteBody(argumentList: readonly string[]): HeldBody {
+  const note = { tags: [] as string[], pinned: false } as { title?: string; text?: string; file?: string; tags: string[]; pinned: boolean; orglet?: string };
+  for (let index = 1; index < argumentList.length; index += 1) {
+    const argument = argumentList[index];
+    if (argument === '--pin') note.pinned = true;
+    else if (argument === '--title') note.title = takeValue(argumentList, index++, argument);
+    else if (argument === '--text') note.text = takeValue(argumentList, index++, argument);
+    else if (argument === '--file') note.file = takeValue(argumentList, index++, argument);
+    else if (argument === '--tag') note.tags.push(takeValue(argumentList, index++, argument));
+    else if (argument === '--to') note.orglet = takeValue(argumentList, index++, argument);
+    else throw new UsageError(t('Không có tùy chọn {0} cho orglet note.', argument));
+  }
+  if ((note.text === undefined) === (note.file === undefined)) throw new UsageError(t('Gõ --file <tệp markdown> hoặc --text <nội dung>, chỉ một trong hai.'));
+  const content = note.file === undefined ? note.text! : readNoteFile(note.file);
+  const title = note.title ?? /^#\s+(.+)$/m.exec(content)?.[1];
+  if (!title) throw new UsageError(t('Gõ --title <tiêu đề>, hoặc để dòng "# tiêu đề" trong tệp.'));
+  return { action: 'note', title, content, tags: note.tags, pinned: note.pinned, ...(note.orglet !== undefined ? { orglet: note.orglet } : {}) };
+}
+
+function readNoteFile(path: string): string {
+  try {
+    if (statSync(path).size > MAX_NOTE_FILE_BYTES) throw new UsageError(t('Tệp ghi chú lớn quá 64 KB.'));
+    return readFileSync(path, 'utf8');
+  } catch (error) {
+    if (error instanceof UsageError) throw error;
+    throw new UsageError(t('Không đọc được tệp {0}.', path));
+  }
+}
+
 /** The body a one-shot command other than `approve` sends, or a usage error. */
 function directBody(command: HeldCommandName, argumentList: readonly string[]): HeldBody {
+  if (command === 'note') return noteBody(argumentList);
   if (command === 'install-update') return { action: 'install-update' };
   if (command === 'test') {
     const what = argumentList[1];
@@ -215,8 +260,53 @@ export function readHiddenFromTerminal(terminal: HeldTerminal, prompt: string): 
   });
 }
 
+/**
+ * Each secret a server file names, one line at a time with echo off. An empty line leaves that value out (an existing server
+ * keeps what it has; a new one is refused by main). Resolves undefined when the person cancels.
+ */
+async function readServerSecrets(terminal: HeldTerminal, named: readonly McpNamedSecret[]): Promise<Record<string, Record<string, string>> | undefined> {
+  const typed: Record<string, Record<string, string>> = {};
+  for (const secret of named) {
+    const value = await readHiddenFromTerminal(terminal, t('{0} của máy chủ {1} (không hiện khi gõ, Enter để bỏ qua): ', secret.name, secret.server));
+    if (value === undefined) return undefined;
+    if (!value.trim()) continue;
+    typed[secret.server] = { ...typed[secret.server], [secret.name]: value.trim() };
+  }
+  return typed;
+}
+
+/**
+ * `orglet skill show <name>`: one unlock for decisions, the package printed, then the person types back the start of its
+ * hash to trust exactly what was printed. Main refuses the trust of a hash it did not show to this same unlock.
+ */
+async function showSkill(held: HeldClient, skill: string, terminal: HeldTerminal, print: Printer): Promise<number> {
+  try {
+    if (!await pairWithTerminal(held, 'decisions', undefined, prompt => readLineFromTerminal(terminal, prompt), print)) return EXIT_CODES.failure;
+    const shown = await held.act({ action: 'skill-show', skill });
+    for (const line of shown.report ?? []) print.stdout(line);
+    if (!shown.skillHash) return EXIT_CODES.failure;
+    const start = shown.skillHash.slice(0, 8);
+    const typed = await readLineFromTerminal(terminal, t('Tin gói này? Gõ {0} để tin, Enter để bỏ qua: ', start));
+    if (typed?.trim().toLowerCase() !== start) {
+      print.stdout(t('Chưa tin gói này.'));
+      return EXIT_CODES.ok;
+    }
+    const done = await held.act({ action: 'skill-review', skill, hash: shown.skillHash });
+    print.stdout(t('Xong: {0}', done.summary));
+    return EXIT_CODES.ok;
+  } catch (error) {
+    if (error instanceof AppRefusal) {
+      print.stderr(error.message);
+      return EXIT_CODES.failure;
+    }
+    throw error;
+  } finally {
+    held.forget();
+  }
+}
+
 /** Pairs for exactly this operation, sends it, and forgets the key. A key is read only after the pairing succeeded. */
-async function runPairedAction(held: HeldClient, body: HeldBody, terminal: HeldTerminal, print: Printer, secretPrompt?: string): Promise<number> {
+async function runPairedAction(held: HeldClient, body: HeldBody, terminal: HeldTerminal, print: Printer, secretPrompt?: string, mcpSecrets?: McpNamedSecret[]): Promise<number> {
   try {
     const paired = await pairWithTerminal(held, 'one', body, prompt => readLineFromTerminal(terminal, prompt), print);
     if (!paired) return EXIT_CODES.failure;
@@ -229,8 +319,17 @@ async function runPairedAction(held: HeldClient, body: HeldBody, terminal: HeldT
       }
       sent = { ...body, secret } as HeldBody;
     }
+    if (mcpSecrets) {
+      const typed = await readServerSecrets(terminal, mcpSecrets);
+      if (!typed) {
+        print.stderr(t('Đã hủy, không lưu máy chủ.'));
+        return EXIT_CODES.failure;
+      }
+      if (Object.keys(typed).length > 0) sent = { ...body, secrets: typed } as HeldBody;
+    }
     const done = await held.act(sent);
     print.stdout(t('Xong: {0}', done.summary));
+    for (const line of done.report ?? []) print.stdout(line);
     return EXIT_CODES.ok;
   } catch (error) {
     if (error instanceof AppRefusal) {
@@ -264,10 +363,12 @@ export async function runHeldCommand(run: HeldRun): Promise<number> {
   let parsed: ApproveArguments | undefined;
   let body: HeldBody | undefined;
   let setup: SetupRequest | undefined;
+  let skill: string | undefined;
   try {
     if (isSetupCommand(run.argumentList)) setup = parseSetupArguments(run.argumentList);
     else if (command === 'approve') parsed = parseApprove(run.argumentList);
-    else if (command !== 'unlock') body = directBody(command as Exclude<HeldCommandName, 'unlock' | 'approve'>, run.argumentList);
+    else if (command === 'skill') skill = parseSkillShow(run.argumentList);
+    else if (command !== 'unlock') body = directBody(command as Exclude<HeldCommandName, 'unlock' | 'approve' | 'skill'>, run.argumentList);
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
     run.print.stderr(`${error.message}\n${t('Chạy "orglet unlock --help" để xem cách dùng.')}`);
@@ -279,7 +380,8 @@ export async function runHeldCommand(run: HeldRun): Promise<number> {
   }
   const held = createHeldClient(run.userData, run.executable);
   try {
-    if (setup) return await runPairedAction(held, setup.body, run.terminal, run.print, setup.secretPrompt);
+    if (setup) return await runPairedAction(held, setup.body, run.terminal, run.print, setup.secretPrompt, setup.mcpSecrets);
+    if (skill) return await showSkill(held, skill, run.terminal, run.print);
     if (command === 'approve') return await approve(held, parsed!, run.terminal, run.print);
     if (body) return await runPairedAction(held, body, run.terminal, run.print);
     const readCode = (prompt: string) => readLineFromTerminal(run.terminal!, prompt);
