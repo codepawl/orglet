@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { EffortCapability } from './effort';
 import { CustomProviderId } from './custom-connections';
 
-export const BuiltInModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
+export const BuiltInModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'codepawl', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
 /** Connections that can produce a native or alias model list, custom OpenAI-compatible ones included. Demo never fetches. */
 export const ModelListProvider = z.union([BuiltInModelListProvider, CustomProviderId]);
 export type ModelListProvider = z.infer<typeof ModelListProvider>;

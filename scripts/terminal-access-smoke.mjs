@@ -103,6 +103,10 @@ try {
   const folder = await mkdtemp(join(tmpdir(), 'orglet-grant-folder-'));
   const grant = { action: 'folder', to: orgletName, path: folder, permissions: ['read'] };
   assert.equal((await rawRequest({ op: 'held', token, request: grant })).code, 'locked', 'a grant is locked with the token alone');
+  // The last held operations: a skill is not trusted, and a server is not saved, with the token alone.
+  assert.equal((await rawRequest({ op: 'held', token, request: { action: 'skill-review', skill: 'Helper', hash: 'b'.repeat(64) } })).code, 'locked', 'trusting a skill package is locked with the token alone');
+  const serverDraft = { name: 'Notes', enabled: true, transport: { kind: 'stdio', command: 'npx', args: [], env: [{ name: 'API_KEY' }] } };
+  assert.equal((await rawRequest({ op: 'held', token, request: { action: 'mcp-save', servers: [serverDraft], secrets: { Notes: { API_KEY: 'x' } } } })).code, 'locked', 'saving an MCP server is locked with the token alone');
   const grantPairing = await rawRequest({ op: 'pair-start', token, scope: 'one', operation: grant });
   assert.equal(grantPairing.ok, true);
   await dialog.waitFor();

@@ -45,6 +45,10 @@ const bridge: Bridge = {
   accountReopenSignIn: () => invoke('orglet:account-reopen-sign-in'),
   accountSignInLink: () => invoke('orglet:account-sign-in-link'),
   accountSignOut: () => invoke('orglet:account-sign-out'),
+  codepawlState: () => invoke('orglet:codepawl-state'),
+  codepawlConnect: () => invoke('orglet:codepawl-connect'),
+  codepawlDisconnect: () => invoke('orglet:codepawl-disconnect'),
+  codepawlUsage: () => invoke('orglet:codepawl-usage'),
   onAccount: callback => {
     const listener = (_event: Electron.IpcRendererEvent, state: AccountState) => callback(state);
     ipcRenderer.on('orglet:account', listener);

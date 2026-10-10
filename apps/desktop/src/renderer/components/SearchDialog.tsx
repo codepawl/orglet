@@ -75,6 +75,12 @@ function unrepeated(name: string, detail: string | undefined): string | undefine
   return detail && detail.trim().toLowerCase() === name.trim().toLowerCase() ? undefined : detail;
 }
 
+/** Whether two lines say the same thing, ignoring case, the spaces around them and the punctuation at their end. */
+function sameWords(first: string, second: string): boolean {
+  const plain = (text: string) => text.trim().replace(/[.!?…]+$/u, '').toLocaleLowerCase();
+  return plain(first) === plain(second);
+}
+
 function Marked({ parts }: { parts: readonly SnippetPart[] }) {
   return <>{parts.map((part, index) => part.match
     ? <mark key={index} className="search-mark">{part.text}</mark>
@@ -250,7 +256,9 @@ function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose 
     detail = label.detail;
     at = row.hit?.at ?? row.task.createdAt;
     const hit = row.hit;
-    if (hit?.snippet.length) {
+    // A chat named after its first message would show that message twice, as the name and as the match under it.
+    const repeatsName = hit ? sameWords(hit.snippet.map(part => part.text).join(''), name) : false;
+    if (hit?.snippet.length && !repeatsName) {
       const sender = hit.sender?.kind === 'orglet' ? hit.sender.name : t('Bạn');
       snippet = <span className="search-result-snippet"><span className="search-result-sender">{sender}: </span><Marked parts={hit.snippet} /></span>;
     }

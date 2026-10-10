@@ -7,6 +7,7 @@ import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { CustomConnectionsSection } from './CustomConnections';
+import { CodepawlConnection } from './CodepawlConnection';
 import type { OpenCodeGoUsage } from '../../shared/opencode';
 import { CURSOR_ONE_SIGN_IN_ON_MAC, harnessCatalog, harnessLogoutArgs, harnessSignInIsMachineWide, harnessSignsInApp, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { BankedResets, PlanUsage, usageReadingTime } from './PlanUsage';
@@ -740,7 +741,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'connections' && <>
-              {ApiProvider.options.map(provider => {
+              {ApiProvider.options.filter(provider => provider !== 'codepawl').map(provider => {
                 const name = API_PROVIDER_NAMES[provider];
                 const local = isLocalApi(provider);
                 const draft = keyDrafts[provider] ?? '';
@@ -813,6 +814,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                     </form>}
                 </div>;
               })}
+              {/* The CodePawl router has no key to type, so it has its own row; it draws nothing in a build without a router. */}
+              <CodepawlConnection account={account} busy={busy} act={act} onConnections={changeConnections} />
               <CustomConnectionsSection connections={workspace.customConnections ?? []} keys={connections.custom ?? {}} busy={busy} act={act} onConnections={changeConnections} />
             </>}
 
@@ -961,7 +964,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               </Row>
               <Row title={t('Terminal đã làm')} description={t('Mới nhất ở trên. Terminal đọc lại danh sách này bằng orglet show terminal.')} />
               <TerminalJournal />
-              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Tài khoản CodePawl là tùy chọn và chưa đồng bộ gì.')} />
+              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Tài khoản CodePawl là tùy chọn. Khi đăng nhập, trò chuyện và Tí được đồng bộ giữa các máy của bạn.')} />
             </>}
 
             {tab === 'account' && <AccountSettings account={account} busy={busy} act={act} />}

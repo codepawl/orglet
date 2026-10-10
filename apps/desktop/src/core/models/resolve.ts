@@ -39,6 +39,15 @@ function resolveOpenCodeModel(plan: OpenCodePlan, custom: string | undefined): R
 }
 
 /**
+ * The router has no default model and no price Orglet reserves against: its free allowance and plan are enforced by the
+ * router itself, so a request is never held against Orglet budgets (isPlanApi).
+ */
+function resolveCodepawlModel(custom: string | undefined): ResolvedModel {
+  if (!custom) return { pricingVersion: 'codepawl:unselected' };
+  return { id: custom, pricingVersion: `plan:codepawl:${custom}` };
+}
+
+/**
  * A custom connection has no default model. Its price is the one the person entered, zero for a server on this computer
  * or a private network, or unknown; its `/models` is never trusted for a price. Without a price every request is
  * reserved as an unknown charge (no rates), exactly like a custom model ID on a built-in paid API.
@@ -67,6 +76,7 @@ export function resolveWorkerModel(worker: Pick<Worker, 'provider' | 'modelId'>,
     return { id, pricingVersion: custom ? `ollama:${custom}` : 'ollama' };
   }
   if (isOpenCodePlan(worker.provider)) return resolveOpenCodeModel(worker.provider, custom);
+  if (worker.provider === 'codepawl') return resolveCodepawlModel(custom);
   if (isCustomProvider(worker.provider)) return resolveCustomConnectionModel(worker.provider, custom, customConnections);
   if (!Object.hasOwn(modelCatalog, worker.provider)) throw new Error('Provider không có catalog giá hợp lệ.');
   const provider = worker.provider as CatalogProvider;

@@ -37,7 +37,15 @@ export type CliElevationOptions = {
 };
 
 type Pairing = { id: string; code: string; scope: ElevationScope; operation?: PairingOperation; expiresAt: number; wrongCodes: number };
-type Elevation = { keyHash: Buffer; scope: ElevationScope; boundHash?: string; startedAt: number; lastUsedAt: number };
+type Elevation = {
+  keyHash: Buffer;
+  scope: ElevationScope;
+  boundHash?: string;
+  startedAt: number;
+  lastUsedAt: number;
+  /** What this elevation has been shown (a skill package, by id and hash). A new pairing starts with nothing shown. */
+  shown: Set<string>;
+};
 
 /** Sorted keys, so the same arguments always hash the same. */
 function canonicalJson(value: unknown): string {
@@ -55,7 +63,7 @@ function canonicalJson(value: unknown): string {
  * could ever be used to test a guess at a key.
  */
 export function operationHash(body: HeldBody): string {
-  const { secret: _secret, ...withoutSecret } = body as HeldBody & { secret?: unknown };
+  const { secret: _secret, secrets: _secrets, ...withoutSecret } = body as HeldBody & { secret?: unknown; secrets?: unknown };
   return createHash('sha256').update(canonicalJson(withoutSecret)).digest('hex');
 }
 
@@ -77,6 +85,7 @@ export class CliElevation {
   private elevation: Elevation | undefined;
   private failedPairings: number[] = [];
   private holdUntil = 0;
+  private readonly shownByGrant = new WeakMap<ElevationGrant, Set<string>>();
 
   constructor(private readonly options: CliElevationOptions) {}
 
@@ -188,7 +197,7 @@ export class CliElevation {
     const key = this.random(32).toString('hex');
     const now = this.now();
     // A new pairing ends the elevation before it.
-    this.elevation = { keyHash: digestOf(key), scope: pairing.scope, ...(pairing.operation ? { boundHash: pairing.operation.hash } : {}), startedAt: now, lastUsedAt: now };
+    this.elevation = { keyHash: digestOf(key), scope: pairing.scope, ...(pairing.operation ? { boundHash: pairing.operation.hash } : {}), startedAt: now, lastUsedAt: now, shown: new Set() };
     this.pairing = undefined;
     this.emit();
     return { key, scope: this.elevation.scope, endsInSeconds: ELEVATION_LIFE_MS / 1000 };
@@ -230,13 +239,25 @@ export class CliElevation {
       if (current.boundHash !== boundHash) throw new CliFailure('locked', 'Mã này chỉ cho phép đúng một thao tác khác. Chạy lại lệnh để lấy mã mới.');
       this.elevation = undefined;
       this.emit();
-      return { scope: 'one' };
+      return this.grantOf('one', current);
     }
     if (required === 'setup' && current.scope !== 'setup') {
       throw new CliFailure('locked', 'Việc này cần quyền rộng hơn. Gõ /unlock setup để mở khóa.');
     }
     current.lastUsedAt = this.now();
     this.emit();
-    return { scope: current.scope };
+    return this.grantOf(current.scope, current);
+  }
+
+  /** The grant stays `{ scope }`; the set of what was shown to its elevation is kept beside it, out of reach of any answer. */
+  private grantOf(scope: ElevationScope, elevation: Elevation): ElevationGrant {
+    const grant: ElevationGrant = { scope };
+    this.shownByGrant.set(grant, elevation.shown);
+    return grant;
+  }
+
+  /** What the elevation behind this grant has been shown. Empty for a grant this object did not make. */
+  shownTo(grant: ElevationGrant): Set<string> {
+    return this.shownByGrant.get(grant) ?? new Set();
   }
 }

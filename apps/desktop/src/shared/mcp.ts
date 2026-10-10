@@ -296,6 +296,19 @@ const ImportFile = z.object({ mcpServers: z.record(z.string(), ImportedServer).o
  * Entries Orglet cannot use are listed as skipped with the reason. Nothing here looks for a file on its own.
  */
 export function parseMcpImport(text: string): { drafts: McpServerDraft[]; skipped: { name: string; reason: string }[] } {
+  const entries = importedEntries(text);
+  const drafts: McpServerDraft[] = [];
+  const skipped: { name: string; reason: string }[] = [];
+  for (const [name, entry] of entries.slice(0, MCP_SERVER_LIMIT)) {
+    const draft = importedDraft(name, entry);
+    if ('reason' in draft) skipped.push({ name, reason: draft.reason });
+    else drafts.push(draft.draft);
+  }
+  for (const [name] of entries.slice(MCP_SERVER_LIMIT)) skipped.push({ name, reason: `Chỉ nhập tối đa ${MCP_SERVER_LIMIT} máy chủ.` });
+  return { drafts, skipped };
+}
+
+function importedEntries(text: string): [string, z.infer<typeof ImportedServer>][] {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -306,15 +319,42 @@ export function parseMcpImport(text: string): { drafts: McpServerDraft[]; skippe
   if (!parsed.success) throw new Error('Tệp không có danh sách máy chủ MCP.');
   const entries = Object.entries(parsed.data.mcpServers ?? parsed.data.servers ?? {});
   if (!entries.length) throw new Error('Tệp không có danh sách máy chủ MCP.');
+  return entries;
+}
+
+/** A secret a server's file names, to be typed at the terminal: an environment variable, or a header (`Authorization` is the bearer token). */
+export type McpNamedSecret = { server: string; name: string };
+
+/**
+ * The same file shape as `parseMcpImport`, for the terminal, where a secret value never sits in a file: every
+ * environment variable and header is a secret, its value in the file must be empty, and only its name is read. A file with a
+ * value in it is refused whole, and the refusal names the entry and never repeats the value.
+ */
+export function parseMcpImportNamingSecrets(text: string): { drafts: McpServerDraft[]; secrets: McpNamedSecret[]; skipped: { name: string; reason: string }[] } {
+  const entries = importedEntries(text);
+  for (const [server, entry] of entries) {
+    for (const [name, value] of [...Object.entries(entry.env ?? {}), ...Object.entries(entry.headers ?? {})]) {
+      if (value !== '') throw new Error(`Tệp có giá trị cho "${name}" của máy chủ "${server}". Để trống giá trị bí mật trong tệp: Orglet sẽ hỏi khi lưu.`);
+    }
+  }
   const drafts: McpServerDraft[] = [];
   const skipped: { name: string; reason: string }[] = [];
   for (const [name, entry] of entries.slice(0, MCP_SERVER_LIMIT)) {
-    const draft = importedDraft(name, entry);
-    if ('reason' in draft) skipped.push({ name, reason: draft.reason });
-    else drafts.push(draft.draft);
+    const enabled = entry.disabled !== true;
+    const transport = entry.command
+      ? { kind: 'stdio', command: entry.command, args: entry.args ?? [], env: Object.keys(entry.env ?? {}).map(variable => ({ name: variable })) }
+      : entry.url ? { kind: 'http', url: entry.url, headers: Object.keys(entry.headers ?? {}).map(header => ({ name: header })) } : undefined;
+    if (!transport) {
+      skipped.push({ name, reason: 'Thiếu command hoặc url.' });
+      continue;
+    }
+    const result = McpServerDraft.safeParse({ name: name.slice(0, 40), enabled, transport });
+    if (result.success) drafts.push(result.data);
+    else skipped.push({ name, reason: result.error.issues[0]?.message ?? 'Không hợp lệ.' });
   }
   for (const [name] of entries.slice(MCP_SERVER_LIMIT)) skipped.push({ name, reason: `Chỉ nhập tối đa ${MCP_SERVER_LIMIT} máy chủ.` });
-  return { drafts, skipped };
+  const secrets = drafts.flatMap(draft => (draft.transport.kind === 'stdio' ? draft.transport.env : draft.transport.headers).map(entry => ({ server: draft.name, name: entry.name })));
+  return { drafts, secrets, skipped };
 }
 
 function importedDraft(name: string, entry: z.infer<typeof ImportedServer>): { draft: McpServerDraft } | { reason: string } {

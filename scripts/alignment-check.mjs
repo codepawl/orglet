@@ -9,7 +9,7 @@ import * as rules from './alignment/rules.ts';
 import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
-import { openSettings, expandSidebar } from './smoke-language.mjs';
+import { openSettings, expandSidebar, briefInSearchRow } from './smoke-language.mjs';
 import { writeViewerFixtures } from './viewer-fixtures.mjs';
 
 // Measures alignment on the packaged app's main screens instead of trusting a screenshot (COD-333). It seeds a
@@ -452,7 +452,7 @@ async function openWorkerTab(page, context, tab) {
 async function openOpenChats(page, context) {
   await page.keyboard.press('Control+K');
   await page.getByRole('dialog').getByRole('combobox').fill(context.earlierChatBrief);
-  await page.getByRole('dialog').getByRole('option').filter({ hasText: context.earlierChatBrief }).first().click();
+  await page.getByRole('dialog').getByRole('option').filter({ hasText: briefInSearchRow(context.earlierChatBrief) }).first().click();
   await page.locator('.open-chat-row .worker.active').waitFor({ state: 'attached' });
   await openArea(page, 'Trò chuyện');
   await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
@@ -672,7 +672,7 @@ const SCREENS = [
   { name: 'details-recovery', minWidth: 900, open: async (page, context) => {
     await page.keyboard.press('Control+K');
     await page.getByRole('dialog').getByRole('combobox').fill(context.earlierChatBrief);
-    await page.getByRole('dialog').getByRole('option').filter({ hasText: context.earlierChatBrief }).first().click();
+    await page.getByRole('dialog').getByRole('option').filter({ hasText: briefInSearchRow(context.earlierChatBrief) }).first().click();
     await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
     await foldSidebar(page);
     await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click();

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { MCP_SERVER_LIMIT, McpServerDraft } from '../shared/mcp';
+import { SyncConflictEntity } from '../shared/sync-conflicts';
 
 /**
  * The held operations the terminal reaches with an elevation (docs/cli-held-actions-design.md). Node only: main and the
@@ -32,7 +34,20 @@ const Provider = z.string().trim().min(1).max(80);
  * `operation`, and `operationHash` leaves it out, so no stored hash or word list is ever made from it.
  */
 export const SecretText = z.string().min(1).max(500);
-export const CHANGES_OF_ACCOUNT = ['sign-in', 'sign-out', 'cancel', 'reopen'] as const;
+const SiteText = z.string().trim().min(1).max(260);
+const ProgramText = z.string().trim().min(1).max(120);
+const Sha256 = z.string().regex(/^[a-f0-9]{64}$/);
+const McpSecretValue = z.string().min(1).max(8192);
+/** Server name, then the variable or header name, then the value typed at the terminal. Never in a draft, a hash or a journal row. */
+const McpSecretValues = z.record(z.string(), z.record(z.string(), McpSecretValue));
+/** A draft from the terminal's file: the names of its secrets are there and the values never are. */
+const McpDraftsWithoutValues = z.array(McpServerDraft).min(1).max(MCP_SERVER_LIMIT).refine(drafts => drafts.every(draftHasNoValues), 'Tệp không được chứa giá trị bí mật.');
+
+function draftHasNoValues(draft: McpServerDraft): boolean {
+  if (draft.transport.kind === 'stdio') return draft.transport.env.every(entry => entry.value === undefined);
+  return draft.transport.bearer === undefined && draft.transport.headers.every(entry => entry.value === undefined);
+}
+export const CHANGES_OF_ACCOUNT =['sign-in', 'sign-out', 'cancel', 'reopen'] as const;
 export const CHANGES_OF_HARNESS = ['add', 'remove', 'select', 'sign-in', 'cancel', 'sign-out'] as const;
 
 const SetupBodies = [
@@ -62,6 +77,18 @@ const SetupBodies = [
   // operation to a pairing; main refuses to run one that arrives without it.
   z.object({ action: z.literal('connect'), provider: Provider, secret: SecretText.optional() }).strict(),
   z.object({ action: z.literal('search-key'), provider: Provider, secret: SecretText.optional() }).strict(),
+  z.object({
+    action: z.literal('browser-choice'), ...ChatFields, profile: Name.optional(), mode: z.enum(['none', 'read', 'act']).optional(),
+    allow: z.array(SiteText).max(100).optional(), block: z.array(SiteText).max(100).optional(), remove: z.array(SiteText).max(100).optional(),
+  }).strict(),
+  z.object({
+    action: z.literal('desktop-choice'), ...ChatFields, mode: z.enum(['none', 'read', 'act']).optional(),
+    add: z.array(ProgramText).max(20).optional(), remove: z.array(ProgramText).max(20).optional(),
+  }).strict(),
+  // The two that carry a server's secret values. The body names the secrets (the entries of the draft have no value) and
+  // `secrets` is optional so the same body, without it, can name the operation to a pairing.
+  z.object({ action: z.literal('mcp-save'), servers: McpDraftsWithoutValues, secrets: McpSecretValues.optional() }).strict(),
+  z.object({ action: z.literal('mcp-import'), servers: McpDraftsWithoutValues, secrets: McpSecretValues.optional() }).strict(),
 ] as const;
 
 export const HeldBody = z.discriminatedUnion('action', [
@@ -76,6 +103,14 @@ export const HeldBody = z.discriminatedUnion('action', [
   z.object({ action: z.literal('budget'), cardId: CardId, amountMicros: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), source: z.enum(['provider_dashboard', 'invoice']) }).strict(),
   z.object({ action: z.literal('install-update') }).strict(),
   z.object({ action: z.literal('test'), what: z.enum(['mcp', 'web-search', 'decision-model']), server: Name.optional() }).strict(),
+  z.object({ action: z.literal('accept'), ...ChatFields, cardId: CardId }).strict(),
+  z.object({ action: z.literal('evidence'), ...ChatFields, cardId: CardId }).strict(),
+  z.object({ action: z.literal('restore-file'), ...ChatFields, runId: z.uuid(), path: z.string().min(1).max(1024) }).strict(),
+  z.object({ action: z.literal('sync-conflict'), entity: SyncConflictEntity, cardId: z.uuid(), revisionId: z.uuid(), generation: z.number().int().positive(), keep: z.enum(['this-computer', 'account']) }).strict(),
+  z.object({ action: z.literal('skill-show'), skill: Name }).strict(),
+  z.object({ action: z.literal('skill-review'), skill: Name, hash: Sha256 }).strict(),
+  // A note the person wrote, saved approved. `orglet` names the orglet it is for; without it the note is for everyone.
+  z.object({ action: z.literal('note'), title: z.string().trim().min(1).max(200), content: z.string().trim().min(1).max(8000), tags: z.array(z.string().trim().min(1).max(40)).max(10), pinned: z.boolean(), orglet: Name.optional() }).strict(),
 ]);
 export type HeldBody = z.infer<typeof HeldBody>;
 export type SetupBody = z.infer<(typeof SetupBodies)[number]>;
@@ -86,7 +121,7 @@ export function isSetupBody(body: HeldBody): body is SetupBody {
 }
 /** The bodies that carry a secret; their errors and journal lines say nothing but that the key was not saved. */
 export function carriesSecret(body: HeldBody): boolean {
-  return body.action === 'connect' || body.action === 'search-key';
+  return body.action === 'connect' || body.action === 'search-key' || body.action === 'mcp-save' || body.action === 'mcp-import';
 }
 export type HeldAction = HeldBody['action'];
 
@@ -119,6 +154,17 @@ export const HELD_ACTIONS: Record<HeldAction, { keys: readonly string[]; label: 
   'search-key-remove': { keys: ['removeWebSearchKey'], label: 'Xóa khóa tìm kiếm web' },
   connect: { keys: ['connect'], label: 'Lưu khóa API của một kết nối' },
   'search-key': { keys: ['saveWebSearchKey'], label: 'Lưu khóa tìm kiếm web' },
+  'browser-choice': { keys: ['setBrowser'], label: 'Đổi trình duyệt của một chat' },
+  'desktop-choice': { keys: ['setDesktop'], label: 'Đổi các ứng dụng trên máy mà một chat được dùng' },
+  'mcp-save': { keys: ['saveMcpServer'], label: 'Lưu một máy chủ MCP' },
+  'mcp-import': { keys: ['importMcpServers'], label: 'Nhập các máy chủ MCP từ một tệp' },
+  accept: { keys: ['accept'], label: 'Chấp nhận báo cáo' },
+  evidence: { keys: ['acknowledgeEvidence'], label: 'Ghi nhận giới hạn bằng chứng' },
+  'restore-file': { keys: ['restoreWorkspaceFile'], label: 'Khôi phục một tệp đã bị xóa' },
+  'sync-conflict': { keys: ['resolveSyncConflict'], label: 'Chọn bản dùng cho một mục sửa trên hai máy' },
+  'skill-show': { keys: ['inspectSkill'], label: 'Xem các tệp của một gói skill' },
+  'skill-review': { keys: ['reviewSkill'], label: 'Tin một gói skill đã xem' },
+  note: { keys: ['saveKnowledge'], label: 'Lưu một ghi chú' },
   // An MCP approval is the approval branch of `answerDecision`; `orglet answer` refuses it without an elevation.
   mcp: { keys: [], label: 'Trả lời xin quyền dùng công cụ MCP' },
   browser: { keys: ['answerBrowserApproval'], label: 'Trả lời một bước trình duyệt đang chờ duyệt' },
@@ -147,4 +193,11 @@ export type WaitingValue = { cards: WaitingCard[] };
 
 export type PairStartValue = { pairingId: string; expiresInSeconds: number };
 export type PairFinishValue = { key: string; scope: 'decisions' | 'one' | 'setup'; endsInSeconds: number };
-export type HeldValue = { action: HeldAction; summary: string };
+export type HeldValue = {
+  action: HeldAction;
+  summary: string;
+  /** Lines to print under the summary: the files of a skill package, or which servers an import saved and skipped. Never a secret. */
+  report?: string[];
+  /** Set by `skill-show`: the hash of the package it printed. */
+  skillHash?: string;
+};

@@ -109,6 +109,14 @@ export async function openHome(page) {
   if (!await home.evaluate(element => element.classList.contains('active'))) await home.click();
 }
 
+/**
+ * How a chat named after its brief reads in a search row: the row shows the name, without the full stop that ends the
+ * brief, and no longer repeats the brief as the match under it.
+ */
+export function briefInSearchRow(brief) {
+  return brief.replace(/[.!?…]+$/u, '');
+}
+
 /** Open a specific under-the-hood task by its brief via search (sidebar no longer lists task rows). */
 export async function openThreadByBrief(page, brief) {
   await expandSidebar(page);
@@ -116,7 +124,7 @@ export async function openThreadByBrief(page, brief) {
   await openHome(page);
   await page.getByRole('button', { name: label('Tìm hoặc bắt đầu trò chuyện') }).first().click();
   await page.getByRole('combobox', { name: label('Tìm cuộc trò chuyện') }).fill(brief);
-  await page.getByRole('option').filter({ hasText: brief }).first().click();
+  await page.getByRole('option').filter({ hasText: briefInSearchRow(brief) }).first().click();
 }
 
 /**

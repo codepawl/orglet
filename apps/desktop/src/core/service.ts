@@ -755,6 +755,10 @@ export class CoreService {
         this.notify();
         return;
       }
+      case 'recoveryDeletedFile': {
+        if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
+        return this.workspaceRuntime.deletedFileSize(commands.recoveryDeletedFile.parse(args));
+      }
       case 'restoreWorkspaceFile': {
         if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
         await this.workspaceRuntime.restore(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
@@ -1110,7 +1114,7 @@ export class CoreService {
     return !!await this.modelListRuntime.readKey?.(provider).catch(() => null);
   }
   private async marketDefaultModel(): Promise<{ provider: Worker['provider']; modelId?: string }> {
-    const providers: Worker['provider'][] = ['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', ...harnessCatalog, ...readCustomConnections(this.store).map(connection => customProviderId(connection.id))];
+    const providers: Worker['provider'][] = ['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'codepawl', 'ollama', ...harnessCatalog, ...readCustomConnections(this.store).map(connection => customProviderId(connection.id))];
     for (const provider of providers) {
       if (!await this.marketConnected(provider)) continue;
       if (isHarness(provider)) return { provider };
@@ -1126,6 +1130,7 @@ export class CoreService {
     if (input.id) this.store.get<Worker>('workers', input.id);
     const { modelId, mcpServerIds, expectedRevision, localOnly, ...fields } = input;
     if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
+    if (fields.provider === 'codepawl' && !modelId?.trim()) throw new Error('Chọn hoặc gõ ID model của CodePawl.');
     if (isCustomProvider(fields.provider)) {
       const connection = requireCustomConnection(this.store, fields.provider);
       if (!modelId?.trim()) throw new Error(`Chọn hoặc gõ ID model cho ${connection.name}.`);
