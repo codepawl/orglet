@@ -64,7 +64,13 @@ export async function useFullSidebar(page) {
  * else. Answers whether it was folded.
  */
 export async function expandSidebar(page) {
-  if (!await page.locator('.app.sidebar-hidden').count()) return false;
+  if (!await page.locator('.app.sidebar-hidden').count()) {
+    // A sidebar that starts open is on screen before its header is: wait for the control that folds it, so a smoke
+    // never presses a row while the first paint is still settling.
+    await page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true }).first().waitFor();
+    await page.locator('.app:not(.startup)').waitFor();
+    return false;
+  }
   // A chat deleted behind the window's back (a smoke deleting it through the core) is left on the window's next
   // refresh, and leaving it folds a narrow window's sidebar again; the tile is pressed again when that happens.
   for (let attempt = 1; ; attempt++) {

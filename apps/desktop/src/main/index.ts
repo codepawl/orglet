@@ -192,6 +192,7 @@ async function showWindow(chat?: CliChat) {
   desktopReady ??= createDesktopWindow();
   await desktopReady;
   if (!window || window.isDestroyed()) return;
+  if (testOffscreen) return;
   if (window.isMinimized()) window.restore();
   window.show();
   window.moveTop();
@@ -495,8 +496,15 @@ function relayBrowserEvent(raw: unknown) {
     : event;
   window.webContents.send('orglet:browser-live', live);
 }
+/**
+ * A test tool: `ORGLET_TEST_OFFSCREEN=1` keeps the window far off the screen, out of the taskbar and never focused, so
+ * a smoke can drive and photograph the real window without it appearing on the person's desktop. Never for a person.
+ */
+const testOffscreen = process.env.ORGLET_TEST_OFFSCREEN === '1';
+const OFFSCREEN_WINDOW = { x: -32000, y: -32000, show: false, skipTaskbar: true };
 async function createDesktopWindow() {
-  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(testOffscreen ? OFFSCREEN_WINDOW : {}), ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  if (testOffscreen) window.showInactive();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('did-start-navigation', (_event, _address, inPlace, mainFrame) => {
     if (mainFrame && !inPlace) moderationCallerGeneration += 1;
