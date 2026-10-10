@@ -593,7 +593,16 @@ const SCREENS = [
     await openChartChat(page);
     await page.getByRole('button', { name: label('Mở lớn'), exact: true }).first().click();
     await page.locator('#source-viewer .chart-plot svg').waitFor();
-  }, close: async page => { await page.mouse.move(2, 2); await page.keyboard.press('Escape'); await page.locator('#source-viewer').waitFor({ state: 'detached' }); } },
+  }, close: async page => {
+    await page.mouse.move(2, 2);
+    // A tooltip still fading out takes the first Escape for itself, so press until the viewer is gone.
+    const viewer = page.locator('#source-viewer');
+    for (let attempt = 0; attempt < 5 && await viewer.count(); attempt++) {
+      await page.keyboard.press('Escape');
+      await viewer.waitFor({ state: 'detached', timeout: 2000 }).catch(() => {});
+    }
+    await viewer.waitFor({ state: 'detached' });
+  } },
   // The chat's Files lists the charts its answers sent, above any attached file.
   { name: 'chat-chart-files', open: async page => {
     await openChartChat(page);

@@ -13,5 +13,11 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      # The Forge packages share one version and only build together, so they arrive as one pull request.
+      electron-forge:
+        patterns: ["@electron-forge/*"]
       minor-and-patch:
         update-types: [minor, patch]
+        # The isolation backend is 0.x, where a minor release can change what a command may reach: it gets a pull
+        # request of its own, checked with `pnpm test:isolation`.
+        exclude-patterns: ["@microsoft/mxc-sdk"]
