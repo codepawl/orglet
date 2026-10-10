@@ -12,6 +12,7 @@ Part of the [user guide](user-guide.md). The full technical detail, including th
 | Gemini CLI on this computer | Gemini CLI installed **and signed in** (Sign in with Google, or its own API key) | Your Google account's Gemini allowance |
 | OpenAI, Anthropic, Grok (xAI), OpenRouter | An API key saved in Settings | Pay per use, within limits you set |
 | OpenCode Zen, OpenCode Go | A Zen or Go key saved in Settings (two separate connections) | Your Zen balance or Go subscription; Orglet does not track or cap this spending |
+| CodePawl router | Signed in to your CodePawl account, in a build that has the router (not open yet) | Free models up to a daily allowance, and the router's plans; Orglet does not track or cap this spending |
 | Ollama on this computer | Ollama running at `127.0.0.1:11434` | Local, free |
 | A custom connection | A name, a base URL and, if the server needs one, an API key; optionally its price | Free on this computer or a private network; otherwise the price you enter, or unknown until you reconcile it |
 
@@ -51,6 +52,8 @@ Keys are encrypted with your system's secure storage (DPAPI on Windows, Keychain
 
 Ollama has no key: turn its switch on while Ollama is running locally.
 
+The CodePawl router has no key to paste either. It is not open yet, so a normal install shows nothing about it. In a build that has it, **Settings → API connections** shows a **CodePawl router** row. Choose **Connect**, signing in to your CodePawl account first if you are not, and Orglet makes a key for this computer and keeps it encrypted like the others. The row then shows the free tokens left today and, if you have a plan, the usage left this period. If the router is not open yet for your account, the row says so in one sentence and nothing is connected. **Disconnect**, or signing out of your account, removes the key from this computer and asks the router to revoke it.
+
 With an OpenCode Go key saved, its row shows how much of the plan's five-hour, weekly and monthly limits that key has used, and when each resets. The numbers come from OpenCode Go and are read again when you save a new key. A key without a Go subscription says so instead.
 
 ## Custom connections
@@ -85,7 +88,7 @@ A reply that comes back without token counts stays unknown in **Charges to recon
 
 An orglet has a model ID. The picker lists that provider's own models, fetched from the provider's API or CLI and cached on this computer for 24 hours; you can also type any ID. Built-in names such as GPT-4.1 mini are suggestions, not a lock. If the list fails to load, typing still works.
 
-Some connections have no model to fall back on: a custom connection, OpenCode Zen and OpenCode Go. There **Model ID** is marked required, and an empty field starts on the first model the connection lists (the only one, when it lists one). Ollama does the same when its suggestion, llama3.2, is not installed. You can change the ID or clear it. Saving with it empty turns the field red and scrolls it into view.
+Some connections have no model to fall back on: a custom connection, OpenCode Zen, OpenCode Go and the CodePawl router. There **Model ID** is marked required, and an empty field starts on the first model the connection lists (the only one, when it lists one). Ollama does the same when its suggestion, llama3.2, is not installed. You can change the ID or clear it. Saving with it empty turns the field red and scrolls it into view.
 
 When the provider's own list marks the chosen model as deprecated, the picker shows a quiet chip; a sunset date appears only when the provider included one. OpenCode Zen and Go have no default: pick a model from that plan's list, and models the OpenCode docs put on another endpoint show as **Not supported**. Details: [model-list-fetch.md](model-list-fetch.md).
 
