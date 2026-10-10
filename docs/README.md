@@ -74,6 +74,7 @@ These pages are the contract. Keep their precise language. Do not rewrite them i
 | [macos-packaging.md](macos-packaging.md) | macOS ZIP, Developer ID signing and notarization |
 | [linux-packaging.md](linux-packaging.md) | Linux ZIP and its headless CI job |
 | [mobile.md](mobile.md) | Proposed shape for a mobile companion, not decided |
+| [ai-router-design.md](ai-router-design.md) | Proposed, not built: the CodePawl AI router as its own product, what it may resell, how it earns, and what free costs |
 | [account-sync-design.md](account-sync-design.md) | Technical design for the optional CodePawl account and sync, not built |
 | [spaces-design.md](spaces-design.md) | Proposed, not built: spaces that hold categories and channels, and which orglets are in each |
 | [cli-held-actions-design.md](cli-held-actions-design.md) | Design: how the terminal reaches approvals, grants and secrets through a code the window shows, and what it never reaches |
