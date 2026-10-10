@@ -371,7 +371,7 @@ export async function runHeldCommand(run: HeldRun): Promise<number> {
     else if (command !== 'unlock') body = directBody(command as Exclude<HeldCommandName, 'unlock' | 'approve' | 'skill'>, run.argumentList);
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
-    run.print.stderr(`${error.message}\n${t('Chạy "orglet unlock --help" để xem cách dùng.')}`);
+    run.print.stderr(`${error.message}\n${t('Chạy "orglet {0} --help" để xem cách dùng.', command)}`);
     return EXIT_CODES.usage;
   }
   if (!run.terminal || !run.terminal.input.isTTY || !run.terminal.output.isTTY) {

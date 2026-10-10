@@ -102,7 +102,7 @@ export function CodepawlConnection({ account, busy, act, onConnections }: { acco
     <ProviderMark provider="codepawl" />
     <div className="setting-text">
       <span id={titleId} className="setting-title">{t('CodePawl router')}</span>
-      <span className="setting-description" role="status"><StatusMark variant={line.mark.variant} tone={line.mark.tone} label={line.text} decorative /> {line.text}</span>
+      <span className="setting-description outcome-line" role="status"><StatusMark variant={line.mark.variant} tone={line.mark.tone} label={line.text} decorative />{line.text}</span>
     </div>
     <div className="setting-control">
       {connected

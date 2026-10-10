@@ -659,7 +659,7 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
                    theirs), so what the turn's runs produced still reads in the same order under the turn. */
                 : turnNotices({ handIn: blockedLines, changes: turn.replies.length ? undefined : changedFilesLines(turn.runs, () => true), proposals: proposalCards(remainingProposals) }).after}
             {/* A held answer says itself why nothing was applied, under the answer; it needs no error card. */}
-            {unresolvedError?.error && !heldRun && !answerAlreadyRecords && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
+            {unresolvedError?.error && !heldRun && !answerAlreadyRecords && <div className="run-error" role="status"><h3 className="run-error-title"><TriangleAlert className="run-error-mark" size={16} aria-hidden="true" />{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
               {/* A plain stop on a connection that never charges says only what the heading already says. */}
