@@ -30,6 +30,8 @@ A new profile's Researcher has no model (owner, 2026-10-05). Its stored provider
 
 **The window can stay off the screen in a smoke.** `ORGLET_TEST_OFFSCREEN=1` places the app's window far outside every display, keeps it out of the taskbar and never gives it focus, so a packaged smoke can drive and photograph the real window while the person keeps working. It is a test tool like the sample replies: never set it for a person. The alignment check is the exception and needs the window on a display, because it resizes the window and reads the size back, which Windows does not report faithfully for a window that is on no display.
 
+**Two smokes run the app the way a person does.** `pnpm test:terminal-pty` runs the shipped `orglet` command in a real pseudo-terminal: it reads the pairing code from the window, types it at the prompt, types secrets with echo off, and checks that no secret appears in what the terminal showed or in the journal. `node scripts/router-connection-smoke.mjs` runs the CodePawl router connection end to end on one computer: the router's own code under `wrangler dev`, a stand-in accounts service that signs real tokens, and a stand-in inference provider. It needs the router's repository beside this one (`ROUTER_REPO`), so it is run by hand and is not part of CI.
+
 ## Connect a provider
 
 1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields. Ollama has no key: turn the switch on if Ollama is running at `127.0.0.1:11434`.

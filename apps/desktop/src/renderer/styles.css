@@ -912,6 +912,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .run-error { background:var(--surface); padding:18px; border-radius:12px; margin-top:16px; }
 .run-error p { margin-top:6px; font-size:14px; }
+/* A turn that stopped leads with its mark, so it is told from an answer at a glance. */
+.run-error-title { display:flex; align-items:center; gap:8px; }
+.run-error-mark { flex-shrink:0; color:var(--org-error, var(--error)); }
 /* What became of a past turn without an answer (COD-290): one line; a long error ends in an ellipsis, whole in the tooltip. */
 .turn-outcome { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .error { color:var(--error); font-size:13px; }
