@@ -9,7 +9,7 @@ import { ProviderId } from '../shared/contracts';
 import { Language } from '../shared/i18n';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { CHANNEL_TOPIC_LIMIT, ChannelName } from '../shared/channels';
-import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
+import { ChannelPatch, ChannelTarget, ManagementTarget, OrgletPatch } from './management';
 
 /**
  * The line protocol between the `orglet` command and the running app (COD-234). One JSON request per line, one JSON
@@ -95,8 +95,8 @@ export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('list'), token: CliToken }).strict(),
   z.object({ op: z.literal('config'), token: CliToken }).strict(),
   z.object({ op: z.literal('save-orglet'), token: CliToken, config: OrgletPatch, target: ManagementTarget.optional() }).strict(),
-  z.object({ op: z.literal('save-crew'), token: CliToken, config: CrewPatch, target: ManagementTarget.optional() }).strict(),
-  z.object({ op: z.literal('delete-entity'), token: CliToken, kind: z.enum(['worker', 'team']), target: ManagementTarget, confirmName: ChatName }).strict(),
+  z.object({ op: z.literal('save-crew'), token: CliToken, config: ChannelPatch, target: ChannelTarget.optional() }).strict(),
+  z.object({ op: z.literal('delete-entity'), token: CliToken, kind: z.enum(['worker', 'team']), target: ChannelTarget, confirmName: ChatName }).strict(),
   z.object({
     op: z.literal('send'),
     token: CliToken,

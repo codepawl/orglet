@@ -11,7 +11,7 @@ import { ManagementEditor, parseDollarLimit } from '../../apps/desktop/src/cli/m
 import { parseArguments, type ManagementCommand } from '../../apps/desktop/src/cli/arguments';
 import { runManagementCommand } from '../../apps/desktop/src/cli/management-command';
 import { completeSlash, parseSlash } from '../../apps/desktop/src/cli/slash';
-import type { Skill, Team, Worker } from '../../apps/desktop/src/shared/contracts';
+import type { Skill, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
 
 let directory: string;
 let store: Store;
@@ -51,7 +51,7 @@ describe('person-driven terminal configuration', () => {
     expect(value.orglets[0].config).not.toHaveProperty('revision');
     expect(value.orglets[0].config).not.toHaveProperty('autoApplyProposals');
     expect(value.orglets[0].config).not.toHaveProperty('mcpServerIds');
-    expect(Object.keys(value)).toEqual(['orglets', 'crews', 'skills', 'providers']);
+    expect(Object.keys(value)).toEqual(['orglets', 'crews', 'channels', 'skills', 'providers']);
     expect(value.providers.every(provider => provider.id !== 'demo')).toBe(true);
     expect(JSON.stringify(value)).not.toContain('workspace_write');
   });
@@ -107,7 +107,7 @@ describe('person-driven terminal configuration', () => {
         return core.command(command as never, args as never);
       },
     });
-    await expect(changingOperations.run({ op: 'save-orglet', token, target: worker, config: { name: 'Stale CLI edit' } }, signal)).rejects.toThrow('đã thay đổi');
+    await expect(changingOperations.run({ op: 'save-orglet', token, target: { id: worker.id, revision: worker.revision! }, config: { name: 'Stale CLI edit' } }, signal)).rejects.toThrow('đã thay đổi');
     expect(store.get<Worker>('workers', worker.id).instructions).toBe('Desktop won the race.');
     expect(store.get<Worker>('workers', worker.id).name).toBe('Terminal orglet');
     await expect(core.command('deleteEntity', { kind: 'worker', id: worker.id, expectedRevision: worker.revision, expectedName: worker.name })).rejects.toThrow('đã thay đổi');
@@ -198,5 +198,149 @@ describe('terminal editor and script inputs', () => {
     expect(remove).not.toHaveBeenCalled();
     await writeFile(path, Buffer.alloc(65 * 1024, 65));
     await expect(runManagementCommand(command, client, directory)).rejects.toThrow('64 KiB');
+  });
+});
+
+describe('channels made and changed from the terminal', () => {
+  const message = { sourceIds: [], consent: true, providerScopes: [], budgetMicros: 500_000 };
+
+  function orgletMembers(...orgletIds: string[]) {
+    return orgletIds.map(id => ({ kind: 'orglet' as const, id }));
+  }
+  function save(config: Record<string, unknown>, target?: { id: string; revision?: number }) {
+    return operations.run({ op: 'save-crew', token, config, ...(target ? { target } : {}) } as never, signal) as Promise<ManagementResult>;
+  }
+  function remove(target: { id: string; revision?: number }, confirmName: string) {
+    return operations.run({ op: 'delete-entity', token, kind: 'team', target, confirmName } as never, signal);
+  }
+  async function secondOrglet(): Promise<Worker> {
+    return await core.command('saveWorker', { ...store.all<Worker>('workers')[0], id: undefined, name: 'Second orglet' }) as Worker;
+  }
+  async function settled(taskId: string): Promise<void> {
+    for (let tries = 0; tries < 300 && (core.teams.isActive(taskId) || core.runner.isActive(taskId)); tries++) await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
+  it('makes a channel that takes turns with createChannel and puts it in the space kept for channels', async () => {
+    const [first] = store.all<Worker>('workers');
+    const second = await secondOrglet();
+    const created = await save({ name: '#ideas', topic: 'Anything goes', members: orgletMembers(first.id, second.id) });
+    expect(created).toMatchObject({ kind: 'team', name: 'ideas', space: 'Kênh' });
+    expect(created.id).toBe(created.channelId);
+    expect(created).not.toHaveProperty('revision');
+    const channel = store.workspace().emptyChannels.find(item => item.id === created.channelId)!;
+    expect(channel).toMatchObject({ name: 'ideas', topic: 'Anything goes', members: orgletMembers(first.id, second.id) });
+    expect(channel.crewId).toBeUndefined();
+    expect(store.workspace().spaces.find(space => space.id === channel.spaceId)?.name).toBe('Kênh');
+    expect(store.all<Team>('teams')).toHaveLength(0);
+  });
+
+  it('makes a channel where the lead splits the work, with the lead settings as a field of the channel', async () => {
+    const [first] = store.all<Worker>('workers');
+    const second = await secondOrglet();
+    const created = await save({ name: 'launch', members: orgletMembers(first.id, second.id), lead: { synthesizerId: second.id, instructions: 'Combine the parts.', workflow: 'sequential', monthlyBudgetMicros: 7_000_000, maxConcurrentTasks: 2 } });
+    const crew = store.get<Team>('teams', created.id);
+    expect(crew).toMatchObject({ name: 'launch', synthesizerId: second.id, instructions: 'Combine the parts.', workflow: 'sequential', monthlyBudgetMicros: 7_000_000, maxConcurrentTasks: 2 });
+    expect(created.revision).toBe(crew.revision);
+    expect(store.workspace().emptyChannels.find(item => item.id === created.channelId)).toMatchObject({ crewId: crew.id });
+    const listed = (await catalog()).channels!.find(item => item.id === created.channelId)!;
+    expect(listed).toMatchObject({ revision: crew.revision, config: { name: 'launch', mode: 'lead', lead: { synthesizerId: second.id, workflow: 'sequential' } } });
+  });
+
+  it('still reads a crew file with the older flat names and makes the same lead channel', async () => {
+    const [first] = store.all<Worker>('workers');
+    const second = await secondOrglet();
+    const created = await save({ name: 'Old crew', instructions: 'Review together.', memberIds: [first.id], synthesizerId: second.id, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 });
+    expect(store.get<Team>('teams', created.id)).toMatchObject({ synthesizerId: second.id, instructions: 'Review together.' });
+    const channel = store.workspace().emptyChannels.find(item => item.id === created.channelId)!;
+    expect(channel.members).toEqual(orgletMembers(first.id, second.id));
+    expect((await catalog()).crews.map(crew => crew.id)).toContain(created.id);
+  });
+
+  it('edits a channel by its own id or by its crew id, and keeps what the patch leaves out', async () => {
+    const [first] = store.all<Worker>('workers');
+    const second = await secondOrglet();
+    const turns = await save({ name: 'ideas', topic: 'Old topic', members: orgletMembers(first.id, second.id) });
+    // The space kept for channels holds the orglets its channels had, so the list can narrow but not widen past it.
+    const renamed = await save({ topic: 'New topic', members: orgletMembers(second.id) }, { id: turns.id });
+    expect(store.workspace().emptyChannels.find(item => item.id === turns.id)).toMatchObject({ name: 'ideas', topic: 'New topic', members: orgletMembers(second.id) });
+    expect(renamed.channelId).toBe(turns.id);
+    const lead = await save({ name: 'launch', memberIds: [first.id], synthesizerId: first.id });
+    await save({ topic: 'Cleared soon', lead: { workflow: 'sequential' } }, { id: lead.id, revision: lead.revision });
+    await save({ topic: '' }, { id: lead.channelId! });
+    const channel = store.workspace().emptyChannels.find(item => item.id === lead.channelId)!;
+    expect(channel).toMatchObject({ name: 'launch', crewId: lead.id });
+    expect(channel).not.toHaveProperty('topic');
+    expect(store.get<Team>('teams', lead.id)).toMatchObject({ workflow: 'sequential', synthesizerId: first.id });
+  });
+
+  it('refuses lead settings on a channel that takes turns until the patch says the mode, and switches it when it does', async () => {
+    const [first] = store.all<Worker>('workers');
+    const turns = await save({ name: 'ideas', members: orgletMembers(first.id) });
+    await expect(save({ instructions: 'Lead it.' }, { id: turns.id })).rejects.toThrow('lần lượt');
+    expect(store.all<Team>('teams')).toHaveLength(0);
+    const switched = await save({ mode: 'lead', lead: { instructions: 'Lead it.' } }, { id: turns.id });
+    expect(switched.id).not.toBe(turns.id);
+    expect(store.get<Team>('teams', switched.id).instructions).toBe('Lead it.');
+  });
+
+  it('refuses a stale revision, a wrong field and a channel that is gone, and changes nothing', async () => {
+    const [first] = store.all<Worker>('workers');
+    const lead = await save({ name: 'launch', members: orgletMembers(first.id), lead: { instructions: 'Combine.' } });
+    await expect(save({ topic: 'x' }, { id: lead.id, revision: lead.revision! + 1 })).rejects.toThrow('đã thay đổi');
+    await expect(save({ name: 'no members' })).rejects.toThrow('members');
+    await expect(save({ topic: 'x' }, { id: '99999999-9999-4999-8999-999999999999' })).rejects.toThrow('đã thay đổi');
+    expect(CliRequest.safeParse({ op: 'save-crew', token, config: { lead: { workHours: null } } }).success).toBe(false);
+    expect(store.workspace().emptyChannels.find(item => item.id === lead.channelId)).not.toHaveProperty('topic');
+  });
+
+  it('deletes an empty channel with deleteChannel after the name is typed, with or without the mark', async () => {
+    const [first] = store.all<Worker>('workers');
+    const turns = await save({ name: 'ideas', members: orgletMembers(first.id) });
+    await expect(remove({ id: turns.id }, 'Ideas')).rejects.toThrow('đúng tên');
+    expect(store.workspace().emptyChannels.some(item => item.id === turns.id)).toBe(true);
+    expect(await remove({ id: turns.id }, '#ideas')).toMatchObject({ deleted: true, name: 'ideas' });
+    expect(store.workspace().emptyChannels.some(item => item.id === turns.id)).toBe(false);
+  });
+
+  it('keeps how a channel with messages was deleted: a lead channel leaves the list, one that takes turns is refused', async () => {
+    const [first] = store.all<Worker>('workers');
+    const turns = await save({ name: 'ideas', members: orgletMembers(first.id) });
+    const taskId = await core.command('createTask', { workerId: first.id, channelId: turns.id, brief: 'Hi', ...message }) as string;
+    await settled(taskId);
+    await expect(remove({ id: turns.id }, 'ideas')).rejects.toThrow('orglet delete --chat');
+    expect(store.get<Task>('tasks', taskId).deletedAt).toBeUndefined();
+    const lead = await save({ name: 'launch', members: orgletMembers(first.id), lead: { instructions: 'Combine.' } });
+    const leadTask = await core.command('createTask', { workerId: first.id, channelId: lead.channelId, brief: 'Hi', ...message }) as string;
+    await settled(leadTask);
+    const deleted = await remove({ id: lead.id, revision: store.get<Team>('teams', lead.id).revision }, 'launch');
+    expect(deleted).toMatchObject({ deleted: true, id: lead.id });
+    expect((await catalog()).crews.some(crew => crew.id === lead.id)).toBe(false);
+    expect(store.get<Task>('tasks', leadTask).deletedAt).toBeUndefined();
+  });
+
+  it('finds a channel by #name in a file command and sends its own id and the typed name', async () => {
+    const [first] = store.all<Worker>('workers');
+    const turns = await save({ name: 'ideas', members: orgletMembers(first.id) });
+    const saveCrew = vi.fn(async () => turns);
+    const deleteChannel = vi.fn(async () => ({ ...turns, deleted: true }));
+    const client: ManagementClient = { catalog, saveOrglet: vi.fn(), saveCrew, delete: deleteChannel };
+    const path = join(directory, 'patch.json');
+    await writeFile(path, JSON.stringify({ topic: 'Changed' }));
+    await runManagementCommand(parseArguments(['edit', 'channel', '#Ideas', '--config', path]) as ManagementCommand, client, directory);
+    expect(saveCrew).toHaveBeenCalledWith({ topic: 'Changed' }, { id: turns.id });
+    await runManagementCommand({ kind: 'delete', entity: 'team', name: 'ideas', confirm: '#ideas', json: false }, client, directory);
+    expect(deleteChannel).toHaveBeenCalledWith('team', { id: turns.id }, 'ideas');
+  });
+
+  it('reads an app that sends only crews as the channels with a lead', async () => {
+    const crewId = '33333333-3333-4333-8333-333333333333';
+    const orgletId = store.all<Worker>('workers')[0].id;
+    const older: ManagementCatalog = { ...(await catalog()), channels: undefined, crews: [{ id: crewId, revision: 3, config: { name: 'Review', instructions: 'Combine.', memberIds: [orgletId], synthesizerId: orgletId, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 } }] };
+    const saveCrew = vi.fn(async () => ({ kind: 'team' as const, id: crewId, name: 'Review', revision: 4 }));
+    const client: ManagementClient = { catalog: async () => older, saveOrglet: vi.fn(), saveCrew, delete: vi.fn() };
+    const path = join(directory, 'patch.json');
+    await writeFile(path, JSON.stringify({ instructions: 'Changed.' }));
+    await runManagementCommand({ kind: 'edit', entity: 'team', name: 'review', config: path, json: false }, client, directory);
+    expect(saveCrew).toHaveBeenCalledWith({ instructions: 'Changed.' }, { id: crewId, revision: 3 });
   });
 });
