@@ -49,6 +49,7 @@ const bridge: Bridge = {
   codepawlConnect: () => invoke('orglet:codepawl-connect'),
   codepawlDisconnect: () => invoke('orglet:codepawl-disconnect'),
   codepawlUsage: () => invoke('orglet:codepawl-usage'),
+  codepawlBilling: request => invoke('orglet:codepawl-billing', request),
   onAccount: callback => {
     const listener = (_event: Electron.IpcRendererEvent, state: AccountState) => callback(state);
     ipcRenderer.on('orglet:account', listener);

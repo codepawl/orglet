@@ -594,6 +594,8 @@ export interface Bridge {
   codepawlDisconnect(): Promise<import('./router').CodepawlState>;
   /** Free tokens left today and included usage left this period; `known: false` when the router could not be asked. */
   codepawlUsage(): Promise<import('./router').CodepawlUsage>;
+  /** Opens the router's checkout page for a plan, or the page where a plan is managed, in the browser. Main opens it; the window learns only how it went. */
+  codepawlBilling(request: import('./router').CodepawlBillingRequest): Promise<import('./router').CodepawlBillingOutcome>;
   /** Every change of the account's state, pushed by the main process. */
   onAccount(callback: (state: import('./account').AccountState) => void): () => void;
   /** Account sync on this computer (COD-329): its state in plain words, never a token, id or address. */

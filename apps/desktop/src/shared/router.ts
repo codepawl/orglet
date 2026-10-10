@@ -63,11 +63,13 @@ const Count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const RouterUsageAnswer = z.object({
   free: z.object({ tokensLeft: Count, tokensLimit: Count, resetsAt: z.string().max(40) }),
   starter: z.object({ leftMicros: Count, periodEnd: z.string().max(40) }).nullable().optional(),
+  payByUse: z.object({ active: z.boolean(), costThisMonthMicros: Count }).optional(),
 });
 
 /**
  * Usage as the window sees it. `known: false` means the router could not be asked, and then no number is present: an
- * unknown amount is never shown as zero. `includedLeftMicros` is absent for an account without a plan.
+ * unknown amount is never shown as zero. `includedLeftMicros` is absent for an account without a plan, and the pay by
+ * use fields are absent when the router did not say.
  */
 export const CodepawlUsage = z.object({
   known: z.boolean(),
@@ -76,10 +78,41 @@ export const CodepawlUsage = z.object({
   freeResetsAt: z.string().max(40).optional(),
   includedLeftMicros: Count.optional(),
   includedPeriodEnd: z.string().max(40).optional(),
+  payByUseActive: z.boolean().optional(),
+  payByUseCostMicros: Count.optional(),
 }).strict();
 export type CodepawlUsage = z.infer<typeof CodepawlUsage>;
 
 export const UNKNOWN_CODEPAWL_USAGE: CodepawlUsage = { known: false };
+
+/** The two plans the router sells. Their prices are the router's and are shown on the checkout page, not here. */
+export const CodepawlPlan = z.enum(['starter', 'pay_by_use']);
+export type CodepawlPlan = z.infer<typeof CodepawlPlan>;
+
+/** What the window may ask about billing: a checkout page for one plan, or the page where a plan is managed. */
+export const CodepawlBillingRequest = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('checkout'), plan: CodepawlPlan }).strict(),
+  z.object({ kind: z.literal('portal') }).strict(),
+]);
+export type CodepawlBillingRequest = z.infer<typeof CodepawlBillingRequest>;
+
+/**
+ * `opened`: the page is open in the browser. `not_open`: the router sells no plan yet. `no_billing_account`: there
+ * is nothing to manage because no plan was ever bought. `unavailable`: the router could not give a page this time.
+ * The page's address never reaches the window.
+ */
+export const CodepawlBillingOutcome = z.enum(['opened', 'not_open', 'no_billing_account', 'unavailable']);
+export type CodepawlBillingOutcome = z.infer<typeof CodepawlBillingOutcome>;
+
+/** Main opens a billing page only at the payment provider (Polar, and its sandbox), whatever address the router sends. */
+export function isBillingPage(address: string): boolean {
+  try {
+    const url = new URL(address);
+    return url.protocol === 'https:' && (url.hostname === 'polar.sh' || url.hostname.endsWith('.polar.sh'));
+  } catch {
+    return false;
+  }
+}
 
 export const ROUTER_NOT_OPEN = 'CodePawl router chưa mở. Thử lại sau.';
 export const ROUTER_SIGN_IN_AGAIN = 'Đăng nhập lại tài khoản CodePawl để dùng CodePawl router.';

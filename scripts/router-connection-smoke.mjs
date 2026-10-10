@@ -103,6 +103,8 @@ const catalog = { models: [{ id: 'smoke-free', free: true, published: { inputMic
 const environmentFile = join(directory, 'router.env');
 await writeFile(environmentFile, [
   `ROUTER_ISSUER=${accountsUrl}/api/auth`,
+  // Whatever the router's own configuration says, this run sells nothing and reaches no payment provider.
+  'ROUTER_BILLING=off',
   `ROUTER_AUDIENCE=${ROUTER_AUDIENCE}`,
   `ROUTER_CATALOG='${JSON.stringify(catalog)}'`,
   'UPSTREAM_STANDIN=standin-upstream-key',
@@ -200,6 +202,12 @@ try {
   await page.getByRole('dialog').evaluate(dialog => { for (const element of dialog.querySelectorAll('*')) if (element.scrollHeight > element.clientHeight + 20) element.scrollTop = element.scrollHeight; });
   await page.waitForTimeout(800);
   await page.screenshot({ path: 'test-results/router-settings.png' });
+  // An account with no plan is offered both plans and nothing to manage. This router sells none, so asking for a
+  // checkout page opens no browser and says so.
+  const plans = page.getByRole('dialog').locator('.setting-connection-plans');
+  await plans.getByRole('button', { name: label('Mua gói Starter') }).waitFor({ timeout: 15000 });
+  assert.equal(await plans.getByRole('button').count(), 2, 'both plans are offered, and no Manage plan without one');
+  assert.equal(await page.evaluate(() => window.orglet.codepawlBilling({ kind: 'checkout', plan: 'starter' })), 'not_open', 'a router with billing off opens no payment page');
   await page.keyboard.press('Escape');
 
   await page.evaluate(() => window.orglet.codepawlDisconnect());

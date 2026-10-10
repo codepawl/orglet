@@ -1,9 +1,9 @@
 import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
-import { LogIn, Plug, Unplug } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { CreditCard, Gauge, LogIn, Plug, SlidersHorizontal, Unplug } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { AccountState } from '../../shared/account';
 import type { Connections } from '../../shared/contracts';
-import { ROUTER_NOT_OPEN, ROUTER_SIGN_IN_AGAIN, type CodepawlState, type CodepawlUsage } from '../../shared/router';
+import { ROUTER_NOT_OPEN, ROUTER_SIGN_IN_AGAIN, type CodepawlBillingOutcome, type CodepawlBillingRequest, type CodepawlState, type CodepawlUsage } from '../../shared/router';
 import { orglet } from '../api';
 import { t } from '../i18n';
 import { formatMoney } from './money';
@@ -32,7 +32,33 @@ function usageLine(usage: CodepawlUsage): string {
   const parts: string[] = [];
   if (usage.freeTokensLeft !== undefined) parts.push(t('Còn {0} token miễn phí hôm nay', [usage.freeTokensLeft.toLocaleString()]));
   if (usage.includedLeftMicros !== undefined) parts.push(t('Còn {0} dùng trong kỳ này', [formatMoney(usage.includedLeftMicros)]));
+  if (usage.payByUseActive) parts.push(t('Trả theo mức dùng: {0} tháng này', [formatMoney(usage.payByUseCostMicros ?? 0)]));
   return parts.join(' · ');
+}
+
+type PlanAction = { id: string; label: string; icon: ReactNode; request: CodepawlBillingRequest };
+
+/**
+ * What the person can do about a plan, from the usage the router reported: buy what they do not have, and manage what
+ * they do. Nothing is offered while the usage is unknown, because then it is not known which plan they have.
+ */
+function planActions(usage: CodepawlUsage | undefined): PlanAction[] {
+  if (!usage?.known) return [];
+  const hasStarter = usage.includedLeftMicros !== undefined;
+  const hasPayByUse = usage.payByUseActive === true;
+  const actions: PlanAction[] = [];
+  if (!hasStarter) actions.push({ id: 'starter', label: t('Mua gói Starter'), icon: <CreditCard size={14} />, request: { kind: 'checkout', plan: 'starter' } });
+  if (!hasPayByUse) actions.push({ id: 'pay_by_use', label: t('Bật trả theo mức dùng'), icon: <Gauge size={14} />, request: { kind: 'checkout', plan: 'pay_by_use' } });
+  if (hasStarter || hasPayByUse) actions.push({ id: 'portal', label: t('Quản lý gói'), icon: <SlidersHorizontal size={14} />, request: { kind: 'portal' } });
+  return actions;
+}
+
+/** What to tell the person after a billing page was asked for. Only an opened page is a success. */
+function billingMessage(outcome: CodepawlBillingOutcome): { text: string; tone: 'success' | 'info' | 'error' } {
+  if (outcome === 'opened') return { text: t('Đã mở trang thanh toán trong trình duyệt. Gói mới hiện ở đây sau khi bạn quay lại.'), tone: 'success' };
+  if (outcome === 'not_open') return { text: t('CodePawl router chưa bán gói trả phí. Phần miễn phí vẫn dùng được.'), tone: 'info' };
+  if (outcome === 'no_billing_account') return { text: t('Chưa có gói nào để quản lý.'), tone: 'info' };
+  return { text: t('Chưa mở được trang thanh toán. Thử lại sau.'), tone: 'error' };
 }
 
 function CodepawlUsageLine({ usage }: { usage: CodepawlUsage | undefined }) {
@@ -70,7 +96,23 @@ export function CodepawlConnection({ account, busy, act, onConnections }: { acco
       return;
     }
     void readUsage();
+    // A plan bought in the browser shows when the person comes back to the window.
+    window.addEventListener('focus', readUsage);
+    return () => window.removeEventListener('focus', readUsage);
   }, [connected, readUsage]);
+
+  const [openingPage, setOpeningPage] = useState(false);
+  const openBilling = async (request: CodepawlBillingRequest) => {
+    setOpeningPage(true);
+    try {
+      const message = billingMessage(await orglet.codepawlBilling(request));
+      toast(message.text, message.tone, 'CodePawl');
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error), 'error', 'CodePawl');
+    } finally {
+      setOpeningPage(false);
+    }
+  };
 
   const makeKey = () => act(async () => {
     const next = await orglet.codepawlConnect();
@@ -113,6 +155,11 @@ export function CodepawlConnection({ account, busy, act, onConnections }: { acco
           ? <Button variant="outline" disabled={busy} onClick={() => void connect()}><LogIn size={14} />{state.status === 'sign_in_again' ? t('Đăng nhập lại') : t('Đăng nhập để kết nối')}</Button>
           : <Button variant="outline" disabled={busy} onClick={() => void connect()}><Plug size={14} />{state.status === 'not_open' ? t('Thử lại') : t('Kết nối')}</Button>}
     </div>
-    {connected && <div className="setting-connection-usage"><CodepawlUsageLine usage={usage} /></div>}
+    {connected && <div className="setting-connection-usage">
+      <CodepawlUsageLine usage={usage} />
+      {planActions(usage).length > 0 && <div className="setting-control setting-connection-plans">
+        {planActions(usage).map(action => <Button key={action.id} variant="outline" disabled={busy || openingPage} onClick={() => void openBilling(action.request)}>{action.icon}{action.label}</Button>)}
+      </div>}
+    </div>}
   </div>;
 }
