@@ -275,7 +275,9 @@ To try a schedule without waiting for its time, click **Run now** (the play butt
 
 The run's header shows the schedule's name with the same calendar mark, and the top of the chat says which schedule it is and who ran it, with **Open schedule**.
 
-You can also ask an orglet, in its chat, to schedule something ("run this every Monday at 9"); it answers with a proposal card, and the schedule it creates is saved switched off until you enable it ([App-change proposals](permissions-and-learning.md#app-change-proposals)).
+**Ask instead of filling the form.** The **Schedules** page has a message box above the list. Write what you want and when ("every weekday at 8, read my inbox and list what needs a reply"), choose which orglet answers from the list beside the box (the first one until you choose another), and send. The message goes to that orglet's own chat, which opens, and the orglet answers with a proposal card. While there are no schedules yet, three ready-made requests under the box fill it for you; they send nothing. You can ask any orglet in its own chat the same way.
+
+A card can set the clock (daily, weekdays, weekly or every few hours with a window), a daily cap and a folder to watch, but only a folder you already chose in a schedule's form. The schedule it creates is saved switched off until you enable it. For a schedule that exists, the orglet can also propose turning it on or off; turning it on always waits for your click. An orglet never deletes a schedule: asked to, it points you to **Delete schedule** in the card's menu. See [App-change proposals](permissions-and-learning.md#app-change-proposals) and [routines.md](routines.md#asking-an-orglet-for-one).
 
 ## What is running
 

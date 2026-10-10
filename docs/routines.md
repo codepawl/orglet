@@ -26,7 +26,7 @@ The row in **Schedules** says the trigger on the line under the name: "Daily at 
 
 Saving a routine is its permission to run unattended. The core stores a fingerprint of the setup it approved (`approvedConfig`): the orglet or crew, their skills and models (a custom connection's price included, COD-242), and the trigger, with the watched folder's identity (its path, volume and file id). A clock routine keeps exactly the fingerprint it had before triggers existed, so updating Orglet does not take away any routine's approval. A changed price asks every routine on that connection to be saved again, whatever its trigger.
 
-Changing the trigger or picking another folder is a new save, so it is approved again then. A trigger that changed without a save, as in a restored backup or a hand-edited row, does not match and the run is refused until the routine is saved again. A change an orglet proposes keeps the routine's trigger and saves it switched off; an orglet cannot pick a folder to watch.
+Changing the trigger or picking another folder is a new save, so it is approved again then. A trigger that changed without a save, as in a restored backup or a hand-edited row, does not match and the run is refused until the routine is saved again. A change an orglet proposes keeps the routine's trigger unless the card shows a new one, and saves it switched off unless the card says on or off; an orglet can only name a folder you already granted, never grant one.
 
 How often and how much are approved the same way (COD-288): an hourly or weekday cadence (with its interval, window and weekdays switch) and a daily cap are added to the fingerprint (`scheduleApproval`). A daily or weekly routine without a cap adds nothing, so its fingerprint and approval stay as they were. A row turned from daily into hourly, given a shorter interval or stripped of its cap without a save does not run until it is saved again.
 
@@ -195,7 +195,19 @@ Guards that still apply to catch-up: recurring approval fingerprint, a non-termi
 
 ## Asking an orglet for one
 
-An empty Schedules page lists three requests under **Or ask <orglet> to set one up** (`SCHEDULE_ASKS` in `RoutinesPanel.tsx`). A click opens the chat of the first orglet in your own order with the request typed in the message box. Nothing is sent until you send it. The orglet answers with a schedule to apply (`propose_schedule`, [agent tools](agent-tools.md)): it never creates the schedule itself. You can ask any orglet the same way in its own chat. An orglet cannot propose deleting a schedule, an hourly schedule, a daily cap or a folder trigger; those stay in the form.
+The Schedules page has a message box above the list, whether or not any schedule exists (`ScheduleAsk.tsx`). You write what you want done and when, pick which orglet answers with the small list beside the box (the first orglet in your own order until you pick another; the choice is remembered on this computer, as window chrome), and send. The words go to that orglet's own chat as an ordinary turn, and the chat opens. There is no separate schedules session: the schedule is made in the orglet's direct message. If that orglet still has no model connected, the connection step opens and your words stay in the box.
+
+While there are no schedules, three ready-made requests sit under the box (`SCHEDULE_ASKS`). A click fills the box and sends nothing. You can ask any orglet the same way in its own chat.
+
+The orglet answers with a schedule card you apply (`propose_schedule`, [agent tools](agent-tools.md)): it never creates, changes or removes a schedule itself. What a proposal covers:
+
+- **The clock.** Daily, weekdays, weekly or every few hours, with an optional window of the day and weekdays only, checked with the same `Schedule` as a saved routine (`shared/schedule.ts`).
+- **The daily cap**, never below one run's limit.
+- **A folder trigger**, only on a folder you already granted in a schedule's form. The orglet sees granted folders by name and id, never by path, and cannot grant a new one.
+- **Turning a schedule on or off.** A new schedule is saved switched off. For an existing one, a card can switch it on or off. The card to switch on waits for your click even when the orglet's auto-apply is on, since it lets the schedule run and spend; a card to switch off may apply on its own.
+- **Not deleting.** There is no proposal that deletes a schedule. Asked to, the orglet tells you to use **Delete schedule** in the three-dot menu on the schedule's card.
+
+To place a schedule well, the orglet reads the app context it is given with each message: every schedule (name, on or off, what starts it, its clock, daily cap, who runs it and the per-run limit; not its brief), the crews with their working hours, the granted folders, and this computer's time zone. It is read-only and holds no keys or paths.
 
 ## What this is not
 

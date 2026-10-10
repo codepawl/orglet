@@ -44,14 +44,13 @@ try {
   assert.equal(await page.getByRole('navigation', { name: 'All tasks' }).count(), 0);
   await page.getByRole('button', { name: /^Schedules/ }).click();
   await page.getByText('No schedules yet.', { exact: true }).waitFor();
-  // The empty page offers requests to hand to an orglet: one opens that orglet's chat with the request typed.
-  await page.getByText('Or ask Researcher to set one up:', { exact: true }).waitFor();
+  // The page has a message box for asking an orglet, and the empty list offers requests to start from: one fills the box and sends nothing.
+  const scheduleBox = page.getByRole('textbox', { name: 'Ask an orglet to schedule', exact: true });
+  await scheduleBox.waitFor();
   assert.equal(await page.locator('.routine-asks button').count(), 3);
   await page.locator('.routine-asks button').first().click();
-  await page.getByRole('heading', { name: 'Chatting with Researcher' }).waitFor();
-  const message = page.getByRole('textbox', { name: 'Message' });
-  assert.equal(await message.inputValue(), 'Set up a schedule for me: Every Monday morning, sum up last week and what is due this week.');
-  await message.fill('');
+  assert.equal(await scheduleBox.inputValue(), 'Set up a schedule for me: Every Monday morning, sum up last week and what is due this week.');
+  await scheduleBox.fill('');
 
   // Validation text in dialogs follows the language too.
   await page.getByRole('button', { name: 'Create space', exact: true }).first().click();

@@ -1308,6 +1308,29 @@ export function App() {
       setError((err as Error).message);
     } finally { setBusy(false); }
   };
+  /**
+   * Sends what was typed on the Schedules page to the orglet picked there, as an ordinary turn in that orglet's own chat
+   * (issue 555): there is no separate schedules session. The orglet answers with a schedule to apply. Resolves to false
+   * when the model has to be connected first, so the page keeps the words.
+   */
+  const askOrgletForSchedule = async (askedId: string, message: string): Promise<boolean> => {
+    const asked = workspace?.workers.find(item => item.id === askedId);
+    if (!workspace || !asked) throw new Error('Tí này không còn nữa. Chọn một Tí khác.');
+    const unconnected = demoReplies() ? undefined : demoWorkerToConnect([asked]);
+    if (unconnected) {
+      connectModel(unconnected);
+      return false;
+    }
+    const providerScopes = asked.provider === 'demo' ? [] : [asked.provider];
+    const turn = { brief: message, sourceIds: [], excludedSources: [], consent: true, providerScopes };
+    const thread = liveWorkerTask(workspace.tasks, asked.id);
+    const chatId = thread
+      ? await orglet.call('reviseTask', { taskId: thread.id, ...turn, budgetMicros: thread.budgetMicros }).then(() => thread.id)
+      : await orglet.call('createTask', { workerId: asked.id, ...turn, budgetMicros: asked.taskBudgetMicros ?? 500_000 });
+    openTask(chatId);
+    close();
+    return true;
+  };
   const close = () => {
     const continueConnecting = panel === 'settings' ? connectingWorker : undefined;
     setPanel(null);
@@ -2691,13 +2714,7 @@ export function App() {
         actions={panel === 'routines' ? undefined
           : libraryTab === 'skills' ? <SkillLibraryActions onOpen={openLibrarySkill} /> : <Button variant="outline" onClick={() => openLibraryKnowledge()}><LucidePlus size={16} />{t('Tạo knowledge')}</Button>}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView}
-        asker={workspace.workers[0]?.name} onAsk={request => {
-          // The first orglet in the person's own order takes the request; any orglet can propose a schedule.
-          const first = workspace.workers[0];
-          if (!first) return;
-          openWorker(first.id);
-          setBrief(t('Lên lịch giúp tôi: {0}', [request]));
-        }} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
+        onAsk={askOrgletForSchedule} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {/* A skill and a note are edited in a dialog over the Library (user, 2026-10-05), so the list stays behind them. */}
       {panel === 'skill' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingSkill?.package ? 'Review skill' : t('Chỉnh skill')}>
