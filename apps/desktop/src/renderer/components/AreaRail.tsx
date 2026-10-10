@@ -117,7 +117,9 @@ export function AreaRail({ entries, spaces, onCreateSpace, onHover, onOpenSideba
   };
   return <TipContext.Provider value={control}><nav className="area-rail" aria-label={t('Khu vực')} onPointerEnter={onHover ? () => onHover(true) : undefined} onPointerLeave={onHover ? () => onHover(false) : undefined} onScroll={control.hide}>
     {onOpenSidebar && <Tooltip label={t('Mở sidebar')} side="bottom">
-      <Button size="icon" className="area-open-sidebar" aria-label={t('Mở sidebar')} onClick={onOpenSidebar}><PanelLeft size={18} /></Button>
+      {/* The pointer on this button is about to open the sidebar for good, so it does not also slide the look out under the tooltip. */}
+      <Button size="icon" className="area-open-sidebar" aria-label={t('Mở sidebar')} onClick={onOpenSidebar}
+        onPointerEnter={() => onHover?.(false)} onPointerLeave={() => onHover?.(true)}><PanelLeft size={18} /></Button>
     </Tooltip>}
     <div className="area-trail">
       <button type="button" className="area-trail-step" aria-label={t('Quay lại')} title={t('Quay lại')} disabled={!trail.back} onClick={() => trail.onTravel(-1)}><ArrowLeft size={16} /></button>
