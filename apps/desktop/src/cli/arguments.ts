@@ -340,6 +340,7 @@ More settings:
   --copy-format ask|text|markdown, --download-format ask|text|markdown
   --retention 0|7|30          Days an archived chat is kept (0: until you delete it)
   --auto-update on|off        Download updates by itself
+  --market-auto-update on|off Apply updates of things added from the Marketplace by itself
   --notifications on|off      System notifications while the window is in the background
   --accent <#rrggbb>          Accent colour
   --font <family|default>, --code-font <family|default>
@@ -406,6 +407,7 @@ const EXTRA_OPTIONS: Record<string, { key: string; commands: readonly CommandNam
   '--download-format': { key: 'downloadFormat', commands: ['preferences'] },
   '--retention': { key: 'retention', commands: ['preferences'] },
   '--auto-update': { key: 'autoUpdate', commands: ['preferences'] },
+  '--market-auto-update': { key: 'marketAutoUpdate', commands: ['preferences'] },
   '--notifications': { key: 'notifications', commands: ['preferences'] },
   '--accent': { key: 'accent', commands: ['preferences'] },
   '--font': { key: 'font', commands: ['preferences'] },
@@ -1123,6 +1125,7 @@ function preferenceChanges(extra: Record<string, string>): PreferenceChanges {
     changes.archiveRetentionDays = days;
   }
   if (extra.autoUpdate !== undefined) changes.autoUpdate = onOrOff('--auto-update', extra.autoUpdate);
+  if (extra.marketAutoUpdate !== undefined) changes.marketAutoUpdate = onOrOff('--market-auto-update', extra.marketAutoUpdate);
   if (extra.notifications !== undefined) changes.backgroundNotifications = onOrOff('--notifications', extra.notifications);
   if (extra.accent !== undefined) {
     if (!/^#[0-9a-f]{6}$/i.test(extra.accent.trim())) throw new UsageError(t("--accent cần màu như #7c8be8."));

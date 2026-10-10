@@ -103,5 +103,53 @@ export type MarketChange = { name: string; before: string; after: string };
 export type MarketUpdate = {
   entityId: string; listing: MarketDisplayListing; installedVersion: number; customization: MarketCustomization;
   token: string; changes: MarketChange[];
+  /** What this update would let an orglet or channel do or spend beyond what it may now; empty when it widens nothing. */
+  widening: MarketWidening[];
 };
-export type MarketInstallation = { entityId: string; kind: MarketKind; listingId: string; version: number; name: string; updateAvailable: boolean };
+export type MarketInstallation = { entityId: string; kind: MarketKind; listingId: string; version: number; name: string; updateAvailable: boolean; latestVersion?: number };
+
+export const MarketWidening = z.object({
+  kind: z.enum(['new-orglet', 'task-budget', 'monthly-budget', 'concurrency', 'skill-files', 'channel-rules']),
+  name: z.string().max(200),
+}).strict();
+export type MarketWidening = z.infer<typeof MarketWidening>;
+/** Why an update is left to the person: they changed the copy, the app cannot tell, or the update widens what it may do. */
+export const MarketUpdateBlock = z.enum(['customized', 'unknown', 'widening']);
+export type MarketUpdateBlock = z.infer<typeof MarketUpdateBlock>;
+
+/**
+ * Why an update waits for the person even when marketplace updates are automatic, or undefined when it may be applied
+ * alone. An edit of the person's own would be replaced, and a wider budget, a new orglet or new skill files change what
+ * the thing may do: both need a look at the comparison first.
+ */
+export function automaticUpdateBlock(update: Pick<MarketUpdate, 'customization' | 'widening'>): MarketUpdateBlock | undefined {
+  if (update.widening.length > 0) return 'widening';
+  if (update.customization === 'customized') return 'customized';
+  if (update.customization === 'unknown') return 'unknown';
+  return undefined;
+}
+
+/**
+ * What the update place remembers about one installed item's automatic update: applied (with what changed), failed
+ * (with its reason, not retried by itself) or left for the person (with why). One record per item, the newest.
+ */
+export const MarketUpdateRecord = z.object({
+  entityId: z.string().uuid(),
+  kind: MarketKind,
+  listingId: ListingId,
+  name: z.string().min(1).max(200),
+  fromVersion: MarketVersion,
+  toVersion: MarketVersion,
+  status: z.enum(['applied', 'failed', 'needs-review']),
+  at: z.iso.datetime(),
+  /** The error of a failed update, in the words the app's own errors use. */
+  reason: z.string().max(600).optional(),
+  /** Set when the update was left to the person, with what it would widen. */
+  block: MarketUpdateBlock.optional(),
+  widening: z.array(MarketWidening).max(20).optional(),
+  changelog: z.string().max(2000).optional(),
+  changed: z.array(z.string().max(200)).max(20),
+}).strict();
+export type MarketUpdateRecord = z.infer<typeof MarketUpdateRecord>;
+export const MARKET_UPDATE_RECORD_LIMIT = 50;
+export const MarketUpdateRecords = z.array(MarketUpdateRecord).max(MARKET_UPDATE_RECORD_LIMIT);

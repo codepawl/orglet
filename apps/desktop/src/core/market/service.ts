@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ProviderId, type Worker, type Skill, type Team } from '../../shared/contracts';
-import { MARKET_BODY_LIMIT, MARKET_KINDS_QUERY, MARKET_URL, MarketCatalog, MarketCatalogPageV2, MarketListing, MarketListingV2, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketCustomization, type MarketUpdate, type MarketInstallation, type MarketDisplayListing } from '../../shared/market';
+import { automaticUpdateBlock, MARKET_BODY_LIMIT, MARKET_KINDS_QUERY, MARKET_URL, MarketCatalog, MarketCatalogPageV2, MarketListing, MarketListingV2, MarketOrigin as Origin, MarketOrigins as Origins, type MarketCatalogView, type MarketAdded, type MarketCustomization, type MarketUpdate, type MarketInstallation, type MarketDisplayListing } from '../../shared/market';
+import { updateWidening } from './widening';
 import { MARKET_SEED_BODIES, seedCatalog } from '../../shared/market-seed';
 import { Store, id } from '../storage/database';
 import { KnowledgeBase } from '../context/knowledge';
@@ -96,7 +97,8 @@ export class Marketplace {
     }).map(origin => {
       const entity = origin.kind === 'space' ? spaces.find(space => space.id === origin.entityId)! : this.store.get<Worker | Team>(origin.kind === 'orglet' ? 'workers' : 'teams', origin.entityId);
       const latest = saved.success ? [saved.data.catalog, ...(saved.data.pages ?? []).map(page => page.catalog)].flatMap(page => page.listings).find(item => item.listingId === origin.listingId) : undefined;
-      return { entityId: entity.id, kind: origin.kind, listingId: origin.listingId, version: origin.version, name: entity.name, updateAvailable: !!latest && latest.version > origin.version };
+      const updateAvailable = !!latest && latest.version > origin.version;
+      return { entityId: entity.id, kind: origin.kind, listingId: origin.listingId, version: origin.version, name: entity.name, updateAvailable, ...(updateAvailable ? { latestVersion: latest!.version } : {}) };
     });
   }
 
@@ -158,12 +160,18 @@ export class Marketplace {
       const { memberKeys, synthesizerKey, ...nextSettings } = template.team;
       changes.unshift({ name: template.team.name, before: JSON.stringify({ ...previousSettings, members: memberIds.map(workerId => this.store.get<Worker>('workers', workerId).name), lead: this.store.get<Worker>('workers', synthesizerId).name }, null, 2), after: JSON.stringify({ ...nextSettings, members: memberKeys.map(key => template.workers.find(worker => worker.key === key)!.name), lead: template.workers.find(worker => worker.key === synthesizerKey)!.name }, null, 2) });
     }
-    return { entityId, listing, installedVersion: origin.version, customization: this.customization(origin, fingerprint), token: hash(`${fingerprint}:${listing.sha256}:${origin.version}`), changes };
+    const widening = updateWidening(this.store, origin, template);
+    return { entityId, listing, installedVersion: origin.version, customization: this.customization(origin, fingerprint), token: hash(`${fingerprint}:${listing.sha256}:${origin.version}`), changes, widening };
   }
 
-  async applyUpdate(entityId: string, token: string): Promise<MarketAdded> {
+  /**
+   * Applies the update the token names. An automatic apply is refused here, not only by its caller, when the update
+   * would replace the person's own edits or widen what the copy may do: those wait for a click on the comparison.
+   */
+  async applyUpdate(entityId: string, token: string, options: { automatic?: boolean } = {}): Promise<MarketAdded> {
     const preview = await this.previewUpdate(entityId);
     if (token !== preview.token) throw new Error('Bạn đã thay đổi sau khi mở thẻ cập nhật. Xem lại bản so sánh.');
+    if (options.automatic && automaticUpdateBlock(preview)) throw new Error('Bản cập nhật này cần bạn xem trước, nên không tự áp dụng.');
     const origin = this.origin(entityId);
     const template = parseMarketTemplate(await this.body(preview.listing), origin.kind);
     const prepared = await this.prepare(template, origin);

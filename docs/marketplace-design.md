@@ -36,7 +36,7 @@ On the server, migration `0003_space_listings.sql` widens the `kind` check of `l
 
 **Deployed.** The `kinds` query and **Launch space** are in production since 2026-10-05. An account can publish a space once production takes submissions, which the rollout below opens.
 
-**From the terminal.** `orglet market` lists the catalog and what was added, and `orglet market add <id>` adds a listing through the same `marketAdd` command ([cli.md](cli.md#the-marketplace)). It does not publish, review or apply an update.
+**From the terminal.** `orglet market` lists the catalog and what was added, and `orglet market add <id>` adds a listing through the same `marketAdd` command ([cli.md](cli.md#the-marketplace)). It does not publish or review. `orglet market update "<name>"` previews an update and applies exactly it with `--confirm`; `orglet update` also lists the items that have one.
 
 ## Pieces
 
@@ -57,7 +57,28 @@ The catalog is cached on the computer, so the Marketplace page opens instantly a
 
 ## Updates
 
-When a listing has a newer version, the friend's profile shows a quiet "Update available" with what changed. Applying it is a click and creates a new revision, so in-flight runs keep their snapshot and the person can go back. If the person edited the orglet, the update shows a side-by-side of their instructions and the new ones and never overwrites silently. Nothing updates by itself.
+When a listing has a newer version, the friend's profile shows a quiet "Update available" with what changed. Applying it is a click and creates a new revision, so in-flight runs keep their snapshot and the person can go back. If the person edited the orglet, the update shows a side-by-side of their instructions and the new ones and never overwrites silently. Nothing updates by itself unless the person turns it on.
+
+### Updates beside the app's own (owner, 2026-10-10)
+
+Owner: "A marketplace update can be manual or automatic; showing it in the app's general update place is enough." The general update place is Settings → Giới thiệu, under the app's own **Kiểm tra cập nhật** and **Tự động cập nhật** rows:
+
+- **Tự cập nhật mục từ Marketplace** is a switch, off by default. An update changes what an orglet is told to do, so it waits for the person unless they opt in. The setting is `marketAutoUpdate` (a boolean in the settings table, on `Workspace`, in the `settings` command and in `orglet preferences --market-auto-update on|off`).
+- **Cập nhật từ Marketplace** lists every installed item whose catalog version is newer: its name, `v1 → v2`, **Xem thay đổi** (opens the Marketplace page's own comparison card, `MarketUpdateCard`) and **Cập nhật**. With more than one there is **Cập nhật tất cả**. With none it is one quiet line. The Marketplace page keeps its own list and card.
+- **Cập nhật** applies at once only what the automatic path would apply. An update that would replace the person's edits (`customization` is `customized` or `unknown`) or widen what the copy may do opens the comparison card instead, so a click on the row never overwrites silently.
+- Opening the tab refreshes the catalog once when something was added from it; with nothing added no request is made.
+
+**What the automatic path does** (`core/market/auto-update.ts`, `MarketAutoUpdates`):
+
+1. It runs after a catalog fetch that reached the service (`source: 'online'`): the Marketplace page opening, the About tab opening, `orglet market --refresh`, turning the switch on, and the core's existing five-second `tick`, which looks at the catalog by itself at most every six hours and only while the switch is on and something was added from the catalog. There is no new timer. An offline machine or a failed fetch (`source: 'cache'` or `'bundled'`) applies nothing.
+2. For each installed item with a newer version it previews the update and applies it through `applyUpdate(entityId, token, { automatic: true })`: the same preview, the same token against the current rows and the same SHA-256 and size checks as a click. `applyUpdate` itself refuses an automatic call that `automaticUpdateBlock` holds back, so the rule does not depend on the caller.
+3. It leaves the update for the person, recorded as `needs-review`, when `customization` is not `unchanged`, or when `widening` is not empty. An update never carries a permission, a folder, a key or an MCP server (templates cannot), so `widening` (`core/market/widening.ts`) names what remains: a new orglet in a channel, a per-run limit raised or removed, a higher monthly budget, more work at once, a changed workflow, review or hours rule, and skill package files that were not there. The comparison card lists them too.
+4. It records one result per item (`marketUpdateRecords`, newest first, at most 50, parsed with `MarketUpdateRecords`): `applied` with the changelog and the names that changed, `failed` with the error, or `needs-review` with the block and what it widens. The update place shows `applied` for 14 days as "Đã cập nhật … lên v…", and a `failed` or `needs-review` record on the item's row while its update is still waiting.
+5. A failed or held version is not tried again by itself: the record stands until a newer version appears or the person updates by hand (which forgets the record). A transient fetch failure therefore stays visible until the person presses **Cập nhật**.
+
+The catalog check only reads the first page and the pages already kept; an installed item on a page that was never fetched keeps its last known state until its page is opened.
+
+**From the terminal.** `orglet update` prints the app's update state, then the Marketplace items with an update and what the automatic path did; `orglet market update` is unchanged.
 
 ## Publishing
 

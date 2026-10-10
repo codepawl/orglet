@@ -49,7 +49,7 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet models <provider>` | The models a connection offers; `--to <orglet>` uses that orglet's |
 | `orglet preferences [--language …] [--theme …] [--titles …]` | Shows or changes the app's language, theme and looks. See [preferences](#preferences). |
 | `orglet show <connections\|spend\|changelog\|update\|browser\|desktop\|sources\|changes>` | Looks at the app without changing it. See [show, update and assign](#show-update-and-assign). |
-| `orglet update` | Checks for a new version and says what it found |
+| `orglet update` | Checks for a new version and says what it found, then lists Marketplace items with an update |
 | `orglet assign --chat <id> [--with <name> …] [--budget <USD>]` | Changes who answers a chat and lowers its cost limit |
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category, how it answers and who is in it, in the order the space shows them |
@@ -596,7 +596,7 @@ orglet preferences --titles off --retention 30 --copy-format markdown --accent "
 orglet preferences --font "Fira Sans" --code-font default --auto-update on --notifications off
 ```
 
-Shows the app's looks and behaviour settings, and changes the ones given: the language, the theme, whether chats are named automatically (`--titles on|off`), whether opening a chat from a notification asks first (`--open-confirmation on|off`), the copy and download formats (`--copy-format`, `--download-format`: `ask`, `text` or `markdown`), how long an archived chat is kept (`--retention 0|7|30` days, 0 until you delete it), automatic updates (`--auto-update`), system notifications while the window is in the background (`--notifications`), the accent colour (`--accent #rrggbb`) and the two fonts (`--font`, `--code-font`; `default` goes back to the font the app ships with). Every other setting stays in the app's Settings: provider permission, the connection limit and the web search provider have no field in the request.
+Shows the app's looks and behaviour settings, and changes the ones given: the language, the theme, whether chats are named automatically (`--titles on|off`), whether opening a chat from a notification asks first (`--open-confirmation on|off`), the copy and download formats (`--copy-format`, `--download-format`: `ask`, `text` or `markdown`), how long an archived chat is kept (`--retention 0|7|30` days, 0 until you delete it), automatic updates (`--auto-update`), applying updates of things added from the Marketplace by itself (`--market-auto-update on|off`, off by default), system notifications while the window is in the background (`--notifications`), the accent colour (`--accent #rrggbb`) and the two fonts (`--font`, `--code-font`; `default` goes back to the font the app ships with). Every other setting stays in the app's Settings: provider permission, the connection limit and the web search provider have no field in the request.
 
 ### show, update and assign
 
@@ -613,7 +613,7 @@ orglet show sources --chat cccc0000
 orglet assign --chat cccc0000 --with Writer --budget 0.25
 ```
 
-`show` only looks. `connections` says yes or no for each API key, custom connection and web search key, and the sign-in status of each CLI account; it never returns a key, token or the account's address. `spend` prints what was charged and what is reserved for runs under way, in integer millionths of a USD, with the connection limit. `changelog` lists the latest releases (`--refresh` fetches them again) and `update` the updater's state; `orglet update` starts the same check as the window's button and prints the state right after. A downloaded update is installed from the window.
+`show` only looks. `connections` says yes or no for each API key, custom connection and web search key, and the sign-in status of each CLI account; it never returns a key, token or the account's address. `spend` prints what was charged and what is reserved for runs under way, in integer millionths of a USD, with the connection limit. `changelog` lists the latest releases (`--refresh` fetches them again) and `update` the updater's state; `orglet update` starts the same check as the window's button and prints the state right after, then the things added from the Marketplace that have a newer version (the command that previews one is `orglet market update "<name>"`, which stays as it is) and what automatic Marketplace updates did: updated, failed with the reason, or left for you with why. A downloaded update is installed from the window.
 
 `browser` and `desktop` print a chat's journal, what each step touched and how it ended. `sources` lists the chat's files by name and size, not where they were picked from. `changes` lists what the chat's runs changed in the working folder, by working copy, with each change's path and status, and notes how many commands ran and how many are uncertain. It does not return the review token: applying or discarding a hand-in, and restoring a file, stay in the window.
 

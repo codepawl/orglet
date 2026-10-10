@@ -31,6 +31,7 @@ import { Preflight } from './orchestration/preflight';
 import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
 import { Marketplace } from './market/service';
+import { MarketAutoUpdates } from './market/auto-update';
 import { harnessReady, isHarness } from '../shared/harness';
 import { Routines, SCHEDULE_NEVER_ACTS, SCHEDULE_NO_DESKTOP } from './orchestration/routines';
 import { FolderTriggers } from './orchestration/folder-triggers';
@@ -165,6 +166,8 @@ export class CoreService {
   readonly backups: Backups;
   readonly templates: TeamTemplates;
   readonly market: Marketplace;
+  /** Marketplace updates applied in the background when the person turned them on, and what became of each. */
+  readonly marketUpdates: MarketAutoUpdates;
   readonly routines: Routines;
   /** Folders routines watch, granted through main's picker (COD-245). */
   readonly routineFolders: RoutineFolders;
@@ -242,6 +245,7 @@ export class CoreService {
       followCrew: team => this.channels.followCrew(team),
       addSpace: (space, workerIds) => this.addMarketSpace(space, workerIds),
     });
+    this.marketUpdates = new MarketAutoUpdates(store, this.market, this.notify, clock);
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
     this.browser = new BrowserTools(store, browserHost, () => this.notify());
@@ -416,8 +420,12 @@ export class CoreService {
       }
       case 'marketCatalog': {
         const input = commands.marketCatalog.parse(args);
-        return this.market.catalog(input.refresh, input.cursor);
+        const view = await this.market.catalog(input.refresh, input.cursor);
+        // A catalog that reached the service is the moment automatic updates look for what is newer; the answer does not wait for them.
+        if (input.refresh && view.source === 'online') void this.marketUpdates.run().catch(() => {});
+        return view;
       }
+      case 'marketUpdateRecords': commands.marketUpdateRecords.parse(args); return this.marketUpdates.records();
       case 'marketInstallations': commands.marketInstallations.parse(args); return this.market.installations();
       case 'marketAdd': {
         const input = commands.marketAdd.parse(args);
@@ -426,7 +434,9 @@ export class CoreService {
       case 'marketPreviewUpdate': return this.market.previewUpdate(commands.marketPreviewUpdate.parse(args).entityId);
       case 'marketApplyUpdate': {
         const input = commands.marketApplyUpdate.parse(args);
-        return this.market.applyUpdate(input.entityId, input.token);
+        const added = await this.market.applyUpdate(input.entityId, input.token);
+        this.marketUpdates.forget(input.entityId);
+        return added;
       }
       case 'saveWorker': {
         const worker = this.saveWorker(commands.saveWorker.parse(args));
@@ -1187,6 +1197,10 @@ export class CoreService {
     saveFont('interfaceFont', input.interfaceFont);
     saveFont('codeFont', input.codeFont);
     if (input.autoUpdate !== undefined) this.store.setSetting('autoUpdate', input.autoUpdate);
+    if (input.marketAutoUpdate !== undefined) {
+      this.store.setSetting('marketAutoUpdate', input.marketAutoUpdate);
+      if (input.marketAutoUpdate) void this.marketUpdates.checkWhenDue(true).catch(() => {});
+    }
     if (input.backgroundNotifications !== undefined) this.store.setSetting('backgroundNotifications', input.backgroundNotifications);
     if (input.showWork !== undefined) this.store.setSetting('showWork', input.showWork);
     if (input.connectionLimitMicros !== undefined) this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
@@ -2292,6 +2306,8 @@ export class CoreService {
     const currency = this.store.setting<CurrencyState>('currency', usdCurrency);
     // Background refresh retries at most every 10 minutes so an offline machine does not poll every tick.
     if (currency.code !== 'USD' && !this.currencyRefresh && Date.now() - this.currencyAttemptAt > 600_000 && (!currency.updatedAt || this.clock().getTime() - new Date(currency.updatedAt).getTime() > RATE_MAX_AGE_MS)) { this.currencyAttemptAt = Date.now(); void this.updateCurrency(currency.code, false); }
+    // Looks at the catalog on its own only every few hours and only when automatic marketplace updates are on.
+    void this.marketUpdates.checkWhenDue().catch(() => {});
     await this.routines.tick();
     await this.folderTriggers.poll();
     // A look at an app can take up to a minute; it runs beside the tick, one at a time, never holding the tick up.

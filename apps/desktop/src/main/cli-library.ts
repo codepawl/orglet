@@ -136,6 +136,7 @@ function preferencesOf(workspace: Workspace): PreferencesValue {
     ...(workspace.downloadFormat === undefined ? {} : { downloadFormat: workspace.downloadFormat }),
     ...(workspace.archiveRetentionDays === undefined ? {} : { archiveRetentionDays: workspace.archiveRetentionDays }),
     ...(workspace.autoUpdate === undefined ? {} : { autoUpdate: workspace.autoUpdate }),
+    ...(workspace.marketAutoUpdate === undefined ? {} : { marketAutoUpdate: workspace.marketAutoUpdate }),
     ...(workspace.backgroundNotifications === undefined ? {} : { backgroundNotifications: workspace.backgroundNotifications }),
     ...(workspace.accentColor === undefined ? {} : { accentColor: workspace.accentColor }),
     ...(workspace.interfaceFont === undefined ? {} : { interfaceFont: workspace.interfaceFont }),

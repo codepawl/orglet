@@ -49,6 +49,7 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   marketPreviewUpdate: reached('orglet market update'),
   // Applies only the update a code names, and the code is printed by the preview of that same update.
   marketApplyUpdate: reached('orglet market update --confirm'),
+  marketUpdateRecords: reached('orglet update'),
   workspace: reached('orglet list'),
   task: reached('orglet read'),
   createTask: reached('orglet send'),

@@ -260,7 +260,7 @@ describe('looking at the app', () => {
     expect(spend.rows[0]).toMatchObject({ chargedMicros: expect.any(Number), reservedMicros: expect.any(Number), connectionLimitMicros: expect.any(Number) });
     expect((await show('changelog')).rows).toEqual([{ version: '0.13.0', name: 'Release 0.13.0', publishedAt: '2026-10-08T00:00:00.000Z', url: 'https://example.com/r' }]);
     expect((await show('update')).rows).toEqual([{ status: 'ready', version: '0.14.0' }]);
-    expect(await operationsWith({}, app).run({ op: 'update-check', token }, signal)).toEqual({ status: 'checking' });
+    expect(await operationsWith({}, app).run({ op: 'update-check', token }, signal)).toEqual({ status: 'checking', market: { available: [], records: [] } });
     await expect(operationsWith().run({ op: 'update-check', token }, signal)).rejects.toThrow('đang chạy');
   });
 
