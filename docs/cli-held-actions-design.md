@@ -1,6 +1,8 @@
 # The terminal and the decisions held for the person: design
 
-**Status: design, 2026-10-10. Phase 4 of the plan in issue 554. Stages A to D below are built in that order; each stage says what it adds.**
+**Status: stages A and B built, 2026-10-10 (pairing, elevation, the setting, the window's dialog and live mark, the journal, `orglet unlock`, and the decisions of stage B). Stages C and D are not built; their operations stay `held` in `parity.ts`. Phase 4 of the plan in issue 554. Stages A to D below are built in that order; each stage says what it adds.**
+
+What stage B left `held` and why: `accept` (it accepts a finished report; no card waits for it), `acknowledgeEvidence` (the request id comes from a part of the evidence view that main does not read), `saveKnowledge` (the approved note needs the full note form), `resolveSyncConflict` (the two versions' summaries are not given to main), `reviewSkill` (it needs the package's files shown to the same unlock first), and `restoreWorkspaceFile` (it needs the recovery file's data).
 
 The `orglet` command reaches most of the app. It reaches none of the trust decisions: approvals, grants, secrets, deletions of data. [cli.md](cli.md#what-stays-in-the-desktop) lists them and `apps/desktop/src/cli/parity.ts` marks each one `held`. This note describes the one path by which the terminal may reach them, and which of them it never reaches.
 
