@@ -132,14 +132,15 @@ try {
   await rawRequest({ op: 'elevation-end', token });
 
   const grantWords = 'Let a chat work in a folder';
-  const activity = page.getByRole('button', { name: label('Hoạt động') });
-  if (await activity.count()) {
-    await activity.first().click();
-    await page.getByText(grantWords).first().waitFor();
-  }
+  // The grant's notice is in the window's list of what finished: Activity, Done.
+  await page.locator(`.area-tile[data-name="${label('Hoạt động')}"]`).click();
+  await page.locator('.sidebar').getByRole('button', { name: new RegExp('^' + label('Xong')) }).first().click();
+  await page.getByText(grantWords).first().waitFor();
+  assert.ok((await page.locator('.page-body').innerText()).includes(label('chỉ đọc')), 'the level is said in the app language');
   await openSettings(page);
   await page.getByRole('tab', { name: label('Dữ liệu'), exact: true }).click();
-  const grantRow = page.locator('.terminal-journal-row', { hasText: grantWords }).first();
+  // The row of the grant that was applied, not the refused one for the data folder above it.
+  const grantRow = page.locator('.terminal-journal-row', { hasText: folder }).first();
   await grantRow.waitFor();
   assert.equal(await page.locator('.terminal-journal').innerText().then(text => text.includes(secret)), false, 'Settings never shows the key');
   await page.locator('.terminal-journal').scrollIntoViewIfNeeded();

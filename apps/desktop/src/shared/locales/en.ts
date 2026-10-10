@@ -184,7 +184,7 @@ export const en: Dictionary = {
   'đọc và sửa': 'read and edit',
   'đọc, sửa và chạy lệnh': 'read, edit and run commands',
   'Terminal chưa làm gì thay bạn.': 'The terminal has not done anything for you yet.',
-  'Terminal trả lời được các thẻ đang chờ bạn duyệt sau khi bạn gõ mã hiện trong cửa sổ này. Tắt thì mọi lệnh như vậy bị từ chối.': 'A terminal can answer the cards waiting for you after you type the code shown in this window. Off, every such command is refused.',
+  'Terminal trả lời được các thẻ đang chờ bạn duyệt, cấp quyền và lưu khóa sau khi bạn gõ mã hiện trong cửa sổ này. Tắt thì mọi lệnh như vậy bị từ chối.': 'A terminal can answer the cards waiting for you, grant access and save keys after you type the code shown in this window. Off, every such command is refused.',
   'Terminal xin ghép đôi quá nhiều lần mà không nhập đúng mã nên bị tạm khóa. Thử lại sau ít phút.': 'The terminal asked to pair too many times without the right code and is on hold. Try again in a few minutes.',
   'Terminal đang làm thay bạn': 'A terminal is acting for you',
   'Terminal đã làm': 'What the terminal did',

@@ -41,21 +41,24 @@ function chatWords(body: { to?: string; chat?: string }): string {
   return body.to ?? (body.chat ? `#${body.chat}` : '');
 }
 
-function levelWords(permissions: readonly string[]): string {
-  if (permissions.includes('execute')) return 'đọc, sửa và chạy lệnh';
-  return permissions.includes('write') ? 'đọc và sửa' : 'chỉ đọc';
+/** Turns a source string into the app's language; the plain function leaves it as written. */
+type Say = (source: string) => string;
+
+function levelWords(permissions: readonly string[], say: Say): string {
+  if (permissions.includes('execute')) return say('đọc, sửa và chạy lệnh');
+  return say(permissions.includes('write') ? 'đọc và sửa' : 'chỉ đọc');
 }
 
 /**
  * The arguments of a grant, as plain words the person reads in the pairing dialog before typing anything: which chat,
  * which folder, at what level. Names and paths are not translated, and this never reads `secret`.
  */
-export function heldDetail(body: HeldBody): string {
+export function heldDetail(body: HeldBody, say: Say = source => source): string {
   switch (body.action) {
     case 'tools': return `${chatWords(body)}: ${body.capabilities.join(', ') || '-'}`;
-    case 'folder': return `${chatWords(body)}: ${body.path} (${levelWords(body.permissions)})`;
-    case 'schedule-folder': return `${body.path} (${levelWords(body.permissions)})`;
-    case 'folder-level': return `${chatWords(body)}: ${levelWords(body.permissions)}`;
+    case 'folder': return `${chatWords(body)}: ${body.path} (${levelWords(body.permissions, say)})`;
+    case 'schedule-folder': return `${body.path} (${levelWords(body.permissions, say)})`;
+    case 'folder-level': return `${chatWords(body)}: ${levelWords(body.permissions, say)}`;
     case 'folder-revoke': return chatWords(body);
     case 'file-revoke': return body.sourceId;
     case 'mcp-enable': return `${body.server}: ${body.enabled ? 'on' : 'off'}`;
@@ -97,7 +100,7 @@ export class CliHeld {
 
   /** The operation and its arguments in words, for the dialog and the journal. */
   private describe(body: HeldBody): string {
-    const detail = heldDetail(body);
+    const detail = heldDetail(body, source => this.say(source));
     return detail ? `${this.say(heldWords(body))}: ${detail}` : this.say(heldWords(body));
   }
 

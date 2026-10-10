@@ -956,7 +956,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 description={t('Đưa Orglet về như mới cài.')}
                 caveat={t('Mọi trò chuyện, Tí, kênh, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key, kết nối tùy chỉnh và máy chủ MCP được giữ lại.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
-              <Row id="terminal-access-label" title={t('Cho phép terminal làm thay tôi')} description={t('Terminal trả lời được các thẻ đang chờ bạn duyệt sau khi bạn gõ mã hiện trong cửa sổ này. Tắt thì mọi lệnh như vậy bị từ chối.')}>
+              <Row id="terminal-access-label" title={t('Cho phép terminal làm thay tôi')} description={t('Terminal trả lời được các thẻ đang chờ bạn duyệt, cấp quyền và lưu khóa sau khi bạn gõ mã hiện trong cửa sổ này. Tắt thì mọi lệnh như vậy bị từ chối.')}>
                 <Switch checked={workspace.terminalAccess} disabled={busy} labelledBy="terminal-access-label" onChange={value => void save({ terminalAccess: value })} />
               </Row>
               <Row title={t('Terminal đã làm')} description={t('Mới nhất ở trên. Terminal đọc lại danh sách này bằng orglet show terminal.')} />
