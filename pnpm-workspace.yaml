@@ -6,6 +6,8 @@ allowBuilds:
   esbuild: true
   electron-winstaller: true
   node-pty: false
+  # Loaded by @microsoft/mxc-sdk; its prebuilt binary comes as an optional package, so nothing is compiled here.
+  koffi: false
 overrides:
   '@electron/node-gyp': '10.2.0-electron.2'
   # Security fixes for build-tool dependencies (Dependabot alerts); both are only used while packaging.

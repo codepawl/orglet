@@ -1,4 +1,4 @@
-import type { WindowsSignOptions } from '@electron/packager';
+import type { PackagerWindowsSignOptions } from '@electron/packager';
 import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
@@ -72,7 +72,7 @@ export function assertPackageSigned(outputPaths: string[]): void {
 }
 
 /** Signs the packaged app: Orglet.exe, the helper tools, and the DLLs and native addons that are not signed yet. */
-export function resolveWindowsSign(env: NodeJS.ProcessEnv = process.env): WindowsSignOptions | undefined {
+export function resolveWindowsSign(env: NodeJS.ProcessEnv = process.env): PackagerWindowsSignOptions | undefined {
   const thumbprint = resolveWindowsCertificate(env);
   if (!thumbprint) {
     return undefined;
