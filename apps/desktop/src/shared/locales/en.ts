@@ -513,7 +513,7 @@ export const en: Dictionary = {
   'Tự cập nhật: {0}': 'Update automatically: {0}',
   'Tự cập nhật mục từ marketplace: {0}': 'Update Marketplace items automatically: {0}',
   'Marketplace: không có bản cập nhật nào.': 'Marketplace: no updates.',
-  'Marketplace: {0} (v{1}{2}) có bản cập nhật. Xem: orglet market update "{0}"': 'Marketplace: {0} (v{1}{2}) has an update. See it: orglet market update "{0}"',
+  'Marketplace: {0} (v{1}{2}) có bản cập nhật. Xem: orglet market update "{3}"': 'Marketplace: {0} (v{1}{2}) has an update. See it: orglet market update "{3}"',
   'Marketplace: đã tự cập nhật {0} lên v{1}{2}.': 'Marketplace: updated {0} to v{1} automatically{2}.',
   'Marketplace: tự cập nhật {0} lên v{1} không thành: {2}': 'Marketplace: the automatic update of {0} to v{1} failed: {2}',
   'Marketplace: {0} lên v{1} chờ bạn xem: {2}': 'Marketplace: {0} to v{1} waits for you: {2}',

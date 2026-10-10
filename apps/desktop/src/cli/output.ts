@@ -350,7 +350,7 @@ function formatMarketUpdates(value: MarketUpdatesValue): string[] {
   const lines: string[] = [];
   for (const item of value.available) {
     const latest = item.latestVersion ? ` -> v${item.latestVersion}` : '';
-    lines.push(t('Marketplace: {0} (v{1}{2}) có bản cập nhật. Xem: orglet market update "{0}"', item.name, item.version, latest));
+    lines.push(t('Marketplace: {0} (v{1}{2}) có bản cập nhật. Xem: orglet market update "{3}"', item.name, item.version, latest, item.name));
   }
   if (value.available.length === 0) lines.push(t('Marketplace: không có bản cập nhật nào.'));
   for (const record of value.records) {
