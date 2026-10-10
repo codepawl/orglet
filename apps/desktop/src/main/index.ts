@@ -199,8 +199,8 @@ async function showWindow(chat?: CliChat) {
   desktopReady ??= createDesktopWindow();
   await desktopReady;
   if (!window || window.isDestroyed()) return;
-  if (testOffscreen) return;
   if (window.isMinimized()) window.restore();
+  if (testOffscreen) return;
   window.show();
   window.moveTop();
   window.focus();
@@ -524,7 +524,8 @@ function relayBrowserEvent(raw: unknown) {
  * a smoke can drive and photograph the real window without it appearing on the person's desktop. Never for a person.
  */
 const testOffscreen = process.env.ORGLET_TEST_OFFSCREEN === '1';
-const OFFSCREEN_WINDOW = { x: -32000, y: -32000, show: false, skipTaskbar: true };
+// Not -32000: Windows parks minimized windows there, and a window placed there stops answering a resize.
+const OFFSCREEN_WINDOW = { x: -20000, y: -20000, show: false, skipTaskbar: true };
 async function createDesktopWindow() {
   window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(testOffscreen ? OFFSCREEN_WINDOW : {}), ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   if (testOffscreen) window.showInactive();

@@ -28,6 +28,8 @@ A new profile's Researcher has no model (owner, 2026-10-05). Its stored provider
 
 **Sample replies are a test tool.** The labelled replies that used to answer for Demo stay in the runner behind `ORGLET_DEMO_REPLIES=1` (`shared/demo-replies.ts`). `vitest.config.ts` sets it for the integration tests and `scripts/sample-replies.mjs`, which both smoke helpers import, sets it for every smoke, so both run without a key. The workspace reports it as `demoReplies`, and the window then shows Demo as it always did (`renderer/demoReplies.ts`). Where this page or another says Demo, it means a test or a smoke.
 
+**The window can stay off the screen in a smoke.** `ORGLET_TEST_OFFSCREEN=1` places the app's window far outside every display, keeps it out of the taskbar and never gives it focus, so a packaged smoke can drive and photograph the real window while the person keeps working. It is a test tool like the sample replies: never set it for a person. The alignment check is the exception and needs the window on a display, because it resizes the window and reads the size back, which Windows does not report faithfully for a window that is on no display.
+
 ## Connect a provider
 
 1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields. Ollama has no key: turn the switch on if Ollama is running at `127.0.0.1:11434`.
