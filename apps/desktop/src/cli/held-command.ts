@@ -8,6 +8,7 @@ import { EXIT_CODES } from './protocol';
 import { t } from './text';
 import { UsageError } from './arguments';
 import type { ElevationScope } from '../shared/terminal-access';
+import { isSetupCommand, parseSetupArguments, SETUP_COMMANDS, SETUP_HELP, type SetupRequest } from './held-setup';
 
 /**
  * `orglet unlock`, `approve`, `reconcile`, `test` and `install-update` (docs/cli-held-actions-design.md). A held command
@@ -15,7 +16,7 @@ import type { ElevationScope } from '../shared/terminal-access';
  * from the terminal only, never from an argument, an environment variable, a pipe or a file.
  */
 
-export const HELD_COMMANDS = ['unlock', 'approve', 'reconcile', 'test', 'install-update'] as const;
+export const HELD_COMMANDS = ['unlock', 'approve', 'reconcile', 'test', 'install-update', ...SETUP_COMMANDS] as const;
 export type HeldCommandName = typeof HELD_COMMANDS[number];
 
 export function isHeldCommand(argumentList: readonly string[]): boolean {
@@ -180,12 +181,55 @@ async function approve(held: HeldClient, parsed: ApproveArguments, terminal: Hel
   return runPairedAction(held, chosen.request, terminal, print);
 }
 
-/** Pairs for exactly this operation, sends it, and forgets the key. */
-async function runPairedAction(held: HeldClient, body: HeldBody, terminal: HeldTerminal, print: Printer): Promise<number> {
+/**
+ * One line typed with echo off, for a key. Raw mode, so nothing is drawn and nothing reaches the shell's history; a
+ * line that is not read from a terminal never gets here. Resolves undefined on Ctrl+C or Ctrl+D.
+ */
+export function readHiddenFromTerminal(terminal: HeldTerminal, prompt: string): Promise<string | undefined> {
+  return new Promise(resolve => {
+    const { input, output } = terminal;
+    const wasRaw = input.isRaw === true;
+    let typed = '';
+    const finish = (value: string | undefined) => {
+      input.off('data', onData);
+      input.setRawMode?.(wasRaw);
+      input.pause();
+      output.write('\n');
+      resolve(value);
+    };
+    const onData = (chunk: Buffer | string) => {
+      const text = String(chunk);
+      // An arrow key or another escape sequence is not part of the key.
+      if (text.startsWith('\u001b')) return;
+      for (const character of text) {
+        if (character === '\r' || character === '\n') return finish(typed);
+        if (character === '\u0003' || character === '\u0004') return finish(undefined);
+        if (character === '\u007f' || character === '\b') typed = typed.slice(0, -1);
+        else if (character >= ' ') typed += character;
+      }
+    };
+    output.write(prompt);
+    input.setRawMode?.(true);
+    input.resume();
+    input.on('data', onData);
+  });
+}
+
+/** Pairs for exactly this operation, sends it, and forgets the key. A key is read only after the pairing succeeded. */
+async function runPairedAction(held: HeldClient, body: HeldBody, terminal: HeldTerminal, print: Printer, secretPrompt?: string): Promise<number> {
   try {
     const paired = await pairWithTerminal(held, 'one', body, prompt => readLineFromTerminal(terminal, prompt), print);
     if (!paired) return EXIT_CODES.failure;
-    const done = await held.act(body);
+    let sent = body;
+    if (secretPrompt) {
+      const secret = (await readHiddenFromTerminal(terminal, secretPrompt))?.trim();
+      if (!secret) {
+        print.stderr(t('Đã hủy, không lưu khóa.'));
+        return EXIT_CODES.failure;
+      }
+      sent = { ...body, secret } as HeldBody;
+    }
+    const done = await held.act(sent);
     print.stdout(t('Xong: {0}', done.summary));
     return EXIT_CODES.ok;
   } catch (error) {
@@ -214,14 +258,16 @@ export type HeldRun = {
 export async function runHeldCommand(run: HeldRun): Promise<number> {
   const command = run.argumentList[0] as HeldCommandName;
   if (run.argumentList.includes('--help')) {
-    run.print.stdout(HELD_HELP);
+    run.print.stdout(isSetupCommand(run.argumentList) ? SETUP_HELP : HELD_HELP);
     return EXIT_CODES.ok;
   }
   let parsed: ApproveArguments | undefined;
   let body: HeldBody | undefined;
+  let setup: SetupRequest | undefined;
   try {
-    if (command === 'approve') parsed = parseApprove(run.argumentList);
-    else if (command !== 'unlock') body = directBody(command, run.argumentList);
+    if (isSetupCommand(run.argumentList)) setup = parseSetupArguments(run.argumentList);
+    else if (command === 'approve') parsed = parseApprove(run.argumentList);
+    else if (command !== 'unlock') body = directBody(command as Exclude<HeldCommandName, 'unlock' | 'approve'>, run.argumentList);
   } catch (error) {
     if (!(error instanceof UsageError)) throw error;
     run.print.stderr(`${error.message}\n${t('Chạy "orglet unlock --help" để xem cách dùng.')}`);
@@ -233,6 +279,7 @@ export async function runHeldCommand(run: HeldRun): Promise<number> {
   }
   const held = createHeldClient(run.userData, run.executable);
   try {
+    if (setup) return await runPairedAction(held, setup.body, run.terminal, run.print, setup.secretPrompt);
     if (command === 'approve') return await approve(held, parsed!, run.terminal, run.print);
     if (body) return await runPairedAction(held, body, run.terminal, run.print);
     const readCode = (prompt: string) => readLineFromTerminal(run.terminal!, prompt);

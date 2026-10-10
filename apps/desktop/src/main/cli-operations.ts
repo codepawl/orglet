@@ -109,6 +109,11 @@ export class CliOperations {
     }
   }
 
+  /** Settings' Undo on a journal row of a grant; it runs from the window only and never through the pipe. */
+  undoGrant(rowId: string): Promise<void> {
+    return this.held.undoGrant(rowId);
+  }
+
   private workspace(): Promise<Workspace> {
     return this.dependencies.request('workspace', {}) as Promise<Workspace>;
   }

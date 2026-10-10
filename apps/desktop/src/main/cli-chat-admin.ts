@@ -209,7 +209,7 @@ export class CliChatAdmin {
 type TaskAssignee = Args<'updateTask'>['assignee'];
 
 /** The chat's assignee after the change: the orglets named, or one crew named alone, else what it has now. */
-function assigneeOf(workspace: Workspace, task: Task, names: readonly string[] | undefined): TaskAssignee {
+export function assigneeOf(workspace: Workspace, task: Task, names: readonly string[] | undefined): TaskAssignee {
   if (!names) {
     if (task.teamId) return { kind: 'team', teamId: task.teamId };
     if (task.assignees === 'all') return { kind: 'all' };

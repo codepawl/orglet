@@ -15,6 +15,8 @@ export type WaitingTarget = { to?: string; chat?: string };
 export type HeldClient = {
   /** Whether this process holds a key that has not been refused yet. */
   unlocked: () => boolean;
+  /** Whether the key this process holds came from `/unlock setup`, the only scope that allows grants and secrets. */
+  canSetup: () => boolean;
   waiting: (target: WaitingTarget) => Promise<WaitingCard[]>;
   startPairing: (scope: ElevationScope, operation?: HeldBody) => Promise<PairStartValue>;
   /** A match keeps the key in memory; a wrong code is an `AppRefusal` with the code `invalid` and tries left. */
@@ -30,6 +32,7 @@ export type HeldClient = {
 
 export function createHeldClient(userData: string, executable: string | undefined): HeldClient {
   let key: string | undefined;
+  let scope: ElevationScope | undefined;
 
   async function send<Value>(body: CliRequestBody, withKey = false): Promise<Value> {
     const line: CliElevatedBody = withKey && key ? { ...body, elevation: key } : body;
@@ -44,11 +47,13 @@ export function createHeldClient(userData: string, executable: string | undefine
 
   return {
     unlocked: () => key !== undefined,
+    canSetup: () => key !== undefined && scope === 'setup',
     waiting: async target => (await send<WaitingValue>({ op: 'waiting', ...target })).cards,
     startPairing: (scope, operation) => send<PairStartValue>({ op: 'pair-start', scope, ...(operation ? { operation } : {}) }),
     finishPairing: async (pairingId, code) => {
       const finished = await send<PairFinishValue>({ op: 'pair-finish', pairingId, code });
       key = finished.key;
+      scope = finished.scope;
       return finished.scope;
     },
     cancelPairing: async pairingId => {
@@ -56,10 +61,12 @@ export function createHeldClient(userData: string, executable: string | undefine
     },
     lock: async () => {
       key = undefined;
+      scope = undefined;
       await send({ op: 'elevation-end' });
     },
     forget: () => {
       key = undefined;
+      scope = undefined;
     },
     act: body => send<HeldValue>({ op: 'held', request: body }, true),
     journal: () => send<ShowValue>({ op: 'show', what: 'terminal', refresh: false }),

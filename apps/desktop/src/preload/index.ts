@@ -139,6 +139,12 @@ const bridge: Bridge = {
   cancelTerminalPairing: () => invoke('orglet:terminal-access-cancel'),
   endTerminalAccess: () => invoke('orglet:terminal-access-end'),
   terminalJournal: () => invoke('orglet:terminal-journal'),
+  undoTerminalAction: rowId => invoke('orglet:terminal-undo', rowId),
+  onTerminalNotice: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: import('../shared/terminal-access').TerminalNotice) => callback(notice);
+    ipcRenderer.on('orglet:terminal-notice', listener);
+    return () => ipcRenderer.removeListener('orglet:terminal-notice', listener);
+  },
 };
 contextBridge.exposeInMainWorld('orglet', bridge);
 

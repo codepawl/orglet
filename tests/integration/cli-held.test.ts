@@ -350,16 +350,14 @@ describe('pairing over the line protocol', () => {
     expect(await send({ op: 'pair-start', scope: 'decisions' })).toMatchObject({ ok: false, code: 'busy' });
     const finished = await send({ op: 'pair-finish', pairingId: started.value.pairingId, code }) as { ok: true; value: { key: string } };
     expect(finished.value.key).toMatch(/^[a-f0-9]{64}$/);
-    expect(await send({ op: 'pair-start', scope: 'setup' })).toMatchObject({ ok: false });
     expect(await send({ op: 'elevation-end' }, finished.value.key)).toMatchObject({ ok: true });
     expect(elevation.state().elevation).toBeUndefined();
   });
 
-  it('refuses a pairing from the terminal for setup, which arrives in a later version', async () => {
-    const { send } = await harness();
-    const refused = await send({ op: 'pair-start', scope: 'setup' }) as { ok: false; error: string };
-    expect(refused.ok).toBe(false);
-    expect(refused.error).toContain('bản sau');
+  it('opens a pairing for setup, which the dialog names as granting access and saving keys', async () => {
+    const { send, elevation } = await harness();
+    expect(await send({ op: 'pair-start', scope: 'setup' })).toMatchObject({ ok: true });
+    expect(elevation.state().pairing?.scope).toBe('setup');
   });
 });
 

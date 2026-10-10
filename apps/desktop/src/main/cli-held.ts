@@ -1,11 +1,12 @@
 import type { TaskDetail, Workspace } from '../shared/contracts';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
-import { type HeldBody, type HeldValue, type PairFinishValue, type PairStartValue, type WaitingCard, type WaitingChoice, type WaitingValue } from '../cli/held-protocol';
+import { carriesSecret, HELD_ACTIONS, isSetupBody, type HeldBody, type HeldValue, type PairFinishValue, type PairStartValue, type WaitingCard, type WaitingChoice, type WaitingValue } from '../cli/held-protocol';
 import type { CliRequest } from '../cli/protocol';
 import { operationHash, type ElevationGrant } from './cli-elevation';
 import { CliFailure, targetChat } from './cli-chats';
 import { pendingDecision } from './cli-chat-history';
 import { readTask, type CliDependencies } from './cli-turns';
+import { CliSetup, type SetupOutcome } from './cli-setup';
 
 /**
  * The terminal's side of the held operations (docs/cli-held-actions-design.md): pairing, the cards a chat is waiting
@@ -32,6 +33,49 @@ export function heldWords(body: HeldBody): string {
     case 'budget': return 'Ghi số tiền nhà cung cấp đã tính cho một lượt chạy';
     case 'install-update': return 'Khởi động lại Orglet để cài bản cập nhật';
     case 'test': return { mcp: 'Chạy thử một máy chủ MCP', 'web-search': 'Chạy thử tìm kiếm web', 'decision-model': 'Chạy thử mô hình quyết định' }[body.what];
+    default: return HELD_ACTIONS[body.action].label;
+  }
+}
+
+function chatWords(body: { to?: string; chat?: string }): string {
+  return body.to ?? (body.chat ? `#${body.chat}` : '');
+}
+
+function levelWords(permissions: readonly string[]): string {
+  if (permissions.includes('execute')) return 'đọc, sửa và chạy lệnh';
+  return permissions.includes('write') ? 'đọc và sửa' : 'chỉ đọc';
+}
+
+/**
+ * The arguments of a grant, as plain words the person reads in the pairing dialog before typing anything: which chat,
+ * which folder, at what level. Names and paths are not translated, and this never reads `secret`.
+ */
+export function heldDetail(body: HeldBody): string {
+  switch (body.action) {
+    case 'tools': return `${chatWords(body)}: ${body.capabilities.join(', ') || '-'}`;
+    case 'folder': return `${chatWords(body)}: ${body.path} (${levelWords(body.permissions)})`;
+    case 'schedule-folder': return `${body.path} (${levelWords(body.permissions)})`;
+    case 'folder-level': return `${chatWords(body)}: ${levelWords(body.permissions)}`;
+    case 'folder-revoke': return chatWords(body);
+    case 'file-revoke': return body.sourceId;
+    case 'mcp-enable': return `${body.server}: ${body.enabled ? 'on' : 'off'}`;
+    case 'mcp-grant': return `${chatWords(body)}: ${body.server}${body.tool ? ` / ${body.tool}` : ''} (${body.allowed ? 'allow' : 'deny'})`;
+    case 'mcp-remove':
+    case 'mcp-sign-in': return body.server;
+    case 'limit': return `${chatWords(body)}: ${(body.budgetMicros / 1_000_000).toFixed(2)} USD`;
+    case 'space-tools': return `${body.space}: ${body.capabilities.join(', ') || '-'}`;
+    case 'decision-model': return body.entries.map(entry => `${entry.connection} ${entry.model}`).join(', ') || '-';
+    case 'switch': return `${body.what}: ${body.enabled ? 'on' : 'off'}`;
+    case 'backup': return body.path;
+    case 'browser-profile': return `${body.change} ${body.profile}`;
+    case 'harness': return [body.change, body.harness, body.account, body.label].filter(Boolean).join(' ');
+    case 'account': return body.change;
+    case 'custom-connection': return [body.change, body.name, body.baseUrl].filter(Boolean).join(' ');
+    case 'disconnect':
+    case 'connect':
+    case 'search-key':
+    case 'search-key-remove': return body.provider;
+    default: return '';
   }
 }
 
@@ -51,9 +95,16 @@ export class CliHeld {
     return this.dependencies.translate(source);
   }
 
+  /** The operation and its arguments in words, for the dialog and the journal. */
+  private describe(body: HeldBody): string {
+    const detail = heldDetail(body);
+    return detail ? `${this.say(heldWords(body))}: ${detail}` : this.say(heldWords(body));
+  }
+
   async pairStart(request: Request<'pair-start'>): Promise<PairStartValue> {
-    if (request.scope === 'setup') throw new CliFailure('failed', 'Mở khóa để cấp quyền và lưu khóa bí mật sẽ có ở một bản sau.');
-    const operation = request.operation ? { hash: operationHash(request.operation), words: this.say(heldWords(request.operation)) } : undefined;
+    // A secret is read after the pairing and sent only in the held request; the dialog, the hash and the journal never see it.
+    if (request.operation && 'secret' in request.operation) throw new CliFailure('invalid', 'Yêu cầu ghép đôi không được mang khóa bí mật.');
+    const operation = request.operation ? { hash: operationHash(request.operation), words: this.describe(request.operation) } : undefined;
     const started = await this.access().elevation.startPairing(request.scope, operation);
     // The window comes forward so the person sees the code; the terminal says where to look as well.
     await Promise.resolve(this.dependencies.open()).catch(() => undefined);
@@ -212,20 +263,35 @@ export class CliHeld {
   async answer(request: Request<'held'>, grant: ElevationGrant): Promise<HeldValue> {
     const body = request.request;
     const words = this.say(heldWords(body));
+    // A grant's row says what it touched; `describe` never reads `secret`.
+    // A row holds at most 300 characters; a long path must not make the journal throw after the grant was made.
+    const journalWords = (isSetupBody(body) ? this.describe(body) : words).slice(0, 300);
     let subject: string | undefined;
     try {
       const outcome = await this.perform(body);
-      subject = outcome.subject;
-      await this.access().journal.record({ scope: grant.scope, operation: words, ...(subject ? { subject } : {}), outcome: 'done' });
+      subject = outcome.subject?.slice(0, 200);
+      const setupFields = isSetupBody(body) ? { notice: true, ...(outcome.undo ? { undo: outcome.undo } : {}) } : {};
+      await this.access().journal.record({ scope: grant.scope, operation: journalWords, ...(subject ? { subject } : {}), outcome: 'done', ...setupFields });
       return { action: body.action, summary: words };
     } catch (error) {
-      const detail = error instanceof Error ? error.message.slice(0, 300) : undefined;
-      await this.access().journal.record({ scope: grant.scope, operation: words, ...(subject ? { subject } : {}), outcome: 'failed', ...(detail ? { detail } : {}) });
+      // A key must never come back in a message, so a failed save of one says only that it failed.
+      const detail = carriesSecret(body) ? undefined : error instanceof Error ? error.message.slice(0, 300) : undefined;
+      await this.access().journal.record({ scope: grant.scope, operation: journalWords, ...(subject ? { subject } : {}), outcome: 'failed', ...(detail ? { detail } : {}) });
       throw error;
     }
   }
 
-  private async perform(body: HeldBody): Promise<{ subject?: string }> {
+  /** Takes back a grant from Settings, once. The window sends the journal row's id and nothing else. */
+  async undoGrant(rowId: string): Promise<void> {
+    const { journal } = this.access();
+    const recipe = await journal.undoOf(rowId);
+    if (!recipe) throw new CliFailure('failed', 'Không hoàn tác được thao tác này nữa.');
+    await new CliSetup(this.dependencies).undo(recipe);
+    await journal.markUndone(rowId);
+  }
+
+  private async perform(body: HeldBody): Promise<SetupOutcome> {
+    if (isSetupBody(body)) return new CliSetup(this.dependencies).perform(body);
     const call = this.dependencies.request;
     switch (body.action) {
       case 'memory': return this.reviewMemory(body);

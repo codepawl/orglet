@@ -13,7 +13,7 @@ import { label, useEnglish, openSettings } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-terminal-access-'));
-const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' };
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1', ORGLET_DEMO_REPLIES: '1' };
 delete env.ELECTRON_RUN_AS_NODE;
 await mkdir('test-results', { recursive: true });
 
@@ -93,7 +93,61 @@ try {
   const lockedAgain = await rawRequest({ op: 'held', token, elevation: key, request: heldRequest });
   assert.equal(lockedAgain.code, 'locked', 'End now closes the key');
   await page.locator('.terminal-access-mark').waitFor({ state: 'detached' });
-  console.log(JSON.stringify({ result: 'passed', checks: ['locked with the token alone', 'code only in the window', 'wrong code and wrong key refused', 'key opens a held operation', 'journal row without the key', 'End now locks again'] }));
+
+  // Stage C: a one-shot pairing for a folder grant on a temp folder, applied, listed, noticed and undone from Settings.
+  // The chat needs a row for Undo, so one demo turn is sent first (the demo switch is on for this smoke only).
+  const listed = await rawRequest({ op: 'list', token });
+  const orgletName = listed.value.orglets[0].name;
+  const sent = await rawRequest({ op: 'send', token, to: orgletName, message: 'hello', files: [], wait: true, timeoutSeconds: 30 });
+  assert.equal(sent.ok, true, 'the demo turn gives the chat a row');
+  const folder = await mkdtemp(join(tmpdir(), 'orglet-grant-folder-'));
+  const grant = { action: 'folder', to: orgletName, path: folder, permissions: ['read'] };
+  assert.equal((await rawRequest({ op: 'held', token, request: grant })).code, 'locked', 'a grant is locked with the token alone');
+  const grantPairing = await rawRequest({ op: 'pair-start', token, scope: 'one', operation: grant });
+  assert.equal(grantPairing.ok, true);
+  await dialog.waitFor();
+  assert.ok((await dialog.innerText()).includes(folder), 'the dialog says the folder in words before any code is typed');
+  const grantCode = (await dialog.locator('.terminal-pairing-code').innerText()).replace(/[^A-Z0-9]/g, '');
+  const grantKey = (await rawRequest({ op: 'pair-finish', token, pairingId: grantPairing.value.pairingId, code: grantCode })).value.key;
+  const otherFolder = await rawRequest({ op: 'held', token, elevation: grantKey, request: { ...grant, path: await mkdtemp(join(tmpdir(), 'orglet-other-')) } });
+  assert.equal(otherFolder.code, 'locked', 'a key made for one folder does not open another');
+  const granted = await rawRequest({ op: 'held', token, elevation: grantKey, request: grant });
+  assert.equal(granted.ok, true, 'the matching key applies the grant');
+  assert.equal((await rawRequest({ op: 'held', token, elevation: grantKey, request: grant })).code, 'locked', 'a one key is spent');
+  const refusedRoot = await rawRequest({ op: 'pair-start', token, scope: 'setup' });
+  const rootCode = (await dialog.locator('.terminal-pairing-code').innerText()).replace(/[^A-Z0-9]/g, '');
+  const setupKey = (await rawRequest({ op: 'pair-finish', token, pairingId: refusedRoot.value.pairingId, code: rootCode })).value.key;
+  const dataFolderGrant = await rawRequest({ op: 'held', token, elevation: setupKey, request: { ...grant, path: directory } });
+  assert.equal(dataFolderGrant.ok, false, 'the data folder cannot be granted from a terminal');
+
+  // Stage D: a web search key saved through an elevated request is in no answer and no journal row.
+  const secret = 'exa-smoke-SECRET-0123456789';
+  const saved = await rawRequest({ op: 'held', token, elevation: setupKey, request: { action: 'search-key', provider: 'exa', secret } });
+  assert.equal(saved.ok, true, 'the key is saved');
+  assert.equal(JSON.stringify(saved).includes(secret), false, 'no answer repeats the key');
+  const refusedWithoutKey = await rawRequest({ op: 'held', token, request: { action: 'search-key', provider: 'exa', secret } });
+  assert.equal(refusedWithoutKey.code, 'locked');
+  assert.equal(JSON.stringify(refusedWithoutKey).includes(secret), false);
+  assert.equal((await readFile(join(directory, 'terminal-journal.jsonl'), 'utf8')).includes(secret), false, 'the journal never holds the key');
+  await rawRequest({ op: 'elevation-end', token });
+
+  const grantWords = 'Let a chat work in a folder';
+  const activity = page.getByRole('button', { name: label('Hoạt động') });
+  if (await activity.count()) {
+    await activity.first().click();
+    await page.getByText(grantWords).first().waitFor();
+  }
+  await openSettings(page);
+  await page.getByRole('tab', { name: label('Dữ liệu'), exact: true }).click();
+  const grantRow = page.locator('.terminal-journal-row', { hasText: grantWords }).first();
+  await grantRow.waitFor();
+  assert.equal(await page.locator('.terminal-journal').innerText().then(text => text.includes(secret)), false, 'Settings never shows the key');
+  await page.locator('.terminal-journal').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/terminal-grant-journal.png' });
+  await grantRow.getByRole('button', { name: label('Hoàn tác') }).click();
+  await grantRow.getByText(label('Đã hoàn tác')).waitFor();
+  await page.keyboard.press('Escape');
+  console.log(JSON.stringify({ result: 'passed', checks: ['locked with the token alone', 'code only in the window', 'wrong code and wrong key refused', 'key opens a held operation', 'journal row without the key', 'End now locks again', 'folder grant: dialog words, matching key only, spent once, data folder refused, noticed, undone from Settings', 'web search key saved and absent from answers, journal and Settings'] }));
 } finally {
   await app.close();
 }

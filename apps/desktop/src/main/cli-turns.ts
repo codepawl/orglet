@@ -21,6 +21,43 @@ export type CliAppState = {
   installUpdate?: () => void;
 };
 
+/**
+ * What stages C and D need from main and cannot get from the core: the credential stores, the account, the browser
+ * profiles and the switches. Each member is the function the window's handler of the same name calls, so a grant from
+ * a terminal runs the window's own code.
+ */
+export type CliSetupApp = {
+  /** The data folder and the home folder, for the folder refusals. */
+  dataFolder: string;
+  homeFolder: string;
+  /** Saves an API key (none for Ollama's local token) the way Settings does; the key is dropped after. */
+  connect: (provider: string, key: string | undefined) => Promise<void>;
+  disconnect: (provider: string) => Promise<void>;
+  /** Drops the key of a custom connection the core has just forgotten. */
+  forgetKey: (provider: string) => Promise<void>;
+  saveSearchKey: (provider: string, key: string) => Promise<void>;
+  removeSearchKey: (provider: string) => Promise<void>;
+  removeMcpServer: (serverId: string) => Promise<void>;
+  signInMcpServer: (serverId: string) => Promise<void>;
+  cancelMcpSignIn: (serverId: string) => void;
+  setSwitch: (what: 'analytics' | 'cli-path' | 'send-to', enabled: boolean) => Promise<void>;
+  writeText: (path: string, text: string) => Promise<void>;
+  account: {
+    /** The name the sync prompt types back: the account's name, else its email. Undefined when nobody is signed in. */
+    label: () => string | undefined;
+    signIn: () => Promise<void>;
+    signOut: () => Promise<void>;
+    cancelSignIn: () => void;
+    reopenSignIn: () => Promise<void>;
+  };
+  startSync: (choice: 'merge' | 'replace' | undefined) => Promise<void>;
+  browserProfiles: {
+    list: () => Promise<{ id: string; name: string }[]>;
+    clear: (profileId: string) => Promise<void>;
+    remove: (profileId: string) => Promise<void>;
+  };
+};
+
 export type CliDependencies = {
   request: CoreRequest;
   version: () => string;
@@ -36,6 +73,8 @@ export type CliDependencies = {
   /** Tells main the language or theme changed from a terminal, as a save in the window does (COD-354). */
   /** Pairing, elevation and the journal behind the held operations (docs/cli-held-actions-design.md). */
   terminalAccess?: { elevation: CliElevation; journal: CliJournal };
+  /** Stages C and D (grants and secrets); without it every such operation is refused as unavailable. */
+  setup?: CliSetupApp;
   settingsChanged?: (changes: { language?: Language; theme?: 'system' | 'light' | 'dark' }) => void;
 };
 

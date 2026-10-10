@@ -1,10 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { DialogOverlay } from '@codepawlhq/orglet-ui';
-import { Ban, Check, Square, SquareTerminal, X } from 'lucide-react';
+import { Ban, Check, Square, SquareTerminal, Undo2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ElevationScope, TerminalAccessState, TerminalJournalRow } from '../../shared/terminal-access';
 import { orglet } from '../api';
 import { t } from '../i18n';
+import { recordNotice } from './notifications';
 import { RowMenu } from './RowMenu';
 import { toast } from './toast';
 import { Button } from './ui';
@@ -51,7 +52,7 @@ export function timeLeftText(endsAt: string, now: number): string {
 
 function scopeWords(scope: ElevationScope, operation: string | undefined): string {
   if (scope === 'one') return operation ?? t('Một thao tác duy nhất.');
-  if (scope === 'setup') return t('Cấp quyền và lưu khóa bí mật trong phiên terminal này.');
+  if (scope === 'setup') return t('Cấp quyền (thư mục, công cụ, MCP, giới hạn chi phí…) và lưu khóa bí mật trong phiên terminal này, tối đa 15 phút.');
   return t('Trả lời các thẻ đang chờ bạn duyệt (công cụ, thay đổi, đề xuất, ghi nhớ). Không cấp quyền mới và không lưu khóa bí mật.');
 }
 
@@ -91,6 +92,10 @@ export function TerminalAccessNotices({ state }: { state: TerminalAccessState })
   useEffect(() => {
     if (holdUntil) toast(t('Terminal bị tạm khóa'), 'error', t('Nó xin ghép đôi nhiều lần mà không nhập đúng mã. Thử lại sau ít phút.'));
   }, [holdUntil]);
+  // A grant or a secret a terminal just set goes to the notification list, so a person who walked away still finds it.
+  useEffect(() => orglet.onTerminalNotice(notice => {
+    recordNotice(notice.subject ? `${notice.operation} (${notice.subject})` : notice.operation, 'info', t('Terminal làm thay bạn'));
+  }), []);
   return null;
 }
 
@@ -110,16 +115,23 @@ function OutcomeMark({ outcome }: { outcome: TerminalJournalRow['outcome'] }) {
   return <Ban size={16} className="terminal-journal-refused" aria-label={t('Bị từ chối')} />;
 }
 
-/** "What the terminal did": the journal main keeps, newest first. */
+/** "What the terminal did": the journal main keeps, newest first. A grant the core can take back has Undo. */
 export function TerminalJournal() {
   const [rows, setRows] = useState<TerminalJournalRow[]>();
+  const [reload, setReload] = useState(0);
   const state = useTerminalAccess();
   useEffect(() => {
     let live = true;
     orglet.terminalJournal().then(next => { if (live) setRows(next); }).catch(() => { if (live) setRows([]); });
     return () => { live = false; };
     // An elevation ending or starting is when the list may have grown.
-  }, [state.elevation?.endsAt]);
+  }, [state.elevation?.endsAt, reload]);
+  const undo = (row: TerminalJournalRow) => {
+    orglet.undoTerminalAction(row.id)
+      .then(() => toast(t('Đã hoàn tác'), 'success', row.operation))
+      .catch(error => toast(t('Không hoàn tác được'), 'error', error instanceof Error ? error.message : undefined))
+      .finally(() => setReload(count => count + 1));
+  };
   if (rows === undefined) return null;
   if (rows.length === 0) return <p className="setting-description terminal-journal-empty">{t('Terminal chưa làm gì thay bạn.')}</p>;
   return <ul className="terminal-journal" aria-label={t('Terminal đã làm')}>
@@ -127,8 +139,9 @@ export function TerminalJournal() {
       <OutcomeMark outcome={row.outcome} />
       <span className="terminal-journal-text">
         <span className="terminal-journal-operation">{row.operation}</span>
-        <span className="terminal-journal-detail">{[row.subject, new Date(row.at).toLocaleString()].filter(Boolean).join(' · ')}</span>
+        <span className="terminal-journal-detail">{[row.subject, new Date(row.at).toLocaleString(), row.undoneAt ? t('Đã hoàn tác') : undefined].filter(Boolean).join(' · ')}</span>
       </span>
+      {row.undoable && <Button variant="outline" onClick={() => undo(row)}><Undo2 size={15} aria-hidden="true" />{t('Hoàn tác')}</Button>}
     </li>)}
   </ul>;
 }
