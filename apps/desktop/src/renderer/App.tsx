@@ -1369,7 +1369,7 @@ export function App() {
     const readyNames = (providers: readonly Worker['provider'][]) => providers.filter(provider => ready[provider as keyof typeof ready]).map(providerName);
     // Until the harnesses have been looked for, none of them counts as ready.
     const plans = harnesses ? readyNames(['claude-code', 'codex', 'cursor', 'gemini']) : [];
-    const keys = readyNames(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', ...(workspace?.customConnections ?? []).map(connection => customProviderId(connection.id))]);
+    const keys = readyNames(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'codepawl', ...(workspace?.customConnections ?? []).map(connection => customProviderId(connection.id))]);
     const local = readyNames(['ollama']);
     const pick = (names: readonly string[], tab: SettingsTab) => () => {
       if (names.length) {

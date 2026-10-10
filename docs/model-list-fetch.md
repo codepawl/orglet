@@ -31,7 +31,7 @@ A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/cont
 | Anthropic | `claude-sonnet-5-5` | $2.00 / $10.00 per MTok; cache writes $2.50, cache reads $0.20 (COD-358) |
 | xAI | `grok-3-mini` | $0.30 / $0.50 per MTok |
 | OpenRouter | `openai/gpt-4.1-mini` | $0.40 / $1.60 per MTok (catalog hint; native list tenths when cached) |
-| Demo / Claude Code / Codex / Cursor / Gemini CLI / Ollama / OpenCode Zen / OpenCode Go | (none) | No Orglet reservation (OpenCode Zen is billed to the Zen balance, OpenCode Go by the Go plan; neither has a default model) |
+| Demo / Claude Code / Codex / Cursor / Gemini CLI / Ollama / OpenCode Zen / OpenCode Go / CodePawl router | (none) | No Orglet reservation (the CodePawl router enforces its own free allowance and plan; OpenCode Zen is billed to the Zen balance, OpenCode Go by the Go plan; neither has a default model) |
 
 The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at the default's rates (unknown reservation until a later COD stores a verified price). The Anthropic default was Claude Haiku 4.5 until COD-358 moved it to Claude Sonnet 5.5. An orglet that left the field empty follows the default; one that saved `claude-haiku-4-5-20251001` keeps that model and is still billed at its verified Haiku price ($1 / $5, cache writes $1.25, reads $0.10), from `formerAnthropicDefaults` in `core/adapters/catalog.ts`. A run that started on the old default and is resumed after the update stops with "model or pricing changed" instead of switching mid-run. xAI and OpenRouter native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set. Ollama runs make no Orglet reservation.
 
@@ -49,6 +49,7 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 | **OpenRouter API** | Native `GET https://openrouter.ai/api/v1/models` with the saved OpenRouter key. | That connection's own catalog and prices. Not used as a list for OpenAI/Anthropic/xAI workers. | **None.** Do not scrape HTML. |
 | **OpenCode Zen API** | Native `GET https://opencode.ai/zen/v1/models` with the saved Zen key ([docs](https://opencode.ai/docs/zen/): "You can fetch the full list of available models and their metadata from" that URL). | The Zen plan's own list. IDs only: no prices, no endpoint per model. | **None.** |
 | **OpenCode Go API** | Native `GET https://opencode.ai/zen/go/v1/models` with the saved Go key ([docs](https://opencode.ai/docs/go/)). Never falls back to the Zen key or list. | The Go plan's own list. IDs only. | **None.** |
+| **CodePawl router** | Native `GET <router>/v1/models` with the router key main made for this computer, only in a build that names a router (`ORGLET_ROUTER_URL`; no default). Never falls back to another key or list. | The router's own list. IDs only: its `free` flag and published price are not kept, since the app has no free mark and does not reserve against them. | **None.** |
 | **Ollama** | Native `GET http://127.0.0.1:11434/api/tags` after the Settings toggle. | Local tags already pulled on this machine. | **None.** |
 | **Custom connection** (`custom:<id>`, COD-242) | That server's own `GET {baseUrl}/models`, with its key when one is saved and no `Authorization` header when not. Parsed like OpenAI's list, with the same display filter. | The only list that server has. No price is read or trusted from it. | **None.** |
 | **Claude Code** | No list command. The documented `--model` **aliases** (`sonnet`, `opus`, `haiku`, `fable`) plus custom ID, each named by the model the CLI itself starts with (its `system`/`init` line), and every other model the account may use from Anthropic's `GET /v1/models` with the CLI's own sign-in (COD-332). Signed out, or both reads failing: the bare aliases. | Official CLI has `--model` but no `claude model list` ([feature request](https://github.com/anthropics/claude-code/issues/12612)). `/model` is interactive. The Models API answers the Claude Code OAuth token when the request carries `anthropic-beta: oauth-2025-04-20` (checked 2026-09-29), and returns `display_name`. | **None.** An alias's model changes when the CLI or its vendor moves it. |
@@ -115,7 +116,7 @@ A later COD may add an optional community overlay **only** if a native list is s
 Normalize every source into one object. Unknown fields stay omitted, never invented.
 
 ```
-provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | ollama | claude-code | codex | cursor | gemini | custom:<id>
+provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | codepawl | ollama | claude-code | codex | cursor | gemini | custom:<id>
 id              exact slug sent to the API or `--model`
 displayName     optional (Anthropic, Codex, Cursor, OpenRouter, Ollama, Claude Code and Gemini CLI aliases)
 isDefault       true only when the CLI says it runs this model with none named (Codex, Claude Code, Cursor)

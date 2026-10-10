@@ -3,7 +3,7 @@ import { basename, dirname, join, relative, isAbsolute, resolve } from 'node:pat
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { release as osRelease, userInfo } from 'node:os';
+import { hostname as osHostname, release as osRelease, userInfo } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
@@ -58,6 +58,8 @@ import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
 import { AccountFile, AccountService, accountPayload, listenOnLoopback } from './account';
+import { RouterConnection, RouterKeyIdFile, routerKeyName } from './router-connection';
+import { CodepawlState, CodepawlUsage, routerBaseUrl } from '../shared/router';
 import { SyncTransport } from './sync-transport';
 import { SyncChoice, syncBaseUrl } from '../shared/sync-status';
 import { MarketPublishingTransport, publishingRelayAllowed } from './market-publishing';
@@ -102,6 +104,8 @@ let mcpSecrets: McpSecretStore;
 let mcpSignIns: McpSignIns;
 /** The optional CodePawl account (COD-337): its tokens stay here, the window hears only `AccountState`. */
 let account: AccountService;
+/** The CodePawl router connection (issue 532): its key stays here; with no `ORGLET_ROUTER_URL` it does nothing at all. */
+let routerConnection: RouterConnection;
 /** Account sync (COD-329 phase 3); it stays off in a build with no `ORGLET_SYNC_URL`. */
 let syncTransport: SyncTransport | undefined;
 /** Usage analytics for a signed-in account (COD-344); records nothing without an account or with the switch off. */
@@ -275,10 +279,27 @@ async function assertCustomConnection(provider: CredentialProvider) {
 }
 /** Keeps an API key in the credential store: Settings' Connect and `orglet connect` both end here. Ollama needs none. */
 async function keepApiKey(provider: CredentialProvider, key: string | undefined) {
+  // The router key is made by the router for the signed-in account; a pasted one is never kept.
+  if (provider === 'codepawl') throw new Error('Kết nối CodePawl bằng tài khoản CodePawl trong Cài đặt → Kết nối, không nhập key.');
   await assertCustomConnection(provider);
   if (key === undefined && provider !== 'ollama') throw new Error('Thiếu khóa để lưu.');
   await credentials.save(provider, key === undefined ? OLLAMA_LOCAL_TOKEN : key.trim());
   await request('invalidateModelList', provider).catch(() => {});
+}
+/** Which keys are saved, never the keys. A build with no router shows none for it, whatever file an older build left. */
+async function savedConnections(): Promise<Connections> {
+  const status = await credentials.status();
+  return routerConnection.configured ? status : { ...status, codepawl: false };
+}
+/** Forgets one connection's key. The router's is revoked there too, which the credential store alone cannot do. */
+async function forgetConnectionKey(provider: CredentialProvider) {
+  if (provider === 'codepawl') await routerConnection.disconnect();
+  else await credentials.remove(provider);
+}
+/** Signs the account out. The router key goes first, while the sign-in can still ask for a token to revoke it. */
+async function signOutAccount() {
+  await routerConnection.revokeBeforeSignOut();
+  return account.signOut();
 }
 function announceChange() {
   if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
@@ -290,11 +311,11 @@ function terminalSetupApp(): CliSetupApp {
     homeFolder: app.getPath('home'),
     connect: async (provider, key) => { await keepApiKey(CredentialProvider.parse(provider), key); announceChange(); },
     disconnect: async provider => {
-      await credentials.remove(CredentialProvider.parse(provider));
+      await forgetConnectionKey(CredentialProvider.parse(provider));
       await request('invalidateModelList', provider).catch(() => {});
       announceChange();
     },
-    forgetKey: async provider => { await credentials.remove(CredentialProvider.parse(provider)); announceChange(); },
+    forgetKey: async provider => { await forgetConnectionKey(CredentialProvider.parse(provider)); announceChange(); },
     saveSearchKey: async (provider, key) => { await webSearchKeys.save(WebSearchKeyProvider.parse(provider), key); announceChange(); },
     removeSearchKey: async provider => { await webSearchKeys.remove(WebSearchKeyProvider.parse(provider)); announceChange(); },
     removeMcpServer: async serverId => {
@@ -328,7 +349,7 @@ function terminalSetupApp(): CliSetupApp {
         return state.name || state.email;
       },
       signIn: async () => { await account.signIn(); },
-      signOut: async () => { await account.signOut(); },
+      signOut: async () => { await signOutAccount(); },
       cancelSignIn: () => { account.cancelSignIn(); },
       reopenSignIn: async () => { await account.reopenSignIn(); },
     },
@@ -371,7 +392,7 @@ async function startCliServer(directory: string) {
       return () => cliObservers.delete(observer);
     },
     app: {
-      connections: async () => ({ ...await credentials.status(), search: await webSearchKeys.status() }),
+      connections: async () => ({ ...await savedConnections(), search: await webSearchKeys.status() }),
       changelog: refresh => changelog.read(refresh),
       updateState: () => updater.state,
       checkForUpdates: () => updater.check(),
@@ -674,6 +695,16 @@ async function start() {
     },
   });
   await account.load();
+  routerConnection = new RouterConnection({
+    baseUrl: routerBaseUrl(process.env.ORGLET_ROUTER_URL),
+    account,
+    keys: { read: () => credentials.read('codepawl'), save: key => credentials.save('codepawl', key), remove: () => credentials.remove('codepawl') },
+    keyIds: new RouterKeyIdFile(directory),
+    deviceName: routerKeyName(osHostname()),
+    onChange: () => {
+      void request('invalidateModelList', 'codepawl').catch(() => {});
+    },
+  });
   publishingTransport = new MarketPublishingTransport(account);
   moderationTransport = new MarketModerationTransport(account, fetch, { request: args => request('marketModerationJournal', args) });
   analytics = new AnalyticsClient({
@@ -748,7 +779,8 @@ async function start() {
       }
       if (message.type === 'key') {
         const provider = CredentialProvider.safeParse(message.provider);
-        core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
+        const withheld = provider.success && provider.data === 'codepawl' && !routerConnection.configured;
+        core.postMessage({ id: message.id, command: 'keyReply', args: provider.success && !withheld ? await credentials.read(provider.data) : null }); return;
       }
       // The web search key for a search the core is about to send (COD-266); the answer rides the same reply as an API key.
       if (message.type === 'searchKey') {
@@ -912,7 +944,20 @@ async function start() {
   handle('orglet:account-reopen-sign-in', async () => account.reopenSignIn());
   // The address holds only the state and the PKCE challenge, so the window may copy it; a token never passes here.
   handle('orglet:account-sign-in-link', async () => z.string().url().nullable().parse(account.signInLink() ?? null));
-  handle('orglet:account-sign-out', async () => accountPayload(await account.signOut()));
+  handle('orglet:account-sign-out', async () => accountPayload(await signOutAccount()));
+  // The CodePawl router (issue 532): the window learns a status and two usage numbers, and never the key.
+  handle('orglet:codepawl-state', async () => CodepawlState.parse(await routerConnection.state()));
+  handle('orglet:codepawl-connect', async () => {
+    const state = CodepawlState.parse(await routerConnection.connect());
+    announceChange();
+    return state;
+  });
+  handle('orglet:codepawl-disconnect', async () => {
+    const state = CodepawlState.parse(await routerConnection.disconnect());
+    announceChange();
+    return state;
+  });
+  handle('orglet:codepawl-usage', async () => CodepawlUsage.parse(await routerConnection.usage()));
   // Analytics (COD-344): the window can read and flip the switch, name a feature from a fixed list, and report an error
   // of its own, which is scrubbed here. It never learns the install id, the queue or the token.
   handle('orglet:analytics-state', async () => analytics.state());
@@ -1007,7 +1052,7 @@ async function start() {
     return request('relinkSource', { taskId: input.taskId, sourceId: input.id, path: result.filePaths[0] });
   });
   /** Which API and web search keys are saved, never the keys. */
-  const connectionStatus = async (): Promise<Connections> => ({ ...await credentials.status(), search: await webSearchKeys.status() });
+  const connectionStatus = async (): Promise<Connections> => ({ ...await savedConnections(), search: await webSearchKeys.status() });
   handle('orglet:connections', async () => connectionStatus());
   handle('orglet:pick-workspace', async raw => {
     const input = PickWorkspace.parse(raw);
@@ -1034,7 +1079,7 @@ async function start() {
   };
   handle('orglet:connect', async raw => {
     const body = z.object({ provider: CredentialProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
-    if (body.provider === 'ollama' || body.key !== undefined) {
+    if (body.provider === 'ollama' || body.provider === 'codepawl' || body.key !== undefined) {
       await keepApiKey(body.provider, body.key);
       return announceConnections();
     }
@@ -1055,7 +1100,7 @@ async function start() {
   });
   handle('orglet:disconnect', async raw => {
     const provider = CredentialProvider.parse(raw);
-    await credentials.remove(provider);
+    await forgetConnectionKey(provider);
     await request('invalidateModelList', provider).catch(() => {});
     return announceConnections();
   });
@@ -1137,7 +1182,8 @@ async function start() {
       'opencode-go': OPENCODE_DOCS_URLS['opencode-go'],
       ollama: 'https://ollama.com',
     } as const;
-    await shell.openExternal(pricing[ApiProvider.parse(raw)]);
+    // The router has no page of its own to open yet, so it is not in the list.
+    await shell.openExternal(pricing[ApiProvider.exclude(['codepawl']).parse(raw)]);
   });
   // A restore that fails says so in a dialog over the window the person clicked in, and that nothing changed (COD-281).
   const showRestoreFailure = async (error: unknown) => {

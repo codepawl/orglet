@@ -65,7 +65,7 @@ A worker's **Permissions** tab and the chat Details show its abilities as contro
 ## Not now
 
 - Company simulation, org charts or agents that run a business
-- Running work while every computer is off (a cloud runner)
+- Running work while every computer is off (a cloud runner). The [CodePawl AI router](ai-router-design.md) is not that: a router relays the model call, and orglets still run on the person's computer.
 - Building the Orglet account before its design in COD-329 is settled: what syncs, encryption, conflicts, offline use
 - Running downloaded scripts, from the marketplace or anywhere else
 - Promising that every provider or subscription works the same way

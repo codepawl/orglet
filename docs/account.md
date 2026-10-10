@@ -10,6 +10,7 @@ Part of the [user guide](user-guide.md). The design behind it is [account-sync-d
 - **Next:** syncing your orglets, channels, chats and settings between your computers.
 - **Later:** Orglet on your phone.
 - Your usage statistics show CodePawl how Orglet is used, so it gets better where it matters to you.
+- **The CodePawl router, when it opens:** the account is how Orglet connects to it, with no key to paste (see [Connections](connections.md#api-keys)). Nothing about it shows until a build names the router's address.
 
 ## The first start
 
@@ -103,6 +104,7 @@ Changes are sent a few seconds after you make them, and while you keep changing 
 ## What is stored where
 
 - **On this computer**, in Orglet's data folder, one file `account.credential` holds the sign-in, encrypted with your system's secure storage the same way as API keys, plus your email, name and plan so Settings can show them offline. It is not in the database, so a backup never includes it and **Erase all data** leaves it alone.
+- **The router key**, if you connect the CodePawl router, sits in `codepawl.credential` beside the API keys, encrypted the same way, with the key's identifier in `codepawl-key-id.txt`. Orglet asks the accounts service for a router access token only to make or revoke that key and to read your usage; the window never sees it. It is not in the database or a backup.
 - **The short-lived access token** stays in the app's memory and is gone when Orglet closes. The app's window never sees either token; it only learns whether you are signed in, your email, name and plan.
 - Sync and marketplace use separate access tokens. New browser sign-ins authorize both resources; an older saved sign-in still works for sync and usage statistics, but needs another browser sign-in before marketplace account access. The desktop can prepare a [public submission](marketplace-design.md#desktop-publishing); production sends remain unavailable until moderation is enabled.
 - **Also in the data folder**: `analytics.json`, a random install id made on this computer (never a hardware id), whether the analytics switch is on and the version that last ran, and `analytics-queue.json`, the statistics waiting to be sent. Neither is in the database or a backup.
@@ -129,4 +131,4 @@ CodePawl keeps these reports for **180 days**, and deletes them when you delete 
 
 ## Sign out
 
-**Settings → Account → Sign out**. Orglet deletes the sign-in from this computer first, then asks the service to cancel it. Signing out works offline too; the sign-in then ends at the service by itself within 30 days. An access token already handed out can stay valid at the service for up to 15 minutes. Your chats, orglets and files stay exactly as they are.
+**Settings → Account → Sign out**. If the CodePawl router is connected, Orglet revokes its key at the router first, because that needs your sign-in, and forgets it here either way. Then it deletes the sign-in from this computer, then asks the service to cancel it. Signing out works offline too; the sign-in then ends at the service by itself within 30 days. An access token already handed out can stay valid at the service for up to 15 minutes. Your chats, orglets and files stay exactly as they are.

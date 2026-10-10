@@ -28,7 +28,7 @@ Schema history: v1 base tables, v2 checkpoints/leases/step attempts, v3 prefligh
 
 Work done after the upgrade is not in the copy. To carry it back, export a backup JSON from the newer build first. Older builds reject fields they do not know, so this only helps when the older build understands every record in the backup. Otherwise keep using the newer build.
 
-Encrypted API keys live in `openai.credential`, `anthropic.credential`, `xai.credential`, `openrouter.credential`, `opencode-zen.credential`, `opencode-go.credential` and `ollama.credential` next to the database. They are not touched by migrations or by this procedure; leave them in place.
+Encrypted API keys live in `openai.credential`, `anthropic.credential`, `xai.credential`, `openrouter.credential`, `opencode-zen.credential`, `opencode-go.credential`, `codepawl.credential` (with `codepawl-key-id.txt`, a router key's identifier) and `ollama.credential` next to the database. They are not touched by migrations or by this procedure; leave them in place.
 
 ## Validation
 

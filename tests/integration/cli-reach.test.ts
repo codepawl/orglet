@@ -238,7 +238,7 @@ describe('schedule notices', () => {
 
 describe('looking at the app', () => {
   const app: CliAppState = {
-    connections: async () => ({ openai: true, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false, custom: {}, search: { exa: true } }),
+    connections: async () => ({ openai: true, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, codepawl: false, ollama: false, custom: {}, search: { exa: true } }),
     changelog: async () => ({ releases: [{ version: '0.13.0', name: 'Release 0.13.0', notes: 'Notes', publishedAt: '2026-10-08T00:00:00.000Z', url: 'https://example.com/r' }], fetchedAt: '2026-10-09T00:00:00.000Z', stale: false }),
     updateState: () => ({ status: 'ready', version: '0.14.0' }),
     checkForUpdates: () => ({ status: 'checking' }),

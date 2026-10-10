@@ -1,6 +1,6 @@
 # CodePawl AI router: design
 
-**Status: agreed in outline, 2026-10-10. Nothing is deployed. Step 1 of issue 532. The owner agreed the free budget, chose Polar and US dollars first, and set what is sold: the API paid by use, and a subscription, starting with one small plan to test. The written answers from third parties under [Before it is sold](#before-it-is-sold) are still open.**
+**Status: agreed in outline, 2026-10-10. Nothing is deployed. Step 1 of issue 532. The owner agreed the free budget, chose Polar and US dollars first, and set what is sold: the API paid by use, and a subscription, starting with one small plan to test. The written answers from third parties under [Before it is sold](#before-it-is-sold) are still open. Step 3, the Orglet connection, is built and off: it exists only in a build that names a router address (`ORGLET_ROUTER_URL`), and there is no default until the router has one (see [the technical guide](technical-guide.md#the-codepawl-router-connection-issue-532)).**
 
 The owner's calls (2026-10-10): the router is a product of its own, not only the engine behind Orglet; it routes whatever model fits, free or paid; and the system is built to earn the most it honestly can.
 
@@ -10,7 +10,7 @@ Sources were read on 2026-10-10. The resale clauses of Anthropic, OpenAI and Ope
 
 One OpenAI-compatible endpoint. A person or an app signs in with a CodePawl account, gets a key, and calls models from several sources through it. It has its own site, its own keys and its own billing. Orglet connects to it as one more connection, with no key to paste.
 
-A router is not a runner: orglets still run on the person's computer and only the model call goes through CodePawl. `docs/product.md` keeps "a cloud runner" under Not now and gains one line saying so when step 2 starts.
+A router is not a runner: orglets still run on the person's computer and only the model call goes through CodePawl. `docs/product.md` keeps "a cloud runner" under Not now and carries one line saying so.
 
 ## Three facts that shape everything
 

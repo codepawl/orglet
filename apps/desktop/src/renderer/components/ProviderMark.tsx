@@ -33,6 +33,8 @@ const marks: Record<BuiltInProviderId | HarnessCatalogId, Mark> = {
   // Zen and Go share OpenCode's mark; the name beside it (and the tooltip) tells the plans apart.
   'opencode-zen': { name: 'OpenCode Zen API', path: paths.opencode, shade: paths.opencodeBlock },
   'opencode-go': { name: 'OpenCode Go API', path: paths.opencode, shade: paths.opencodeBlock },
+  // CodePawl has no mark in the app yet, so the router wears a letter, like a custom connection.
+  codepawl: { name: 'CodePawl router', letter: 'C' },
   ollama: { name: 'Ollama', path: paths.ollama },
   'claude-code': { name: 'Claude Code', path: paths.claude, color: '#D97757' },
   codex: { name: 'Codex', path: paths.openai },
