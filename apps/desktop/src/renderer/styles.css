@@ -3561,3 +3561,23 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .space-home h2 { margin:0; font-size:20px; font-weight:600; overflow-wrap:anywhere; }
 .space-home p { margin:0; }
 .space-home-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:12px; }
+
+/* A terminal asking to act for the person (docs/cli-held-actions-design.md): the pairing dialog, the live mark and the journal. */
+.terminal-pairing-dialog { position:fixed; left:50%; top:20vh; transform:translateX(-50%); z-index:11; width:min(460px, calc(100vw - 32px)); display:flex; flex-direction:column; gap:12px; padding:22px 26px 20px; background:var(--bg); border-radius:16px; box-shadow:0 16px 48px color-mix(in srgb, black 20%, transparent); outline:none; user-select:none; }
+.terminal-pairing-head { display:flex; align-items:center; gap:10px; color:var(--text); }
+.terminal-pairing-title { margin:0; font-size:17px; font-weight:600; line-height:24px; }
+.terminal-pairing-scope { margin:0; color:var(--text); line-height:20px; }
+.terminal-pairing-hint { margin:0; color:var(--muted); font-size:13px; line-height:18px; }
+.terminal-pairing-code { margin:4px 0; padding:14px 0; text-align:center; font-family:var(--font-mono, ui-monospace, monospace); font-size:34px; font-weight:600; letter-spacing:.14em; color:var(--text); background:var(--row-hover); border-radius:12px; }
+.terminal-pairing-time { margin:0; text-align:center; color:var(--muted); font-size:13px; }
+.terminal-pairing-dialog .actions { display:flex; justify-content:flex-end; }
+.terminal-access-mark, .terminal-access-mark:hover:not(:disabled) { color:var(--accent); }
+.terminal-journal { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
+.terminal-journal-row { display:flex; align-items:flex-start; gap:10px; padding:6px 0; }
+.terminal-journal-row > svg { flex-shrink:0; margin-top:2px; }
+.terminal-journal-done { color:var(--success); }
+.terminal-journal-failed { color:var(--error); }
+.terminal-journal-refused { color:var(--muted); }
+.terminal-journal-text { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.terminal-journal-operation { color:var(--text); }
+.terminal-journal-detail { color:var(--muted); font-size:13px; }

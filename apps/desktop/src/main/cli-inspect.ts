@@ -40,6 +40,7 @@ export class CliInspect {
       case 'desktop': return this.desktopJournal(request);
       case 'sources': return this.sources(request);
       case 'changes': return this.changes(request);
+      case 'terminal': return this.terminal();
     }
   }
 
@@ -139,6 +140,13 @@ export class CliInspect {
       view.truncated ? translate('Danh sách bị cắt bớt.') : '',
     ].filter(Boolean);
     return { what: 'changes', rows, ...(notes.length ? { note: notes.join('; ') } : {}) };
+  }
+
+  /** What the terminal did while acting for the person, newest first: the same list as Settings. Reading only. */
+  private async terminal(): Promise<ShowValue> {
+    const journal = this.dependencies.terminalAccess?.journal;
+    const rows = journal ? await journal.list(MAX_ROWS) : [];
+    return { what: 'terminal', rows: rows.map(row => ({ at: row.at, scope: row.scope, operation: row.operation, subject: row.subject ?? null, outcome: row.outcome })) };
   }
 
   private async chatOf(request: Request<'show'>): Promise<string> {

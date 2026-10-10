@@ -1188,6 +1188,7 @@ export class CoreService {
     saveFont('codeFont', input.codeFont);
     if (input.autoUpdate !== undefined) this.store.setSetting('autoUpdate', input.autoUpdate);
     if (input.backgroundNotifications !== undefined) this.store.setSetting('backgroundNotifications', input.backgroundNotifications);
+    if (input.terminalAccess !== undefined) this.store.setSetting('terminalAccess', input.terminalAccess);
     if (input.showWork !== undefined) this.store.setSetting('showWork', input.showWork);
     if (input.connectionLimitMicros !== undefined) this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
     if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);

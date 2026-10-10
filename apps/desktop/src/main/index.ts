@@ -27,6 +27,9 @@ import { translateMessage } from '../shared/i18n';
 import type { CliInstallState } from '../shared/cli';
 import { CLI_BACKGROUND_FLAG, cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
+import { CliElevation } from './cli-elevation';
+import { CliJournal } from './cli-journal';
+import { EMPTY_TERMINAL_ACCESS, type TerminalAccessState } from '../shared/terminal-access';
 import { chatsOf, CliOperations } from './cli-operations';
 import type { CliObserver } from './cli-activity';
 import { RunActivity } from '../shared/run-activity';
@@ -166,6 +169,10 @@ let language: Language = DEFAULT_LANGUAGE;
 const activeDictionary = () => language === 'en' ? en : language === 'en-GB' ? enGB : null;
 const tr = (key: string, params?: readonly unknown[]) => translate(activeDictionary(), key, params);
 let cliServer: CliServer | undefined;
+/** Pairing and elevation for a terminal acting for the person, and what it did (docs/cli-held-actions-design.md). */
+let terminalElevation: CliElevation | undefined;
+let terminalJournal: CliJournal | undefined;
+const TERMINAL_SWEEP_MILLISECONDS = 5_000;
 const cliObservers = new Set<CliObserver>();
 /**
  * Brings the window forward for `orglet open`, and with a chat asks the renderer to show it. Windows may only flash
@@ -238,6 +245,8 @@ function recordCommand(command: string, args: unknown) {
   if (feature) analytics.recordFeature(feature);
   if (command !== 'settings') return;
   const next = args as Record<string, unknown>;
+  // Turning off "Let a terminal act for me" ends a pairing or an elevation at once.
+  if (next.terminalAccess === false) terminalElevation?.endElevation();
   // Without the startup read to compare against, every key would look changed; the first save only sets the baseline.
   const changes = Object.keys(savedSettings).length ? settingChanges(savedSettings, next, new Date()) : [];
   for (const event of changes) analytics.record(event);
@@ -260,7 +269,19 @@ async function startCliServer(directory: string) {
   const token = createCliToken();
   await writeCliToken(directory, token);
   const translateForCli = (message: string) => translateMessage(activeDictionary(), message);
-  const operations = new CliOperations({ request, version: () => app.getVersion(), open: showWindow, translate: translateForCli,
+  const elevation = new CliElevation({
+    isEnabled: async () => (await request('workspace', {}) as Workspace).terminalAccess !== false,
+    onChange: state => {
+      if (window && !window.isDestroyed()) window.webContents.send('orglet:terminal-access', state);
+    },
+  });
+  const journal = new CliJournal(directory);
+  terminalElevation = elevation;
+  terminalJournal = journal;
+  // A code that is not typed in time and an idle elevation end by themselves; the window learns of it within seconds.
+  setInterval(() => elevation.expire(), TERMINAL_SWEEP_MILLISECONDS).unref();
+  const operations = new CliOperations({ request,
+    terminalAccess: { elevation, journal }, version: () => app.getVersion(), open: showWindow, translate: translateForCli,
     observe: observer => {
       cliObservers.add(observer);
       return () => cliObservers.delete(observer);
@@ -270,6 +291,7 @@ async function startCliServer(directory: string) {
       changelog: refresh => changelog.read(refresh),
       updateState: () => updater.state,
       checkForUpdates: () => updater.check(),
+      installUpdate: () => updater.install(),
     },
     // A language set from a terminal reaches main's own dialogs and the spell checker, as one set in the window does.
     settingsChanged: changes => {
@@ -281,11 +303,12 @@ async function startCliServer(directory: string) {
   cliServer = new CliServer({
     endpoint: cliEndpoint(directory),
     token,
-    handle: (cliRequest, signal, progress) => {
+    handle: (cliRequest, signal, progress, grant) => {
       analytics.recordFeature('cli');
-      return operations.run(cliRequest, signal, progress);
+      return operations.run(cliRequest, signal, progress, grant);
     },
     translate: translateForCli,
+    elevation,
   });
   await cliServer.start();
 }
@@ -856,6 +879,11 @@ async function start() {
   handle('orglet:update-state', async () => updater.state);
   handle('orglet:check-for-updates', async () => updater.check());
   handle('orglet:install-update', async () => { updater.install(); });
+  // The pairing dialog and the live mark. The window can read the state and end it; it can never start or extend an elevation.
+  handle('orglet:terminal-access-state', async (): Promise<TerminalAccessState> => terminalElevation?.state() ?? EMPTY_TERMINAL_ACCESS);
+  handle('orglet:terminal-access-cancel', async () => { terminalElevation?.cancelPairing(); });
+  handle('orglet:terminal-access-end', async () => { terminalElevation?.endElevation(); });
+  handle('orglet:terminal-journal', async () => terminalJournal ? terminalJournal.list() : []);
   // The person's own Exit, from their menu: the same quit as closing the last window, so before-quit runs as usual.
   handle('orglet:quit', async () => { app.quit(); });
   handle('orglet:pick', async () => {
