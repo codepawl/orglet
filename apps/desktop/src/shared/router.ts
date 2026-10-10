@@ -43,9 +43,10 @@ export const ROUTER_KEY_PATTERN = /^cpr_[A-Za-z0-9_\-]{16,500}$/;
 /**
  * `off`: this build names no router, so nothing about it is shown. `signed_out`: there is a router, but no account to
  * ask it for a key. `ready`: signed in, no key yet. `connected`: a key is saved. `not_open`: the account service does
- * not know the router yet, so no key can be made.
+ * not know the router yet, so no key can be made. `sign_in_again`: the saved sign-in did not ask for the router (it was
+ * made by a build without one), and only a new sign-in can.
  */
-export const CodepawlStatus = z.enum(['off', 'signed_out', 'ready', 'connected', 'not_open']);
+export const CodepawlStatus = z.enum(['off', 'signed_out', 'ready', 'connected', 'not_open', 'sign_in_again']);
 export type CodepawlStatus = z.infer<typeof CodepawlStatus>;
 
 /** Everything the window learns about the connection. Strict, so a key can never ride along. */
@@ -81,5 +82,6 @@ export type CodepawlUsage = z.infer<typeof CodepawlUsage>;
 export const UNKNOWN_CODEPAWL_USAGE: CodepawlUsage = { known: false };
 
 export const ROUTER_NOT_OPEN = 'CodePawl router chưa mở. Thử lại sau.';
+export const ROUTER_SIGN_IN_AGAIN = 'Đăng nhập lại tài khoản CodePawl để dùng CodePawl router.';
 export const ROUTER_UNREACHABLE = 'Không kết nối được CodePawl router. Kiểm tra mạng rồi thử lại.';
 export const ROUTER_TOO_MANY_KEYS = 'Tài khoản đã có đủ số key của CodePawl router. Thu hồi bớt một key rồi thử lại.';

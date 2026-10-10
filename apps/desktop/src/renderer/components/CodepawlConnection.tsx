@@ -3,7 +3,7 @@ import { LogIn, Plug, Unplug } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { AccountState } from '../../shared/account';
 import type { Connections } from '../../shared/contracts';
-import { ROUTER_NOT_OPEN, type CodepawlState, type CodepawlUsage } from '../../shared/router';
+import { ROUTER_NOT_OPEN, ROUTER_SIGN_IN_AGAIN, type CodepawlState, type CodepawlUsage } from '../../shared/router';
 import { orglet } from '../api';
 import { t } from '../i18n';
 import { formatMoney } from './money';
@@ -17,10 +17,12 @@ type Act = (action: () => Promise<string | void>, about?: string) => Promise<voi
 const CONNECTED_MARK: StatusMarkState = { variant: 'filled', tone: 'success' };
 const NOT_OPEN_MARK: StatusMarkState = { variant: 'paused', tone: 'muted' };
 const NOT_CONNECTED_MARK: StatusMarkState = { variant: 'empty', tone: 'muted' };
+const SIGN_IN_AGAIN_MARK: StatusMarkState = { variant: 'asking', tone: 'accent' };
 
 function stateLine(state: CodepawlState): { mark: StatusMarkState; text: string } {
   if (state.status === 'connected') return { mark: CONNECTED_MARK, text: t('Đã kết nối · {0}', [state.deviceName ?? t('máy này')]) };
   if (state.status === 'not_open') return { mark: NOT_OPEN_MARK, text: t(ROUTER_NOT_OPEN) };
+  if (state.status === 'sign_in_again') return { mark: SIGN_IN_AGAIN_MARK, text: t(ROUTER_SIGN_IN_AGAIN) };
   if (state.status === 'signed_out') return { mark: NOT_CONNECTED_MARK, text: t('Đăng nhập tài khoản CodePawl để kết nối, không cần dán key.') };
   return { mark: NOT_CONNECTED_MARK, text: t('Kết nối bằng tài khoản CodePawl đang đăng nhập, không cần dán key.') };
 }
@@ -78,7 +80,7 @@ export function CodepawlConnection({ account, busy, act, onConnections }: { acco
   }, 'CodePawl');
   // The browser may stay open for minutes, so the sign-in waits on its own instead of holding the other tabs busy.
   const connect = async () => {
-    if (state?.status === 'signed_out') {
+    if (state?.status === 'signed_out' || state?.status === 'sign_in_again') {
       try {
         const signedIn = await orglet.accountSignIn();
         if (signedIn.status !== 'signed_in') return;
@@ -107,8 +109,8 @@ export function CodepawlConnection({ account, busy, act, onConnections }: { acco
     <div className="setting-control">
       {connected
         ? <Button variant="outline" disabled={busy} onClick={disconnect}><Unplug size={14} />{t('Ngắt kết nối')}</Button>
-        : state.status === 'signed_out'
-          ? <Button variant="outline" disabled={busy} onClick={() => void connect()}><LogIn size={14} />{t('Đăng nhập để kết nối')}</Button>
+        : state.status === 'signed_out' || state.status === 'sign_in_again'
+          ? <Button variant="outline" disabled={busy} onClick={() => void connect()}><LogIn size={14} />{state.status === 'sign_in_again' ? t('Đăng nhập lại') : t('Đăng nhập để kết nối')}</Button>
           : <Button variant="outline" disabled={busy} onClick={() => void connect()}><Plug size={14} />{state.status === 'not_open' ? t('Thử lại') : t('Kết nối')}</Button>}
     </div>
     {connected && <div className="setting-connection-usage"><CodepawlUsageLine usage={usage} /></div>}

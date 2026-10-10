@@ -706,6 +706,7 @@ async function start() {
     store: new AccountFile(directory, safeStorage),
     openExternal: address => shell.openExternal(address),
     loopback: listenOnLoopback,
+    routerConfigured: routerBaseUrl(process.env.ORGLET_ROUTER_URL) !== undefined,
     onChange: state => {
       if (window && !window.isDestroyed()) window.webContents.send('orglet:account', accountPayload(state));
       void analytics?.accountChanged(state);

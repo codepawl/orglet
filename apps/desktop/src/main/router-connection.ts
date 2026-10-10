@@ -12,7 +12,7 @@ import {
   UNKNOWN_CODEPAWL_USAGE,
   type CodepawlState,
 } from '../shared/router';
-import { ResourceRefused } from './account';
+import { ResourceRefused, RouterSignInRequired } from './account';
 
 /**
  * The CodePawl router connection (issue 532). The person never pastes a key: with the CodePawl account signed in, main
@@ -74,6 +74,8 @@ const CreatedKey = z.object({
 
 type RouterAccount = {
   state(): AccountState;
+  /** Whether the saved sign-in asked for the router; if not, a token for it cannot be had until the person signs in again. */
+  signInCoversRouter(): boolean;
   getAccessToken(resource: typeof ACCOUNT_ROUTER_RESOURCE): Promise<string>;
 };
 
@@ -110,6 +112,7 @@ export class RouterConnection {
     const deviceName = this.dependencies.deviceName;
     if (await this.dependencies.keys.read()) return { status: 'connected', deviceName };
     if (this.dependencies.account.state().status !== 'signed_in') return { status: 'signed_out' };
+    if (!this.dependencies.account.signInCoversRouter()) return { status: 'sign_in_again' };
     return { status: this.notOpen ? 'not_open' : 'ready' };
   }
 
@@ -128,6 +131,7 @@ export class RouterConnection {
     if (await this.dependencies.keys.read()) return this.state();
     if (this.dependencies.account.state().status !== 'signed_in') return { status: 'signed_out' };
     const token = await this.routerToken();
+    if (token === 'sign_in_again') return { status: 'sign_in_again' };
     if (token === 'not_open') {
       this.notOpen = true;
       return { status: 'not_open' };
@@ -195,7 +199,7 @@ export class RouterConnection {
     if (!this.configured || this.dependencies.account.state().status !== 'signed_in') return UNKNOWN_CODEPAWL_USAGE;
     try {
       const token = await this.routerToken();
-      if (token === 'not_open') return UNKNOWN_CODEPAWL_USAGE;
+      if (token === 'not_open' || token === 'sign_in_again') return UNKNOWN_CODEPAWL_USAGE;
       const response = await this.send('/v1/usage', { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
       if (!response.ok) return UNKNOWN_CODEPAWL_USAGE;
       const parsed = RouterUsageAnswer.safeParse(await response.json().catch(() => undefined));
@@ -216,18 +220,22 @@ export class RouterConnection {
   private async revokeAtRouter(keyId: string): Promise<void> {
     try {
       const token = await this.routerToken();
-      if (token === 'not_open') return;
+      if (token === 'not_open' || token === 'sign_in_again') return;
       await this.send(`/v1/keys/${encodeURIComponent(keyId)}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
     } catch {
       // Best effort: the key is already gone from this computer, and the person can revoke it on the router.
     }
   }
 
-  /** An access token for the router, or `not_open` when the accounts service does not know the router yet. */
-  private async routerToken(): Promise<string | 'not_open'> {
+  /**
+   * An access token for the router; `not_open` when the accounts service does not know the router yet, and
+   * `sign_in_again` when the saved sign-in never asked for it.
+   */
+  private async routerToken(): Promise<string | 'not_open' | 'sign_in_again'> {
     try {
       return await this.dependencies.account.getAccessToken(ACCOUNT_ROUTER_RESOURCE);
     } catch (failure) {
+      if (failure instanceof RouterSignInRequired) return 'sign_in_again';
       if (failure instanceof ResourceRefused) return 'not_open';
       throw failure;
     }

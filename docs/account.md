@@ -10,7 +10,7 @@ Part of the [user guide](user-guide.md). The design behind it is [account-sync-d
 - **Next:** syncing your orglets, channels, chats and settings between your computers.
 - **Later:** Orglet on your phone.
 - Your usage statistics show CodePawl how Orglet is used, so it gets better where it matters to you.
-- **The CodePawl router, when it opens:** the account is how Orglet connects to it, with no key to paste (see [Connections](connections.md#api-keys)). Nothing about it shows until a build names the router's address.
+- **The CodePawl router, when it opens:** the account is how Orglet connects to it, with no key to paste (see [Connections](connections.md#api-keys)). Nothing about it shows until a build names the router's address. In such a build the sign-in asks for the router too; a sign-in made earlier, or by a build without a router, is asked to sign in again before it can connect.
 
 ## The first start
 
