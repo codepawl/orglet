@@ -1233,6 +1233,7 @@ export class CoreService {
       saveTeam: input => this.saveTeam(commands.saveTeam.parse(input)),
       saveSkill: input => this.saveSkill(commands.saveSkill.parse(input)),
       saveRoutine: input => this.saveRoutine(commands.saveRoutine.parse(input)),
+      watchFolders: () => this.routineFolders.list(),
       templateText: teamId => this.templates.export(teamId),
       currentSettings: () => this.currentSettings(),
       applySettings: patch => this.applySettings(patch),

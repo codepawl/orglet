@@ -34,7 +34,7 @@ class WorkFolderUnavailable extends Error {}
 class PreviousRunBusy extends Error {}
 
 /** A daily cap below one run's limit would never let a run start. */
-const CAP_BELOW_RUN_LIMIT = 'Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.';
+export const CAP_BELOW_RUN_LIMIT ='Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.';
 
 /**
  * An hourly schedule runs again within the hour, so a run it could not start is skipped with a note on its card, and

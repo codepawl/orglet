@@ -24,7 +24,7 @@ export type ProposalContext = {
 export type ResolvedMember = { key: string; name: string; description?: string; worker?: Worker; proposal?: AppProposal; lead: boolean };
 
 const REF_PREFIX = 'ref:';
-const moneyFields = new Set(['taskBudgetMicros', 'monthlyBudgetMicros']);
+const moneyFields = new Set(['taskBudgetMicros', 'monthlyBudgetMicros', 'dailyCapMicros']);
 const memberFields = new Set(['memberIds', 'synthesizerId']);
 const workflowNames: Record<string, string> = { sequential: 'Tuần tự', parallel: 'Song song' };
 
@@ -116,6 +116,15 @@ export function scheduleInWords(value: string): string {
   return t('Hằng tuần vào {0} lúc {1} · {2}', [days[Number(weekday ?? 1)], time, timeZone]);
 }
 
+/** What starts a schedule, as the core writes it on a card ("folder:Invoices"), in words. Any other shape is shown as written. */
+export function triggerInWords(value: string): string {
+  if (value === 'schedule') return t('Theo lịch');
+  if (value === 'called') return t('Chỉ khi được gọi');
+  if (value.startsWith('folder:')) return t('Khi có tệp mới trong {0}', [value.slice('folder:'.length)]);
+  if (value.startsWith('app:')) return t('Khi có mục mới trong {0}', [value.slice('app:'.length)]);
+  return value;
+}
+
 export function showChangeValue(field: string, value: string, context: ProposalContext): string {
   if (moneyFields.has(field) && /^\d+$/.test(value)) return formatMoney(Number(value));
   if (value === 'true') return t('Bật');
@@ -125,6 +134,7 @@ export function showChangeValue(field: string, value: string, context: ProposalC
   if (field === 'skillId') return skillName(value, context);
   if (field === 'workflow') return workflowName(value);
   if (field === 'schedule') return scheduleInWords(value);
+  if (field === 'trigger') return triggerInWords(value);
   if (memberFields.has(field)) return value.split(', ').map(part => resolveMember(part, context).name).join(', ');
   // A schedule's target or a template's crew may point at an orglet or a crew of this reply.
   if (field === 'target' || field === 'team') return siblingByRef(value, context)?.title ?? value;
