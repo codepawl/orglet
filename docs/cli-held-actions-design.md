@@ -127,7 +127,7 @@ A scripted way to load a key (CI, a setup script) is out of scope on purpose: a 
 
 Every elevated operation is recorded by main: time, the operation in words, the chat or orglet it touched, the outcome, and which scope it ran under. Never an argument that is a secret.
 
-- **Settings → Privacy → What the terminal did** lists it, newest first, with **Undo** on a grant the core can undo.
+- **Settings → Privacy → What the terminal did** lists it, newest first, with **Undo** on a grant the core can undo. How to undo is kept in main's memory, not in the journal: the journal is a file in the data folder, and a row an orglet wrote there must never become a button that widens what it may do. Undo is gone after a restart.
 - `orglet show terminal` prints the same list. It is read-only and needs no elevation.
 - A grant or a secret also raises a notice in the window's notification list at the moment it happens, so a person who paired and walked away from the window still finds it.
 

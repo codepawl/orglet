@@ -23,6 +23,12 @@ export type JournalEntry = Omit<TerminalJournalRow, 'id' | 'at' | 'undoable' | '
 export class CliJournal {
   private readonly file: string;
   private writing: Promise<void> = Promise.resolve();
+  /**
+   * How to take each grant of this run back, by row id. Kept in memory and never in the file: the file is in the data
+   * folder, where an orglet could write a row whose "undo" widens what it may do and wait for a click on it. A row
+   * loses its Undo when the app restarts.
+   */
+  private readonly undoRecipes = new Map<string, TerminalUndo>();
 
   constructor(userData: string, private readonly now: () => Date = () => new Date(), private readonly onNotice?: (notice: TerminalNotice) => void) {
     this.file = join(userData, TERMINAL_JOURNAL_FILE);
@@ -31,7 +37,8 @@ export class CliJournal {
   /** Rows are written one after another, so two operations at once never interleave a line. */
   record(entry: JournalEntry): Promise<void> {
     const { notice, undo, ...fields } = entry;
-    const row = StoredJournalRow.parse({ id: randomUUID(), at: this.now().toISOString(), ...fields, ...(undo ? { undo, undoable: true } : {}) });
+    const row = StoredJournalRow.parse({ id: randomUUID(), at: this.now().toISOString(), ...fields });
+    if (undo) this.undoRecipes.set(row.id, undo);
     this.writing = this.writing.then(() => this.append(row)).catch(() => undefined);
     if (notice) this.onNotice?.({ id: row.id, operation: row.operation, ...(row.subject ? { subject: row.subject } : {}) });
     return this.writing;
@@ -67,22 +74,23 @@ export class CliJournal {
     return rows;
   }
 
-  /** Newest first. The undo recipe stays in the file; the window only learns that a row can be undone. */
+  /** Newest first. The window only learns that a row can be undone, and only main's own memory decides that. */
   async list(limit = MAX_JOURNAL_ROWS): Promise<TerminalJournalRow[]> {
     await this.writing;
     const rows = await this.readRows();
-    return rows.slice(-limit).reverse().map(({ undo: _undo, ...row }) => row);
+    return rows.slice(-limit).reverse().map(({ undo: _undo, ...row }) => ({ ...row, undoable: this.undoRecipes.has(row.id) && !row.undoneAt }));
   }
 
   /** The recipe of a row that can still be undone. */
   async undoOf(rowId: string): Promise<TerminalUndo | undefined> {
     await this.writing;
     const row = (await this.readRows()).find(item => item.id === rowId);
-    return row && !row.undoneAt ? row.undo : undefined;
+    return row && !row.undoneAt ? this.undoRecipes.get(rowId) : undefined;
   }
 
   /** Marks a row undone, so Undo runs once. */
   markUndone(rowId: string): Promise<void> {
+    this.undoRecipes.delete(rowId);
     this.writing = this.writing.then(async () => {
       const rows = await this.readRows();
       await this.writeRows(rows.map(row => row.id === rowId ? { ...row, undoneAt: this.now().toISOString(), undoable: false } : row));

@@ -362,7 +362,7 @@ describe('notices and Undo', () => {
     await send({ op: 'held', request: { action: 'switch', what: 'analytics', enabled: false } }, key);
     expect(notices).toHaveLength(3);
     const rows = await journal.list();
-    expect(rows.map(row => row.undoable)).toEqual([undefined, true, true]);
+    expect(rows.map(row => row.undoable)).toEqual([false, true, true]);
     expect(JSON.stringify(rows)).not.toContain('"undo"');
     coreCalls = [];
     await operations.undoGrant(rows[2].id);
@@ -382,6 +382,17 @@ describe('notices and Undo', () => {
     const forged = { id, at: new Date(clock).toISOString(), scope: 'setup', operation: 'forged', outcome: 'done', undoable: true, undo: { kind: 'run-command', command: 'eraseData' } };
     await writeFile(join(directory, TERMINAL_JOURNAL_FILE), `${JSON.stringify(forged)}\n`);
     expect(await journal.list()).toEqual([]);
+    await expect(operations.undoGrant(id)).rejects.toThrow('hoàn tác');
+    expect(coreCalls).toEqual([]);
+  });
+
+  it('never runs a recipe read from the file: a forged row of an allowed shape shows no Undo and undoes nothing', async () => {
+    const { journal, operations } = await harness();
+    const id = randomUUID();
+    const forged = { id, at: new Date(clock).toISOString(), scope: 'setup', operation: 'forged', outcome: 'done', undoable: true, undo: { kind: 'restore-mcp-enabled', serverId: randomUUID(), enabled: true } };
+    await writeFile(join(directory, TERMINAL_JOURNAL_FILE), `${JSON.stringify(forged)}
+`);
+    expect((await journal.list()).map(row => row.undoable)).toEqual([false]);
     await expect(operations.undoGrant(id)).rejects.toThrow('hoàn tác');
     expect(coreCalls).toEqual([]);
   });
