@@ -8,6 +8,7 @@ import { releaseHighlights } from '../../shared/release-notes';
 import { Button } from './ui';
 import { Switch } from './Switch';
 import { Markdown } from './Markdown';
+import { MarketUpdatesBlock } from './MarketUpdatesBlock';
 import { BrandMark, type BrandName } from './brandMarks';
 import { Orglet3D } from './Orglet3D';
 import { clockLabel } from './TimeMark';
@@ -199,9 +200,10 @@ function ReleaseEntry({ release, current }: { release: Release; current: boolean
  * Settings → Giới thiệu (COD-176): the running build, its updater, where to find the project, and what changed.
  * Everything technical comes from the main process; this component only asks and shows.
  */
-export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
+export function AboutSettings({ workspace, busy, onAutoUpdate, onMarketAutoUpdate, act }: {
   workspace: Workspace; busy: boolean;
   onAutoUpdate: (value: boolean) => void;
+  onMarketAutoUpdate: (value: boolean) => void;
   act: (action: () => Promise<string | void>, about?: string) => Promise<void>;
 }) {
   // The build, the updater's state and the release list are kept for the session (COD-218): resting on the way
@@ -259,6 +261,10 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
     <Row id="auto-update-label" title={t('Tự động cập nhật')} description={t('Tải ngầm bản mới rồi báo để bạn khởi động lại.')}>
       <Switch checked={workspace.autoUpdate} disabled={busy || unsupported} labelledBy="auto-update-label" onChange={onAutoUpdate} />
     </Row>
+    <Row id="market-auto-update-label" title={t('Tự cập nhật mục từ Marketplace')} description={t('Một bản cập nhật đổi cách một Tí làm việc, nên mặc định app chờ bạn. Bản bạn đã chỉnh sửa hoặc bản mở rộng quyền, ngân sách vẫn luôn chờ bạn xem.')}>
+      <Switch checked={workspace.marketAutoUpdate} disabled={busy} labelledBy="market-auto-update-label" onChange={onMarketAutoUpdate} />
+    </Row>
+    <MarketUpdatesBlock workspace={workspace} busy={busy} act={act} />
     <Row title={t('Chi tiết bản cài')} description={<span className="about-details">{detailsLine}</span>}>
       <Button variant="outline" disabled={busy || !about} onClick={copyDetails}><Copy size={14} />{t('Sao chép')}</Button>
     </Row>

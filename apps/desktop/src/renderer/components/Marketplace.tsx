@@ -14,6 +14,7 @@ import { MARKET_SEED_BODIES } from '../../shared/market-seed';
 import { PageTabs } from './PageTabs';
 import { RowMenu } from './RowMenu';
 import { FieldError } from '@codepawlhq/orglet-ui';
+import { wideningText } from '../marketUpdateText';
 
 /**
  * What a listing is, told at a glance by a picture before its name (user, 2026-10-05): an orglet's face, two faces
@@ -30,7 +31,7 @@ function ListingFace({ listingId, kind, name, summary }: { listingId: string; ki
   return <span className="market-listing-face"><Avatar name={name} seed={listingId} defaultMascot hint={summary} size="md" /></span>;
 }
 
-function addedNotice(result: MarketAdded) {
+export function addedNotice(result: MarketAdded) {
   if (result.fallbackNames.length) toast(t('Đã dùng kết nối mặc định cho {0}; kết nối gợi ý chưa sẵn sàng.', [result.fallbackNames.join(', ')]));
 }
 
@@ -193,7 +194,8 @@ export function MarketProfileUpdate({ entityId, onUpdated }: { entityId: string;
   </div>;
 }
 
-function MarketUpdateCard({ update, onClose, onApplied }: { update: MarketUpdate; onClose: () => void; onApplied: (result: MarketAdded) => void | Promise<void> }) {
+/** The comparison of an update with the installed copy, and the one button that applies exactly this update. */
+export function MarketUpdateCard({ update, onClose, onApplied }: { update: MarketUpdate; onClose: () => void; onApplied: (result: MarketAdded) => void | Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return <Drawer open title={t('Cập nhật {0}', [update.listing.name])} description={`v${update.installedVersion} → v${update.listing.version}`} onClose={onClose}>
@@ -202,6 +204,10 @@ function MarketUpdateCard({ update, onClose, onApplied }: { update: MarketUpdate
       <p className="muted">{update.customization === 'customized' ? t('Bạn đã chỉnh sửa bản này. Áp dụng sẽ thay nội dung mẫu bằng bản bên phải; kết nối và quyền trên máy vẫn giữ nguyên.')
         : update.customization === 'unknown' ? t('Orglet không biết bản này đã được chỉnh sửa hay chưa. So sánh hai bên trước khi áp dụng; kết nối và quyền trên máy vẫn giữ nguyên.')
         : t('Áp dụng tạo bản sửa đổi mới. Lần chạy đang làm việc vẫn dùng bản đã bắt đầu.')}</p>
+      {update.widening.length > 0 && <div className="muted">
+        <p>{t('Bản này mở rộng những gì mục này được làm hoặc được chi, nên không tự áp dụng:')}</p>
+        <ul>{update.widening.map((item, index) => <li key={index}>{wideningText(item)}</li>)}</ul>
+      </div>}
       {update.changes.map((change, index) => <section key={index} className="marketplace-comparison" aria-label={change.name}>
         <h3>{change.name}</h3>
         <div className="marketplace-comparison-columns"><div><p className="muted">{t('Bản của bạn')}</p><pre>{change.before || t('Chưa có')}</pre></div><div><p className="muted">{t('Bản mới')}</p><pre>{change.after}</pre></div></div>

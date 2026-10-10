@@ -1367,6 +1367,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .about-title { font-size:17px; font-weight:600; line-height:1.2; }
 .about-details { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .about-links-row,.about-changelog { align-items:flex-start; }
+/* A marketplace update that was applied: the mark leads the title on one line, centred on its text. */
+.market-update-title { display:inline-flex; align-items:center; gap:8px; }
 /* The `orglet` terminal command row (COD-234): the row keeps its button centred on the text, and the example
    command sits under it, as close to the description as a card inside the row would be. */
 .about-command-line { padding-bottom:13px; }
