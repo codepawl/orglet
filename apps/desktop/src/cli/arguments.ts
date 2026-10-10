@@ -1,11 +1,12 @@
 import { t } from './text';
 import { COMPLETION_SHELLS, type CompletionShell } from './completion';
-import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, UserMessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody } from './protocol';
+import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, SHOW_TOPICS, UserMessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody, type ShowTopic } from './protocol';
 import { ClockTime, EVERY_HOURS_CHOICES, MAX_DAILY_CAP_MICROS } from '../shared/schedule';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { ProviderId } from '../shared/contracts';
 import { MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
+import { FontFamily } from '../shared/fonts';
 
 /** Turning `orglet …` arguments into one command, and the help text for each (COD-234). */
 
@@ -13,7 +14,7 @@ export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open' 
   | 'react' | 'forward' | 'answer' | 'revise' | ChatControl
   | 'chats' | 'side' | 'bring' | 'channel' | 'group' | 'members' | 'rename' | 'archive' | 'restore' | 'template'
   | 'schedules' | 'schedule' | 'spaces' | 'space' | 'market' | 'completion'
-  | 'search' | 'running' | 'library' | 'memory' | 'usage' | 'models' | 'preferences';
+  | 'search' | 'running' | 'library' | 'memory' | 'usage' | 'models' | 'preferences' | 'show' | 'update' | 'assign';
 /** The fields `orglet schedule add` and `edit` may set (COD-354), as the protocol carries them. */
 export type ScheduleFields = Omit<Extract<CliRequestBody, { op: 'schedule-save' }>, 'op' | 'schedule'>;
 export type ManagementCommand = { entity: 'worker' | 'team'; name?: string; config?: string; confirm?: string; json: boolean } & ({ kind: 'create' } | { kind: 'edit' } | { kind: 'delete' });
@@ -46,8 +47,12 @@ export type ParsedCommand =
   | { kind: 'template'; templateId: TemplateId; provider: 'demo' | 'openai'; json: boolean }
   | { kind: 'schedules'; json: boolean }
   | { kind: 'spaces'; json: boolean }
-  | { kind: 'market'; verb: 'list' | 'installed' | 'add'; listingId?: string; refresh: boolean; json: boolean }
-  | { kind: 'space'; verb: 'add' | 'edit' | 'category' | 'uncategory' | 'move' | 'out' | 'delete'; space?: string; names: string[]; rename?: string; category?: string; chat?: string; channelName?: string; confirmName?: string; json: boolean }
+  | { kind: 'market'; verb: 'list' | 'installed' | 'add' | 'update'; listingId?: string; installed?: string; confirmCode?: string; refresh: boolean; json: boolean }
+  | { kind: 'space'; verb: SpaceVerb; space?: string; names: string[]; rename?: string; category?: string; chat?: string; channelName?: string; confirmName?: string; value?: string; position?: number; json: boolean }
+  | { kind: 'schedule-notice'; schedule: string; action: 'dismiss' | 'catch-up'; json: boolean }
+  | ({ kind: 'chat-settings'; names?: string[]; budgetMicros?: number; json: boolean } & ChatTarget)
+  | ({ kind: 'show'; what: ShowTopic; refresh: boolean; json: boolean } & Partial<{ to: string; chat: string }>)
+  | { kind: 'update-check'; json: boolean }
   | { kind: 'completion'; shell: CompletionShell }
   | { kind: 'schedule-enable'; schedule: string; enabled: boolean; json: boolean }
   | { kind: 'schedule-delete'; schedule: string; confirmName: string; json: boolean }
@@ -59,9 +64,13 @@ export type ParsedCommand =
   | { kind: 'memory-delete'; id: string; confirm?: string; json: boolean }
   | { kind: 'usage'; refresh: boolean; json: boolean }
   | { kind: 'models'; provider?: ProviderId; to?: string; refresh: boolean; json: boolean }
-  | { kind: 'preferences'; language?: 'vi' | 'en' | 'en-GB'; theme?: 'system' | 'light' | 'dark'; json: boolean }
+  | ({ kind: 'preferences'; language?: 'vi' | 'en' | 'en-GB'; theme?: 'system' | 'light' | 'dark'; json: boolean } & PreferenceChanges)
   | { kind: 'open'; to?: string; json: boolean }
   | { kind: 'run'; schedule: string; files: string[]; json: boolean };
+
+export type SpaceVerb = 'add' | 'edit' | 'category' | 'uncategory' | 'move' | 'out' | 'delete' | 'folder' | 'color' | 'order';
+/** The looks and behaviour settings `orglet preferences` changes besides the language and theme. */
+export type PreferenceChanges = Omit<Extract<CliRequestBody, { op: 'preferences' }>, 'op' | 'language' | 'theme'>;
 
 /** A mistake in how the command was typed; exits with code 2. */
 export class UsageError extends Error {}
@@ -69,11 +78,11 @@ export class UsageError extends Error {}
 const CONTROL_COMMANDS: readonly ChatControl[] = ['stop', 'pause', 'resume', 'retry', 'continue'];
 export const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run', 'config', 'create', 'edit', 'delete',
   'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'chats', 'side', 'bring', 'channel', 'group', 'members', 'rename', 'archive', 'restore', 'template',
-  'schedules', 'schedule', 'spaces', 'space', 'market', 'completion', 'search', 'running', 'library', 'memory', 'usage', 'models', 'preferences'];
+  'schedules', 'schedule', 'spaces', 'space', 'market', 'completion', 'search', 'running', 'library', 'memory', 'usage', 'models', 'preferences', 'show', 'update', 'assign'];
 /** Commands that name an orglet or crew with --to; `schedule` names the one it runs for, `library` and `models` whose. */
-const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule', 'library', 'models'];
+const CHAT_COMMANDS: readonly CommandName[] = ['chat', 'send', 'read', 'open', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'rename', 'archive', 'schedule', 'library', 'models', 'show', 'assign'];
 /** Commands that name a chat with --chat, by the start of its id. */
-const CHAT_ID_COMMANDS: readonly CommandName[] = ['send', 'read', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'bring', 'members', 'rename', 'archive', 'restore', 'delete'];
+const CHAT_ID_COMMANDS: readonly CommandName[] = ['send', 'read', 'react', 'forward', 'answer', 'revise', ...CONTROL_COMMANDS, 'side', 'bring', 'members', 'rename', 'archive', 'restore', 'delete', 'show', 'assign'];
 /**
  * Commands whose message takes files with --file. `answer` is not one: the core's answer command has no field for
  * sources, so there is nowhere to put a file.
@@ -128,7 +137,10 @@ Commands:
   memory    Edit, pin or delete an approved memory
   usage     Plan usage of signed-in CLI accounts
   models    The models a connection offers
-  preferences  Show or change the app's language and theme
+  preferences  Show or change the app's language, theme and looks
+  show      Look at connections, spend, releases, journals, sources and a run's changes
+  update    Check for a new version of Orglet
+  assign    Change who answers a chat and its cost limit
   open      Bring the Orglet window forward, optionally on one chat
   run       Start a schedule now, optionally with files
   config    Show editable configurations, skill IDs and existing connections
@@ -275,7 +287,63 @@ Options:
 
 Example:
   orglet run "Invoice check" --file invoice.pdf`,
+  show: `Usage: orglet show <connections|spend|changelog|update> [--refresh] [--json]
+       orglet show <browser|desktop|sources|changes> (--to <name> | --chat <id>) [--json]
+
+Looks at the app without changing anything.
+  connections  Which API keys are saved and which CLI accounts are signed in (never a key)
+  spend        What was spent, what is reserved for runs under way, and the connection limit
+  changelog    The latest releases (--refresh fetches the list again)
+  update       The updater's state
+  browser      The chat's browser journal: what the browser did, on which site, and how it ended
+  desktop      The chat's desktop journal: which program and element each step touched
+  sources      The chat's files by name and size
+  changes      What the chat's runs changed in the working folder, and the working copies
+               that are still there. Applying or discarding them is done in the app.`,
+  update: `Usage: orglet update [--json]
+
+Checks for a new version of Orglet and says what it found: up to date, downloading,
+ready to install, or why it could not check. Installing a downloaded update is done
+in the app.`,
+  assign: `Usage: orglet assign (--to <name> | --chat <id>) [--with <orglet>]... [--budget <USD>] [--json]
+
+Changes who answers a chat and its cost limit, as the chat's settings do in the app.
+--with replaces the orglets (or names one channel with a lead alone). In a channel only
+--budget applies; orglet members changes who is in it. The limit can only be lowered
+here: raising what a chat may spend is done in the app. A chat that is running is refused.`,
 };
+
+/** What the commands that grew for issue 554 add to their help; the older text stays as it was. */
+COMMAND_HELP.space += `
+
+Also:
+  orglet space folder "<name>" [--value <folder>]    Put a space's tile in a folder on the rail; without --value, take it out
+  orglet space color "<name>" [--value <#rrggbb>]    Colour of the space's tile; without --value, the default
+  orglet space order "<name>" (--name <channel> | --chat <id>) --position <n>
+                                                      Move a channel to place n among those of its category
+  orglet space order "<name>" --category <name> --position <n>
+                                                      Move a category to place n in the space
+What a new channel in a space starts with (its tool permissions) is set in the app.`;
+COMMAND_HELP.market += `
+
+  orglet market update "<name>"                       Show what an update of something you added changes, with a code
+  orglet market update "<name>" --confirm <code>      Apply exactly that update; refused if it changed since`;
+COMMAND_HELP.schedule += `
+
+  orglet schedule dismiss "<name>"    Close the notice a schedule shows after the app was closed over its time
+  orglet schedule catch-up "<name>"   Run the missed time once, as the notice's button does`;
+COMMAND_HELP.preferences += `
+
+More settings:
+  --titles on|off             Name chats automatically
+  --open-confirmation on|off  Ask before opening a chat from a notification
+  --copy-format ask|text|markdown, --download-format ask|text|markdown
+  --retention 0|7|30          Days an archived chat is kept (0: until you delete it)
+  --auto-update on|off        Download updates by itself
+  --notifications on|off      System notifications while the window is in the background
+  --accent <#rrggbb>          Accent colour
+  --font <family|default>, --code-font <family|default>
+Keys, consent, money limits and connections are changed in the app.`;
 
 /** One help text for the five controls of a chat's latest turn; they take the same options. */
 function controlHelp(): Record<ChatControl, string> {
@@ -326,6 +394,24 @@ type Options = {
   targets: string[];
   members: string[];
   positionals: string[];
+  /** The options of the preferences and space commands added for issue 554, by the name they have in `EXTRA_OPTIONS`. */
+  extra: Record<string, string>;
+};
+
+/** Options that take a value and belong to one or two commands only: the key each fills in `Options.extra`, and who takes it. */
+const EXTRA_OPTIONS: Record<string, { key: string; commands: readonly CommandName[] }> = {
+  '--titles': { key: 'titles', commands: ['preferences'] },
+  '--open-confirmation': { key: 'openConfirmation', commands: ['preferences'] },
+  '--copy-format': { key: 'copyFormat', commands: ['preferences'] },
+  '--download-format': { key: 'downloadFormat', commands: ['preferences'] },
+  '--retention': { key: 'retention', commands: ['preferences'] },
+  '--auto-update': { key: 'autoUpdate', commands: ['preferences'] },
+  '--notifications': { key: 'notifications', commands: ['preferences'] },
+  '--accent': { key: 'accent', commands: ['preferences'] },
+  '--font': { key: 'font', commands: ['preferences'] },
+  '--code-font': { key: 'codeFont', commands: ['preferences'] },
+  '--value': { key: 'value', commands: ['space'] },
+  '--position': { key: 'position', commands: ['space'] },
 };
 
 type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' | 'message' | 'replyTo' | 'note' | 'title' | 'provider' | 'channelName' | 'topic' | 'space' | 'category'
@@ -334,7 +420,7 @@ type SingleOption = 'to' | 'chat' | 'timeout' | 'config' | 'confirm' | 'turns' |
 
 /** Options that take a value, written as `--to Researcher` or `--to=Researcher`. */
 export const VALUE_OPTIONS = new Set(['--to', '--chat', '--file', '--timeout', '--config', '--confirm', '--turns', '--message', '--reply-to', '--note', '--target', '--with', '--title', '--provider', '--name', '--topic', '--space', '--category',
-  '--brief', '--every', '--at', '--day', '--timezone', '--budget', '--daily-cap', '--rename', '--query', '--text', '--language', '--theme']);
+  '--brief', '--every', '--at', '--day', '--timezone', '--budget', '--daily-cap', '--rename', '--query', '--text', '--language', '--theme', ...Object.keys(EXTRA_OPTIONS)]);
 /** The options of the library, memory and preferences commands, the field each fills and who takes it (COD-354). */
 const LIBRARY_OPTIONS: readonly [string, SingleOption, CommandName][] = [['--query', 'query', 'library'], ['--text', 'text', 'memory'], ['--language', 'language', 'preferences'], ['--theme', 'theme', 'preferences']];
 /** The options only `orglet schedule add` and `edit` take. */
@@ -372,10 +458,11 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
   { option: '--pin', given: options => options.pin, commands: ['memory'] },
   { option: '--unpin', given: options => options.unpin, commands: ['memory'] },
   { option: '--yes', given: options => options.yes, commands: ['memory'] },
-  { option: '--refresh', given: options => options.refresh, commands: ['usage', 'models', 'market'] },
+  { option: '--refresh', given: options => options.refresh, commands: ['usage', 'models', 'market', 'show'] },
+  ...Object.entries(EXTRA_OPTIONS).map(([option, owner]) => ({ option, given: (options: Options) => options.extra[owner.key] !== undefined, commands: owner.commands })),
   ...LIBRARY_OPTIONS.map(([option, key, command]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: [command] })),
-  ...SCHEDULE_OPTIONS.map(([option, key]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: (key === 'rename' ? ['schedule', 'space', 'rename'] : ['schedule']) as readonly CommandName[] })),
-  { option: '--with', given: options => options.members.length > 0, commands: ['channel', 'group', 'members', 'space'] },
+  ...SCHEDULE_OPTIONS.map(([option, key]) => ({ option, given: (options: Options) => options[key] !== undefined, commands: (key === 'rename' ? ['schedule', 'space', 'rename'] : key === 'budget' ? ['schedule', 'assign'] : ['schedule']) as readonly CommandName[] })),
+  { option: '--with', given: options => options.members.length > 0, commands: ['channel', 'group', 'members', 'space', 'assign'] },
   { option: '--name', given: options => options.channelName !== undefined, commands: ['channel', 'group', 'space'] },
   { option: '--topic', given: options => options.topic !== undefined, commands: ['channel', 'group'] },
   { option: '--space', given: options => options.space !== undefined, commands: ['channel', 'group', 'chats', 'search', 'running'] },
@@ -385,12 +472,12 @@ const CHAT_OPTION_OWNERS: readonly { option: string; given: (options: Options) =
   { option: '--archived', given: options => options.archived, commands: ['chats'] },
 ];
 /** Commands that take one positional value after their name: a message, a schedule, an emoji, an answer or a template. */
-const VALUE_COMMANDS: readonly CommandName[] = ['completion', 'send', 'run', 'react', 'answer', 'revise', 'side', 'channel', 'group', 'template', 'search', 'library', 'models'];
+const VALUE_COMMANDS: readonly CommandName[] = ['completion', 'send', 'run', 'react', 'answer', 'revise', 'side', 'channel', 'group', 'template', 'search', 'library', 'models', 'show'];
 /** Commands whose positionals may name an orglet or crew: `<orglet|channel> "<name>"`. */
 const ENTITY_COMMANDS: readonly CommandName[] = ['create', 'edit', 'delete', 'archive', 'restore'];
 
 function readOptions(argumentList: readonly string[]): Options {
-  const options: Options = { help: false, version: false, json: false, wait: true, off: false, archived: false, called: false, pin: false, unpin: false, yes: false, refresh: false, files: [], targets: [], members: [], positionals: [] };
+  const options: Options = { help: false, version: false, json: false, wait: true, off: false, archived: false, called: false, pin: false, unpin: false, yes: false, refresh: false, files: [], targets: [], members: [], positionals: [], extra: {} };
   let index = 0;
   while (index < argumentList.length) {
     const argument = argumentList[index];
@@ -434,6 +521,12 @@ function assignValue(options: Options, name: string, value: string): void {
   }
   if (name === '--with') {
     options.members.push(value);
+    return;
+  }
+  const extra = EXTRA_OPTIONS[name];
+  if (extra) {
+    if (options.extra[extra.key] !== undefined) throw new UsageError(`${name} can be given once.`);
+    options.extra[extra.key] = value;
     return;
   }
   const key = SINGLE_OPTIONS[name];
@@ -483,7 +576,7 @@ function extraPositionals(command: CommandName, options: Options): string[] {
 /** Options that only one command understands, so `orglet list --file x` is a mistake rather than ignored. */
 function rejectForeignOptions(command: CommandName, options: Options): void {
   if (!['create', 'edit'].includes(command) && options.config !== undefined) throw new UsageError('--config belongs to "orglet create" and "orglet edit".');
-  if (!['delete', 'schedule', 'space', 'memory'].includes(command) && options.confirm !== undefined) throw new UsageError('--confirm belongs to the commands that delete: "orglet delete", "orglet schedule delete", "orglet space delete" and "orglet memory delete".');
+  if (!['delete', 'schedule', 'space', 'memory', 'market'].includes(command) && options.confirm !== undefined) throw new UsageError('--confirm belongs to the commands that delete or apply: "orglet delete", "orglet schedule delete", "orglet space delete", "orglet memory delete" and "orglet market update".');
   const waitOptions = !options.wait || options.timeout !== undefined;
   if (!WAITING_COMMANDS.includes(command) && waitOptions) throw new UsageError('--no-wait and --timeout belong to commands that wait for an answer, such as "orglet send".');
   const takesFiles = FILE_COMMANDS.includes(command);
@@ -585,7 +678,30 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'usage': return { kind: 'usage', refresh: options.refresh, json };
     case 'models': return parseModels(options);
     case 'preferences': return parsePreferences(options);
+    case 'show': return parseShow(options);
+    case 'update': return { kind: 'update-check', json };
+    case 'assign': return parseAssign(options);
   }
+}
+
+const TOPICS_OF_A_CHAT: readonly ShowTopic[] = ['browser', 'desktop', 'sources', 'changes'];
+
+function parseShow(options: Options): ParsedCommand {
+  const what = SHOW_TOPICS.find(item => item === options.positionals[1]);
+  if (!what) throw new UsageError(t("Gõ một mục sau orglet show: {0}.", SHOW_TOPICS.join(', ')));
+  const named = options.to !== undefined || options.chat !== undefined;
+  if (TOPICS_OF_A_CHAT.includes(what)) return { kind: 'show', what, refresh: false, json: options.json, ...requireTarget('show', options) };
+  if (named) throw new UsageError(t("orglet show {0} không nhận --to hay --chat.", what));
+  if (options.refresh && what !== 'changelog') throw new UsageError(t("--refresh chỉ dùng với orglet show changelog."));
+  return { kind: 'show', what, refresh: options.refresh, json: options.json };
+}
+
+/** `orglet assign`: who answers a chat and its cost limit, which may only go down here. */
+function parseAssign(options: Options): ParsedCommand {
+  const names = options.members.map(name => name.trim()).filter(Boolean);
+  if (!names.length && options.budget === undefined) throw new UsageError(t("orglet assign cần --with <tên> hoặc --budget <USD>."));
+  const budgetMicros = options.budget === undefined ? undefined : parseUsd('--budget', options.budget, MAX_RUN_BUDGET_MICROS);
+  return { kind: 'chat-settings', ...requireTarget('assign', options), ...(names.length ? { names } : {}), ...(budgetMicros === undefined ? {} : { budgetMicros }), json: options.json };
 }
 
 /**
@@ -769,8 +885,15 @@ function parseTemplate(options: Options): ParsedCommand {
 /** `orglet market`, `orglet market installed` and `orglet market add <id>`. */
 function parseMarket(options: Options): ParsedCommand {
   const verb = options.positionals[1] ?? 'list';
-  if (verb !== 'list' && verb !== 'installed' && verb !== 'add') throw new UsageError(t("Gõ installed hoặc add <mã> sau orglet market, hoặc không gõ gì để xem danh mục."));
+  if (verb !== 'list' && verb !== 'installed' && verb !== 'add' && verb !== 'update') throw new UsageError(t("Gõ installed, add <mã> hoặc update \"<tên>\" sau orglet market, hoặc không gõ gì để xem danh mục."));
   const listingId = options.positionals[2]?.trim();
+  if (options.confirm !== undefined && verb !== 'update') throw new UsageError(t("--confirm chỉ dùng với orglet market update."));
+  if (verb === 'update') {
+    if (!listingId) throw new UsageError(t("Gõ tên mục đã thêm, ví dụ: orglet market update \"Launch space\""));
+    const confirmCode = options.confirm?.trim();
+    if (confirmCode !== undefined && !/^[a-f0-9]{8}$/.test(confirmCode)) throw new UsageError(t("--confirm cần mã tám ký tự mà orglet market update in ra."));
+    return { kind: 'market', verb, installed: listingId, ...(confirmCode ? { confirmCode } : {}), refresh: false, json: options.json };
+  }
   if (verb !== 'add' && listingId) throw new UsageError(t("Chỉ orglet market add nhận một mã."));
   if (verb !== 'list' && options.refresh) throw new UsageError(t("--refresh chỉ dùng khi xem danh mục."));
   if (verb !== 'add') return { kind: 'market', verb, refresh: options.refresh, json: options.json };
@@ -778,12 +901,12 @@ function parseMarket(options: Options): ParsedCommand {
   return { kind: 'market', verb, listingId, refresh: false, json: options.json };
 }
 
-const SPACE_VERBS = ['add', 'edit', 'category', 'uncategory', 'move', 'out', 'delete'] as const;
+const SPACE_VERBS: readonly SpaceVerb[] = ['add', 'edit', 'category', 'uncategory', 'move', 'out', 'delete', 'folder', 'color', 'order'];
 
 /** `orglet space`: a space's own changes, its categories, and a channel moved into or out of one. */
 function parseSpace(options: Options): ParsedCommand {
   const verb = SPACE_VERBS.find(item => item === options.positionals[1]);
-  if (!verb) throw new UsageError(t("Gõ add, edit, category, uncategory, move, out hoặc delete sau orglet space."));
+  if (!verb) throw new UsageError(t("Gõ add, edit, category, uncategory, move, out, folder, color, order hoặc delete sau orglet space."));
   const space = options.positionals[2]?.trim();
   if (verb === 'out' && space) throw new UsageError(t("orglet space out chỉ nhận --chat <mã> hoặc --name <tên kênh>."));
   if (verb !== 'out' && !space) throw new UsageError(t("Gõ tên không gian, ví dụ: orglet space {0} \"Launch\"", verb));
@@ -796,10 +919,12 @@ function parseSpace(options: Options): ParsedCommand {
   };
   takes(['add', 'edit', 'category'], '--with', names.length > 0);
   takes(['edit', 'category'], '--rename', options.rename !== undefined);
-  takes(['category', 'uncategory', 'move'], '--category', options.category !== undefined);
-  takes(['move', 'out'], '--chat', options.chat !== undefined);
-  takes(['move', 'out'], '--name', options.channelName !== undefined);
+  takes(['category', 'uncategory', 'move', 'order'], '--category', options.category !== undefined);
+  takes(['move', 'out', 'order'], '--chat', options.chat !== undefined);
+  takes(['move', 'out', 'order'], '--name', options.channelName !== undefined);
   takes(['delete'], '--confirm', options.confirm !== undefined);
+  takes(['folder', 'color'], '--value', options.extra.value !== undefined);
+  takes(['order'], '--position', options.extra.position !== undefined);
   const base = { kind: 'space' as const, verb, names, json: options.json, ...(space ? { space } : {}) };
   if (verb === 'add') {
     if (!names.length) throw new UsageError(t("Không gian cần ít nhất một --with <tên Tí>."));
@@ -813,6 +938,20 @@ function parseSpace(options: Options): ParsedCommand {
     if (!category) throw new UsageError(t("Gõ tên mục sau --category."));
     return { ...base, category, ...(rename ? { rename } : {}) };
   }
+  if (verb === 'folder' || verb === 'color') {
+    const value = options.extra.value?.trim();
+    if (verb === 'color' && value !== undefined && !/^#[0-9a-f]{6}$/i.test(value)) throw new UsageError(t("--value cần màu như #7c8be8, hoặc bỏ trống để về màu mặc định."));
+    return { ...base, ...(value ? { value } : {}) };
+  }
+  if (verb === 'order') {
+    const position = Number(options.extra.position);
+    if (!Number.isInteger(position) || position < 1) throw new UsageError(t("--position cần số nguyên từ 1 trở lên."));
+    const orderedCategory = category !== undefined && options.chat === undefined && channelName === undefined;
+    const orderedChannel = options.chat !== undefined || channelName !== undefined;
+    if (orderedCategory === orderedChannel || (options.chat !== undefined && channelName !== undefined)) throw new UsageError(t("orglet space order cần một kênh (--chat <mã> hoặc --name <tên>) hoặc một mục (--category <tên>)."));
+    const target = orderedCategory ? { category } : channelName ? { channelName } : { chat: requireChatId('space', options.chat) };
+    return { ...base, ...target, position };
+  }
   if (verb === 'move' || verb === 'out') {
     // A channel with no message yet has no chat id, so it is named instead.
     if ((options.chat === undefined) === (channelName === undefined)) throw new UsageError(t("Chỉ kênh cần chuyển bằng --chat <mã> hoặc --name <tên kênh>, một trong hai."));
@@ -824,7 +963,7 @@ function parseSpace(options: Options): ParsedCommand {
   return { ...base, confirmName };
 }
 
-const SCHEDULE_VERBS = ['add', 'edit', 'on', 'off', 'delete'] as const;
+const SCHEDULE_VERBS = ['add', 'edit', 'on', 'off', 'delete', 'dismiss', 'catch-up'] as const;
 /** Weekday names `--day` takes, in the schedule's numbering: 0 is Sunday. */
 const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const MICROS_PER_USD = 1_000_000;
@@ -833,11 +972,12 @@ const MAX_RUN_BUDGET_MICROS = 100_000_000;
 /** `orglet schedule <add|edit|on|off|delete> "<name>" [options]`. */
 function parseSchedule(options: Options): ParsedCommand {
   const verb = SCHEDULE_VERBS.find(item => item === options.positionals[1]);
-  if (!verb) throw new UsageError(t("Gõ add, edit, on, off hoặc delete sau orglet schedule."));
+  if (!verb) throw new UsageError(t("Gõ add, edit, on, off, dismiss, catch-up hoặc delete sau orglet schedule."));
   const schedule = options.positionals[2]?.trim();
   if (!schedule) throw new UsageError(t("Gõ tên lịch, ví dụ: orglet schedule {0} \"Review sáng\"", verb));
   const changes = SCHEDULE_OPTIONS.some(([, key]) => options[key] !== undefined) || options.to !== undefined || options.called || options.off;
-  if ((verb === 'on' || verb === 'off' || verb === 'delete') && changes) throw new UsageError(t("orglet schedule {0} chỉ nhận tên lịch.", verb));
+  if ((verb === 'on' || verb === 'off' || verb === 'delete' || verb === 'dismiss' || verb === 'catch-up') && changes) throw new UsageError(t("orglet schedule {0} chỉ nhận tên lịch.", verb));
+  if (verb === 'dismiss' || verb === 'catch-up') return { kind: 'schedule-notice', schedule, action: verb, json: options.json };
   if (verb !== 'delete' && options.confirm !== undefined) throw new UsageError('--confirm belongs to "orglet schedule delete".');
   if (verb === 'on' || verb === 'off') return { kind: 'schedule-enable', schedule, enabled: verb === 'on', json: options.json };
   if (verb === 'delete') {
@@ -947,8 +1087,53 @@ function parsePreferences(options: Options): ParsedCommand {
   if (options.language !== undefined && !language) throw new UsageError(t("--language cần {0}.", LANGUAGES.join(', ')));
   const theme = THEMES.find(item => item === options.theme?.trim().toLowerCase());
   if (options.theme !== undefined && !theme) throw new UsageError(t("--theme cần {0}.", THEMES.join(', ')));
-  return { kind: 'preferences', ...(language ? { language } : {}), ...(theme ? { theme } : {}), json: options.json };
+  return { kind: 'preferences', ...(language ? { language } : {}), ...(theme ? { theme } : {}), ...preferenceChanges(options.extra), json: options.json };
 }
+
+function onOrOff(option: string, value: string): boolean {
+  if (value === 'on') return true;
+  if (value === 'off') return false;
+  throw new UsageError(t("{0} cần on hoặc off.", option));
+}
+
+function oneOf<Choice extends string>(option: string, value: string, choices: readonly Choice[]): Choice {
+  const found = choices.find(choice => choice === value.trim().toLowerCase());
+  if (!found) throw new UsageError(t("{0} cần {1}.", option, choices.join(', ')));
+  return found;
+}
+
+/** A font family, or `default` for the font the app ships with. */
+function fontChoice(option: string, value: string): string | null {
+  const family = value.trim();
+  if (family.toLowerCase() === 'default') return null;
+  if (!FontFamily.safeParse(family).success) throw new UsageError(t("{0} cần tên một họ phông, hoặc default.", option));
+  return family;
+}
+
+/** The looks and behaviour settings of `orglet preferences` beyond language and theme, checked as the window checks them. */
+function preferenceChanges(extra: Record<string, string>): PreferenceChanges {
+  const changes: PreferenceChanges = {};
+  if (extra.titles !== undefined) changes.autoTitles = onOrOff('--titles', extra.titles);
+  if (extra.openConfirmation !== undefined) changes.confirmOpenTask = onOrOff('--open-confirmation', extra.openConfirmation);
+  if (extra.copyFormat !== undefined) changes.copyFormat = oneOf('--copy-format', extra.copyFormat, FORMAT_CHOICES);
+  if (extra.downloadFormat !== undefined) changes.downloadFormat = oneOf('--download-format', extra.downloadFormat, FORMAT_CHOICES);
+  if (extra.retention !== undefined) {
+    const days = Number(extra.retention);
+    if (days !== 0 && days !== 7 && days !== 30) throw new UsageError(t("--retention cần 0 (giữ đến khi xóa), 7 hoặc 30 ngày."));
+    changes.archiveRetentionDays = days;
+  }
+  if (extra.autoUpdate !== undefined) changes.autoUpdate = onOrOff('--auto-update', extra.autoUpdate);
+  if (extra.notifications !== undefined) changes.backgroundNotifications = onOrOff('--notifications', extra.notifications);
+  if (extra.accent !== undefined) {
+    if (!/^#[0-9a-f]{6}$/i.test(extra.accent.trim())) throw new UsageError(t("--accent cần màu như #7c8be8."));
+    changes.accentColor = extra.accent.trim();
+  }
+  if (extra.font !== undefined) changes.interfaceFont = fontChoice('--font', extra.font);
+  if (extra.codeFont !== undefined) changes.codeFont = fontChoice('--code-font', extra.codeFont);
+  return changes;
+}
+
+const FORMAT_CHOICES = ['ask', 'text', 'markdown'] as const;
 
 /** A USD amount with up to six decimals, kept as integer micros the way the app stores money. */
 function parseUsd(option: string, value: string, maximumMicros: number): number {

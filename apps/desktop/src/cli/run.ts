@@ -8,6 +8,8 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
+import { formatChatSettings, formatScheduleNotice, formatShow, formatUpdateCheck } from './output';
+import type { ChatSettingsValue, MarketUpdateValue, ScheduleNoticeValue, ShowValue, UpdateCheckValue } from './protocol';
 import { chatOption, formatManagementResult, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatSpaces, formatSpaceChange, formatMarket, formatChannelCreated, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
@@ -113,9 +115,19 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'template': return { op: 'template', templateId: command.templateId, provider: command.provider };
     case 'schedules': return { op: 'schedules' };
     case 'spaces': return { op: 'spaces' };
-    case 'market': return { op: 'market', verb: command.verb, refresh: command.refresh, ...(command.listingId ? { listingId: command.listingId } : {}) };
+    case 'market': return {
+      op: 'market', verb: command.verb, refresh: command.refresh,
+      ...(command.listingId ? { listingId: command.listingId } : {}),
+      ...(command.installed ? { installed: command.installed } : {}),
+      ...(command.confirmCode ? { confirmCode: command.confirmCode } : {}),
+    };
+    case 'schedule-notice': return { op: 'schedule-notice', schedule: command.schedule, action: command.action };
+    case 'chat-settings': return { op: 'chat-settings', ...targetFields(command), ...(command.names ? { names: command.names } : {}), ...(command.budgetMicros === undefined ? {} : { budgetMicros: command.budgetMicros }) };
+    case 'show': return { op: 'show', what: command.what, refresh: command.refresh, ...(command.chat ? { chat: command.chat } : command.to ? { to: command.to } : {}) };
+    case 'update-check': return { op: 'update-check' };
     case 'space': return {
       op: 'space-change', verb: command.verb, names: command.names,
+      ...(command.value ? { value: command.value } : {}), ...(command.position ? { position: command.position } : {}),
       ...(command.space ? { space: command.space } : {}), ...(command.rename ? { rename: command.rename } : {}),
       ...(command.category ? { category: command.category } : {}), ...(command.chat ? { chat: command.chat } : {}),
       ...(command.channelName ? { channelName: command.channelName } : {}),
@@ -131,7 +143,10 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'memory-delete': return { op: 'memory-delete', id: command.id, ...(command.confirm ? { confirm: command.confirm } : { confirmed: true as const }) };
     case 'usage': return { op: 'usage', refresh: command.refresh };
     case 'models': return { op: 'models', ...(command.provider ? { provider: command.provider } : {}), ...(command.to ? { to: command.to } : {}), refresh: command.refresh };
-    case 'preferences': return { op: 'preferences', ...(command.language ? { language: command.language } : {}), ...(command.theme ? { theme: command.theme } : {}) };
+    case 'preferences': {
+      const { kind: _kind, json: _json, ...settings } = command;
+      return { op: 'preferences', ...settings };
+    }
     case 'run': return {
       op: 'run',
       schedule: command.schedule,
@@ -270,7 +285,7 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       if (!command.json) output.stdout(formatSpaceChange(value as SpaceChangeValue));
       return EXIT_CODES.ok;
     case 'market':
-      if (!command.json) output.stdout(formatMarket(value as MarketListValue | MarketInstalledValue | MarketAddValue));
+      if (!command.json) output.stdout(formatMarket(value as MarketListValue | MarketInstalledValue | MarketAddValue | MarketUpdateValue));
       return EXIT_CODES.ok;
     case 'schedule-enable':
     case 'schedule-delete':
@@ -301,6 +316,18 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
     }
     case 'preferences':
       if (!command.json) output.stdout(formatPreferences(value as PreferencesValue));
+      return EXIT_CODES.ok;
+    case 'show':
+      if (!command.json) output.stdout(formatShow(value as ShowValue));
+      return EXIT_CODES.ok;
+    case 'chat-settings':
+      if (!command.json) output.stdout(formatChatSettings(value as ChatSettingsValue));
+      return EXIT_CODES.ok;
+    case 'schedule-notice':
+      if (!command.json) output.stdout(formatScheduleNotice(value as ScheduleNoticeValue));
+      return EXIT_CODES.ok;
+    case 'update-check':
+      if (!command.json) output.stdout(formatUpdateCheck(value as UpdateCheckValue));
       return EXIT_CODES.ok;
   }
 }

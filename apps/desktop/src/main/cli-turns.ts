@@ -1,11 +1,21 @@
-import type { Source, TaskDetail } from '../shared/contracts';
+import type { Connections, Source, TaskDetail } from '../shared/contracts';
 import type { Language } from '../shared/i18n';
+import type { Changelog, UpdateState } from '../shared/updates';
 import type { CliChat, SendValue } from '../cli/protocol';
 import type { CliActivityFeed, CliObserver } from './cli-activity';
 import type { CoreRequest } from './cli-chats';
 import { isTurnRunning, pendingQuestion, turnAnswers, turnErrors, waitsForDesktop } from './cli-chat-history';
 
 /** What the CLI operations need from main, and waiting for a turn the way `send` does (COD-234, COD-354). */
+
+export type CliAppState = {
+  /** Which keys are saved, never the keys. */
+  connections: () => Promise<Connections>;
+  changelog: (refresh: boolean) => Promise<Changelog>;
+  updateState: () => UpdateState;
+  /** Starts a check the way the window's button does and returns the state right after. */
+  checkForUpdates: () => UpdateState;
+};
 
 export type CliDependencies = {
   request: CoreRequest;
@@ -17,6 +27,8 @@ export type CliDependencies = {
   /** How often `send` reads the chat while it waits. */
   pollMilliseconds?: number;
   observe?: (observer: CliObserver) => () => void;
+  /** What only main knows (the saved keys, the release notes, the updater), for the read-only `show` and `update`. */
+  app?: CliAppState;
   /** Tells main the language or theme changed from a terminal, as a save in the window does (COD-354). */
   settingsChanged?: (changes: { language?: Language; theme?: 'system' | 'light' | 'dark' }) => void;
 };

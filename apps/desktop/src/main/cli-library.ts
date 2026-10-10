@@ -111,17 +111,36 @@ export class CliLibrary {
     return { provider, models, fetchedAt: result.fetchedAt, stale: result.stale, ...(result.error ? { error: this.dependencies.translate(result.error) } : {}) };
   }
 
-  /** Shows the language and theme, and changes either; every other setting stays as it is. */
+  /**
+   * Shows the looks and behaviour settings and changes the ones given; the rest of Settings (keys, consent, money
+   * limits, providers) stays as it is, and the request has no field for them.
+   */
   async preferences(request: Request<'preferences'>): Promise<PreferencesValue> {
     const workspace = await this.workspace();
-    const changes = { ...(request.language ? { language: request.language } : {}), ...(request.theme ? { theme: request.theme } : {}) };
-    if (Object.keys(changes).length) {
-      const settings = { theme: workspace.theme, connectionLimitMicros: workspace.connectionLimitMicros, ...changes };
-      await this.dependencies.request('settings', settings);
-      this.dependencies.settingsChanged?.(changes);
-    }
-    return { language: request.language ?? workspace.language, theme: request.theme ?? workspace.theme };
+    const { op: _op, token: _token, ...fields } = request;
+    const changes = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
+    if (!Object.keys(changes).length) return preferencesOf(workspace);
+    await this.dependencies.request('settings', { theme: workspace.theme, connectionLimitMicros: workspace.connectionLimitMicros, ...changes });
+    this.dependencies.settingsChanged?.({ ...(request.language ? { language: request.language } : {}), ...(request.theme ? { theme: request.theme } : {}) });
+    return preferencesOf(await this.workspace());
   }
+}
+
+function preferencesOf(workspace: Workspace): PreferencesValue {
+  return {
+    language: workspace.language,
+    theme: workspace.theme,
+    ...(workspace.autoTitles === undefined ? {} : { autoTitles: workspace.autoTitles }),
+    ...(workspace.confirmOpenTask === undefined ? {} : { confirmOpenTask: workspace.confirmOpenTask }),
+    ...(workspace.copyFormat === undefined ? {} : { copyFormat: workspace.copyFormat }),
+    ...(workspace.downloadFormat === undefined ? {} : { downloadFormat: workspace.downloadFormat }),
+    ...(workspace.archiveRetentionDays === undefined ? {} : { archiveRetentionDays: workspace.archiveRetentionDays }),
+    ...(workspace.autoUpdate === undefined ? {} : { autoUpdate: workspace.autoUpdate }),
+    ...(workspace.backgroundNotifications === undefined ? {} : { backgroundNotifications: workspace.backgroundNotifications }),
+    ...(workspace.accentColor === undefined ? {} : { accentColor: workspace.accentColor }),
+    ...(workspace.interfaceFont === undefined ? {} : { interfaceFont: workspace.interfaceFont }),
+    ...(workspace.codeFont === undefined ? {} : { codeFont: workspace.codeFont }),
+  };
 }
 
 /** A memory by the start of its id, which has to be approved: a proposed one is reviewed in the desktop. */
