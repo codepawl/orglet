@@ -3,7 +3,8 @@ import type { HarnessInfo } from '../shared/harness';
 import type { BrowserAction } from '../shared/browser';
 import type { DesktopAction } from '../shared/desktop';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
-import type { CliRequest, ShowRow, ShowValue, UpdateCheckValue } from '../cli/protocol';
+import type { MarketInstallation, MarketUpdateRecord } from '../shared/market';
+import type { CliRequest, MarketUpdatesValue, ShowRow, ShowValue, UpdateCheckValue } from '../cli/protocol';
 import type { UpdateState } from '../shared/updates';
 import { CliFailure, targetChat } from './cli-chats';
 import type { CliDependencies } from './cli-turns';
@@ -40,12 +41,28 @@ export class CliInspect {
       case 'desktop': return this.desktopJournal(request);
       case 'sources': return this.sources(request);
       case 'changes': return this.changes(request);
+      case 'terminal': return this.terminal();
     }
   }
 
   /** Looks for an update and says what it found. Installing the one it downloads stays a click in the window. */
-  checkForUpdates(): UpdateCheckValue {
-    return updateRow(this.app().checkForUpdates()) as UpdateCheckValue;
+  async checkForUpdates(): Promise<UpdateCheckValue> {
+    const app = updateRow(this.app().checkForUpdates()) as UpdateCheckValue;
+    return { ...app, market: await this.marketUpdates() };
+  }
+
+  /** The Marketplace items with a newer version, and what the automatic path did; a core that cannot say adds nothing. */
+  private async marketUpdates(): Promise<MarketUpdatesValue> {
+    const installations = await this.dependencies.request('marketInstallations', {}) as MarketInstallation[];
+    const records = await this.dependencies.request('marketUpdateRecords', {}) as MarketUpdateRecord[];
+    return {
+      available: installations.filter(item => item.updateAvailable).map(item => ({ id: item.listingId, name: item.name, kind: item.kind, version: item.version, ...(item.latestVersion ? { latestVersion: item.latestVersion } : {}) })),
+      records: records.map(record => ({
+        name: record.name, status: record.status, version: record.toVersion, changed: record.changed,
+        ...(record.reason ? { reason: this.dependencies.translate(record.reason) } : {}),
+        ...(record.block ? { block: record.block } : {}),
+      })),
+    };
   }
 
   private app() {
@@ -139,6 +156,13 @@ export class CliInspect {
       view.truncated ? translate('Danh sách bị cắt bớt.') : '',
     ].filter(Boolean);
     return { what: 'changes', rows, ...(notes.length ? { note: notes.join('; ') } : {}) };
+  }
+
+  /** What the terminal did while acting for the person, newest first: the same list as Settings. Reading only. */
+  private async terminal(): Promise<ShowValue> {
+    const journal = this.dependencies.terminalAccess?.journal;
+    const rows = journal ? await journal.list(MAX_ROWS) : [];
+    return { what: 'terminal', rows: rows.map(row => ({ at: row.at, scope: row.scope, operation: row.operation, subject: row.subject ?? null, outcome: row.outcome })) };
   }
 
   private async chatOf(request: Request<'show'>): Promise<string> {

@@ -69,8 +69,6 @@
   --org-panel-width: min(720px, calc(100vw - 32px));
   --org-panel-height: min(640px, calc(100dvh - 32px));
   --org-overlay: #0000002e;
-  /* A fault's icon on a toast, which sits on the inverted primary colour. */
-  --org-toast-error: #ff8a8a;
 
   /* Motion. Everything that appears uses the same short decelerating curve: quick enough never to delay a click,
      long enough that nothing snaps. A gesture that should overshoot uses the spring instead. */
@@ -100,7 +98,6 @@
   --org-warning: #d4a72c;
   --org-focus: #a6c1ff;
   --org-overlay: #00000059;
-  --org-toast-error: #a82626;
   /* On a dark page a shadow has little to darken, so the values are heavier. */
   --org-shadow-xs: 0 1px 2px #0000004d;
   --org-shadow-md: 0 2px 6px #0000004d, 0 10px 28px #00000073;
@@ -127,7 +124,6 @@
     --org-warning: #d4a72c;
     --org-focus: #a6c1ff;
     --org-overlay: #00000059;
-    --org-toast-error: #a82626;
     --org-shadow-xs: 0 1px 2px #0000004d;
     --org-shadow-md: 0 2px 6px #0000004d, 0 10px 28px #00000073;
     --org-shadow-lg: 0 4px 12px #0000004d, 0 18px 48px #00000099;

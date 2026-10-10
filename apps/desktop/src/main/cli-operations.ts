@@ -24,6 +24,8 @@ export type { CliDependencies } from './cli-turns';
 import { CliSpaces } from './cli-spaces';
 import { CliMarket } from './cli-market';
 import { CliInspect } from './cli-inspect';
+import { CliHeld } from './cli-held';
+import type { ElevationGrant } from './cli-elevation';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -41,6 +43,7 @@ export class CliOperations {
   private readonly spaceChanges: CliSpaces;
   private readonly market: CliMarket;
   private readonly inspect: CliInspect;
+  private readonly held: CliHeld;
 
   constructor(private readonly dependencies: CliDependencies) {
     this.chatActions = new CliChatActions(dependencies);
@@ -50,9 +53,10 @@ export class CliOperations {
     this.spaceChanges = new CliSpaces(dependencies);
     this.market = new CliMarket(dependencies);
     this.inspect = new CliInspect(dependencies);
+    this.held = new CliHeld(dependencies);
   }
 
-  async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
+  async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void, grant?: ElevationGrant): Promise<unknown> {
     switch (request.op) {
       case 'status': return this.status();
       case 'list': return this.list();
@@ -92,11 +96,22 @@ export class CliOperations {
       case 'usage': return this.library.usage(request);
       case 'models': return this.library.models(request);
       case 'preferences': return this.library.preferences(request);
+      case 'pair-start': return this.held.pairStart(request);
+      case 'pair-finish': return this.held.pairFinish(request);
+      case 'pair-cancel': return this.held.pairCancel(request);
+      case 'elevation-end': return this.held.elevationEnd();
+      case 'waiting': return this.held.waiting(request);
+      case 'held': return this.held.answer(request, grant ?? { scope: 'decisions' });
       case 'config':
       case 'save-orglet':
       case 'save-crew':
       case 'delete-entity': return manageCli(request, this.dependencies);
     }
+  }
+
+  /** Settings' Undo on a journal row of a grant; it runs from the window only and never through the pipe. */
+  undoGrant(rowId: string): Promise<void> {
+    return this.held.undoGrant(rowId);
   }
 
   private workspace(): Promise<Workspace> {

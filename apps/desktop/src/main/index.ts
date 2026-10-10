@@ -27,7 +27,11 @@ import { translateMessage } from '../shared/i18n';
 import type { CliInstallState } from '../shared/cli';
 import { CLI_BACKGROUND_FLAG, cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
+import { CliElevation } from './cli-elevation';
+import { CliJournal } from './cli-journal';
+import { EMPTY_TERMINAL_ACCESS, type TerminalAccessState } from '../shared/terminal-access';
 import { chatsOf, CliOperations } from './cli-operations';
+import type { CliSetupApp } from './cli-turns';
 import type { CliObserver } from './cli-activity';
 import { RunActivity } from '../shared/run-activity';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
@@ -166,6 +170,11 @@ let language: Language = DEFAULT_LANGUAGE;
 const activeDictionary = () => language === 'en' ? en : language === 'en-GB' ? enGB : null;
 const tr = (key: string, params?: readonly unknown[]) => translate(activeDictionary(), key, params);
 let cliServer: CliServer | undefined;
+/** Pairing and elevation for a terminal acting for the person, and what it did (docs/cli-held-actions-design.md). */
+let terminalElevation: CliElevation | undefined;
+let terminalJournal: CliJournal | undefined;
+let undoTerminalGrant: ((rowId: string) => Promise<void>) | undefined;
+const TERMINAL_SWEEP_MILLISECONDS = 5_000;
 const cliObservers = new Set<CliObserver>();
 /**
  * Brings the window forward for `orglet open`, and with a chat asks the renderer to show it. Windows may only flash
@@ -193,6 +202,7 @@ async function showWindow(chat?: CliChat) {
   await desktopReady;
   if (!window || window.isDestroyed()) return;
   if (window.isMinimized()) window.restore();
+  if (testOffscreen) return;
   window.show();
   window.moveTop();
   window.focus();
@@ -238,6 +248,8 @@ function recordCommand(command: string, args: unknown) {
   if (feature) analytics.recordFeature(feature);
   if (command !== 'settings') return;
   const next = args as Record<string, unknown>;
+  // Turning off "Let a terminal act for me" ends a pairing or an elevation at once.
+  if (next.terminalAccess === false) terminalElevation?.endElevation();
   // Without the startup read to compare against, every key would look changed; the first save only sets the baseline.
   const changes = Object.keys(savedSettings).length ? settingChanges(savedSettings, next, new Date()) : [];
   for (const event of changes) analytics.record(event);
@@ -255,12 +267,105 @@ function watchErrors() {
     analytics.recordError('unhandled_rejection', error.message, error.stack);
   });
 }
+/** A key is only kept for a custom connection the core still has, so a stale window cannot plant an orphan secret. */
+async function assertCustomConnection(provider: CredentialProvider) {
+  if (!isCustomProvider(provider)) return;
+  const workspace = await request('workspace', {}) as Workspace;
+  if (!findCustomConnection(workspace.customConnections ?? [], provider)) throw new Error('Không tìm thấy kết nối này.');
+}
+/** Keeps an API key in the credential store: Settings' Connect and `orglet connect` both end here. Ollama needs none. */
+async function keepApiKey(provider: CredentialProvider, key: string | undefined) {
+  await assertCustomConnection(provider);
+  if (key === undefined && provider !== 'ollama') throw new Error('Thiếu khóa để lưu.');
+  await credentials.save(provider, key === undefined ? OLLAMA_LOCAL_TOKEN : key.trim());
+  await request('invalidateModelList', provider).catch(() => {});
+}
+function announceChange() {
+  if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
+}
+/** The window's own functions for stages C and D, handed to the terminal's operations (docs/cli-held-actions-design.md). */
+function terminalSetupApp(): CliSetupApp {
+  return {
+    dataFolder: app.getPath('userData'),
+    homeFolder: app.getPath('home'),
+    connect: async (provider, key) => { await keepApiKey(CredentialProvider.parse(provider), key); announceChange(); },
+    disconnect: async provider => {
+      await credentials.remove(CredentialProvider.parse(provider));
+      await request('invalidateModelList', provider).catch(() => {});
+      announceChange();
+    },
+    forgetKey: async provider => { await credentials.remove(CredentialProvider.parse(provider)); announceChange(); },
+    saveSearchKey: async (provider, key) => { await webSearchKeys.save(WebSearchKeyProvider.parse(provider), key); announceChange(); },
+    removeSearchKey: async provider => { await webSearchKeys.remove(WebSearchKeyProvider.parse(provider)); announceChange(); },
+    removeMcpServer: async serverId => {
+      mcpSignIns.cancel(serverId);
+      await request('removeMcpServer', serverId);
+      await mcpSecrets.remove(serverId);
+    },
+    signInMcpServer: async serverId => {
+      const serverUrl = await request('mcpSignInTarget', serverId) as string;
+      await mcpSignIns.signIn(serverId, serverUrl);
+      await request('testMcpServer', { id: serverId });
+    },
+    cancelMcpSignIn: serverId => mcpSignIns.cancel(serverId),
+    setSwitch: async (what, enabled) => {
+      if (what === 'analytics') {
+        analytics.setEnabled(enabled);
+        return;
+      }
+      const installer = what === 'cli-path' ? cliInstaller() : sendToInstaller();
+      if (!installer) throw new Error(what === 'cli-path' ? 'Chỉ bản cài trên Windows tự thêm lệnh orglet vào PATH.' : 'Chỉ bản cài trên Windows mới thêm Orglet vào menu Gửi tới.');
+      // Recorded first, so an update that lands while this runs already knows the choice.
+      if (what === 'cli-path') await keepOffPath(app.getPath('userData'), !enabled);
+      else await keepOffSendTo(app.getPath('userData'), !enabled);
+      if (enabled) await installer.install();
+      else await installer.remove();
+    },
+    writeText: (path, text) => writeAtomicText(path, text),
+    account: {
+      label: () => {
+        const state = account.state();
+        return state.name || state.email;
+      },
+      signIn: async () => { await account.signIn(); },
+      signOut: async () => { await account.signOut(); },
+      cancelSignIn: () => { account.cancelSignIn(); },
+      reopenSignIn: async () => { await account.reopenSignIn(); },
+    },
+    startSync: async choice => { await syncTransport!.start(choice); },
+    browserProfiles: {
+      list: async () => (await browserProfiles.list()).map(profile => ({ id: profile.id, name: profile.name })),
+      clear: async profileId => {
+        await browserHost!.requestIfRunning({ kind: 'closeProfile', profileId });
+        await browserProfiles.clear(profileId);
+      },
+      remove: async profileId => {
+        await browserHost!.requestIfRunning({ kind: 'closeProfile', profileId });
+        await browserProfiles.remove(profileId);
+      },
+    },
+  };
+}
 /** The line protocol the `orglet` command talks to (COD-234), with a new token on every start. */
 async function startCliServer(directory: string) {
   const token = createCliToken();
   await writeCliToken(directory, token);
   const translateForCli = (message: string) => translateMessage(activeDictionary(), message);
-  const operations = new CliOperations({ request, version: () => app.getVersion(), open: showWindow, translate: translateForCli,
+  const elevation = new CliElevation({
+    isEnabled: async () => (await request('workspace', {}) as Workspace).terminalAccess !== false,
+    onChange: state => {
+      if (window && !window.isDestroyed()) window.webContents.send('orglet:terminal-access', state);
+    },
+  });
+  const journal = new CliJournal(directory, undefined, notice => {
+    if (window && !window.isDestroyed()) window.webContents.send('orglet:terminal-notice', notice);
+  });
+  terminalElevation = elevation;
+  terminalJournal = journal;
+  // A code that is not typed in time and an idle elevation end by themselves; the window learns of it within seconds.
+  setInterval(() => elevation.expire(), TERMINAL_SWEEP_MILLISECONDS).unref();
+  const operations = new CliOperations({ request,
+    terminalAccess: { elevation, journal }, setup: terminalSetupApp(), version: () => app.getVersion(), open: showWindow, translate: translateForCli,
     observe: observer => {
       cliObservers.add(observer);
       return () => cliObservers.delete(observer);
@@ -270,6 +375,7 @@ async function startCliServer(directory: string) {
       changelog: refresh => changelog.read(refresh),
       updateState: () => updater.state,
       checkForUpdates: () => updater.check(),
+      installUpdate: () => updater.install(),
     },
     // A language set from a terminal reaches main's own dialogs and the spell checker, as one set in the window does.
     settingsChanged: changes => {
@@ -278,14 +384,16 @@ async function startCliServer(directory: string) {
       useSpellCheckerLanguage(language);
     },
   });
+  undoTerminalGrant = rowId => operations.undoGrant(rowId);
   cliServer = new CliServer({
     endpoint: cliEndpoint(directory),
     token,
-    handle: (cliRequest, signal, progress) => {
+    handle: (cliRequest, signal, progress, grant) => {
       analytics.recordFeature('cli');
-      return operations.run(cliRequest, signal, progress);
+      return operations.run(cliRequest, signal, progress, grant);
     },
     translate: translateForCli,
+    elevation,
   });
   await cliServer.start();
 }
@@ -495,8 +603,16 @@ function relayBrowserEvent(raw: unknown) {
     : event;
   window.webContents.send('orglet:browser-live', live);
 }
+/**
+ * A test tool: `ORGLET_TEST_OFFSCREEN=1` keeps the window far off the screen, out of the taskbar and never focused, so
+ * a smoke can drive and photograph the real window without it appearing on the person's desktop. Never for a person.
+ */
+const testOffscreen = process.env.ORGLET_TEST_OFFSCREEN === '1';
+// Not -32000: Windows parks minimized windows there, and a window placed there stops answering a resize.
+const OFFSCREEN_WINDOW = { x: -20000, y: -20000, show: false, skipTaskbar: true };
 async function createDesktopWindow() {
-  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(testOffscreen ? OFFSCREEN_WINDOW : {}), ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  if (testOffscreen) window.showInactive();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('did-start-navigation', (_event, _address, inPlace, mainFrame) => {
     if (mainFrame && !inPlace) moderationCallerGeneration += 1;
@@ -856,6 +972,16 @@ async function start() {
   handle('orglet:update-state', async () => updater.state);
   handle('orglet:check-for-updates', async () => updater.check());
   handle('orglet:install-update', async () => { updater.install(); });
+  // The pairing dialog and the live mark. The window can read the state and end it; it can never start or extend an elevation.
+  handle('orglet:terminal-access-state', async (): Promise<TerminalAccessState> => terminalElevation?.state() ?? EMPTY_TERMINAL_ACCESS);
+  handle('orglet:terminal-access-cancel', async () => { terminalElevation?.cancelPairing(); });
+  handle('orglet:terminal-access-end', async () => { terminalElevation?.endElevation(); });
+  handle('orglet:terminal-journal', async () => terminalJournal ? terminalJournal.list() : []);
+  // Undo names a journal row; what it undoes is the recipe main saved with the row, not anything the window sends.
+  handle('orglet:terminal-undo', async raw => {
+    if (!undoTerminalGrant) throw new Error('Terminal chưa sẵn sàng.');
+    await undoTerminalGrant(z.string().min(1).max(64).parse(raw));
+  });
   // The person's own Exit, from their menu: the same quit as closing the last window, so before-quit runs as usual.
   handle('orglet:quit', async () => { app.quit(); });
   handle('orglet:pick', async () => {
@@ -906,25 +1032,13 @@ async function start() {
     if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
     return connectionStatus();
   };
-  /** A key is only kept for a custom connection the core still has, so a stale window cannot plant an orphan secret. */
-  const assertCustomConnection = async (provider: CredentialProvider) => {
-    if (!isCustomProvider(provider)) return;
-    const workspace = await request('workspace', {}) as Workspace;
-    if (!findCustomConnection(workspace.customConnections ?? [], provider)) throw new Error('Không tìm thấy kết nối này.');
-  };
   handle('orglet:connect', async raw => {
     const body = z.object({ provider: CredentialProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
+    if (body.provider === 'ollama' || body.key !== undefined) {
+      await keepApiKey(body.provider, body.key);
+      return announceConnections();
+    }
     await assertCustomConnection(body.provider);
-    if (body.provider === 'ollama' && body.key === undefined) {
-      await credentials.save('ollama', OLLAMA_LOCAL_TOKEN);
-      await request('invalidateModelList', 'ollama').catch(() => {});
-      return announceConnections();
-    }
-    if (body.key !== undefined) {
-      await credentials.save(body.provider, body.key.trim());
-      await request('invalidateModelList', body.provider).catch(() => {});
-      return announceConnections();
-    }
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn tệp .txt chỉ chứa API key — key được mã hóa bằng Windows'), properties: ['openFile'], filters: [{ name: 'API key text', extensions: ['txt'] }] });
     if (!result.canceled) {
       const file = await open(result.filePaths[0], 'r');
@@ -1225,11 +1339,17 @@ else {
     }
     void receiveLaunch(argv, true);
   });
-  app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
+  // Quitting while the window is still loading rejects that load; it is not a failed start and gets no error box.
+  let quitRequested = false;
+  app.whenReady().then(start).catch(error => {
+    if (!quitRequested) dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.');
+    app.quit();
+  });
   app.on('activate', () => { if (started) void showWindow(); });
   app.on('browser-window-focus', () => syncTransport?.windowFocused());
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', event => {
+    quitRequested = true;
     // Analytics gets one short last flush (at most 3 seconds) before anything else closes.
     if (analytics && !analyticsFlushed) {
       analyticsFlushed = true;

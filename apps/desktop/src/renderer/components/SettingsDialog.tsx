@@ -25,6 +25,7 @@ import { toast } from './toast';
 import { confirmAction } from './confirm';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../../shared/erase';
 import { Switch } from './Switch';
+import { TerminalJournal } from './TerminalAccess';
 import { CodeFontPreview, InterfaceFontSample } from './FontPreview';
 import { AboutSettings } from './AboutSettings';
 import { McpHeadingActions, McpSettings, type McpEditing } from './McpSettings';
@@ -85,7 +86,7 @@ const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
   archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi kết nối / tháng', providerConcurrency: 'Yêu cầu cùng lúc mỗi nhà cung cấp', providerConsent: 'Provider được phép',
-  autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', showWork: 'Hiện cách Tí làm việc', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
+  autoUpdate: 'Tự động cập nhật', marketAutoUpdate: 'Tự cập nhật mục từ Marketplace', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', showWork: 'Hiện cách Tí làm việc', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
@@ -617,7 +618,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; backgroundNotifications: boolean; showWork: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; marketAutoUpdate: boolean; backgroundNotifications: boolean; terminalAccess: boolean; showWork: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
     return t('Đã lưu');
   }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
@@ -955,10 +956,15 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 description={t('Đưa Orglet về như mới cài.')}
                 caveat={t('Mọi trò chuyện, Tí, kênh, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key, kết nối tùy chỉnh và máy chủ MCP được giữ lại.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
+              <Row id="terminal-access-label" title={t('Cho phép terminal làm thay tôi')} description={t('Terminal trả lời được các thẻ đang chờ bạn duyệt, cấp quyền và lưu khóa sau khi bạn gõ mã hiện trong cửa sổ này. Tắt thì mọi lệnh như vậy bị từ chối.')}>
+                <Switch checked={workspace.terminalAccess} disabled={busy} labelledBy="terminal-access-label" onChange={value => void save({ terminalAccess: value })} />
+              </Row>
+              <Row title={t('Terminal đã làm')} description={t('Mới nhất ở trên. Terminal đọc lại danh sách này bằng orglet show terminal.')} />
+              <TerminalJournal />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Tài khoản CodePawl là tùy chọn và chưa đồng bộ gì.')} />
             </>}
 
             {tab === 'account' && <AccountSettings account={account} busy={busy} act={act} />}
-            {tab === 'about' && <AboutSettings workspace={workspace} busy={busy} act={act} onAutoUpdate={value => void save({ autoUpdate: value })} />}
+            {tab === 'about' && <AboutSettings workspace={workspace} busy={busy} act={act} onAutoUpdate={value => void save({ autoUpdate: value })} onMarketAutoUpdate={value => void save({ marketAutoUpdate: value })} />}
   </TabbedDialog>;
 }

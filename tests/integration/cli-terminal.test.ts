@@ -190,13 +190,13 @@ describe('orglet chat slash commands', () => {
 
   it('completes commands and chat names', () => {
     const names = ['Researcher', 'Review crew', 'Writer'];
-    expect(completeSlash('/l', names)).toEqual([['/list', '/language'], '/l']);
+    expect(completeSlash('/l', names)).toEqual([['/list', '/language', '/lock'], '/l']);
     expect(completeSlash('/li', names)).toEqual([['/list'], '/li']);
     expect(completeSlash('/', names)[0]).toEqual(['/to ', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
       '/history', '/revise', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
       '/chats', '/side', '/bring', '/channel', '/group', '/members', '/rename', '/archive', '/restore', '/schedules', '/schedule', '/spaces', '/space', '/market',
       '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme', '/preferences', '/show', '/update',
-      '/new', '/edit', '/delete', '/help', '/exit']);
+      '/new', '/edit', '/delete', '/unlock', '/lock', '/approve', '/grant', '/connect', '/disconnect', '/help', '/exit']);
     expect(completeSlash('/t', names)).toEqual([['/to ', '/theme'], '/t']);
     expect(completeSlash('/to', names)).toEqual([['/to '], '/to']);
     expect(completeSlash('/to re', names)).toEqual([['/to Researcher', '/to Review crew'], '/to re']);

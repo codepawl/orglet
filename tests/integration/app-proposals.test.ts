@@ -200,7 +200,7 @@ describe('proposal tools', () => {
 describe('what the tools cannot reach', () => {
   it('rejects keys, connections, accounts, permissions and the auto-apply switch as unknown fields', () => {
     const settings = { theme: 'dark', language: null, accentColor: null, logoColor: null, interfaceFont: null, codeFont: null, copyFormat: null, downloadFormat: null, autoTitles: null, confirmOpenTask: null };
-    for (const forbidden of ['apiKey', 'connectionLimitMicros', 'providerConsent', 'providerConcurrency', 'autoUpdate', 'archiveRetentionDays', 'connections', 'harnessAccounts', 'backup']) {
+    for (const forbidden of ['apiKey', 'connectionLimitMicros', 'providerConsent', 'providerConcurrency', 'autoUpdate', 'marketAutoUpdate', 'archiveRetentionDays', 'connections', 'harnessAccounts', 'backup']) {
       expect(ProposeSettings.safeParse({ ...settings, [forbidden]: true }).success).toBe(false);
     }
     const orglet = { targetId: null, ref: null, name: 'X', description: null, instructions: 'Y', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null };

@@ -29,6 +29,8 @@ type ComposerOptions = {
   /** A fixed viewport above the draft; absent for callers using inline terminal output. */
   frame?: (height: number, width: number) => string[];
   detail?: () => string;
+  /** While true the draft is drawn as dots (a key being typed), so it never shows on the screen. */
+  masked?: () => boolean;
   shortcut?: (action: ComposerShortcut) => boolean | void;
 };
 
@@ -316,8 +318,9 @@ export class TerminalComposer {
     let column = 0;
     let cursorRow = 0;
     let cursorColumn = prefixWidth;
+    const hidden = this.options.masked?.() === true;
     for (const segment of graphemes.segment(draft)) {
-      const character = segment.segment;
+      const character = hidden && segment.segment !== '\n' ? '•' : segment.segment;
       const columns = displayWidth(character === '\t' ? '  ' : character);
       if (character !== '\n' && column + columns > contentWidth) {
         lines.push(' '.repeat(prefixWidth));

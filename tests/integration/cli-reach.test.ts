@@ -260,7 +260,7 @@ describe('looking at the app', () => {
     expect(spend.rows[0]).toMatchObject({ chargedMicros: expect.any(Number), reservedMicros: expect.any(Number), connectionLimitMicros: expect.any(Number) });
     expect((await show('changelog')).rows).toEqual([{ version: '0.13.0', name: 'Release 0.13.0', publishedAt: '2026-10-08T00:00:00.000Z', url: 'https://example.com/r' }]);
     expect((await show('update')).rows).toEqual([{ status: 'ready', version: '0.14.0' }]);
-    expect(await operationsWith({}, app).run({ op: 'update-check', token }, signal)).toEqual({ status: 'checking' });
+    expect(await operationsWith({}, app).run({ op: 'update-check', token }, signal)).toEqual({ status: 'checking', market: { available: [], records: [] } });
     await expect(operationsWith().run({ op: 'update-check', token }, signal)).rejects.toThrow('đang chạy');
   });
 
@@ -330,6 +330,7 @@ describe('the parity table for what this phase reaches', () => {
       expect(COMMAND_PARITY[key].status, key).toBe('reached');
     }
     expect(COMMAND_PARITY.saveKnowledge.status).toBe('held');
-    for (const key of ['applyWorkspaceReview', 'discardWorkspaceReview', 'restoreWorkspaceFile'] as const) expect(COMMAND_PARITY[key].status, key).toBe('held');
+    expect(COMMAND_PARITY.restoreWorkspaceFile.status).toBe('held');
+    for (const key of ['applyWorkspaceReview', 'discardWorkspaceReview'] as const) expect(COMMAND_PARITY[key].status, key).toBe('elevated');
   });
 });

@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, type PointerEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Folder, FolderOpen } from 'lucide-react';
-import { Plus } from './icons';
+import { Tooltip } from '@codepawlhq/orglet-ui';
+import { PanelLeft, Plus } from './icons';
+import { Button } from './ui';
 import { t } from '../i18n';
 import { RowMenu, type RowMenuItem } from './RowMenu';
 import type { Area } from '../areas';
@@ -91,7 +93,7 @@ function FolderTiles({ folder }: { folder: AreaRailFolder }) {
  * A tile's name shows beside it while the pointer is on it (user, 2026-10-05), the way Discord names a server.
  * Spaces can sit in folders (user, 2026-10-05): a folder is an outlined group with its own tile, which opens and closes it.
  */
-export function AreaRail({ entries, spaces, onCreateSpace, onHover, trail }: {
+export function AreaRail({ entries, spaces, onCreateSpace, onHover, onOpenSidebar, trail }: {
   /** The app's own places: Home, Activity, Library, Schedules. */
   entries: readonly AreaRailEntry[];
   /** The person's spaces and their folders, under a divider of their own (user, 2026-10-05), the way Discord parts its servers from Home. */
@@ -102,6 +104,8 @@ export function AreaRail({ entries, spaces, onCreateSpace, onHover, trail }: {
   trail: { back: boolean; forward: boolean; onTravel: (step: -1 | 1) => void };
   /** The pointer came over the rail or left it, so a folded sidebar can show itself for a look. */
   onHover?: (inside: boolean) => void;
+  /** Given while the sidebar is folded: the rail then starts with the button that pins it open, so the list is never hidden without a way back. */
+  onOpenSidebar?: () => void;
 }) {
   const [tip, setTip] = useState<Tip>();
   const control: TipControl = {
@@ -112,6 +116,11 @@ export function AreaRail({ entries, spaces, onCreateSpace, onHover, trail }: {
     hide: () => setTip(undefined),
   };
   return <TipContext.Provider value={control}><nav className="area-rail" aria-label={t('Khu vực')} onPointerEnter={onHover ? () => onHover(true) : undefined} onPointerLeave={onHover ? () => onHover(false) : undefined} onScroll={control.hide}>
+    {onOpenSidebar && <Tooltip label={t('Mở sidebar')} side="bottom">
+      {/* The pointer on this button is about to open the sidebar for good, so it does not also slide the look out under the tooltip. */}
+      <Button size="icon" className="area-open-sidebar" aria-label={t('Mở sidebar')} onClick={onOpenSidebar}
+        onPointerEnter={() => onHover?.(false)} onPointerLeave={() => onHover?.(true)}><PanelLeft size={18} /></Button>
+    </Tooltip>}
     <div className="area-trail">
       <button type="button" className="area-trail-step" aria-label={t('Quay lại')} title={t('Quay lại')} disabled={!trail.back} onClick={() => trail.onTravel(-1)}><ArrowLeft size={16} /></button>
       <button type="button" className="area-trail-step" aria-label={t('Tiến tới')} title={t('Tiến tới')} disabled={!trail.forward} onClick={() => trail.onTravel(1)}><ArrowRight size={16} /></button>

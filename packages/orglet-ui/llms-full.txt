@@ -1733,6 +1733,7 @@ showToast('Could not save the file', 'error');
 - The container is a polite live region. An `error` toast has `role="alert"`, the others `role="status"`.
 - It is portaled to the page, so an open modal dialog does not hide the announcements.
 - Each toast leads with its tone's icon, left of the text, so the outcome is a shape and not colour alone.
+- A toast is a raised surface of the current theme (`--org-surface`, `--org-text`, a soft shadow, no border). The icon is drawn in `--org-success` or `--org-error`; `info` keeps the text colour.
 - Toasts are not focusable except their action, so keep the action to something that is also reachable elsewhere.
 
 ---

@@ -102,6 +102,7 @@ import { APP_KEY, dwellAbout, dwellChat, dwellModels, followWorkspace, showEarli
 import { useCached } from './prefetch';
 import { becameReady, updateIndicator } from '../shared/updates';
 import { readyUpdateLabel, UpdateButton } from './components/UpdateButton';
+import { TerminalAccessMark, TerminalAccessNotices, TerminalPairingDialog, useTerminalAccess } from './components/TerminalAccess';
 import { restartIntoUpdate } from './updateRestart';
 import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestination, type OpenChatReads } from './openChat';
 import { swapScreen } from './screenTransition';
@@ -434,6 +435,7 @@ export function App() {
   };
   const update = useCached(updateStates, window.orglet ? APP_KEY : undefined);
   const updateMark = updateIndicator(update);
+  const terminalAccess = useTerminalAccess();
   // Full sidebar or the rail (COD-340): the stored mode, written back when the person folds or opens it, never when a
   // narrow window folds it for them.
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => readSidebarMode() === 'full' && innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
@@ -2695,7 +2697,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
@@ -2707,7 +2709,10 @@ export function App() {
         { label: t('Thoát Orglet'), icon: LogOut, danger: true, onSelect: () => void orglet.quit() },
       ]}
       onDwell={dwellAbout}
-      trailing={updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />
+      trailing={<>
+        <TerminalAccessMark state={terminalAccess} />
+        {updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined}
+      </>} />
     <main className="main-pane" id="main-content" tabIndex={-1}>
       {pagePanelOpen ? <PanelPage onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()}
         description={panel === 'routines' ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.'))}
@@ -2891,6 +2896,8 @@ export function App() {
     {privacyTaskId && workspace.tasks.find(task => task.id === privacyTaskId) && <LocalOnlyDialog key={`privacy:${privacyTaskId}`} task={workspace.tasks.find(task => task.id === privacyTaskId)!} workspace={workspace} onClose={() => setPrivacyTaskId(undefined)} />}
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
     <Toaster />
+    <TerminalPairingDialog state={terminalAccess} />
+    <TerminalAccessNotices state={terminalAccess} />
     <Confirmer />
     <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} workspace={workspace} onOpenChat={openChatAt} onOpenOrglet={openWorker} onRestoreOrglet={workerId => { archiveEntity('worker', workerId, false); openWorker(workerId); }} onOpenCrew={openTeam} onDwellTask={dwellChat} />
     <ForwardPicker request={forwarding} options={forwarding ? forwardOptions(workspace, forwarding.taskId, workers => recipientReady(workers.map(item => item.provider))) : []} sending={forwardSending} onSend={choice => void sendForward(choice)} onClose={() => setForwarding(undefined)} />

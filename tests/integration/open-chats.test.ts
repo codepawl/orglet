@@ -9,6 +9,7 @@ import {
   chatKeyForView,
   closeOpenChat,
   initialSidebarMode,
+  NARROW_WINDOW_WIDTH,
   isRosterChat,
   openChatState,
   parseChatKey,
@@ -234,12 +235,20 @@ describe('what is kept between starts', () => {
     expect(parseStoredOpenChats(JSON.stringify({ version: 2, open: ['worker:a', 'task:b'], recent: 'nope' }))).toEqual({ open: ['task:b'], recent: [] });
   });
 
-  it('opens a new install on the rail, and keeps the full sidebar for a profile used before', () => {
-    expect(initialSidebarMode(null, false)).toBe('rail');
-    expect(initialSidebarMode(null, true)).toBe('full');
-    expect(initialSidebarMode('rail', true)).toBe('rail');
-    expect(initialSidebarMode('full', false)).toBe('full');
-    expect(initialSidebarMode('sideways', false)).toBe('rail');
+  it('opens a new install on the full sidebar when the window has room, on the rail when it is narrow', () => {
+    expect(initialSidebarMode(null, false, 1184)).toBe('full');
+    expect(initialSidebarMode(null, false, NARROW_WINDOW_WIDTH + 1)).toBe('full');
+    expect(initialSidebarMode(null, false, NARROW_WINDOW_WIDTH)).toBe('rail');
+    expect(initialSidebarMode(null, false, 600)).toBe('rail');
+  });
+
+  it('keeps the full sidebar for a profile used before, and a saved choice wins over the width', () => {
+    expect(initialSidebarMode(null, true, 600)).toBe('full');
+    expect(initialSidebarMode('rail', true, 1184)).toBe('rail');
+    expect(initialSidebarMode('rail', false, 1184)).toBe('rail');
+    expect(initialSidebarMode('full', false, 600)).toBe('full');
+    expect(initialSidebarMode('sideways', false, 600)).toBe('rail');
+    expect(initialSidebarMode('sideways', false, 1184)).toBe('full');
   });
 });
 

@@ -10,6 +10,8 @@ import { FontFamily } from '../shared/fonts';
 import { Language } from '../shared/i18n';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { CHANNEL_TOPIC_LIMIT, ChannelName } from '../shared/channels';
+import { ElevationScope } from '../shared/terminal-access';
+import { HeldBody, PairingId } from './held-protocol';
 import { ChannelPatch, ChannelTarget, ManagementTarget, OrgletPatch } from './management';
 
 /**
@@ -66,7 +68,7 @@ export type ChatChange = z.infer<typeof ChatChange>;
 /** A schedule (routine) is named the way the app names it: up to 80 characters. */
 const ScheduleName = z.string().trim().min(1).max(80);
 /** What `orglet show` can look at. All read-only; none of them carries a key, a token or a file's content. */
-export const SHOW_TOPICS = ['connections', 'spend', 'changelog', 'update', 'browser', 'desktop', 'sources', 'changes'] as const;
+export const SHOW_TOPICS = ['connections', 'spend', 'changelog', 'update', 'browser', 'desktop', 'sources', 'changes', 'terminal'] as const;
 export type ShowTopic = typeof SHOW_TOPICS[number];
 /** How many past turns one `read` returns at most (COD-354). */
 export const MAX_READ_TURNS = 50;
@@ -210,12 +212,21 @@ export const CliRequest = z.discriminatedUnion('op', [
     autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(),
     copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(),
     archiveRetentionDays: z.union([z.literal(0), z.literal(7), z.literal(30)]).optional(),
-    autoUpdate: z.boolean().optional(), backgroundNotifications: z.boolean().optional(),
+    autoUpdate: z.boolean().optional(), marketAutoUpdate: z.boolean().optional(), backgroundNotifications: z.boolean().optional(),
     accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
     /** A font family, or `null` for the font the app ships with. */
     interfaceFont: FontFamily.nullable().optional(), codeFont: FontFamily.nullable().optional(),
   }).strict(),
   z.object({ op: z.literal('open'), token: CliToken, to: ChatName.optional() }).strict(),
+  // Pairing and the held operations (docs/cli-held-actions-design.md). `elevation` rides beside the token on a request
+  // line and is read by the server before this schema runs, so it is not a field of any operation.
+  z.object({ op: z.literal('pair-start'), token: CliToken, scope: ElevationScope, operation: HeldBody.optional() }).strict()
+    .refine(request => (request.scope === 'one') === (request.operation !== undefined), 'A one-operation pairing names the operation, and no other scope does.'),
+  z.object({ op: z.literal('pair-finish'), token: CliToken, pairingId: PairingId, code: z.string().min(1).max(32) }).strict(),
+  z.object({ op: z.literal('pair-cancel'), token: CliToken, pairingId: PairingId }).strict(),
+  z.object({ op: z.literal('elevation-end'), token: CliToken }).strict(),
+  z.object({ op: z.literal('waiting'), token: CliToken, to: ChatName.optional(), chat: ChatId.optional() }).strict(),
+  z.object({ op: z.literal('held'), token: CliToken, request: HeldBody }).strict(),
   z.object({
     op: z.literal('run'),
     token: CliToken,
@@ -228,11 +239,14 @@ export type CliOperation = CliRequest['op'];
 /** A request before the CLI adds the token; the conditional keeps each operation's own fields. */
 export type CliRequestBody = CliRequest extends infer Request ? Request extends CliRequest ? Omit<Request, 'token'> : never : never;
 
-export type CliErrorCode = 'unauthorized' | 'invalid' | 'too_large' | 'busy' | 'not_found' | 'ambiguous' | 'failed';
+/** `locked`: the operation needs an elevation the request does not carry, or the one it carries has ended. */
+export type CliErrorCode = 'unauthorized' | 'invalid' | 'too_large' | 'busy' | 'not_found' | 'ambiguous' | 'failed' | 'locked';
+/** A request body with the elevation key a held operation carries beside the token. */
+export type CliElevatedBody = CliRequestBody & { elevation?: string };
 export type CliResponse<T = unknown> = { ok: true; value: T } | { ok: false; code: CliErrorCode; error: string };
 export const CliResponseFrame = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown() }).strict(),
-  z.object({ ok: z.literal(false), code: z.enum(['unauthorized', 'invalid', 'too_large', 'busy', 'not_found', 'ambiguous', 'failed']), error: z.string() }).strict(),
+  z.object({ ok: z.literal(false), code: z.enum(['unauthorized', 'invalid', 'too_large', 'busy', 'not_found', 'ambiguous', 'failed', 'locked']), error: z.string() }).strict(),
 ]);
 
 export const CliActivity = RunActivity.extend({ name: z.string().max(80), color: z.string().regex(/^#[a-f0-9]{6}$/i).optional() });
@@ -413,7 +427,7 @@ export type PreferencesValue = {
   language: string; theme: string;
   /** The rest are absent from an app older than the preferences listing. */
   autoTitles?: boolean; confirmOpenTask?: boolean; copyFormat?: string; downloadFormat?: string; archiveRetentionDays?: number;
-  autoUpdate?: boolean; backgroundNotifications?: boolean; accentColor?: string; interfaceFont?: string | null; codeFont?: string | null;
+  autoUpdate?: boolean; marketAutoUpdate?: boolean; backgroundNotifications?: boolean; accentColor?: string; interfaceFont?: string | null; codeFont?: string | null;
 };
 /** What `market update` found, and whether this call applied it: `code` is what `--confirm` takes to apply exactly this update. */
 export type MarketUpdateValue = { name: string; installedVersion: number; version: number; changes: { name: string; before: string; after: string }[]; code: string; applied: boolean };
@@ -423,7 +437,12 @@ export type ShowValue = { what: ShowTopic; rows: ShowRow[]; note?: string };
 export type ChatSettingsValue = { taskId: string; name: string; with: string[]; budgetMicros: number };
 export type NoteValue = { id: string; short: string; title: string };
 export type ScheduleNoticeValue = { schedule: { id: string; name: string }; action: 'dismiss' | 'catch-up'; taskId?: string };
-export type UpdateCheckValue = { status: string; version?: string; message?: string; checkedAt?: string };
+/** What things added from the Marketplace have waiting, and what the automatic path did with them. */
+export type MarketUpdatesValue = {
+  available: { id: string; name: string; kind: 'orglet' | 'crew' | 'space'; version: number; latestVersion?: number }[];
+  records: { name: string; status: 'applied' | 'failed' | 'needs-review'; version: number; reason?: string; block?: 'customized' | 'unknown' | 'widening'; changed: string[] }[];
+};
+export type UpdateCheckValue = { status: string; version?: string; message?: string; checkedAt?: string; market?: MarketUpdatesValue };
 export type ScheduleValue = { schedule: CliScheduleRow };
 export type OpenValue = { chat?: CliChat };
 /** The schedule `run` started and the chat its run opened. */

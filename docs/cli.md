@@ -49,7 +49,7 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet models <provider>` | The models a connection offers; `--to <orglet>` uses that orglet's |
 | `orglet preferences [--language …] [--theme …] [--titles …]` | Shows or changes the app's language, theme and looks. See [preferences](#preferences). |
 | `orglet show <connections\|spend\|changelog\|update\|browser\|desktop\|sources\|changes>` | Looks at the app without changing it. See [show, update and assign](#show-update-and-assign). |
-| `orglet update` | Checks for a new version and says what it found |
+| `orglet update` | Checks for a new version and says what it found, then lists Marketplace items with an update |
 | `orglet assign --chat <id> [--with <name> …] [--budget <USD>]` | Changes who answers a chat and lowers its cost limit |
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category, how it answers and who is in it, in the order the space shows them |
@@ -60,21 +60,85 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 
 It can create, edit and remove orglets and channels, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
 
+### Unlocking: answering what is waiting from the terminal
+
+The design is [cli-held-actions-design.md](cli-held-actions-design.md). A terminal gets the right to answer what a chat is waiting on in one way: **Orglet shows a short code in its window and you type it at the terminal that asked.** An orglet that runs through a coding CLI cannot see Orglet's window and cannot type at your keyboard, so it cannot do this; a flag such as `--yes` would not help it, because it can type that too.
+
+```
+orglet unlock                       opens the terminal chat already unlocked
+orglet approve --to Researcher      prints the card the chat waits on and its choices
+orglet approve --to Researcher once answers it (the choice's name, here an MCP approval)
+orglet approve                      the cards that belong to the app: memories to review, a downloaded update
+orglet reconcile <id> 1.50 invoice  records what the provider billed for an unsettled run
+orglet test mcp <name>|web-search|decision-model
+orglet install-update
+orglet show terminal                what the terminal did (read-only, needs no code)
+```
+
+What you can answer is the same as what the window's buttons do: an MCP, browser or desktop approval; applying or discarding what a run changed, and applying a working copy that a check command blocked; applying, dismissing or undoing an app-change proposal; approving or archiving what an orglet wanted to remember; recording the amount a provider billed; installing a downloaded update; and testing an MCP server, web search or the decision model. Each prints the same facts as the window's card first.
+
+1. The command needs a real terminal on input and output. In a script, or with either redirected, it exits with code 2 before it sends anything.
+2. It asks the app for a code. Orglet comes forward and shows a dialog: **A terminal is asking to act for you**, the code, what it allows and the time left. The only button is **Cancel**. Press it if you did not just run a command.
+3. You type the code at the terminal. It is read from the terminal only, never from an argument, an environment variable, a pipe or a file. A code lives 2 minutes and allows 5 wrong tries. One pairing is open at a time. After 3 pairings that ended without the right code in 10 minutes, pairing is held for 10 minutes.
+4. A one-shot command (`orglet approve … once`) pairs for exactly that operation with exactly those arguments; the key is spent by it and forgotten when the command exits. In the terminal chat, `/unlock` pairs for decisions: the key stays in memory for the session, lasts 15 minutes or 5 without use, and `/lock`, leaving the chat, a refused request or **End now** forget it. When a turn stops on a card, the chat prints the card and says `/unlock` (or `/open` to answer in the window); unlocked, `/approve <choice>` answers it. `/unlock setup` pairs for grants and secrets (next section); the dialog says so in words.
+5. While a terminal is acting, the user panel shows a mark with **End now**. Every answer is listed in **Settings → Data → What the terminal did** and by `orglet show terminal`.
+
+**Settings → Data → Let a terminal act for me** (on by default) turns the whole path off: pairing and every one of these answers are refused, with a sentence that names the setting.
+
+Exit codes are the usual ones; a refused unlock or answer is 1, and a command with no terminal is 2. In `--json` form a request without a live unlock answers `{"ok": false, "code": "locked"}`.
+
+### Grants and keys from the terminal
+
+Grants (what an orglet may reach) and secrets (API keys) take the same code, with a wider scope. In the chat, `/unlock setup` pairs for the session (15 minutes, 5 idle); a one-shot command pairs for exactly its own operation, and the dialog says that operation in words (the chat, the folder, the level) before you type anything. A `decisions` unlock does not allow any of this.
+
+```
+orglet grant tools --to <name> <capability…>                 a chat's tools (skill.read, network.web, workspace.apply…)
+orglet grant folder --to <name> <path> [--edit | --run]      a folder in place of the picker; --chat <id> names a chat by id
+orglet grant folder-level --to <name> read|edit|run          another level on the folder the chat has
+orglet grant folder-revoke --to <name>
+orglet grant schedule-folder watch|work <path> [--edit | --run]
+orglet grant file-revoke <source id>                         take a file back
+orglet grant mcp-enable <server> on|off      mcp --to <name> <server> [<tool>] allow|deny      mcp-remove <server>      mcp-sign-in <server> [--cancel]
+orglet grant limit --to <name> <USD>                         a chat's cost limit, up as well as down
+orglet grant space-tools <space> [<capability…>]             what a new channel in a space starts with
+orglet grant decision-model off | <connection>:<model>…
+orglet grant analytics|cli-path|send-to on|off
+orglet grant backup <path>                                   a new file in a folder that exists, outside the data folder
+orglet grant sync --confirm "<account name>" [merge|replace]
+orglet grant browser-profile clear|delete <profile> --confirm "<profile name>"
+orglet grant harness add <harness> <label> | remove|select|sign-in|sign-out <harness> <account> | cancel <harness>
+orglet grant account sign-in|sign-out|cancel|reopen
+orglet grant custom save <name> <base url> | delete <name>
+orglet connect <provider>        asks for the key with nothing shown as you type
+orglet connect search <provider>
+orglet disconnect <provider>     disconnect search <provider>
+```
+
+- A **folder** is resolved by the app. It has to exist and be a folder, and it may not be a drive root, your home folder itself, the data folder, or a folder that contains the data folder. The folder picker lets you click anything; a path typed in a terminal gets these refusals as well.
+- A **key** is read from the terminal with echo off and only on a real terminal, after the pairing succeeded. It is never an argument, an environment variable, a file path or standard input. It travels inside the one request that saves it, goes to the same encrypted store Settings uses, and is dropped: no answer, no journal line, no log and no error message contains it (a failed save says only that the key was not saved). A pairing for a one-shot `connect` names the operation and the provider, never the key; the hash the pairing is bound to covers the operation and its other arguments and leaves the key out. In the chat, `/connect <provider>` types the key into a masked line that goes nowhere but the request.
+- **`sync`** and **`browser-profile`** need the account's name or the profile's name typed back as `--confirm`. Sign-ins that open a browser (`mcp-sign-in`, `account sign-in`) do what the window does.
+- Each grant raises a **notice** in the window's notification list when it happens. In **Settings → Data → What the terminal did**, a row has **Undo** where the core can take it back: a folder given to a chat that had none (revokes it), a chat's tools or the level of its folder (restores the previous set or level), an MCP server turned on or off, and an MCP permission. Undo runs from the window only; a terminal cannot undo its own grant. How to undo a row is kept in the app's memory, never in the journal file, so a row keeps its Undo until Orglet restarts and a line written into the file by anything else never has one. Limits, keys, switches, backups and the rest have no Undo, because the previous value is not kept or the act cannot be taken back.
+- In the chat the same words are slash commands: `/grant …`, `/connect <provider>`, `/disconnect <provider>`.
+
 ### What stays in the desktop
 
-These are trust decisions, so the terminal has no operation for them:
+These are trust decisions that the terminal never reaches, even with a code:
 
-- browser, desktop and MCP approvals, the cards that ask before an orglet takes a consequential step
-- folder grants and the folder's level
-- a chat's permissions (tools, commands, web)
-- API keys and connections, and signing a harness CLI in
-- approving or archiving knowledge proposals, writing a note to the library (the core saves it as approved, with no review), and applying app-change proposals
-- applying or discarding the changes a run made, restoring a file from its working copy, and what a new channel in a space starts with (its tool permissions)
-- raising what a chat may spend
-- backups, restore and erase
-- the CodePawl account
+- erasing data, and restoring a backup
+- the first-run choice about the CodePawl account
+- the live browser view, taking the browser over, and creating or opening a browser profile
+- publishing to and moderating the marketplace
+
+And these have no terminal command yet, so they stay in the window (`parity.ts` marks each `held` with its reason):
+
+- a chat's browser profile and site list (`setBrowser`) and its granted desktop programs (`setDesktop`)
+- adding or editing an MCP server with its secret values (`saveMcpServer`), and importing servers from a file (`importMcpServers`)
+- the sign-in link the window copies (`accountSignInLink`)
+- writing a note to the library (the core saves it as approved, with no review), restoring a file from its working copy, trusting a skill package, choosing between two versions of a synced chat, and noting that a run's evidence limit was seen
 
 The reason is where the pipe's token lives. It is a file in the data folder. An orglet that runs through a harness CLI such as Claude Code or Codex runs as you, the same user, and can read that folder. Anything the pipe could approve, an orglet could approve for itself. When a turn stops on one of these cards, `send`, `answer` and the chat stop waiting and say so; `/open` or `orglet open --to <name>` shows the card in the app.
+
+Decisions about work that is waiting for you, grants and keys are not in this list: a terminal reaches them after you type a code the window shows (the two sections above).
 
 File Explorer's **Send to** menu and `orglet://` links are other ways in, on [their own page](integrations.md).
 
@@ -596,7 +660,7 @@ orglet preferences --titles off --retention 30 --copy-format markdown --accent "
 orglet preferences --font "Fira Sans" --code-font default --auto-update on --notifications off
 ```
 
-Shows the app's looks and behaviour settings, and changes the ones given: the language, the theme, whether chats are named automatically (`--titles on|off`), whether opening a chat from a notification asks first (`--open-confirmation on|off`), the copy and download formats (`--copy-format`, `--download-format`: `ask`, `text` or `markdown`), how long an archived chat is kept (`--retention 0|7|30` days, 0 until you delete it), automatic updates (`--auto-update`), system notifications while the window is in the background (`--notifications`), the accent colour (`--accent #rrggbb`) and the two fonts (`--font`, `--code-font`; `default` goes back to the font the app ships with). Every other setting stays in the app's Settings: provider permission, the connection limit and the web search provider have no field in the request.
+Shows the app's looks and behaviour settings, and changes the ones given: the language, the theme, whether chats are named automatically (`--titles on|off`), whether opening a chat from a notification asks first (`--open-confirmation on|off`), the copy and download formats (`--copy-format`, `--download-format`: `ask`, `text` or `markdown`), how long an archived chat is kept (`--retention 0|7|30` days, 0 until you delete it), automatic updates (`--auto-update`), applying updates of things added from the Marketplace by itself (`--market-auto-update on|off`, off by default), system notifications while the window is in the background (`--notifications`), the accent colour (`--accent #rrggbb`) and the two fonts (`--font`, `--code-font`; `default` goes back to the font the app ships with). Every other setting stays in the app's Settings: provider permission, the connection limit and the web search provider have no field in the request.
 
 ### show, update and assign
 
@@ -613,7 +677,7 @@ orglet show sources --chat cccc0000
 orglet assign --chat cccc0000 --with Writer --budget 0.25
 ```
 
-`show` only looks. `connections` says yes or no for each API key, custom connection and web search key, and the sign-in status of each CLI account; it never returns a key, token or the account's address. `spend` prints what was charged and what is reserved for runs under way, in integer millionths of a USD, with the connection limit. `changelog` lists the latest releases (`--refresh` fetches them again) and `update` the updater's state; `orglet update` starts the same check as the window's button and prints the state right after. A downloaded update is installed from the window.
+`show` only looks. `connections` says yes or no for each API key, custom connection and web search key, and the sign-in status of each CLI account; it never returns a key, token or the account's address. `spend` prints what was charged and what is reserved for runs under way, in integer millionths of a USD, with the connection limit. `changelog` lists the latest releases (`--refresh` fetches them again) and `update` the updater's state; `orglet update` starts the same check as the window's button and prints the state right after, then the things added from the Marketplace that have a newer version (the command that previews one is `orglet market update "<name>"`, which stays as it is) and what automatic Marketplace updates did: updated, failed with the reason, or left for you with why. A downloaded update is installed from the window.
 
 `browser` and `desktop` print a chat's journal, what each step touched and how it ended. `sources` lists the chat's files by name and size, not where they were picked from. `changes` lists what the chat's runs changed in the working folder, by working copy, with each change's path and status, and notes how many commands ran and how many are uncertain. It does not return the review token: applying or discarding a hand-in, and restoring a file, stay in the window.
 
@@ -631,7 +695,7 @@ Names match without regard to case. A unique start of a name is enough: `--to re
 |---|---|
 | 0 | It worked |
 | 1 | It failed: an unknown name, a turn that failed or ran out of time, a chat with no answer yet |
-| 2 | The command was typed wrong. Run `orglet --help` or `orglet <command> --help`. |
+| 2 | The command was typed wrong. Run `orglet --help` or `orglet <command> --help`. A command that needs you to type a code (`unlock`, `approve`, `reconcile`, `test`, `install-update`, `grant`, `connect`, `disconnect`) also exits 2 when input or output is not a terminal. |
 | 3 | The app could not be reached, even after trying to start it |
 
 Messages that come from the app are in the app's language.
@@ -652,6 +716,7 @@ Messages that come from the app are in the app's language.
 - `schedules`, `schedule-enable`, `schedule-delete` and `schedule-save` read the workspace's routines and call `saveRoutine` and `deleteRoutine`. `schedule-save` has fields for the name, target, brief, timing, limits and a clock or called trigger only; the app fills consent and provider scopes from the target's providers, and refuses providers not in **Settings → Allowed providers** (`providerConsent`). An edit sends the routine's own task back with only the given fields changed.
 - `search`, `running`, `library`, `usage` and `models` read through `searchChats`, the workspace's `running`, `knowledge` and `searchKnowledge`, `harnessUsage` and `modelList`. `memory-edit` and `memory-delete` call `updateMemory` and `deleteMemory`, only for an approved memory, because `updateMemory` approves what it saves. A delete carries `--confirm` text that the app compares with the memory's id and text, or `--yes`; a request with neither is refused by the protocol. `preferences` sends `settings` with the current theme and connection limit and only the language or theme changed; main then updates its own language as for a save in the window.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
+- The operations that answer held decisions (`held`) carry an `elevation` key beside the token. The server checks the token first, then the key's SHA-256 in constant time, its life (15 minutes, 5 idle) and scope; a missing or dead key answers `locked`. The set of operations that need a key comes from `apps/desktop/src/cli/parity.ts` (the `elevated` answer), not from a second list, and a test fails when the two differ. `pair-start` asks for a code (main makes it from an alphabet without 0, O, 1, I and L and shows it in the window; the answer does not carry it), `pair-finish` sends the typed code and is the only answer that ever carries a key, `pair-cancel` and `elevation-end` end a pairing or a key, and `waiting` reads the cards a chat or the app is waiting on, with the same facts as the window and a ready request for each choice. Each answer calls the core command its window button calls; `held` also journals it in `terminal-journal.jsonl` in the data folder (words, never an argument; local, not synced, not in a backup). The key is never written to disk, a log or an environment variable, and the window never receives it. Grants and secrets are `held` bodies too (`tools`, `folder`, `limit`, `connect`, … in `held-protocol.ts`); `main/cli-setup.ts` runs them. Each calls the core command or the `main` function the window's control calls (`setToolCapabilities`, `grantWorkspace` with the checked path, `setWorkspaceLevel`, `revokeWorkspace`, `setMcpServerEnabled`, `setMcpGrant`, `updateTask`, `updateSpace`, `saveDecisionModelSetting`, the harness account commands, `saveCustomConnection`; `backupExport` written to the checked path; the credential, web search key, MCP, account, sync and browser profile functions of `main/index.ts`), and a request needs the `setup` scope or a `one` key made for it. A `secret` field is optional in the schema so the same body can name the operation to a pairing; `pair-start` refuses an operation that carries one, `operationHash` leaves it out, and a body that arrives without it is refused. Settings' **Undo** names a journal row to `undoTerminalAction`; main reads the recipe saved with that row and runs one of five fixed shapes.
 - Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.
 - Native harness step times are when Orglet first observes the start and completion. They are not exact internal harness timings. A step received before its channel member's run metadata keeps those observed times when the author is joined later.

@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
-import { label, labelBefore, useEnglish, useFullSidebar, openHome } from './smoke-language.mjs';
+import { label, labelBefore, useEnglish, useFullSidebar, openHome, openSettings } from './smoke-language.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-marketplace-'));
 const { env } = await isolatedHarnessEnvironment(directory);
@@ -90,7 +90,10 @@ try {
   page = await app.firstWindow();
   await page.waitForFunction(() => window.orglet !== undefined);
   const after = await page.evaluate(() => window.orglet.call('marketInstallations', {}));
-  assert.deepEqual(after.map(item => ({ ...item, updateAvailable: false })), before, 'origin links survive a packaged app restart');
+  // The fixture above published version 2, so only what says an update exists may differ.
+  const withoutUpdateState = items => items.map(({ updateAvailable, latestVersion, ...origin }) => origin);
+  assert.deepEqual(withoutUpdateState(after), withoutUpdateState(before), 'origin links survive a packaged app restart');
+  assert.equal(after.find(item => item.listingId === 'research-friend').latestVersion, 2);
   await openHome(page);
   await page.locator('.sidebar').getByRole('button', { name: label('Tùy chọn {0}', ['Research friend']), exact: true }).first().click();
   await page.getByRole('menuitem', { name: label('Chỉnh sửa'), exact: true }).click();
@@ -106,6 +109,22 @@ try {
   assert.equal((await workspace(page)).workers.find(worker => worker.id === orglet.id).revision, 2);
   await page.keyboard.press('Escape');
   await page.locator('.marketplace-profile').waitFor({ state: 'detached' });
+  // The same update is listed beside the app's own in Settings, About. This copy was edited, so Update opens the
+  // comparison instead of replacing the edit.
+  await openSettings(page);
+  await page.getByRole('tab', { name: label('Giới thiệu'), exact: true }).click();
+  const updateRow = page.locator('.setting-row').filter({ hasText: 'Research friend' });
+  await updateRow.waitFor();
+  assert.match(await updateRow.innerText(), /v1\s*→\s*v2/);
+  await settle(page);
+  await page.screenshot({ path: 'test-results/marketplace-updates-about.png' });
+  await updateRow.getByRole('button', { name: label('Cập nhật'), exact: true }).click();
+  await page.locator('.marketplace-update').waitFor();
+  assert.equal((await workspace(page)).workers.find(worker => worker.id === orglet.id).revision, 2, 'an edited copy is not replaced by one click');
+  await page.screenshot({ path: 'test-results/marketplace-updates-about-compare.png' });
+  await page.getByRole('button', { name: label('Hủy'), exact: true }).click();
+  await page.locator('.marketplace-update').waitFor({ state: 'detached' });
+  await page.keyboard.press('Escape');
   await openDiscover(page);
   await page.getByRole('button', { name: label('Xem bản cập nhật'), exact: true }).click();
   await page.locator('.marketplace-update').waitFor();

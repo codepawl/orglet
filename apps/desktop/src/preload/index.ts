@@ -130,6 +130,21 @@ const bridge: Bridge = {
     ipcRenderer.on('orglet:browser-live', listener);
     return () => ipcRenderer.removeListener('orglet:browser-live', listener);
   },
+  terminalAccessState: () => invoke('orglet:terminal-access-state'),
+  onTerminalAccess: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, state: import('../shared/terminal-access').TerminalAccessState) => callback(state);
+    ipcRenderer.on('orglet:terminal-access', listener);
+    return () => ipcRenderer.removeListener('orglet:terminal-access', listener);
+  },
+  cancelTerminalPairing: () => invoke('orglet:terminal-access-cancel'),
+  endTerminalAccess: () => invoke('orglet:terminal-access-end'),
+  terminalJournal: () => invoke('orglet:terminal-journal'),
+  undoTerminalAction: rowId => invoke('orglet:terminal-undo', rowId),
+  onTerminalNotice: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, notice: import('../shared/terminal-access').TerminalNotice) => callback(notice);
+    ipcRenderer.on('orglet:terminal-notice', listener);
+    return () => ipcRenderer.removeListener('orglet:terminal-notice', listener);
+  },
 };
 contextBridge.exposeInMainWorld('orglet', bridge);
 

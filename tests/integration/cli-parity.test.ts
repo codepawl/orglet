@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BRIDGE_PARITY, COMMAND_PARITY, type Parity } from '../../apps/desktop/src/cli/parity';
+import { BRIDGE_PARITY, COMMAND_PARITY, elevatedKeys, heldActionScope, NEVER_FROM_TERMINAL, type Parity } from '../../apps/desktop/src/cli/parity';
+import { HELD_ACTIONS, SETUP_ACTIONS, type HeldAction } from '../../apps/desktop/src/cli/held-protocol';
 import { commands } from '../../apps/desktop/src/shared/contracts';
 
 const SOURCE_FOLDER = join(__dirname, '../../apps/desktop/src');
@@ -62,7 +63,8 @@ describe('the parity table of the orglet terminal command', () => {
     for (const [key, entry] of Object.entries(COMMAND_PARITY)) {
       const sent = isQuotedIn(source, sentCommand(entry, key));
       if (entry.status === 'reached' && !sent) claimedButNotSent.push(key);
-      if (entry.status !== 'reached' && sent) sentButNotClaimed.push(key);
+      if (entry.status === 'elevated' && !sent) claimedButNotSent.push(key);
+      if (entry.status !== 'reached' && entry.status !== 'elevated' && sent) sentButNotClaimed.push(key);
     }
     expect(claimedButNotSent).toEqual([]);
     expect(sentButNotClaimed).toEqual([]);
@@ -70,7 +72,7 @@ describe('the parity table of the orglet terminal command', () => {
 
   it('gives each answer the words it needs: a command for reached, a reason for the others', () => {
     for (const entry of [...Object.values(COMMAND_PARITY), ...Object.values(BRIDGE_PARITY)]) {
-      if (entry.status === 'reached') expect(entry.command).toMatch(/^orglet\b/);
+      if (entry.status === 'reached' || entry.status === 'elevated') expect(entry.command).toMatch(/^orglet\b/);
       else expect(entry.reason.length).toBeGreaterThan(5);
     }
   });
@@ -81,9 +83,30 @@ describe('the parity table of the orglet terminal command', () => {
     expect(held.filter(key => isQuotedIn(source, key))).toEqual([]);
   });
 
-  it('counts the three answers, so a change of the table shows in review', () => {
+  it('derives the operations that need an elevation from the table: every elevated key belongs to a held action, and the reverse', () => {
+    const fromActions = Object.values(HELD_ACTIONS).flatMap(action => action.keys).sort();
+    expect(elevatedKeys().sort()).toEqual(fromActions);
+  });
+
+  it('gives every held action the scope its keys say: grants and secrets are setup, decisions are decisions', () => {
+    for (const action of Object.keys(HELD_ACTIONS) as HeldAction[]) {
+      expect(heldActionScope(action), action).toBe(SETUP_ACTIONS.has(action) ? 'setup' : 'decisions');
+    }
+  });
+
+  it('never makes anything on the never-from-the-terminal list elevated', () => {
+    const table = { ...COMMAND_PARITY, ...BRIDGE_PARITY } as Record<string, Parity>;
+    for (const key of NEVER_FROM_TERMINAL) {
+      expect(table[key], key).toBeDefined();
+      expect(table[key].status, key).not.toBe('elevated');
+      expect(table[key].status, key).not.toBe('reached');
+      expect(elevatedKeys(), key).not.toContain(key);
+    }
+  });
+
+  it('counts the four answers, so a change of the table shows in review', () => {
     const count = (status: Parity['status']) => Object.values(COMMAND_PARITY).filter(entry => entry.status === status).length;
-    expect(count('reached') + count('window-only') + count('held')).toBe(commandKeys.length);
+    expect(count('reached') + count('elevated') + count('window-only') + count('held')).toBe(commandKeys.length);
     expect(Object.values(BRIDGE_PARITY).filter(entry => entry.status === 'reached')).toEqual([]);
   });
 });
