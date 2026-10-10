@@ -67,7 +67,8 @@ export async function expandSidebar(page) {
   if (!await page.locator('.app.sidebar-hidden').count()) {
     // A sidebar that starts open is on screen before its header is: wait for the control that folds it, so a smoke
     // never presses a row while the first paint is still settling.
-    await page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true }).first().waitFor();
+    // A smoke may have switched the interface to Vietnamese, so either name is the control.
+    await page.getByRole('button', { name: new RegExp('^(' + label('Thu gọn sidebar') + '|Thu gọn sidebar)$') }).first().waitFor();
     await page.locator('.app:not(.startup)').waitFor();
     return false;
   }
