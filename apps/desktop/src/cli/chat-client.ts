@@ -3,6 +3,7 @@ import { DEFAULT_WAIT_SECONDS, type BringValue, type ChatChangeValue, type ChatC
 import type { Reaction } from '../shared/message-interactions';
 import type { LibraryValue, ModelsValue, PreferencesValue, RunningValue, RunValue, SchedulesValue, ScheduleValue, SearchValue, SpacesValue, UsageValue } from './protocol';
 import type { CliProgressFrame } from './protocol';
+import type { HeldClient } from './held-client';
 import { ManagementCatalog, ManagementResult, type ManagementClient } from './management';
 
 /**
@@ -18,6 +19,8 @@ export type ChatClient = {
   open: (to: string) => Promise<OpenValue>;
   management?: ManagementClient;
   actions?: ChatActionClient;
+  /** Pairing and the held operations; absent in a test that gives the session a fake app. */
+  held?: HeldClient;
 };
 
 /** What a one-shot command printed and how it ended: 0 is success. */

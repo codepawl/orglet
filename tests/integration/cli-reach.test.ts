@@ -330,6 +330,7 @@ describe('the parity table for what this phase reaches', () => {
       expect(COMMAND_PARITY[key].status, key).toBe('reached');
     }
     expect(COMMAND_PARITY.saveKnowledge.status).toBe('held');
-    for (const key of ['applyWorkspaceReview', 'discardWorkspaceReview', 'restoreWorkspaceFile'] as const) expect(COMMAND_PARITY[key].status, key).toBe('held');
+    expect(COMMAND_PARITY.restoreWorkspaceFile.status).toBe('held');
+    for (const key of ['applyWorkspaceReview', 'discardWorkspaceReview'] as const) expect(COMMAND_PARITY[key].status, key).toBe('elevated');
   });
 });

@@ -234,6 +234,12 @@ try {
   assert.equal(refused.code, 'unauthorized');
   const disallowed = await rawRequest(userData, { op: 'eraseData', token, scope: 'everything' });
   assert.equal(disallowed.code, 'invalid');
+  // A decision held for the person is `locked` with only the token, and nothing changed. The pairing itself needs a
+  // pseudo-terminal and the code from the window, which this smoke does not drive.
+  const locked = await rawRequest(userData, { op: 'held', token, request: { action: 'test', what: 'web-search' } });
+  assert.equal(locked.ok, false);
+  assert.equal(locked.code, 'locked');
+  assert.equal(orglet(userData, 'approve', '--to', 'Researcher').code, 2, 'A held command without a terminal exits 2');
   const afterRefusal = await app.firstWindow().then(page => page.evaluate(() => window.orglet.call('workspace', {})));
   assert.ok(afterRefusal.tasks.length >= 1, 'A refused request must not change anything');
 
