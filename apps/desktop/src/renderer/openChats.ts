@@ -263,17 +263,22 @@ export function writeOpenChats(state: OpenChats) {
 
 /**
  * How the left column shows the roster: the narrow rail of faces, or the full sidebar with its sections. The rail is
- * the default; a profile from before the rail keeps the full sidebar it has always had, until the person folds it.
+ * the default only in a narrow window; a wide window and a profile from before the rail show the full sidebar, until
+ * the person folds it, and what they chose wins from then on.
  */
 export type SidebarMode = 'rail' | 'full';
 
 const sidebarModeKey = 'orglet.sidebar-mode';
+/** At this width and below the sidebar lays over the chat instead of sharing the row with it (the CSS breakpoint). */
+export const NARROW_WINDOW_WIDTH = 780;
 /** Keys only a profile that has been used before holds: the last open chat and the dragged sidebar width. */
 const earlierProfileKeys = ['orglet.last-open-chat', 'orglet.sidebar-width'];
 
-export function initialSidebarMode(stored: string | null, hasEarlierProfile: boolean): SidebarMode {
+export function initialSidebarMode(stored: string | null, hasEarlierProfile: boolean, windowWidth: number): SidebarMode {
   if (stored === 'rail' || stored === 'full') return stored;
-  return hasEarlierProfile ? 'full' : 'rail';
+  // A new install in a window with room for the list and a chat shows the list: nothing on a folded rail says it can open.
+  const roomForSidebar = windowWidth > NARROW_WINDOW_WIDTH;
+  return hasEarlierProfile || roomForSidebar ? 'full' : 'rail';
 }
 
 /**
@@ -284,7 +289,7 @@ export function readSidebarMode(): SidebarMode {
   try {
     const stored = localStorage.getItem(sidebarModeKey);
     const hasEarlierProfile = earlierProfileKeys.some(key => localStorage.getItem(key) !== null);
-    const mode = initialSidebarMode(stored, hasEarlierProfile);
+    const mode = initialSidebarMode(stored, hasEarlierProfile, window.innerWidth);
     if (stored !== mode) localStorage.setItem(sidebarModeKey, mode);
     return mode;
   } catch {

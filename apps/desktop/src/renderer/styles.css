@@ -1805,13 +1805,12 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-motion-quick:var(--motion-quick); --org-motion-base:var(--motion-base); --org-motion-gesture:var(--motion-gesture);
   --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);
   --org-panel-width:var(--panel-width); --org-panel-height:var(--panel-height); --org-overlay:#0000002e;
-  --org-toast-error:#ff8a8a;
   --org-select-height:var(--select-height); --org-select-radius:var(--select-radius); --org-select-option-height:var(--select-option-height);
   --org-sidebar:var(--sidebar);
 }
-/* The dialog backdrop and the toasts are portaled to the page, so they follow the page's theme. */
-:root[data-theme=dark] { --org-overlay:#00000059; --org-toast-error:#a82626; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { --org-overlay:#00000059; --org-toast-error:#a82626; } }
+/* The dialog backdrop is portaled to the page, so it follows the page's theme. */
+:root[data-theme=dark] { --org-overlay:#00000059; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { --org-overlay:#00000059; } }
 .field { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
 /* Flex, like the <label> around an input: an inline title box adds a line strut, and a Select then sat 3px lower
    than the input beside it in a two-column grid (COD-245). */
@@ -3261,6 +3260,7 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-rail-list { display:flex; flex-direction:column; align-items:center; gap:8px; margin:0; padding:0; list-style:none; }
 /* Back and forward, side by side above the tiles: small and quiet, since they are used far less than the tiles. They
    start level with the top edge of the cards beside the rail (user, 2026-10-05), so the rail has no top padding. */
+.area-open-sidebar { flex-shrink:0; margin-bottom:-4px; }
 .area-trail { display:flex; align-items:center; justify-content:center; gap:2px; flex-shrink:0; margin-bottom:-4px; }
 .area-trail-step { display:grid; place-items:center; width:24px; height:24px; min-height:24px; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
 .area-trail-step:hover:not(:disabled) { background:var(--row-hover); color:var(--text); }

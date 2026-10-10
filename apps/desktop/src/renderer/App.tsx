@@ -2695,7 +2695,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
