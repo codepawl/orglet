@@ -1,6 +1,6 @@
 # CodePawl AI router: design
 
-**Status: proposed, 2026-10-10. Nothing is built or deployed. Step 1 of issue 532. Four things below need the owner's answer or a written answer from a third party before any code; they are listed under [Before any code](#before-any-code).**
+**Status: agreed in outline, 2026-10-10. Nothing is deployed. Step 1 of issue 532. The owner agreed the free budget, chose Polar and US dollars first, and set what is sold: the API paid by use, and a subscription, starting with one small plan to test. The written answers from third parties under [Before it is sold](#before-it-is-sold) are still open.**
 
 The owner's calls (2026-10-10): the router is a product of its own, not only the engine behind Orglet; it routes whatever model fits, free or paid; and the system is built to earn the most it honestly can.
 
@@ -107,14 +107,26 @@ Planning price for a small model: $0.10 per million input tokens and $0.40 per m
 
 With 1,000 free accounts using a fifth of a 200,000-token allowance on average: about $210 a month. With the 50,000-token allowance: about $48.
 
-**Proposed for v0:** 50,000 tokens a day per account, and a global free budget of **$50 a month** that turns free models off for the rest of the month when reached. Fixed costs beside it: Workers Paid $5 a month. Nothing is deployed until the owner agrees to this figure.
+**Agreed for v0 (owner, 2026-10-10):** 50,000 tokens a day per account, and a global free budget of **$50 a month** that turns free models off for the rest of the month when reached. Fixed costs beside it: Workers Paid $5 a month.
 
-## Before any code
+## What is sold
 
-1. **Owner: agree the free budget.** $50 a month and 50,000 tokens a day, or other figures.
-2. **Owner: which payment route first.** A domestic VND gateway for customers in Vietnam (the wedge above; the gateway, its fee, and what the household business may invoice are to be checked with the gateway and the accountant), a merchant of record for customers abroad, or both. Either way the paid plan waits for a written yes from the provider that this product is acceptable.
-3. **Third parties, in writing:** Anthropic and OpenAI on whether a router, and bring-your-own-key routing, is approved; the chosen merchant of record on a subscription with included AI usage; each inference provider's terms on serving end users.
-4. **One measurement:** a test Worker relaying a long stream, to learn what it costs in CPU time.
+The owner's call (2026-10-10): two things, through Polar, in US dollars.
+
+1. **The API, paid by use.** A customer with a card on file is billed each month for what they used, at the published price per model. In Polar this is a product with a metered price: the router sends usage events and Polar invoices them. Nothing is prepaid, so nothing is stored value.
+2. **A subscription.** One small plan first, to test the whole path: **Starter, $5 a month, with $3.50 of usage at the published prices**, no rollover. Polar's fee on a $5 payment is about $0.68 (4% + $0.40, plus 1.5% on an international card), which leaves about $4.32; the included usage is priced so a subscriber who uses all of it still leaves the router above cost through the spread. Larger plans come after this one has run.
+
+Free stays: 50,000 tokens a day per account on the free models, inside the global budget below.
+
+Polar's acceptable use forbids "Selling others' products or services using Polar against an upfront payment or with an agreed upon revenue share". The router sells its own service, routing with failover, caching and one bill, but the line is Polar's to draw, so the product description sent to Polar at onboarding says plainly what it is, and nothing is charged to a real customer before Polar has accepted it.
+
+## Before it is sold
+
+1. **Agreed (owner, 2026-10-10):** the free budget, $50 a month in all and 50,000 tokens a day per account; Polar and US dollars first. A domestic VND gateway stays the next route to look at.
+2. **Third parties, in writing:** Polar on this product, at onboarding; each inference provider's terms on serving end users, before it is added; Anthropic and OpenAI on whether a router, and bring-your-own-key routing, is approved, before either lab's models are listed.
+3. **One measurement:** a test Worker relaying a long stream, to learn what it costs in CPU time.
+
+Code for v0 can be written and tested locally before these answers; deploying, and charging anyone, cannot.
 
 ## Risks
 
