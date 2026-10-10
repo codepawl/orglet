@@ -2,7 +2,8 @@ import { readFileSync, statSync } from 'node:fs';
 import { UsageError } from './arguments';
 import type { HeldBody } from './held-protocol';
 import { parseMcpImportNamingSecrets, type McpNamedSecret } from '../shared/mcp';
-import { t } from './text';
+import { neverDesktopProgram } from '../shared/desktop';
+import { t, tMessage } from './text';
 
 /**
  * `orglet grant …`, `orglet connect <provider>` and `orglet disconnect <provider>` (docs/cli-held-actions-design.md,
@@ -208,6 +209,9 @@ function browserBody(options: Options): HeldBody {
 
 function desktopBody(options: Options): HeldBody {
   if (options.mode === undefined && !hasList(options, ['--add', '--remove'])) throw new UsageError(t('Gõ ít nhất một thay đổi: --mode, --add hoặc --remove.'));
+  // Refused here, before any code is asked for: the app refuses these programs whatever the person types.
+  const neverGranted = (options.lists['--add'] ?? []).find(program => neverDesktopProgram(program, ['orglet.exe', 'electron.exe']));
+  if (neverGranted !== undefined) throw new UsageError(t('Orglet không bao giờ dùng ứng dụng {0}.', neverGranted));
   return {
     action: 'desktop-choice', ...chatFields(options),
     ...(options.mode !== undefined ? { mode: modeOf(options.mode) } : {}),
@@ -230,9 +234,9 @@ function serverFileRequest(verb: 'mcp-save' | 'mcp-import', path: string | undef
   try {
     parsed = parseMcpImportNamingSecrets(text);
   } catch (error) {
-    throw new UsageError(error instanceof Error ? error.message : t('Tệp không hợp lệ.'));
+    throw new UsageError(error instanceof Error ? tMessage(error.message) : t('Tệp không hợp lệ.'));
   }
-  if (parsed.drafts.length === 0) throw new UsageError(parsed.skipped.map(item => `${item.name}: ${item.reason}`).join(' '));
+  if (parsed.drafts.length === 0) throw new UsageError(parsed.skipped.map(item => `${item.name}: ${tMessage(item.reason)}`).join(' '));
   if (verb === 'mcp-save' && parsed.drafts.length !== 1) throw new UsageError(t('Tệp có {0} máy chủ. Dùng orglet grant mcp-import cho nhiều máy chủ.', parsed.drafts.length));
   return { body: { action: verb, servers: parsed.drafts }, ...(parsed.secrets.length ? { mcpSecrets: parsed.secrets } : {}) };
 }
