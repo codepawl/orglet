@@ -1,5 +1,6 @@
 import type { Connections, Source, TaskDetail } from '../shared/contracts';
 import type { Language } from '../shared/i18n';
+import type { McpServerDraft } from '../shared/mcp';
 import type { Changelog, UpdateState } from '../shared/updates';
 import type { CliChat, SendValue } from '../cli/protocol';
 import type { CliActivityFeed, CliObserver } from './cli-activity';
@@ -40,6 +41,8 @@ export type CliSetupApp = {
   removeMcpServer: (serverId: string) => Promise<void>;
   signInMcpServer: (serverId: string) => Promise<void>;
   cancelMcpSignIn: (serverId: string) => void;
+  /** Saves a server with its secret values the way Settings' form does: the values go to the encrypted store, the core gets names. */
+  saveMcpServer: (draft: McpServerDraft) => Promise<void>;
   setSwitch: (what: 'analytics' | 'cli-path' | 'send-to', enabled: boolean) => Promise<void>;
   writeText: (path: string, text: string) => Promise<void>;
   account: {

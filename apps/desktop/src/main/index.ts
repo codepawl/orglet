@@ -304,6 +304,23 @@ async function signOutAccount() {
 function announceChange() {
   if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
 }
+/**
+ * MCP servers (COD-241). The form's secret values stop here: they are encrypted into main's store and the core
+ * receives the server's shape with names only. A new server's values are dropped again if the core refuses it.
+ * Settings' form, its import and `orglet grant mcp-save` all end here.
+ */
+async function saveMcpDraft(draft: McpServerDraft): Promise<McpServerView> {
+  const serverId = draft.id ?? randomUUID();
+  const saved = draft.id ? await mcpSecrets.read(serverId) : { env: {}, headers: {} };
+  const { config, secrets } = splitMcpDraft(draft, serverId, saved);
+  await mcpSecrets.save(serverId, secrets);
+  try {
+    return await request('saveMcpServer', config) as McpServerView;
+  } catch (error) {
+    if (!draft.id) await mcpSecrets.remove(serverId);
+    throw error;
+  }
+}
 /** The window's own functions for stages C and D, handed to the terminal's operations (docs/cli-held-actions-design.md). */
 function terminalSetupApp(): CliSetupApp {
   return {
@@ -329,6 +346,7 @@ function terminalSetupApp(): CliSetupApp {
       await request('testMcpServer', { id: serverId });
     },
     cancelMcpSignIn: serverId => mcpSignIns.cancel(serverId),
+    saveMcpServer: async draft => { await saveMcpDraft(draft); announceChange(); },
     setSwitch: async (what, enabled) => {
       if (what === 'analytics') {
         analytics.setEnabled(enabled);
@@ -1114,22 +1132,6 @@ async function start() {
     await webSearchKeys.remove(WebSearchKeyProvider.parse(raw));
     return announceConnections();
   });
-  /**
-   * MCP servers (COD-241). The form's secret values stop here: they are encrypted into main's store and the core
-   * receives the server's shape with names only. A new server's values are dropped again if the core refuses it.
-   */
-  const saveMcpDraft = async (draft: McpServerDraft): Promise<McpServerView> => {
-    const serverId = draft.id ?? randomUUID();
-    const saved = draft.id ? await mcpSecrets.read(serverId) : { env: {}, headers: {} };
-    const { config, secrets } = splitMcpDraft(draft, serverId, saved);
-    await mcpSecrets.save(serverId, secrets);
-    try {
-      return await request('saveMcpServer', config) as McpServerView;
-    } catch (error) {
-      if (!draft.id) await mcpSecrets.remove(serverId);
-      throw error;
-    }
-  };
   handle('orglet:mcp-save', async raw => saveMcpDraft(McpServerDraft.parse(raw)));
   /**
    * Signs in to a remote server in the system browser (stage 4). The address comes from the core's saved server, never

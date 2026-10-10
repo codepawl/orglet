@@ -1,5 +1,7 @@
+import { readFileSync, statSync } from 'node:fs';
 import { UsageError } from './arguments';
 import type { HeldBody } from './held-protocol';
+import { parseMcpImportNamingSecrets, type McpNamedSecret } from '../shared/mcp';
 import { t } from './text';
 
 /**
@@ -10,12 +12,16 @@ import { t } from './text';
 
 export const SETUP_COMMANDS = ['grant', 'connect', 'disconnect'] as const;
 
-export type SetupRequest = { body: HeldBody; secretPrompt?: string };
+/** `secretPrompt` is one key; `mcpSecrets` are the values a server file names, each typed after the pairing with echo off. */
+export type SetupRequest = { body: HeldBody; secretPrompt?: string; mcpSecrets?: McpNamedSecret[] };
 
-type Options = { positionals: string[]; to?: string; chat?: string; confirm?: string; flags: Set<string> };
+type Options = { positionals: string[]; to?: string; chat?: string; confirm?: string; profile?: string; mode?: string; lists: Record<string, string[]>; flags: Set<string> };
 
-const VALUE_OPTIONS = new Set(['--to', '--chat', '--confirm']);
+const VALUE_OPTIONS = new Set(['--to', '--chat', '--confirm', '--profile', '--mode']);
+/** Options that may repeat, each repeat adding one value. */
+const LIST_OPTIONS = new Set(['--allow', '--block', '--remove', '--add']);
 const FLAG_OPTIONS = new Set(['--edit', '--run', '--cancel']);
+const MAX_SERVER_FILE_BYTES = 1024 * 1024;
 
 export const SETUP_HELP = [
   t('Cấp quyền và lưu khóa từ terminal, mỗi lệnh cần mã hiện trong cửa sổ Orglet (chỉ chạy khi có terminal):'),
@@ -36,6 +42,9 @@ export const SETUP_HELP = [
   '  orglet grant sync --confirm "<account name>" [merge|replace]',
   '  orglet grant browser-profile clear|delete <profile> --confirm "<profile name>"',
   '  orglet grant harness add <harness> <label> | remove|select|sign-in|sign-out <harness> <account> | cancel <harness>',
+  '  orglet grant browser (--to <name> | --chat <id>) [--profile <name>] [--mode none|read|act] [--allow <site>…] [--block <site>…] [--remove <site>…]',
+  '  orglet grant desktop (--to <name> | --chat <id>) [--mode none|read|act] [--add <program>…] [--remove <program>…]',
+  '  orglet grant mcp-save <file.json> | mcp-import <file.json>      ' + t('tệp chỉ nêu tên bí mật; giá trị gõ ở terminal, không hiện'),
   '  orglet grant account sign-in|sign-out|cancel|reopen',
   '  orglet grant custom save <name> <base url> | delete <name>',
   '  orglet connect <provider>        ' + t('hỏi khóa, không hiện khi gõ'),
@@ -48,15 +57,18 @@ export function isSetupCommand(argumentList: readonly string[]): boolean {
 }
 
 function readOptions(argumentList: readonly string[]): Options {
-  const options: Options = { positionals: [], flags: new Set() };
+  const options: Options = { positionals: [], lists: {}, flags: new Set() };
   for (let index = 0; index < argumentList.length; index += 1) {
     const argument = argumentList[index];
-    if (VALUE_OPTIONS.has(argument)) {
+    if (VALUE_OPTIONS.has(argument) || LIST_OPTIONS.has(argument)) {
       const value = argumentList[index + 1];
       if (value === undefined) throw new UsageError(t('{0} cần một giá trị.', argument));
       index += 1;
       if (argument === '--to') options.to = value;
       else if (argument === '--chat') options.chat = value.replace(/^#/, '');
+      else if (argument === '--profile') options.profile = value;
+      else if (argument === '--mode') options.mode = value;
+      else if (LIST_OPTIONS.has(argument)) options.lists[argument] = [...(options.lists[argument] ?? []), value];
       else options.confirm = value;
     } else if (FLAG_OPTIONS.has(argument)) {
       options.flags.add(argument);
@@ -157,12 +169,72 @@ function grantBody(options: Options): HeldBody {
     case 'account':
       if (first !== 'sign-in' && first !== 'sign-out' && first !== 'cancel' && first !== 'reopen') throw new UsageError(t('Gõ sign-in, sign-out, cancel hoặc reopen.'));
       return { action: 'account', change: first };
+    case 'browser': return browserBody(options);
+    case 'desktop': return desktopBody(options);
     case 'custom':
       if (first === 'delete') return { action: 'custom-connection', change: 'delete', name: needed(second, t('tên kết nối')) };
       if (first === 'save') return { action: 'custom-connection', change: 'save', name: needed(second, t('tên kết nối')), baseUrl: needed(third, t('địa chỉ gốc')) };
       throw new UsageError(t('Gõ orglet grant custom save <tên> <địa chỉ> hoặc delete <tên>.'));
     default: throw new UsageError(t('Gõ "orglet grant --help" để xem các việc có thể cấp.'));
   }
+}
+
+function modeOf(word: string | undefined): 'none' | 'read' | 'act' | undefined {
+  if (word === undefined) return undefined;
+  if (word === 'none' || word === 'read' || word === 'act') return word;
+  throw new UsageError(t('--mode phải là none, read hoặc act.'));
+}
+
+function listed(options: Options, name: string): { [key: string]: string[] } {
+  const values = options.lists[name];
+  return values?.length ? { [name.slice(2)]: values } : {};
+}
+
+function hasList(options: Options, names: readonly string[]): boolean {
+  return names.some(name => (options.lists[name]?.length ?? 0) > 0);
+}
+
+function browserBody(options: Options): HeldBody {
+  if (options.profile === undefined && options.mode === undefined && !hasList(options, ['--allow', '--block', '--remove'])) {
+    throw new UsageError(t('Gõ ít nhất một thay đổi: --profile, --mode, --allow, --block hoặc --remove.'));
+  }
+  return {
+    action: 'browser-choice', ...chatFields(options),
+    ...(options.profile !== undefined ? { profile: options.profile } : {}),
+    ...(options.mode !== undefined ? { mode: modeOf(options.mode) } : {}),
+    ...listed(options, '--allow'), ...listed(options, '--block'), ...listed(options, '--remove'),
+  };
+}
+
+function desktopBody(options: Options): HeldBody {
+  if (options.mode === undefined && !hasList(options, ['--add', '--remove'])) throw new UsageError(t('Gõ ít nhất một thay đổi: --mode, --add hoặc --remove.'));
+  return {
+    action: 'desktop-choice', ...chatFields(options),
+    ...(options.mode !== undefined ? { mode: modeOf(options.mode) } : {}),
+    ...listed(options, '--add'), ...listed(options, '--remove'),
+  };
+}
+
+/** A server file, read here at the terminal: it names the secrets and never holds one. The values are typed after the pairing. */
+function serverFileRequest(verb: 'mcp-save' | 'mcp-import', path: string | undefined): SetupRequest {
+  const file = needed(path, t('đường dẫn tệp JSON'));
+  let text: string;
+  try {
+    if (statSync(file).size > MAX_SERVER_FILE_BYTES) throw new UsageError(t('Tệp lớn quá 1 MB.'));
+    text = readFileSync(file, 'utf8');
+  } catch (error) {
+    if (error instanceof UsageError) throw error;
+    throw new UsageError(t('Không đọc được tệp {0}.', file));
+  }
+  let parsed: ReturnType<typeof parseMcpImportNamingSecrets>;
+  try {
+    parsed = parseMcpImportNamingSecrets(text);
+  } catch (error) {
+    throw new UsageError(error instanceof Error ? error.message : t('Tệp không hợp lệ.'));
+  }
+  if (parsed.drafts.length === 0) throw new UsageError(parsed.skipped.map(item => `${item.name}: ${item.reason}`).join(' '));
+  if (verb === 'mcp-save' && parsed.drafts.length !== 1) throw new UsageError(t('Tệp có {0} máy chủ. Dùng orglet grant mcp-import cho nhiều máy chủ.', parsed.drafts.length));
+  return { body: { action: verb, servers: parsed.drafts }, ...(parsed.secrets.length ? { mcpSecrets: parsed.secrets } : {}) };
 }
 
 function decisionEntry(text: string): { connection: string; model: string } {
@@ -175,6 +247,10 @@ function decisionEntry(text: string): { connection: string; model: string } {
 export function parseSetupArguments(argumentList: readonly string[]): SetupRequest {
   const command = argumentList[0] as typeof SETUP_COMMANDS[number];
   const options = readOptions(argumentList.slice(1));
-  if (command === 'grant') return { body: grantBody(options) };
+  if (command === 'grant') {
+    const [verb, file] = options.positionals;
+    if (verb === 'mcp-save' || verb === 'mcp-import') return serverFileRequest(verb, file);
+    return { body: grantBody(options) };
+  }
   return connectionBody(command, options.positionals);
 }

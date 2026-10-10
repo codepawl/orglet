@@ -1,3 +1,7 @@
+import { ZodError } from 'zod';
+import { BrowserChoice, BrowserProfileId, CLEAN_BROWSER_PROFILE, capabilitiesWithBrowserLevel, defaultBrowserChoice, normalizeBrowserSite, type BrowserSite } from '../shared/browser';
+import { capabilitiesWithDesktopLevel, defaultDesktopChoice, DesktopChoice, DesktopProgram, neverDesktopProgram, type DesktopWindowsView } from '../shared/desktop';
+import { McpServerDraft } from '../shared/mcp';
 import { commands, ApiProvider, CredentialProvider, type Task, type Workspace } from '../shared/contracts';
 import { customProviderId, isCustomProvider } from '../shared/custom-connections';
 import { HarnessCatalogId, type HarnessInfo } from '../shared/harness';
@@ -25,11 +29,85 @@ export type SetupOutcome = {
   subject?: string;
   /** How Settings can take the grant back, when the core can. */
   undo?: TerminalUndo;
+  /** Lines for the terminal to print under the summary. Never a secret. */
+  report?: string[];
+  /** The hash of the skill package a `skill-show` printed, so the terminal can send exactly that hash to approve. */
+  skillHash?: string;
 };
 
 type ChatTarget = { taskId: string } | { workerId: string } | { teamId: string };
 const NOT_AVAILABLE = 'Bản Orglet này chưa hỗ trợ cấp quyền từ terminal.';
 const KEY_NOT_SAVED = 'Không lưu được khóa.';
+
+/** A schema's refusal as the window words it, without the library's raw issue list. */
+function parsedOrRefused<Value>(parse: () => Value): Value {
+  try {
+    return parse();
+  } catch (error) {
+    if (error instanceof ZodError) throw new CliFailure('invalid', error.issues[0]?.message ?? 'Dữ liệu không hợp lệ.');
+    throw error;
+  }
+}
+
+function siteOf(text: string): string {
+  const site = normalizeBrowserSite(text);
+  if (!site) throw new CliFailure('invalid', 'Nhập một địa chỉ như example.com hoặc localhost:3000.');
+  return site;
+}
+
+/** The site list after the same edits the window's list makes: a site is dropped, or put at the end with its new decision. */
+function editedSites(current: readonly BrowserSite[], change: { allow?: string[]; block?: string[]; remove?: string[] }): BrowserSite[] {
+  const addedAt = new Date().toISOString();
+  let sites = current.filter(entry => !(change.remove ?? []).some(text => siteOf(text) === entry.site));
+  for (const [texts, decision] of [[change.allow ?? [], 'allowed'], [change.block ?? [], 'blocked']] as const) {
+    for (const text of texts) {
+      const site = siteOf(text);
+      sites = [...sites.filter(entry => entry.site !== site), { site, decision, addedAt }];
+    }
+  }
+  return sites;
+}
+
+/** A program as the list keeps it: lowercase, with .exe. */
+function programOf(typed: string): string {
+  const lower = typed.trim().toLowerCase();
+  const program = lower.endsWith('.exe') ? lower : `${lower}.exe`;
+  if (!DesktopProgram.safeParse(program).success) throw new CliFailure('invalid', 'Tên chương trình không hợp lệ.');
+  return program;
+}
+
+/**
+ * The draft Settings' form would send: the file's names plus the values typed at the terminal. An `Authorization` entry is
+ * the bearer token, as the window's import reads it. A new server needs every value; an existing one keeps a value left untyped.
+ */
+function draftWithSecrets(server: McpServerDraft, typed: Record<string, string>, existingId: string | undefined): McpServerDraft {
+  const { id: _namedByTerminal, ...base } = server;
+  const withTyped = (entry: { name: string }) => ({ name: entry.name, ...(typed[entry.name] !== undefined ? { value: typed[entry.name] } : {}) });
+  const identity = existingId ? { id: existingId } : {};
+  if (server.transport.kind === 'stdio') {
+    const env = server.transport.env.map(withTyped);
+    if (!existingId) requireTyped(env);
+    return McpServerDraft.parse({ ...base, ...identity, transport: { ...server.transport, env } });
+  }
+  const tokenEntry = server.transport.headers.find(entry => entry.name.toLowerCase() === 'authorization');
+  const headers = server.transport.headers.filter(entry => entry !== tokenEntry).map(withTyped);
+  const typedToken = tokenEntry ? typed[tokenEntry.name]?.replace(/^Bearer\s+/i, '').trim() : undefined;
+  if (!existingId) requireTyped([...headers, ...(tokenEntry ? [{ name: tokenEntry.name, value: typedToken }] : [])]);
+  return McpServerDraft.parse({ ...base, ...identity, transport: { ...server.transport, headers, ...(typedToken ? { bearer: typedToken } : {}) } });
+}
+
+function requireTyped(entries: readonly { name: string; value?: string }[]): void {
+  const missing = entries.filter(entry => !entry.value).map(entry => entry.name);
+  if (missing.length) throw new Error(`Thiếu giá trị cho: ${missing.join(', ')}.`);
+}
+
+/** A failure's message with every typed value cut out, so no refusal can carry a secret back to the terminal. */
+function scrubbed(error: unknown, values: readonly string[]): string {
+  if (error instanceof ZodError) return 'Dữ liệu không hợp lệ.';
+  let message = error instanceof Error ? error.message : 'Không lưu được.';
+  for (const value of values) message = message.split(value).join('…');
+  return message.slice(0, 300);
+}
 
 export class CliSetup {
   constructor(private readonly dependencies: CliDependencies) {}
@@ -73,7 +151,75 @@ export class CliSetup {
       case 'search-key-remove': return this.removeSearchKey(body);
       case 'connect': return this.connect(body);
       case 'search-key': return this.saveSearchKey(body);
+      case 'browser-choice': return this.changeBrowser(body);
+      case 'desktop-choice': return this.changeDesktop(body);
+      case 'mcp-save':
+      case 'mcp-import': return this.saveMcpServers(body);
     }
+  }
+
+  /** What the window's browser settings do: the profile it lists, the site list it edits, and the level the capabilities say. */
+  private async changeBrowser(body: Extract<SetupBody, { action: 'browser-choice' }>): Promise<SetupOutcome> {
+    const { task, name } = await this.existingChat(await this.workspace(), body);
+    const current = task.browser ?? defaultBrowserChoice();
+    const profileId = body.profile === undefined ? current.profileId : await this.browserProfileId(body.profile);
+    const choice = parsedOrRefused(() => BrowserChoice.parse({ profileId, sites: editedSites(current.sites, body) }));
+    await this.request('setBrowser', { taskId: task.id, browser: choice });
+    if (body.mode) await this.request('setToolCapabilities', { taskId: task.id, capabilities: ToolCapabilities.parse(capabilitiesWithBrowserLevel(task.toolCapabilities ?? [], body.mode)) });
+    return { subject: name };
+  }
+
+  /** The profile a typed name means, among the ones main keeps; the window's list is the same list. */
+  private async browserProfileId(typed: string): Promise<BrowserProfileId> {
+    if (typed.toLowerCase() === CLEAN_BROWSER_PROFILE) return CLEAN_BROWSER_PROFILE;
+    const profile = (await this.app().browserProfiles.list()).find(item => item.name.toLowerCase() === typed.toLowerCase());
+    if (!profile) throw new CliFailure('not_found', 'Không tìm thấy hồ sơ trình duyệt này.');
+    return BrowserProfileId.parse(profile.id);
+  }
+
+  /** Grants programs by executable name with the window's refusals: the fixed never-list, Orglet's own programs, and administrator windows. */
+  private async changeDesktop(body: Extract<SetupBody, { action: 'desktop-choice' }>): Promise<SetupOutcome> {
+    const { task, name } = await this.existingChat(await this.workspace(), body);
+    const current = task.desktop ?? defaultDesktopChoice();
+    const open = (await this.request('desktopWindows', {}) as DesktopWindowsView | undefined)?.windows ?? [];
+    let apps = current.apps.filter(app => !(body.remove ?? []).some(typed => programOf(typed) === app.program));
+    for (const typed of body.add ?? []) {
+      const program = programOf(typed);
+      if (neverDesktopProgram(program)) throw new CliFailure('failed', 'Orglet không bao giờ dùng ứng dụng này.');
+      const windows = open.filter(window => window.program === program);
+      if (windows.length > 0 && windows.every(window => window.elevated)) throw new CliFailure('failed', 'Ứng dụng này chạy bằng quyền quản trị nên Tí không dùng được.');
+      if (apps.some(app => app.program === program)) continue;
+      apps = [...apps, { program, name: (windows[0]?.title ?? program).slice(0, 120), addedAt: new Date().toISOString() }];
+    }
+    const desktop = parsedOrRefused(() => DesktopChoice.parse({ apps }));
+    await this.request('setDesktop', { taskId: task.id, desktop });
+    if (body.mode) await this.request('setToolCapabilities', { taskId: task.id, capabilities: ToolCapabilities.parse(capabilitiesWithDesktopLevel(task.toolCapabilities ?? [], body.mode)) });
+    return { subject: name };
+  }
+
+  /**
+   * Saves servers from a file whose secrets are only named. The values typed at the terminal arrive in `secrets`, go to the
+   * same main function Settings' form uses, and are dropped; any message that could carry one is cleaned before it leaves.
+   */
+  private async saveMcpServers(body: Extract<SetupBody, { action: 'mcp-save' | 'mcp-import' }>): Promise<SetupOutcome> {
+    if (body.action === 'mcp-save' && body.servers.length !== 1) throw new CliFailure('invalid', 'Tệp để lưu một máy chủ chỉ được có đúng một máy chủ. Dùng mcp-import cho nhiều máy chủ.');
+    const existing = (await this.workspace()).mcpServers;
+    const typedValues = Object.values(body.secrets ?? {}).flatMap(entries => Object.values(entries));
+    const saved: string[] = [];
+    const skipped: string[] = [];
+    for (const server of body.servers) {
+      try {
+        const known = existing.find(item => item.name.toLowerCase() === server.name.toLowerCase());
+        await this.app().saveMcpServer(draftWithSecrets(server, body.secrets?.[server.name] ?? {}, known?.id));
+        saved.push(server.name);
+      } catch (error) {
+        const reason = scrubbed(error, typedValues);
+        if (body.action === 'mcp-save') throw new CliFailure('failed', reason);
+        skipped.push(`${server.name}: ${reason}`);
+      }
+    }
+    if (saved.length === 0) throw new CliFailure('failed', skipped.join(' '));
+    return { subject: saved.join(', '), report: [...saved.map(item => `+ ${item}`), ...skipped.map(item => `! ${item}`)] };
   }
 
   /** The chat a request names: its row when it has one, else the orglet or crew whose empty chat it is. */

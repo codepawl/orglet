@@ -1,7 +1,7 @@
 import type { Source, Workspace } from '../shared/contracts';
 import type { HarnessInfo } from '../shared/harness';
 import type { BrowserAction } from '../shared/browser';
-import type { DesktopAction } from '../shared/desktop';
+import type { DesktopAction, DesktopWindowsView } from '../shared/desktop';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
 import type { MarketInstallation, MarketUpdateRecord } from '../shared/market';
 import type { CliRequest, MarketUpdatesValue, ShowRow, ShowValue, UpdateCheckValue } from '../cli/protocol';
@@ -42,7 +42,20 @@ export class CliInspect {
       case 'sources': return this.sources(request);
       case 'changes': return this.changes(request);
       case 'terminal': return this.terminal();
+      case 'desktop-programs': return this.desktopPrograms();
     }
+  }
+
+  /** The programs with a window open now, which `orglet grant desktop` can name. Window titles only; no window is read. */
+  private async desktopPrograms(): Promise<ShowValue> {
+    const view = await this.dependencies.request('desktopWindows', {}) as DesktopWindowsView;
+    const byProgram = new Map<string, { windows: number; title: string; elevated: boolean }>();
+    for (const window of view.windows) {
+      const known = byProgram.get(window.program);
+      byProgram.set(window.program, { windows: (known?.windows ?? 0) + 1, title: known?.title ?? window.title, elevated: (known?.elevated ?? true) && window.elevated });
+    }
+    const rows = [...byProgram.entries()].map(([program, entry]) => ({ program, window: entry.title, windows: entry.windows, reachable: !entry.elevated }));
+    return { what: 'desktop-programs', rows, ...(view.available ? {} : { note: this.dependencies.translate('Ứng dụng trên máy chỉ chạy được trên Windows.') }) };
   }
 
   /** Looks for an update and says what it found. Installing the one it downloads stays a click in the window. */

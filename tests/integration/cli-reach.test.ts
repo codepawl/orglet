@@ -325,12 +325,10 @@ describe('the terminal editor for a channel that takes turns', () => {
 });
 
 describe('the parity table for what this phase reaches', () => {
-  it('says reached for the commands above and keeps saving a note held', () => {
+  it('says reached for the commands above and elevated for the decisions behind a code', () => {
     for (const key of ['updateTask', 'reorder', 'dismissRoutine', 'catchUpRoutine', 'marketPreviewUpdate', 'marketApplyUpdate', 'workspaceRecovery', 'sourceMetadata', 'browserActions', 'desktopActions', 'harnesses'] as const) {
       expect(COMMAND_PARITY[key].status, key).toBe('reached');
     }
-    expect(COMMAND_PARITY.saveKnowledge.status).toBe('held');
-    expect(COMMAND_PARITY.restoreWorkspaceFile.status).toBe('held');
-    for (const key of ['applyWorkspaceReview', 'discardWorkspaceReview'] as const) expect(COMMAND_PARITY[key].status, key).toBe('elevated');
+    for (const key of ['applyWorkspaceReview', 'discardWorkspaceReview', 'saveKnowledge', 'restoreWorkspaceFile'] as const) expect(COMMAND_PARITY[key].status, key).toBe('elevated');
   });
 });

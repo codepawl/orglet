@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 import type { Run, Task } from '../../shared/contracts';
 import { WorkspaceGrantSnapshot, type WorkspacePermission } from '../../shared/workspace-access';
@@ -516,6 +516,16 @@ export class WorkspaceRuntime {
    * is never overwritten, and the chat must still hold the same folder with edit access. It is journaled like any
    * other effect; an interrupted restore is an unknown outcome to review, never retried by itself.
    */
+  /** How big a deleted file's saved copy is, for the person to read before it is restored. Reading only (issue 554). */
+  async deletedFileSize(raw: unknown): Promise<{ path: string; bytes: number; restored: boolean }> {
+    const input = RestoreWorkspaceFile.parse(raw);
+    const run = this.store.get<Run>('runs', input.runId);
+    if (run.taskId !== input.taskId) throw new Error('Lần chạy không thuộc cuộc trò chuyện này.');
+    const change = this.saved(run.id)?.changes.find(item => item.kind === 'delete' && item.path === input.path);
+    if (!change || change.status !== 'applied' || !change.backupPath) throw new Error('Không có tệp đã xóa để khôi phục ở đường dẫn này.');
+    return { path: change.path, bytes: (await stat(change.backupPath)).size, restored: change.restored === true };
+  }
+
   async restore(raw: unknown, isActive: (taskId: string) => boolean): Promise<void> {
     const input = RestoreWorkspaceFile.parse(raw);
     const signal = AbortSignal.timeout(60_000);

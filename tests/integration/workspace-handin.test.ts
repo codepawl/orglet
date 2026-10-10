@@ -407,6 +407,15 @@ describe('restoring a file the hand-in deleted (COD-254)', () => {
     expect(store.detail(task.id).events.map(event => event.message)).toContain('Đã khôi phục tệp đã xóa: contract-old.pdf');
   });
 
+  it('tells the size of the saved copy before it is restored, and changes nothing', async () => {
+    const worker = await deleteDuplicate();
+    expect(await worker.deletedFileSize(input())).toEqual({ path: 'contract-old.pdf', bytes: 'contract v1'.length, restored: false });
+    expect(await present(join(source, 'contract-old.pdf'))).toBe(false);
+    await expect(worker.deletedFileSize({ ...input(), path: 'notes.txt' })).rejects.toThrow('Không có tệp đã xóa');
+    await worker.restore(input(), () => false);
+    expect(await worker.deletedFileSize(input())).toMatchObject({ restored: true });
+  });
+
   it('never overwrites something now at that path, and can try again once it is gone', async () => {
     const worker = await deleteDuplicate();
     await writeFile(join(source, 'contract-old.pdf'), 'a new file with the same name');
