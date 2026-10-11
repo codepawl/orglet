@@ -4,7 +4,7 @@ import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Trash, X as SidebarX } from './components/icons';
 import { PanelRight, Bookmark, BellRing, CircleCheck, Users, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, Hash, MessagesSquare, MessageSquareText, Settings2, UserRoundCog, UserRoundPlus, ArrowLeft, Brain, FileDiff, FileText } from 'lucide-react';
-import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
+import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput, type UnfriendResult } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { PanelPage } from './components/PanelPage';
 import { SkillEditor } from './components/Editors';
@@ -118,7 +118,10 @@ import type { HomePageView } from './components/FriendsPage';
 import { CHAT_SWITCH_SETTLE_MS, markChatSwitch } from './chatSwitch';
 import type { Space } from '../shared/spaces';
 import { UserPanel } from './components/UserPanel';
-import { CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, LogIn, LogOut, RefreshCw, NotebookText, Sparkles, Upload } from 'lucide-react';
+import { CircleUserRound, Store, FolderInput, FolderMinus, FolderPlus, FolderTree, Folders, Clock, LogIn, LogOut, RefreshCw, NotebookText, Sparkles, Upload, UserMinus } from 'lucide-react';
+import { orgletPlaces, type OrgletPlace } from '../shared/unfriend';
+import { UnfriendDialog } from './components/UnfriendDialog';
+import { directMessageWorkers, keptPlaceNames } from './unfriendChoice';
 import { AddOrgletDialog, MarketplacePage, type FriendTemplate } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
@@ -350,7 +353,7 @@ export function App() {
   const [channelDraft, setChannelDraft] = useState<ChannelDraft>();
   useEffect(() => {
     if (!workspace) return;
-    const listed = (section: SidebarSelectionSection) => section === 'workers' ? workspace.workers.map(item => item.id) : [];
+    const listed = (section: SidebarSelectionSection) => section === 'workers' ? directMessageWorkers(workspace.workers).map(item => item.id) : [];
     setSelection(current => current.section ? pruneSelection(current, listed(current.section)) : current);
     setEmptyChannelId(current => current && workspace.emptyChannels.some(channel => channel.id === current) ? current : undefined);
   }, [workspace]);
@@ -395,6 +398,8 @@ export function App() {
     return next;
   });
   const toggleMembers = () => setMembersOpen(current => { try { localStorage.setItem('orglet.members', current ? 'hidden' : 'shown'); } catch { /* chrome only */ } return !current; });
+  const [unfriending, setUnfriending] = useState<{ id: string; name: string; places: OrgletPlace[] }>();
+  const [unfriendBusy, setUnfriendBusy] = useState(false);
   const [newOrgletName, setNewOrgletName] = useState('');
   const [friendsBusy, setFriendsBusy] = useState(false);
   const savedMessages = useSavedMessages();
@@ -552,7 +557,7 @@ export function App() {
       const showWorkspace = () => {
         setWorkspace({ ...next, tasks });
         setConnections(connectionState);
-        setWorkerId(value => value || next.workers[0]?.id || '');
+        setWorkerId(value => value || directMessageWorkers(next.workers)[0]?.id || '');
       };
       // The first workspace replaces the startup screen, and an answered account choice replaces that screen (COD-341).
       const screenChanges = !workspaceRef.current || leavingAccountChoice.current;
@@ -616,7 +621,7 @@ export function App() {
   useEffect(() => { setLanguage(workspace?.language); }, [workspace?.language]);
   useEffect(() => {
     if (!workspace) return;
-    if (workerId && !workspace.workers.some(worker => worker.id === workerId)) setWorkerId(workspace.workers[0]?.id ?? '');
+    if (workerId && !workspace.workers.some(worker => worker.id === workerId)) setWorkerId(directMessageWorkers(workspace.workers)[0]?.id ?? '');
     if (teamId && !workspace.teams.some(team => team.id === teamId)) setTeamId('');
   }, [workspace, workerId, teamId]);
   // An error shown in the banner is also kept, so dismissing it does not lose it (user, 2026-09-20), together with
@@ -939,7 +944,7 @@ export function App() {
     const closed = closeOpenChat(openChats, key, activeChatKey);
     setOpenChats(closed.state);
     if (closed.activate) openChatByKey(closed.activate);
-    else if (key === activeChatKey && workspace?.workers[0]) openWorker(workspace.workers[0].id);
+    else if (key === activeChatKey && workspace && directMessageWorkers(workspace.workers)[0]) openWorker(directMessageWorkers(workspace.workers)[0].id);
     // The × that was clicked leaves with its row: the keyboard carries on in the chat instead of falling to the page.
     requestAnimationFrame(() => {
       if (document.activeElement === document.body) document.getElementById('main-content')?.focus({ preventScroll: true });
@@ -1836,7 +1841,7 @@ export function App() {
     dwellModels(item.provider, resting);
   };
   const recipientOptions = [
-    ...workspace.workers.map(item => {
+    ...directMessageWorkers(workspace.workers).map(item => {
       const available = recipientReady([item.provider]);
       return {
         value: item.id,
@@ -2175,13 +2180,50 @@ export function App() {
       <Button size="icon" className="row-action" aria-label={createLabel} title={createLabel} onClick={create}><Plus size={16} /></Button>
     </>;
   };
-  /** The sidebar's Delete for an orglet: one still in a channel says so before the person confirms, and opens that channel. */
-  const workerDeleteItem = (worker: { id: string; name: string }) => {
-    const block = deleteBlockedByChannels(workspace.teams, worker.id, worker.name);
-    if (block) {
-      return { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => editCrewChannel(block.crewId), confirm: { question: block.question, label: block.actionLabel, icon: Hash, safe: true } };
+  /** Whether the chat on screen is this orglet's own DM (its main chat or a side thread), which unfriending closes. */
+  const showsDirectChatOf = (orgletId: string): boolean => {
+    if (selected) {
+      const open = workspace.tasks.find(task => task.id === selected);
+      return Boolean(open && open.workerId === orgletId && !open.teamId && !open.assignees && !open.channel);
     }
-    return { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', worker.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [worker.name]), label: t('Xóa') } };
+    return workerId === orgletId && !teamId && !emptyChannelId;
+  };
+  const unfriendOrglet = (orgletId: string, keep: { kind: 'space' | 'channel'; id: string }[]) => {
+    if (heldBySchedule('worker', orgletId)) {
+      setUnfriending(undefined);
+      return;
+    }
+    const name = entityName('worker', orgletId);
+    const leaves = showsDirectChatOf(orgletId);
+    setUnfriendBusy(true);
+    rowAction(async () => {
+      try {
+        const result: UnfriendResult = await orglet.call('unfriendWorker', { id: orgletId, keep });
+        setUnfriending(undefined);
+        const text = result.outcome === 'deleted' ? t('Đã hủy kết bạn') : result.kept === 1 ? t('Đã hủy kết bạn · vẫn ở một nơi') : t('Đã hủy kết bạn · vẫn ở {0} nơi', [result.kept]);
+        toast(text, 'success', name);
+        if (leaves) {
+          const nextFriend = directMessageWorkers(workspace.workers).find(item => item.id !== orgletId);
+          if (nextFriend) openWorker(nextFriend.id);
+          else leaveThread();
+        }
+      } finally {
+        setUnfriendBusy(false);
+      }
+    }, name, () => removalWayOut('worker', orgletId));
+  };
+  const befriendOrglet = (orgletId: string) => rowAction(async () => {
+    const name = entityName('worker', orgletId);
+    await orglet.call('befriendWorker', { id: orgletId });
+    toast(t('Đã kết bạn lại'), 'success', name);
+  }, entityName('worker', orgletId));
+  /** The sidebar's Unfriend for an orglet: one in no place asks inline, one still in a space or channel opens the dialog that asks where it goes. */
+  const workerUnfriendItem = (worker: { id: string; name: string }) => {
+    const places = orgletPlaces(workspace, worker.id);
+    if (places.length > 0) {
+      return { label: t('Hủy kết bạn'), icon: UserMinus, danger: true, onSelect: () => setUnfriending({ id: worker.id, name: worker.name, places }) };
+    }
+    return { label: t('Hủy kết bạn'), icon: UserMinus, danger: true, onSelect: () => unfriendOrglet(worker.id, []), confirm: { question: t('Hủy kết bạn với {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [worker.name]), label: t('Hủy kết bạn') } };
   };
   const selectionCount = selection.ids.length;
   const deleteSelectionQuestion = t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
@@ -2247,7 +2289,7 @@ export function App() {
       : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} fallback={emptyChatUsage.note} /> : emptyChatUsage.note ?? leadNudge;
   /** An orglet's face at a given size, the same drawing the sidebar row uses. */
   const workerFace = (item: Worker, size: 'xs' | 'sm') => <Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size={size} />;
-  const orderedWorkers = workerOrder.order.map(id => workspace.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item));
+  const orderedWorkers = workerOrder.order.map(id => workspace.workers.find(item => item.id === id)).filter((item): item is Worker => item !== undefined && !item.unfriendedAt);
   /** An empty channel is the one on screen: its own empty chat, or, when the lead splits the work, its crew's (COD-369). */
   const emptyChannelActive = (channel: { id: string; crewId?: string }) => !selected && (channel.crewId ? teamId === channel.crewId : emptyChannel?.channelId === channel.id);
   const channelName = (chat: Task) => channelLabel(channelNameOf(chat, taskWorkers(chat, workspace).map(member => member.name)));
@@ -2647,9 +2689,9 @@ export function App() {
       </SidebarSection>}
       <SidebarSection id="workers" title={t('Tin riêng')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
         {selection.section === 'workers' && selectionBar}
-        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
-          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, workerDeleteItem(item)]} />}
-          {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
+        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => item !== undefined && !item.unfriendedAt).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
+          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, workerUnfriendItem(item)]} />}
+          {...rowsUnder({ workerId: item.id }, item.name)} />)}{!orderedWorkers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
       {/* Home lists direct messages only (user, 2026-10-05): a channel lives in a space, under its tile on the rail.
           One that arrives outside every space is put into the space kept for them (`adoptLooseChannels`). */}
@@ -2798,14 +2840,14 @@ export function App() {
           <ComposerFoot>{composerHint}</ComposerFoot>
           <SkippedFiles items={skippedSources} />
         </div>
-      </div> : workspace.workers.length === 0
+      </div> : orderedWorkers.length === 0
         // The last orglet can be deleted; the pane then offers to make one instead of standing empty.
         ? <NoOrglets onCreate={() => { setEditingWorker(undefined); setPanel('worker'); }} />
         : null}
       </>}
     </main>
     {membersShown && headerChannel && <MemberColumn onYou={() => openSettings('account')} you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
-      onMessage={member => { clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
+      onMessage={member => { if (member.unfriendedAt) { toast(t('Kết bạn lại với {0} để nhắn riêng.', [member.name]), 'info', member.name, { action: { label: t('Kết bạn lại'), onSelect: () => befriendOrglet(member.id) } }); return; } clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
       others={headerSpace && headerChannel.access === 'listed' ? workspace.workers.filter(worker => scopeOrgletIds(headerSpace, headerChannel.categoryId).includes(worker.id) && !headerChannel.workers.some(member => member.id === worker.id)) : []}
       onAdd={member => action(async () => {
         const members = [...headerChannel.workers, member].map(item => ({ kind: 'orglet' as const, id: item.id }));
@@ -2887,10 +2929,12 @@ export function App() {
     {spaceDraft && <SpaceDialog key={`space:${spaceDraft.space?.id ?? 'new'}`} open draft={spaceDraft} workspace={workspace} onClose={() => setSpaceDraft(undefined)}
       onCreated={spaceId => { setOpenSpace(spaceId); setArea('channels'); setSpaceHomeOpen(true); }} />}
     <AddOrgletDialog open={addOrgletOpen} onClose={() => setAddOrgletOpen(false)} archived={workspace.archivedWorkers} busy={friendsBusy} templates={friendTemplates}
+      unfriended={workspace.workers.filter(item => item.unfriendedAt).map(item => ({ worker: item, stillIn: keptPlaceNames(orgletPlaces(workspace, item.id)) }))} onBefriend={member => befriendOrglet(member.id)}
       onCreate={name => { setAddOrgletOpen(false); setNewOrgletName(name); setEditingWorker(undefined); setPanel('worker'); }}
       onRestore={member => { setAddOrgletOpen(false); void archiveEntity('worker', member.id, false); }}
       onTemplate={id => { setAddOrgletOpen(false); addTemplate(id); }}
       onImport={() => { setAddOrgletOpen(false); void action(async () => { if (await orglet.importTemplate()) setArea('home'); }); }} />
+    {unfriending && <UnfriendDialog open orgletName={unfriending.name} places={unfriending.places} busy={unfriendBusy} onConfirm={keep => unfriendOrglet(unfriending.id, keep)} onClose={() => setUnfriending(undefined)} />}
     {categoryDraft && <CategoryDialog key={`category:${categoryDraft.space.id}`} open draft={categoryDraft} workspace={workspace} onClose={() => setCategoryDraft(undefined)} />}
     {channelDraft && <ChannelDialog key={`channel:${channelDraft.id ?? 'new'}`} open draft={channelDraft} workspace={workspace} onClose={() => setChannelDraft(undefined)} onCreated={channelCreated} />}
     {privacyTaskId && workspace.tasks.find(task => task.id === privacyTaskId) && <LocalOnlyDialog key={`privacy:${privacyTaskId}`} task={workspace.tasks.find(task => task.id === privacyTaskId)!} workspace={workspace} onClose={() => setPrivacyTaskId(undefined)} />}

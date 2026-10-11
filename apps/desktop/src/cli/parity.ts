@@ -149,6 +149,8 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   archiveTask: reached('orglet archive'),
   archiveEntity: reached('orglet archive orglet, orglet archive channel'),
   deleteEntity: reached('orglet delete orglet, orglet delete channel with messages'),
+  unfriendWorker: windowOnly('unfriending an orglet is chosen place by place in the window; ' + NOT_BUILT),
+  befriendWorker: windowOnly('befriending again follows the window\'s unfriend; ' + NOT_BUILT),
   deleteTask: reached('orglet delete --chat'),
   createChannel: reached('orglet channel, orglet create channel'),
   updateChannel: reached('orglet members, orglet edit channel'),

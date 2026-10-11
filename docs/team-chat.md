@@ -126,6 +126,18 @@ A **space** is a named group of orglets that holds categories and channels, the 
 
 Back and forward work like a browser. The side buttons on a mouse, or Alt+Left and Alt+Right, step through what you opened: a chat, then another chat, then back to the first; Library, a skill, back to Library, forward to the skill again; Settings tab to tab; Notifications open, then back closes it. Closing a panel is a step too, so back reopens it. A chat, skill or knowledge item deleted since is skipped. Alt+arrows do nothing while you type in a text box; the mouse buttons always work. Leaving a schedule you are editing asks about unsaved changes, the same as the panel's own Back.
 
+## Unfriending an orglet
+
+Unfriending replaces deleting an orglet. It takes the orglet out of the person's direct messages. If the orglet is still in spaces or channels, the person chooses for each place whether to kick it out, which is the default, or keep it there. The core command is `unfriendWorker { id, keep: [{ kind, id }] }`, and `befriendWorker { id }` undoes it.
+
+**Places.** `orgletPlaces` in `shared/unfriend.ts` lists them. A space is one row that stands for the space and every channel in it, so its channels are not listed on their own. A channel outside every space is one row, whether its orglets take turns or a lead splits the work. A place has `canKick: false` when kicking would leave it with no orglet, such as a space with one orglet or a channel outside every space with one member. That place always keeps the orglet, whatever `keep` says. A space lets the orglet go when the space has another orglet, and each of its categories that lists this orglet has another one too. A channel of that space where this orglet was the only one does not hold it back: it takes the space's orglets when the orglet leaves (`Channels.inheritIfOnlyOrglet`).
+
+**Kicking.** A space goes through the same save as the space editor, so the orglet leaves every channel in it that took its members from the space. A channel outside a space goes through the channel editor's save. Both create a new revision of a crew record, so a run in progress keeps its snapshot. If the orglet led a channel where a lead splits the work, the first remaining member becomes the lead. The command refuses while an enabled schedule runs the orglet or one of its chats is queued, running or pausing, with the same sentences as deleting.
+
+**What is left.** When no place keeps the orglet, it is deleted exactly as `deleteEntity` deletes it. Otherwise it is marked unfriended with `unfriendedAt` in the entity state, next to `archivedAt` and `deletedAt`. The workspace still lists it in `workers` with `unfriendedAt` set, so the places that kept it keep working with it. Its own DM chats, the main chat and the side threads, are archived and not deleted. Befriending clears `unfriendedAt` and does not restore archived chats.
+
+**Guards.** While an orglet is unfriended, starting a new DM or side thread with it is refused ("Kết bạn lại với {name} trước khi nhắn riêng."). Channel and space chats that kept it work as before. `deleteEntity` and `archiveEntity` for an orglet still refuse while it is in a crew.
+
 ## One live thread
 
 Policy: one open conversation per worker and per team; archive it to start over; do **not** create a new `tasks` row on every message ([team-chat-context.md](team-chat-context.md)).

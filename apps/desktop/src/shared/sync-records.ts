@@ -49,7 +49,7 @@ export const SyncArtifact = z.object({ id: Id, runId: Id, report: Report, hash: 
 export const SyncData = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('revision'), revision: SyncRevision }).strict(),
   z.object({ kind: z.literal('entityState'), entity: z.enum(['worker', 'team']), id: Id,
-    value: z.object({ archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict().nullable() }).strict(),
+    value: z.object({ archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional(), unfriendedAt: z.iso.datetime().optional() }).strict().nullable() }).strict(),
   z.object({ kind: z.literal('chat'), value: SyncChat }).strict(),
   z.object({ kind: z.literal('chatField'), taskId: Id, change: SyncChatField }).strict(),
   z.object({ kind: z.literal('turn'), value: SyncTurn }).strict(),

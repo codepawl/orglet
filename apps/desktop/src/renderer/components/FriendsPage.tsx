@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { ArchiveRestore, FileUp, Store, UserRoundPlus } from 'lucide-react';
+import { ArchiveRestore, FileUp, Store, UserPlus, UserRoundPlus } from 'lucide-react';
 import { Input, Tooltip } from '@codepawlhq/orglet-ui';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
@@ -33,10 +33,13 @@ export function MarketplacePage({ onMarketAdded }: { onMarketAdded: (result: Mar
  * left the main panel mostly empty and took the chat away. It makes an orglet from a name, and lists the other ways
  * to add one: a ready-made group, a template file, an archived orglet to bring back. Each of them closes the dialog.
  */
-export function AddOrgletDialog({ open, onClose, archived, onCreate, onRestore, templates, onTemplate, onImport, busy }: {
+export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefriend, onCreate, onRestore, templates, onTemplate, onImport, busy }: {
   open: boolean;
   onClose: () => void;
   archived: readonly Worker[];
+  /** Orglets that are no longer friends but still answer in some places, with the names of those places. */
+  unfriended: readonly { worker: Worker; stillIn: string }[];
+  onBefriend: (worker: Worker) => void;
   /** Opens the new-orglet dialog with this name already typed. */
   onCreate: (name: string) => void;
   onRestore: (worker: Worker) => void;
@@ -62,6 +65,16 @@ export function AddOrgletDialog({ open, onClose, archived, onCreate, onRestore, 
           <Button type="submit" disabled={!name.trim()}><UserRoundPlus size={16} />{t('Tạo Tí')}</Button>
         </form>
       </section>
+      {unfriended.length > 0 && <section className="page-section" aria-labelledby="friends-unfriended-title">
+        <h2 id="friends-unfriended-title">{t('Không còn là bạn')}</h2>
+        <ul className="friends-sources">
+          {unfriended.map(({ worker, stillIn }) => <li key={worker.id} className="friend-source">
+            <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="md" />
+            <span className="friend-source-text"><span className="friend-name">{worker.name}</span><span className="friend-status">{t('Vẫn ở {0}', [stillIn])}</span></span>
+            <Button variant="outline" disabled={busy} onClick={() => onBefriend(worker)}><UserPlus size={16} />{t('Kết bạn lại')}</Button>
+          </li>)}
+        </ul>
+      </section>}
       <section className="page-section" aria-labelledby="friends-other-title">
         <h2 id="friends-other-title">{t('Cách khác để thêm Tí')}</h2>
         <p className="muted">{t('Không muốn tự tạo? Đưa về một Tí đã lưu trữ, chọn một nhóm làm sẵn hoặc nhập mẫu từ tệp.')}</p>
