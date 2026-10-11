@@ -127,7 +127,7 @@ export function WebSearchSettings({ provider, keys, instanceUrl, busy, act, onPr
       </div>
       <div className="setting-control">
         <Select ariaLabel={t('Nhà cung cấp tìm kiếm web')} className="setting-select" value={provider} disabled={busy}
-          onChange={value => onProvider(value as WebSearchProvider)} menuMinWidth={340}
+          onChange={value => onProvider(value as WebSearchProvider)} menuMinWidth={440} showDetail={false}
           options={WEB_SEARCH_PROVIDER_ORDER.map(option => ({
             value: option, label: option === 'auto' ? t(WEB_SEARCH_PROVIDER_NAMES.auto) : WEB_SEARCH_PROVIDER_NAMES[option],
             note: option === 'auto' ? t('mặc định') : undefined, detail: providerNotes[option], icon: providerIcon(option),
@@ -139,7 +139,7 @@ export function WebSearchSettings({ provider, keys, instanceUrl, busy, act, onPr
         <span id="search-key-title" className="setting-title">{t('API key {0}', [name])}</span>
         {/* Where to get a key matters only while there is none. */}
         <span className="setting-description">{hasKey ? t('Đã lưu. Tìm kiếm dùng lượt của tài khoản {0} của bạn.', [name]) : <>
-          {keyNeeded ? t('Bắt buộc. Tìm kiếm chỉ chạy khi có key.') : t('Không bắt buộc. Thêm key khi hết lượt miễn phí.')} · <button type="button" className="text-link" disabled={busy}
+          {keyNeeded ? t('Bắt buộc. Tìm kiếm chỉ chạy khi có key.') : t('Không bắt buộc. Thêm key khi hết lượt miễn phí.')} <button type="button" className="text-link" disabled={busy}
             onClick={() => void act(async () => { await orglet.openLink(keyLinks[keyProvider]); }, name)}>{t('Lấy key')}<ExternalLink size={12} aria-hidden="true" /></button>
         </>}</span>
       </div>
