@@ -193,7 +193,7 @@ export function formatSpaces(value: SpacesValue): string {
   }).join('\n\n');
 }
 
-const MARKET_KIND_NAMES = { orglet: 'orglet', crew: 'channel', space: 'space' } as const;
+const MARKET_KIND_NAMES = { orglet: 'orglet', crew: 'space', space: 'space' } as const;
 
 /** The catalog, what was added from it, or what one `add` made. */
 export function formatMarket(value: MarketListValue | MarketInstalledValue | MarketAddValue | MarketUpdateValue): string {

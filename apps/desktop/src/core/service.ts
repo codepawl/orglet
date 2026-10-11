@@ -66,12 +66,12 @@ import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../sh
 import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
-import { adoptCrews, Channels, channelForGroup, CHANNEL_HAS_NO_ORGLETS } from './storage/channels';
+import { adoptCrews, Channels, channelForGroup, CHANNEL_HAS_NO_ORGLETS, crewChannelRecord, emptyChannels, saveEmptyChannels } from './storage/channels';
 import { Spaces, storedSpaces } from './storage/spaces';
 import { spaceChatCapabilities } from '../shared/spaces';
 import { orgletPlaces } from '../shared/unfriend';
 import type { SpaceTemplate } from '../shared/space-template';
-import { isLegacyGroupChat } from '../shared/channels';
+import { EmptyChannel, isLegacyGroupChat } from '../shared/channels';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
 import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
 import { canContinueRun } from '../shared/out-of-steps';
@@ -262,7 +262,8 @@ export class CoreService {
     this.market = new Marketplace(store, this.notify, {
       connected: provider => this.marketConnected(provider),
       defaultModel: () => this.marketDefaultModel(),
-      followCrew: team => this.channels.followCrew(team),
+      followCrew: team => this.followMarketCrew(team),
+      addCrewSpace: (name, team, workerIds) => this.addMarketCrewSpace(name, team, workerIds),
       addSpace: (space, workerIds) => this.addMarketSpace(space, workerIds),
     });
     this.marketUpdates = new MarketAutoUpdates(store, this.market, this.notify, clock);
@@ -2092,6 +2093,34 @@ export class CoreService {
       });
     }
     return spaceId;
+  }
+  /**
+   * A crew listing is shown and added as a space: a space named after the listing, holding its orglets, with the
+   * crew's channel (the lead splits the work) inside it. The crew record is already saved, so the channel is made for
+   * that record here. `channels.create` would save a second crew.
+   */
+  private addMarketCrewSpace(name: string, team: Team, workerIds: Record<string, string>): string {
+    const spaceId = this.spaces.create({ name, orgletIds: Object.values(workerIds), categories: [] });
+    const channel = EmptyChannel.parse({ ...crewChannelRecord(team), spaceId, access: 'listed', createdAt: this.clock().toISOString() });
+    saveEmptyChannels(this.store, [...emptyChannels(this.store), channel]);
+    return spaceId;
+  }
+  /**
+   * An update of a crew copy finds the crew's channel by its crew record, wherever it sits: in the space of a copy
+   * added as a space, or loose in "Channels" for a copy added before. A member the update brings in joins the copy's
+   * space first, because a channel lists only orglets its space has.
+   */
+  private followMarketCrew(team: Team) {
+    const written = this.store.all<Task>('tasks').flatMap(task => !task.deletedAt && task.channel ? [task.channel] : []);
+    const crewChannels = [...written, ...emptyChannels(this.store)].filter(channel => channel.crewId === team.id && channel.spaceId);
+    for (const channel of crewChannels) {
+      const space = storedSpaces(this.store).find(item => item.id === channel.spaceId);
+      if (!space) continue;
+      const arriving = crewChannelRecord(team).members.map(member => member.id).filter(orgletId => !space.orgletIds.includes(orgletId));
+      if (!arriving.length) continue;
+      this.spaces.update(space.id, { name: space.name, color: space.color, orgletIds: [...space.orgletIds, ...arriving], categories: space.categories });
+    }
+    this.channels.followCrew(team);
   }
   private assertChannelIdle(channelId: string) {
     const row = this.store.all<Task>('tasks').find(task => task.channel?.id === channelId && !task.deletedAt);

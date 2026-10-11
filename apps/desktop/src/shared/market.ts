@@ -98,7 +98,8 @@ export const MarketUpdateTarget = z.object({ entityId: z.string().uuid() }).stri
 export const MarketApplyUpdate = MarketUpdateTarget.extend({ token: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 export type MarketDisplayListing = MarketListing | MarketListingV2;
 export type MarketCatalogView = { listings: MarketDisplayListing[]; nextCursor?: string | null; pageCursor?: string; cachedPages?: { cursor: string; name: string }[]; source: 'online' | 'cache' | 'bundled'; fetchedAt: string | null; error?: string };
-export type MarketAdded = { entityId: string; kind: MarketKind; workerIds: string[]; fallbackNames: string[] };
+/** `spaceId` is set when the copy sits in a space of its own that the listing does not name: a crew listing, added as a space. */
+export type MarketAdded = { entityId: string; kind: MarketKind; workerIds: string[]; fallbackNames: string[]; spaceId?: string };
 export type MarketChange = { name: string; before: string; after: string };
 export type MarketUpdate = {
   entityId: string; listing: MarketDisplayListing; installedVersion: number; customization: MarketCustomization;

@@ -417,7 +417,6 @@ export const en: Dictionary = {
   "Đã bị ẩn": "Hidden",
   "Đã ngừng xuất bản": "Unpublished",
   "Để chia sẻ mẫu, mở menu của một Tí, một crew hoặc một không gian rồi chọn Xuất bản lên marketplace. Bạn luôn xem trước nội dung trước khi gửi.": "To share a template, open the menu of an orglet, a crew or a space and choose Publish to marketplace. You review the content before sending it.",
-  "Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.": "Approved public templates. Add your own copy, no account needed.",
   "Bạn này không đến từ danh mục.": "This item did not come from the catalog.",
   "Bạn đã chỉnh sửa bản này. Áp dụng sẽ thay nội dung mẫu bằng bản bên phải; kết nối và quyền trên máy vẫn giữ nguyên.": "You customized this copy. Applying replaces its template content with the version on the right; local connections and permissions stay as they are.",
   "Bạn đã thay đổi sau khi mở thẻ cập nhật. Xem lại bản so sánh.": "This item changed after you opened the update card. Review the comparison again.",
@@ -437,7 +436,6 @@ export const en: Dictionary = {
   "Loại mẫu đã thay đổi. Thêm mẫu mới để giữ bản hiện tại.": "The template type changed. Add a new copy to keep the current one.",
   "Làm mới": "Refresh",
   "Mục trong danh mục bị trùng.": "The catalog contains duplicate listings.",
-  "Kênh của Tí": "Channel",
   "Nội dung mẫu không khớp SHA-256 của danh mục.": "The template content does not match the catalog SHA-256.",
   "Từ marketplace": "From the marketplace",
   "Hướng dẫn crew": "Crew instructions",
@@ -4979,6 +4977,12 @@ export const en: Dictionary = {
   '{0} đang ở trong {1}. Bỏ Tí này khỏi kênh trước khi xóa.': '{0} is in {1}. Remove this orglet from the channel before deleting it.',
   '{0} đang ở trong {1} kênh: {2}. Bỏ Tí này khỏi các kênh đó trước khi xóa.': '{0} is in {1} channels: {2}. Remove this orglet from those channels before deleting it.',
   'Mẫu Tí': 'Orglet',
+  // Marketplace: search and the two sections of Discover. A listing with several orglets is a space.
+  'Tìm mẫu': 'Search templates',
+  'Tìm theo tên, mô tả, thẻ hoặc tác giả': 'Search by name, summary, tag or author',
+  'Không có mẫu nào khớp "{0}".': 'No template matches "{0}".',
+  'Các Tí': 'Orglets',
+  'Các không gian': 'Spaces',
   // The CodePawl AI router connection (issue 532).
   'CodePawl router': 'CodePawl router',
   'CodePawl router chưa mở. Thử lại sau.': 'The CodePawl router is not open yet. Try again later.',

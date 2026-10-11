@@ -2464,8 +2464,9 @@ export function App() {
       ? <MarketplacePage onMarketAdded={async result => {
           await refresh();
           clearSelection();
-          if (result.kind === 'space') {
-            setOpenSpace(result.entityId);
+          const spaceId = result.spaceId ?? (result.kind === 'space' ? result.entityId : undefined);
+          if (spaceId) {
+            setOpenSpace(spaceId);
             setFriendsOpen(false);
             setArea('channels');
           } else if (result.kind === 'orglet') openWorker(result.entityId);
