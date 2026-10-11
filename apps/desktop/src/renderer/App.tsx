@@ -2464,10 +2464,14 @@ export function App() {
       ? <MarketplacePage onMarketAdded={async result => {
           await refresh();
           clearSelection();
-          if (result.kind === 'space') {
-            setOpenSpace(result.entityId);
+          const spaceId = result.spaceId ?? (result.kind === 'space' ? result.entityId : undefined);
+          if (spaceId) {
+            setOpenSpace(spaceId);
             setFriendsOpen(false);
             setArea('channels');
+            // A listing with several orglets arrives as a space with one channel: open that channel, so the person
+            // lands where they can write, not on the space's empty home.
+            if (result.kind === 'crew') openTeam(result.entityId);
           } else if (result.kind === 'orglet') openWorker(result.entityId);
           else openTeam(result.entityId);
         }} />

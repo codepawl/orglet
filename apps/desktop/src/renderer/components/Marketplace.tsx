@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from './Avatar';
 import { SpaceMark } from './SpaceMark';
-import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, ShieldCheck, UserRoundPlus, X } from 'lucide-react';
-import type { MarketCatalogView, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
+import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, Search, SearchX, ShieldCheck, UserRoundPlus, X } from 'lucide-react';
+import type { MarketCatalogView, MarketDisplayListing, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
 import { orglet } from '../api';
 import { t, tMessage } from '../i18n';
 import { Button, Drawer, PanelHeading } from './ui';
@@ -13,21 +13,18 @@ import { useMarketModeration } from './MarketModeration';
 import { MARKET_SEED_BODIES } from '../../shared/market-seed';
 import { PageTabs } from './PageTabs';
 import { RowMenu } from './RowMenu';
-import { FieldError } from '@codepawlhq/orglet-ui';
+import { FieldError, Input } from '@codepawlhq/orglet-ui';
 import { wideningText } from '../marketUpdateText';
+import { discoverSections, listingMatches, shownKind } from '../marketplaceDiscover';
 
 /**
- * What a listing is, told at a glance by a picture before its name (user, 2026-10-05): an orglet's face, two faces
- * for a crew, a space's filled tile. A listing carries no picture of its own, so the face is the one the app would
+ * What a listing is, told at a glance by a picture before its name (user, 2026-10-05): an orglet's face, a space's
+ * filled tile (a crew listing brings several orglets, so it is a space here too). A listing carries no picture of its own, so the face is the one the app would
  * pick for that name and summary, and the tile takes its colours from the listing's id: the same listing looks the
  * same every time, on every computer. The faces are the flat drawing, which needs no canvas.
  */
 function ListingFace({ listingId, kind, name, summary }: { listingId: string; kind: 'orglet' | 'crew' | 'space'; name: string; summary: string }) {
-  if (kind === 'space') return <span className="market-listing-face"><SpaceMark seed={listingId} /></span>;
-  if (kind === 'crew') return <span className="market-listing-face market-listing-crew">
-    <Avatar name={name} seed={`${listingId}:lead`} defaultMascot hint={summary} size="sm" />
-    <Avatar name={name} seed={`${listingId}:member`} defaultMascot hint={name} size="sm" />
-  </span>;
+  if (shownKind(kind) === 'space') return <span className="market-listing-face"><SpaceMark seed={listingId} /></span>;
   return <span className="market-listing-face"><Avatar name={name} seed={listingId} defaultMascot hint={summary} size="md" /></span>;
 }
 
@@ -44,6 +41,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
   const [refreshing, setRefreshing] = useState(true);
   const viewGeneration = useRef(0);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const [update, setUpdate] = useState<MarketUpdate>();
   const [previousPages, setPreviousPages] = useState<(string | undefined)[]>([]);
   const load = async (refresh: boolean) => {
@@ -83,12 +81,36 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
       setBusy(false);
     }
   };
+  const shown = catalog ? catalog.listings.filter(listing => listingMatches(listing, query)) : [];
+  const listingRow = (listing: MarketDisplayListing) => {
+    const copies = installed.filter(item => item.listingId === listing.listingId);
+    const publicListing = 'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] ? listing : undefined;
+    return <li key={listing.listingId} className="friend-source marketplace-listing">
+    <ListingFace listingId={listing.listingId} kind={listing.kind} name={listing.name} summary={listing.summary} />
+    <div className="friend-source-text">
+      <h3 className="friend-name">{listing.name}</h3><p className="market-listing-summary">{listing.summary}</p>
+      <div className="market-listing-meta"><span>{listingKindName(listing.kind)}</span><span className="market-listing-author">{typeof listing.author === 'string' ? listing.author : listing.author.displayName}</span><span>{listing.language.toUpperCase()} · v{listing.version}</span><span>{listing.license}</span></div>
+      {copies.length > 0 && <p className="market-listing-installed">{copies.length === 1 ? t('Đã thêm') : t('Đã thêm {0} bản trên máy', [copies.length])}{copies.some(item => item.updateAvailable) && ` · ${t('Có bản cập nhật')}`}</p>}
+    </div>
+    <div className="market-listing-actions">
+    <Button type="button" variant="primary" disabled={busy} onClick={() => void action(async () => {
+      const result = await orglet.call('marketAdd', { listingId: listing.listingId, version: listing.version });
+      addedNotice(result);
+      await onAdded(result);
+      setInstalled(await orglet.call('marketInstallations', {}));
+    })}><UserRoundPlus size={16} />{copies.length ? t('Thêm bản nữa') : t('Thêm')}</Button>
+    {publicListing && <RowMenu label={t('Tùy chọn {0}', [listing.name])} disabled={busy} items={[
+      { label: t('Report'), icon: Flag, onSelect: () => moderation.setReport(publicListing) },
+      ...(moderation.capability?.canReview ? [{ label: t('Xem để duyệt'), icon: ShieldCheck, onSelect: () => moderation.setReview(publicListing) }] : []),
+    ]} />}
+    </div>
+      </li>;
+  };
   return <section className="page-section marketplace" aria-labelledby="marketplace-title">
     <PanelHeading title={<span id="marketplace-title">{t('Marketplace')}</span>}>
       {moderation.entry}
       {tab === 'discover' && <Button type="button" variant="outline" disabled={busy || refreshing} onClick={() => void action(() => load(true))}><RefreshCw size={16} />{refreshing ? t('Đang làm mới') : t('Làm mới')}</Button>}
     </PanelHeading>
-    {tab === 'discover' && <p className="muted">{t('Mẫu công khai đã được duyệt. Thêm bản sao của riêng bạn, không cần tài khoản.')}</p>}
     <PageTabs tabs={[{ id: 'discover', label: t('Khám phá') }, { id: 'own', label: t('Mục của tôi') }]} current={tab} onSelect={setTab} label={t('Các phần của marketplace')} />
     {tab === 'discover' ? <div className="marketplace-discover">
     {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
@@ -101,32 +123,18 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
       setCatalog(await orglet.call('marketCatalog', { cursor: cursor || undefined }));
       setPreviousPages([]);
     })} />}
-    {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <ul className="friends-sources">
-      {catalog.listings.length === 0 && <li className="marketplace-empty muted">{t('Chưa có mẫu trên trang này. Bạn có thể làm mới hoặc mở một trang đã lưu.')}</li>}
-      {catalog.listings.map(listing => {
-        const copies = installed.filter(item => item.listingId === listing.listingId);
-        const publicListing = 'reviewDigest' in listing && !MARKET_SEED_BODIES[`${listing.listingId}:${listing.version}`] ? listing : undefined;
-        return <li key={listing.listingId} className="friend-source marketplace-listing">
-        <ListingFace listingId={listing.listingId} kind={listing.kind} name={listing.name} summary={listing.summary} />
-        <div className="friend-source-text">
-          <h3 className="friend-name">{listing.name}</h3><p className="market-listing-summary">{listing.summary}</p>
-          <div className="market-listing-meta"><span>{listingKindName(listing.kind)}</span><span className="market-listing-author">{typeof listing.author === 'string' ? listing.author : listing.author.displayName}</span><span>{listing.language.toUpperCase()} · v{listing.version}</span><span>{listing.license}</span></div>
-          {copies.length > 0 && <p className="market-listing-installed">{copies.length === 1 ? t('Đã thêm') : t('Đã thêm {0} bản trên máy', [copies.length])}{copies.some(item => item.updateAvailable) && ` · ${t('Có bản cập nhật')}`}</p>}
-        </div>
-        <div className="market-listing-actions">
-        <Button type="button" variant="primary" disabled={busy} onClick={() => void action(async () => {
-          const result = await orglet.call('marketAdd', { listingId: listing.listingId, version: listing.version });
-          addedNotice(result);
-          await onAdded(result);
-          setInstalled(await orglet.call('marketInstallations', {}));
-        })}><UserRoundPlus size={16} />{copies.length ? t('Thêm bản nữa') : t('Thêm')}</Button>
-        {publicListing && <RowMenu label={t('Tùy chọn {0}', [listing.name])} disabled={busy} items={[
-          { label: t('Report'), icon: Flag, onSelect: () => moderation.setReport(publicListing) },
-          ...(moderation.capability?.canReview ? [{ label: t('Xem để duyệt'), icon: ShieldCheck, onSelect: () => moderation.setReview(publicListing) }] : []),
-        ]} />}
-        </div>
-      </li>; })}
-    </ul>}
+    <div className="send-to-search marketplace-search">
+      <Search size={16} aria-hidden="true" />
+      <Input type="search" aria-label={t('Tìm mẫu')} placeholder={t('Tìm theo tên, mô tả, thẻ hoặc tác giả')} value={query} onChange={event => setQuery(event.target.value)} />
+    </div>
+    {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <>
+      {catalog.listings.length === 0 && <ul className="friends-sources"><li className="marketplace-empty muted">{t('Chưa có mẫu trên trang này. Bạn có thể làm mới hoặc mở một trang đã lưu.')}</li></ul>}
+      {catalog.listings.length > 0 && shown.length === 0 && <p className="marketplace-no-match muted" role="status"><SearchX size={16} aria-hidden="true" />{t('Không có mẫu nào khớp "{0}".', [query.trim()])}</p>}
+      {discoverSections(shown).map(section => <section key={section.kind} className="market-section" aria-labelledby={`market-section-${section.kind}`}>
+        <h3 id={`market-section-${section.kind}`} className="market-section-heading">{section.kind === 'orglet' ? t('Các Tí') : t('Các không gian')}<span className="muted">{section.listings.length}</span></h3>
+        <ul className="friends-sources">{section.listings.map(listingRow)}</ul>
+      </section>)}
+    </>}
     {(previousPages.length > 0 || catalog?.nextCursor) && <div className="marketplace-pagination">
       <Button type="button" variant="outline" disabled={busy || previousPages.length === 0} onClick={() => void action(async () => {
         const cursor = previousPages.at(-1);

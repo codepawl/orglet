@@ -3480,8 +3480,6 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .marketplace-listing .friend-source-text { gap: 6px; }
 /* The listing's picture: one column wide for every kind, level with the listing's name. */
 .market-listing-face { display: grid; place-items: center; flex-shrink: 0; align-self: flex-start; width: 40px; min-height: 40px; }
-.market-listing-crew { display: flex; justify-content: center; }
-.market-listing-crew > .avatar + .avatar { margin-left: -6px; }
 .marketplace-listing .friend-name, .market-own .friend-name { margin: 0; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: 14px; }
 .market-listing-summary { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .market-listing-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 12px; }
@@ -3489,6 +3487,12 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-listing-meta > .market-listing-author { white-space: normal; overflow-wrap: anywhere; }
 .market-listing-installed { margin: 0; font-size: 12px; color: var(--muted); }
 .marketplace-empty { padding: 12px 10px; }
+.marketplace-search { margin: 0; }
+.marketplace-no-match { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 10px; }
+.market-section { display: grid; gap: 4px; }
+/* Centred, not on the baseline: the smaller count sat 1.5px low beside the heading (market-publishing smoke). */
+.market-section-heading { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; }
+.market-section-heading > .muted { font-size: 12px; font-weight: 400; }
 .marketplace-updates { display: grid; gap: 8px; }
 .marketplace-updates h3, .market-own h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .market-own .friend-status { white-space: normal; overflow: visible; overflow-wrap: anywhere; }

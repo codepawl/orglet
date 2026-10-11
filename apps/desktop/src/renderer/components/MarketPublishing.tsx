@@ -11,6 +11,7 @@ import { Select } from './Select';
 import { confirmAction } from './confirm';
 import { providerName } from './workerModel';
 import type { MarketSubmission } from '../../shared/market-publishing';
+import { shownKind } from '../marketplaceDiscover';
 
 type Source = { kind: 'orglet' | 'crew' | 'space'; entityId: string; name: string };
 
@@ -54,8 +55,8 @@ function operationLabel(operation: PublishingOperationView): string {
 
 /** What kind of listing it is, in the singular: one orglet is "Orglet", where the plural "Orglets" names a group of them. */
 export function listingKindName(kind: MarketSubmission['kind']): string {
-  if (kind === 'space') return t('Không gian');
-  if (kind === 'crew') return t('Kênh của Tí');
+  // A listing with several orglets is a space in the person's eyes, whatever kind the catalog keeps it as.
+  if (shownKind(kind) === 'space') return t('Không gian');
   return t('Mẫu Tí');
 }
 

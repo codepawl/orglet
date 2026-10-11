@@ -31,6 +31,8 @@ export type MarketRuntime = {
   followCrew?: (team: Team) => void;
   /** Makes the space a listing carries, with its categories and channels, for orglets already written; answers its id. */
   addSpace?: (space: SpaceTemplate['space'], workerIds: Record<string, string>) => string;
+  /** Makes the space a crew listing is added as, named after the listing, with the crew's channel inside; answers its id. */
+  addCrewSpace?: (name: string, team: Team, workerIds: Record<string, string>) => string;
 };
 
 export class Marketplace {
@@ -108,6 +110,7 @@ export class Marketplace {
     const prepared = await this.prepare(template);
     if (template.space && !this.runtime.addSpace) throw new Error('Không thêm được không gian ở đây.');
     let entityId = prepared.team?.id ?? prepared.workers[0].id;
+    let spaceId: string | undefined;
     const origin: Origin = { entityId, listingId, version, kind: listing.kind, workerIds: prepared.workerIds, skillIds: prepared.skillIds, baseline: '', baselineKind: 'authoring-v1' };
     this.store.transaction(() => {
       this.store.versionRows(prepared.rows);
@@ -116,12 +119,15 @@ export class Marketplace {
         entityId = this.runtime.addSpace!(template.space, prepared.workerIds);
         origin.entityId = entityId;
       }
+      // A crew is added as a space too. Its origin keeps the crew record as the entity, so an update finds it the same
+      // way for a copy added this way and for one added before, whose channel sits outside every space.
+      if (prepared.team && this.runtime.addCrewSpace) spaceId = this.runtime.addCrewSpace(listing.name, prepared.team, prepared.workerIds);
       if (prepared.team) new KnowledgeBase(this.store).importProposed(entityId, template.knowledge ?? []);
       origin.baseline = this.authoring(origin);
       this.store.setSetting('marketOrigins', [...this.origins(), Origin.parse(origin)]);
     });
     this.notify();
-    return { entityId, kind: listing.kind, workerIds: prepared.workers.map(worker => worker.id), fallbackNames: prepared.fallbackNames };
+    return { entityId, kind: listing.kind, workerIds: prepared.workers.map(worker => worker.id), fallbackNames: prepared.fallbackNames, ...(spaceId ? { spaceId } : {}) };
   }
 
   async previewUpdate(entityId: string): Promise<MarketUpdate> {

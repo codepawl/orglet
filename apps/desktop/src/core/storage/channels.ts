@@ -184,7 +184,7 @@ export function emptyChannels(store: Store): EmptyChannel[] {
   return channels.sort((first, second) => second.createdAt.localeCompare(first.createdAt));
 }
 
-function saveEmptyChannels(store: Store, channels: EmptyChannel[]) {
+export function saveEmptyChannels(store: Store, channels: EmptyChannel[]) {
   store.setSetting(EMPTY_CHANNELS, channels);
 }
 
