@@ -83,6 +83,7 @@ import { workerModelLabel, providerName } from './components/workerModel';
 import { customProviderId } from '../shared/custom-connections';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
+import { ComposerEffort } from './components/ComposerEffort';
 import { ComposerAccount } from './components/ComposerAccount';
 import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
@@ -1167,7 +1168,7 @@ export function App() {
   const nobodyInEmptyChannel = Boolean(emptyChannel && !emptyChannel.workerIds.length);
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : emptyChannel ? channelWorkers : worker ? [worker] : [];
   // Plan usage by the empty chat's bar (COD-326); an open chat's bar reads its own through FollowUpComposer.
-  const emptyChatUsage = usePlanUsageBar({ workers: selected ? [] : executionWorkers, harnesses, running: false, action });
+  const emptyChatUsage = usePlanUsageBar({ workers: selected ? [] : executionWorkers, harnesses, running: false, action, openSettings: () => openSettings('harness') });
   /**
    * An orglet's or crew's chat is its one live row. When that row starts somewhere other than this composer (the
    * `orglet` terminal command) while the empty chat is on screen, the view switches to it, so a question it asks,
@@ -2051,9 +2052,9 @@ export function App() {
           onSelect={accountId => action(async () => { setHarnesses(await orglet.call('selectHarnessAccount', { harness: composerHarness.id, id: accountId })); })}
           onManage={() => openSettings('harness')} />}
         <ComposerModel worker={{ ...worker, provider: worker.provider }}
-          plan={[emptyChatUsage.plans?.shown, ...(emptyChatUsage.plans?.others ?? [])].find(plan => plan?.harness.id === worker.provider)}
-          onOpenSettings={() => openSettings('harness')}
           onChange={modelId => action(() => orglet.call('saveWorker', { ...worker, modelId: modelId || undefined }))} />
+        <ComposerEffort worker={{ ...worker, provider: worker.provider }}
+          onChange={effort => action(() => orglet.call('saveWorker', { ...worker, effort }))} />
       </>
       : recipientOptions.length > 0
         ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [worker?.name ?? t('Tí')])} value={recipientValue} onChange={pickRecipient} showDetail={false} showIcon={false} menuMinWidth={320} options={recipientOptions} />

@@ -1,12 +1,10 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent } from 'react';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
-import type { HarnessPlan } from '../../shared/composer-usage';
 import type { ModelVendor } from '../../shared/modelChoices';
 import { numberedRowIndex, sidePanelSide } from '../../shared/model-menu';
 import { t } from '../i18n';
 import { AnchoredPopover } from './AnchoredPopover';
 import { ModelMark } from './ProviderMark';
-import { PlanSection } from './PlanUsage';
 import { MessageBoxFocus } from './SourcePicker';
 import { Button } from './ui';
 
@@ -33,7 +31,7 @@ const MENU_PADDING = 6;
  * side panel, Arrow Left or Escape goes back, Escape on the main list closes the menu. Hovering or focusing More
  * models opens its panel.
  */
-export function ModelMenu({ ariaLabel, currentLabel, provider, checked, mainRows, currentOutsideMain, sideRows, plan, onSelect, onOpenSettings }: {
+export function ModelMenu({ ariaLabel, currentLabel, provider, checked, mainRows, currentOutsideMain, sideRows, onSelect }: {
   ariaLabel: string;
   /** The checked model's name, which the chip shows. */
   currentLabel: string;
@@ -44,10 +42,7 @@ export function ModelMenu({ ariaLabel, currentLabel, provider, checked, mainRows
   /** The checked model when it is not in the main list (it is in the side panel, or typed by hand): shown after the main rows. */
   currentOutsideMain?: ModelMenuRow;
   sideRows: readonly ModelMenuRow[];
-  /** The plan allowance of this chat's harness; absent for an API connection or a harness that reports none. */
-  plan?: HarnessPlan;
   onSelect: (value: string) => void;
-  onOpenSettings: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [sidePlacement, setSidePlacement] = useState<{ side: 'right' | 'left'; top: number }>();
@@ -113,10 +108,6 @@ export function ModelMenu({ ariaLabel, currentLabel, provider, checked, mainRows
     if (focusMessageBox) focusMessageBox();
     else trigger.current?.focus();
     if (row.value !== checked) onSelect(row.value);
-  };
-  const openSettings = () => {
-    close();
-    onOpenSettings();
   };
 
   const itemsOf = (list: HTMLElement | null) => [...(list?.querySelectorAll<HTMLButtonElement>('[role=menuitemradio], [role=menuitem]') ?? [])];
@@ -191,10 +182,6 @@ export function ModelMenu({ ariaLabel, currentLabel, provider, checked, mainRows
           const movedOut = next !== null && !root.current?.contains(next) && next !== trigger.current;
           if (movedOut) close();
         }}>
-        {plan && <div className="model-menu-plan">
-          <PlanSection plan={plan} />
-          <Button type="button" variant="outline" className="usage-settings" onClick={openSettings}>{t('Xem chi tiết')}</Button>
-        </div>}
         <div ref={mainList} role="menu" aria-label={ariaLabel} className="model-menu-list">
           {mainRows.map((row, index) => renderRow(row, index < 9 ? index + 1 : undefined, true))}
           {currentOutsideMain && renderRow(currentOutsideMain, undefined, true)}

@@ -390,7 +390,9 @@ export type UsageFoot = { ring?: ReactNode; /** The plan allowances of the chat'
  * Switching selects the other account, as Settings would; the next message runs on it. `workers` answer in the chat, and `runs` are the chat's (none in an empty chat),
  * for the context window of the model each orglet will use next.
  */
-export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, dock }: {
+export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, dock, openSettings }: {
+  /** Opens Settings where the plan's accounts are, from the ring's allowance. */
+  openSettings?: () => void;
   /** The bar whose island is read: the main chat's, or a side thread's in the right panel (COD-365). */
   dock?: string;
   workers: readonly ContextWorker[];
@@ -407,7 +409,8 @@ export function usePlanUsageBar({ workers, harnesses, running, runs = [], action
   const lists = useCachedEach(modelLists, listed);
   const context = chatContextFor(workers, Object.fromEntries(listed.map(provider => [provider, lists[provider]?.models])), runs);
   useReportedWindowRefresh(runs);
-  const ring = usageRingFor(context) ? <UsageRing context={context} /> : undefined;
+  const plans = usage ? [usage.shown, ...usage.others] : [];
+  const ring = usageRingFor(context) || plans.length > 0 ? <UsageRing context={context} plans={plans} {...(openSettings ? { onOpenSettings: openSettings } : {})} /> : undefined;
   if (!usage) return { ring, out: false };
   const switchAccount = (harness: HarnessInfo, accountId: string) => action(() => orglet.call('selectHarnessAccount', { harness: harness.id, id: accountId }));
   const { shown, offer } = usage;
@@ -474,7 +477,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0 || Boolean(readOnly);
-  const planUsage = usePlanUsageBar({ workers, harnesses, running: busy, runs: detail.runs, action, dock: islandDock });
+  const planUsage = usePlanUsageBar({ workers, harnesses, running: busy, runs: detail.runs, action, dock: islandDock, openSettings: () => openSettings('harness') });
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
   /**

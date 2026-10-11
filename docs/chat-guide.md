@@ -6,7 +6,7 @@ Part of the [user guide](user-guide.md). How the words in the chat are chosen an
 
 In a new orglet chat, the model picker in the row under the message box shows the selected model's name. Open it to choose another model for that orglet. The first nine models are numbered at the end of their row: press the number to choose that model while the menu is open. Each row shows the maker's logo and the model's name with its version, such as Opus 5.5, as the CLI or provider reports it. When the version is not known, the row shows the short name, such as Opus.
 
-When the orglet runs on a plan (Claude Code, Codex), the top of the menu shows that plan's allowance: each window's share used with its bar, when it resets, and which account it is, and **View details** opens **Settings → Harness**. A chat on an API connection has no plan, so its menu starts with the models. A channel's prompt bar has no model picker, so a plan's allowance shows there only as the line and the island described under Usage and context, and in **Settings → Harness**.
+Beside the model is **how hard the orglet thinks**: Auto, Low, Medium, High or Max. Auto lets Orglet choose for each kind of turn. The choice is saved on the orglet, the same as in its settings, and it is not shown for a model that has no such setting. A channel's prompt bar has no model picker, so a plan's allowance shows there only as the line and the island described under Usage and context, and in **Settings → Harness**.
 
 The row marked **Default** is the model that runs when you have not picked one. Choosing it saves no model, so the orglet follows the CLI if its default changes later. The newest model of each family is listed first. Older ones, and models only reachable by their full ID, are under **More models**: point at it (or press Arrow Right on it) and a second panel opens beside the menu, to the right when there is room, otherwise to the left. Choosing a model in either panel closes both; Arrow Left or Esc goes back from the side panel to the list. When the model in use is one of the older ones, the main list still shows it, with its tick. The same list appears in the orglet's settings under **Model**, where you can still type any model ID.
 
@@ -118,13 +118,13 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 
 ## Usage and context
 
-Under the message box, at the right end of the row with the model picker, a small ring shows how full the chat's context window is. It stays grey until 80%, turns amber from 80%, and red at 100%. The ring is about the context only; the plan allowance is at the top of the model picker (see above).
+Under the message box, at the right end of the row with the model picker, a small ring shows how full the chat's context window is. It stays grey until 80%, turns amber from 80%, and red at 100%. Click the ring for the details: the context window of the model each orglet will use next and, when the orglet runs on a plan (Claude Code, Codex), that plan's allowance under it, with **View details** to **Settings → Harness**.The ring is about the context only; the plan allowance is at the top of the model picker (see above).
 
 Click the ring to see the context window:
 
 - **Context window**: the model the orglet will answer with next, how many tokens its latest answer in this chat sent, out of how many that model holds ("304.3k / 1M (30%)"). Before the chat's first answer it shows the model's size with nothing used yet ("0 / 1M (0%)"). In a channel each orglet has its own line with its model. The popover keeps to the figures; how a long chat is trimmed is here: each message sends up to the last 10 turns word for word, and older turns are folded into a short summary.
 
-The plan allowance in the model picker lists each allowance of the plan, with how much is used and when it resets, and which account it is. If Orglet could not read fresh numbers, for example because Claude Code's sign-in renews only when it runs, you see the last numbers with their time (**Figures as of 07:05**).
+The plan allowance there lists each allowance of the plan, with how much is used and when it resets, and which account it is. If Orglet could not read fresh numbers, for example because Claude Code's sign-in renews only when it runs, you see the last numbers with their time (**Figures as of 07:05**).
 
 From 80% of a plan allowance, a line under that row says how much is used and when it resets. At 100% there is no line: the island on top of the message box says the plan ran out and when it resets (**Claude Code ran out · Resets Sat, 10/10, 9:00 AM**), and × hides it until that reset. If another account of the same app has room, the island offers it instead (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
 
