@@ -439,6 +439,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .topbar-provider > .provider-mark { display:inline-grid; place-items:center; flex-shrink:0; }
 /* Beside a byline: the role this worker played for the team, then the model that wrote the message. */
 .byline-role { font-size:11px; line-height:16px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 8px; }
+/* A message by an orglet that left the channel (owner, 2026-10-12): quiet until the pointer or the keyboard reaches it. 58% keeps the text readable in both themes. */
+.ghost-message { opacity:.58; transition:opacity var(--motion-quick) var(--ease-out); }
+.ghost-message:hover, .ghost-message:focus-within { opacity:1; }
+.ghost-message .avatar { filter:grayscale(1); }
+@media(prefers-reduced-motion:reduce) { .ghost-message { transition:none; } }
 .byline-provider { font-size:11px; font-weight:500; color:var(--muted); }
 .badge { display:inline-flex; align-items:center; border-radius:6px; background:var(--surface); font-size:11px; padding:2px 6px; font-weight:500; color:var(--muted); white-space:nowrap; }
 .badge.critical,.badge.warning { color:var(--error); }
@@ -3627,3 +3632,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .unfriend-status.error { color:var(--error); }
 .unfriend-actions { display:flex; justify-content:flex-end; gap:8px; }
 .org-drawer:has(.unfriend-dialog) { width:min(520px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
+.lead-leaves-dialog { display:flex; flex-direction:column; gap:14px; }
+.lead-leaves-dialog p { margin:0; }
+.lead-leaves-actions { display:flex; justify-content:flex-end; gap:8px; }
+.org-drawer:has(.lead-leaves-dialog) { width:min(480px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }

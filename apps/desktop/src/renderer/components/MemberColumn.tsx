@@ -4,6 +4,7 @@ import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 import { arrivedWithChat } from '../chatSwitch';
 import { AnchoredPopover } from './AnchoredPopover';
+import { LeadLeavesDialog } from './LeadLeavesDialog';
 import { Avatar, workerInk } from './Avatar';
 import { ProviderMark } from './ProviderMark';
 import { RowMenu } from './RowMenu';
@@ -16,7 +17,7 @@ import { Button } from './ui';
  * right-click on it opens its menu. The person's row opens nothing. It takes the right panel's place while Details is closed, so the two never sit side by
  * side. It has no close button: the toggle in the channel's header shows and hides it (user, 2026-10-04).
  */
-export function MemberColumn({ you, onYou, members, working, leadId, onMessage, onEdit, removable, onRemove }: {
+export function MemberColumn({ you, onYou, members, working, leadId, onMessage, onEdit, busy, onRemove }: {
   /** The person's name, as their face in the rail has it. */
   you: string;
   /** The person's own row was clicked. */
@@ -28,14 +29,18 @@ export function MemberColumn({ you, onYou, members, working, leadId, onMessage, 
   onMessage: (worker: Worker) => void;
   /** Opens that orglet's settings, where its role, model and memory are. */
   onEdit: (worker: Worker) => void;
-  /** Whether this orglet can be taken out of the channel: not the lead of a channel where the lead splits the work. The last orglet may go. */
-  removable: (worker: Worker) => boolean;
-  /** Takes the orglet out of the channel. Its messages stay, and it stays an orglet. */
-  onRemove: (worker: Worker) => void;
+  /** Whether the call that takes an orglet out is under way. */
+  busy?: boolean;
+  /**
+   * Takes the orglet out of the channel. Its messages stay, and it stays an orglet. When it was the lead and two or
+   * more orglets stay, `nextLeadId` is the one the person chose to lead next.
+   */
+  onRemove: (worker: Worker, nextLeadId?: string) => void;
 }) {
   const youWord = t('Bạn');
   // A column that came with the chat is in place at once; one the person asked for folds in.
   const [cameWithChat] = useState(() => arrivedWithChat());
+  const [leadLeaving, setLeadLeaving] = useState<Worker>();
   return <aside className={`members-pane${cameWithChat ? ' with-chat' : ''}`} aria-label={t('Thành viên')}>
     <div className="members-head">
       <h2>{t('Thành viên — {0}', [members.length + 1])}</h2>
@@ -50,11 +55,18 @@ export function MemberColumn({ you, onYou, members, working, leadId, onMessage, 
           </span>
         </Button>
       </li>
-      {members.map(worker => <li key={worker.id}>
-        <MemberRow worker={worker} working={working.has(worker.id)} lead={worker.id === leadId} onMessage={() => onMessage(worker)} onEdit={() => onEdit(worker)}
-          onRemove={removable(worker) ? () => onRemove(worker) : undefined} />
-      </li>)}
+      {members.map(worker => {
+        const isLead = worker.id === leadId;
+        // A lead who leaves asks who leads next, unless nobody else is left to choose from.
+        const choosesSuccessor = isLead && members.length > 2;
+        return <li key={worker.id}>
+          <MemberRow worker={worker} working={working.has(worker.id)} lead={isLead} onMessage={() => onMessage(worker)} onEdit={() => onEdit(worker)}
+            choosesSuccessor={choosesSuccessor} onRemove={choosesSuccessor ? () => setLeadLeaving(worker) : () => onRemove(worker)} />
+        </li>;
+      })}
     </ul>
+    {leadLeaving && <LeadLeavesDialog open leaving={leadLeaving} staying={members.filter(worker => worker.id !== leadLeaving.id)} busy={Boolean(busy)}
+      onClose={() => setLeadLeaving(undefined)} onConfirm={nextLeadId => { onRemove(leadLeaving, nextLeadId); setLeadLeaving(undefined); }} />}
   </aside>;
 }
 
@@ -62,7 +74,7 @@ export function MemberColumn({ you, onYou, members, working, leadId, onMessage, 
  * One orglet in the column and the profile card its row opens (user, 2026-10-04, from Discord's member card): a strip
  * in the orglet's own colour, its face, its name, what it runs on, what it does, and the two things to do with it.
  */
-function MemberRow({ worker, working, lead, onMessage, onEdit, onRemove }: { worker: Worker; working: boolean; lead: boolean; onMessage: () => void; onEdit: () => void; onRemove?: () => void }) {
+function MemberRow({ worker, working, lead, onMessage, onEdit, choosesSuccessor, onRemove }: { worker: Worker; working: boolean; lead: boolean; onMessage: () => void; onEdit: () => void; choosesSuccessor: boolean; onRemove: () => void }) {
   const row = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -81,7 +93,8 @@ function MemberRow({ worker, working, lead, onMessage, onEdit, onRemove }: { wor
       { label: t('Hồ sơ'), icon: UserRound, onSelect: () => setOpen(true) },
       { label: t('Nhắn tin'), icon: MessageCircle, onSelect: onMessage },
       { label: t('Chỉnh sửa'), icon: Pencil, onSelect: onEdit },
-      ...(onRemove ? [{ label: t('Xóa khỏi kênh'), icon: UserRoundMinus, danger: true, onSelect: onRemove, confirm: { question: t('Xóa {0} khỏi kênh này?', [worker.name]), label: t('Xóa khỏi kênh') } }] : []),
+      // Choosing who leads next needs more than a yes, so that case opens its own dialog instead of the menu's question.
+      { label: t('Xóa khỏi kênh'), icon: UserRoundMinus, danger: true, onSelect: onRemove, ...(choosesSuccessor ? {} : { confirm: { question: t('Xóa {0} khỏi kênh này?', [worker.name]), label: t('Xóa khỏi kênh') } }) },
     ]} />
     <AnchoredPopover anchor={row} open={open} onClose={close} label={t('Hồ sơ của {0}', [worker.name])} className="member-card">
       <div className="member-card-strip" style={{ '--member-ink': workerInk(worker) } as CSSProperties} />
