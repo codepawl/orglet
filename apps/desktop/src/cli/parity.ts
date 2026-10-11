@@ -209,6 +209,8 @@ export const BRIDGE_PARITY: Record<keyof Bridge, Parity> = {
   exportTemplate: windowOnly('a native save dialog'),
   importTemplate: windowOnly('a native open dialog'),
   importSkill: windowOnly('a native open dialog'),
+  scanClaudeCode: windowOnly('reads another app\'s folder after a click in the window, with a native folder pick for a project'),
+  importClaudeCode: windowOnly('a dialog that shows what is imported and what is left behind'),
   exportSkill: windowOnly('a native save dialog'),
   openPricing: windowOnly('opens a link in the browser'),
   backup: elevated('orglet grant backup', 'setup'),

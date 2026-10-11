@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react';
-import type { Skill } from '../../shared/contracts';
+import type { Connections, Skill, Workspace } from '../../shared/contracts';
+import type { HarnessInfo } from '../../shared/harness';
 import { skillSummary } from '../../shared/skill-summary';
 import { Button } from './ui';
-import { FileText, FolderInput, Plus, Sparkles } from 'lucide-react';
+import { FileText, FolderInput, Plus, Sparkles, SquareTerminal } from 'lucide-react';
 import { Select } from './Select';
 import { toast } from './toast';
 import { t, tMessage } from '../i18n';
 import { EmptyPanel } from './EmptyPanel';
 import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
+import { ClaudeCodeImportDialog } from './ClaudeCodeImport';
 import { Skeleton, SkeletonGroup, SkeletonText, Textarea } from '@codepawlhq/orglet-ui';
 import { skillReviews } from '../caches';
 import { dwellHandlers, useCached } from '../prefetch';
 
 /** Import and create actions for the Skills tab; they sit on the library's tab row. */
-export function SkillLibraryActions({ onOpen }: { onOpen: (skill?: Skill) => void }) {
+export function SkillLibraryActions({ onOpen, workspace, connections, harnesses }: { onOpen: (skill?: Skill) => void; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[] | undefined }) {
+  const [importing, setImporting] = useState(false);
   const [busy, setBusy] = useState(false);
   return <>
     <Button variant="outline" disabled={busy} onClick={async () => {
@@ -22,6 +25,8 @@ export function SkillLibraryActions({ onOpen }: { onOpen: (skill?: Skill) => voi
       try { const skill = await orglet.importSkill(); if (skill) onOpen(skill); }
       catch (err) { toast((err as Error).message, 'error', t('Nhập skill từ thư mục')); } finally { setBusy(false); }
     }}><FolderInput size={16} />{t('Nhập từ thư mục')}</Button>
+    <Button variant="outline" onClick={() => setImporting(true)}><SquareTerminal size={16} />{t('Nhập từ Claude Code')}</Button>
+    <ClaudeCodeImportDialog open={importing} onClose={() => setImporting(false)} workspace={workspace} connections={connections} harnesses={harnesses} />
     <Button variant="outline" onClick={() => onOpen()}><Plus size={16} />{t('Tạo skill')}</Button>
   </>;
 }

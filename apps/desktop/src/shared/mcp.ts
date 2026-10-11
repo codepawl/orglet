@@ -300,7 +300,7 @@ export function parseMcpImport(text: string): { drafts: McpServerDraft[]; skippe
   const drafts: McpServerDraft[] = [];
   const skipped: { name: string; reason: string }[] = [];
   for (const [name, entry] of entries.slice(0, MCP_SERVER_LIMIT)) {
-    const draft = importedDraft(name, entry);
+    const draft = mcpDraftFromEntry(name, entry);
     if ('reason' in draft) skipped.push({ name, reason: draft.reason });
     else drafts.push(draft.draft);
   }
@@ -357,7 +357,8 @@ export function parseMcpImportNamingSecrets(text: string): { drafts: McpServerDr
   return { drafts, secrets, skipped };
 }
 
-function importedDraft(name: string, entry: z.infer<typeof ImportedServer>): { draft: McpServerDraft } | { reason: string } {
+/** One file entry as a draft with its values, or the reason it cannot be one. Shared with the Claude Code import. */
+export function mcpDraftFromEntry(name: string, entry: z.infer<typeof ImportedServer>): { draft: McpServerDraft } | { reason: string } {
   const enabled = entry.disabled !== true;
   if (entry.command) {
     const env = Object.entries(entry.env ?? {}).filter(([, value]) => value !== '').map(([variable, value]) => ({ name: variable, value }));

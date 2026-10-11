@@ -33,6 +33,8 @@ Arguments are shown in the app. Put tokens in environment variables or headers, 
 
 **Import from a file.** **Import from a file** reads a JSON file you pick, in the `mcpServers` format most apps use (`servers` in VS Code's). Orglet never looks for another app's MCP settings on its own. It does not read Claude Desktop, Cursor or VS Code files unless you pick one.
 
+**Import from Claude Code.** Claude Code's servers come in through **Library**, **Skills**, **Import from Claude Code**, which reads them only when you open that dialog and saves them the same way as an import from a file. See [Import from Claude Code](import-from-claude-code.md).
+
 ## Let an orglet use a server
 
 An orglet uses no server until you pick one.
