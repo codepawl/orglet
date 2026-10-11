@@ -753,10 +753,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   <div className="setting-text">
                     <span id={titleId} className="setting-title">{local ? name : `${name} API`}</span>
                     <span className="setting-description">{local
-                      ? (connections[provider] ? t('Đã bật Ollama tại 127.0.0.1:11434') : t('Tắt · bật công tắc nếu Ollama đang chạy trên máy này'))
+                      ? (connections[provider] ? t('Đã bật Ollama tại 127.0.0.1:11434') : t('Tắt'))
                       : active
                         ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
-                        : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); }, name)}>{local ? t('Tài liệu') : provider === 'opencode-go' ? t('Giá và hạn mức gói') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
+                        : t('Tắt')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); }, name)}>{local ? t('Tài liệu') : provider === 'opencode-go' ? t('Giá và hạn mức gói') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
                   </div>
                   <div className="setting-control">
                     <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {

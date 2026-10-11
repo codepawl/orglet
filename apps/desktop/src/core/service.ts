@@ -58,7 +58,7 @@ import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
 import { assertSkillReady, inspectPackage, packageForImport, packageForExport } from './skill-package';
 import { taskResultStamp } from '../shared/task-seen';
-import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
+import { claudeCodeModels, fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
 import { EFFORT_METADATA_REFRESH_AT, canStoreModelListRow, dropProviderRow, readModelListCache, readReportedContextWindows, withReportedContextWindows, writeModelListCache } from './models/cache';
 import { CATALOG_HINT_IDS, emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople, parseMentions } from '../shared/mentions';
@@ -147,6 +147,13 @@ function namedAliases(row: Pick<ModelListRow, 'models'>): number {
 }
 
 const PARTIAL_MODEL_LIST_RETRY_MS = 10 * 60_000;
+
+/**
+ * How long the first read of Claude Code's list waits for the CLI to name its aliases. The window gives a command 30
+ * seconds, and the starts took 29 to 31 seconds on 2026-10-11, so a first read used to end in "Core không phản hồi".
+ * Past this wait the bare aliases are answered, marked stale, and the names follow when the starts finish.
+ */
+export const FIRST_CLAUDE_LIST_WAIT_MS = 12_000;
 
 /** A cached list is fetched again after a day, or at its `retryAfter` when a fetch learned nothing (COD-338). */
 export function modelListStale(row: ModelListRow, now: Date): boolean {
@@ -1607,7 +1614,17 @@ export class CoreService {
       if (stale && !this.modelListFailed.has(provider)) this.scheduleModelListRefresh(provider);
       return this.toModelListResult(provider, row, stale);
     }
-    return this.toModelListResult(provider, await this.refreshModelList(provider), false);
+    const refreshing = this.refreshModelList(provider);
+    if (provider !== 'claude-code' || row || input.refresh) return this.toModelListResult(provider, await refreshing, false);
+    let waiting: ReturnType<typeof setTimeout> | undefined;
+    const waitedLongEnough = new Promise<undefined>(resolve => {
+      waiting = setTimeout(() => resolve(undefined), FIRST_CLAUDE_LIST_WAIT_MS);
+    });
+    const named = await Promise.race([refreshing, waitedLongEnough]);
+    clearTimeout(waiting);
+    if (named) return this.toModelListResult(provider, named, false);
+    void refreshing.then(() => this.notify()).catch(() => {});
+    return this.toModelListResult(provider, { fetchedAt: this.clock().toISOString(), models: claudeCodeModels(), source: 'alias' }, true);
   }
   /** Drop one provider's cached list (API key change, harness Dò lại, or cache-shape bump). */
   invalidateModelList(provider: CredentialProvider | ModelListProviderId) {

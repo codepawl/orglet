@@ -16,14 +16,14 @@ const modeNames: Record<ApprovalMode, string> = translated({
 });
 
 const modeDescriptions: Record<ApprovalMode, string> = translated({
-  ask: 'Thay đổi chờ bạn xem rồi mới vào thư mục.',
-  apply: 'Thay đổi vào thư mục khi Tí làm xong.',
-  plan: 'Chỉ đọc và gửi kế hoạch, chưa sửa gì.',
+  ask: 'Bạn xem trước khi áp dụng.',
+  apply: 'Áp dụng khi Tí làm xong.',
+  plan: 'Chỉ lên kế hoạch, chưa sửa gì.',
 });
 
 const folderNeedNotes: Record<Exclude<FolderNeed, undefined>, string> = translated({
-  pick: 'Cần thư mục làm việc · chọn để thêm',
-  edit: 'Cần quyền sửa thư mục · chọn để cho phép',
+  pick: 'Cần thư mục làm việc',
+  edit: 'Cần quyền sửa thư mục',
 });
 
 const modeIcons: Record<ApprovalMode, LucideIcon> = { ask: FileDiff, apply: FolderCheck, plan: ListTodo };
