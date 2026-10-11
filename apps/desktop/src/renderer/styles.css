@@ -3490,7 +3490,8 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .marketplace-search { margin: 0; }
 .marketplace-no-match { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 10px; }
 .market-section { display: grid; gap: 4px; }
-.market-section-heading { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; }
+/* Centred, not on the baseline: the smaller count sat 1.5px low beside the heading (market-publishing smoke). */
+.market-section-heading { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; }
 .market-section-heading > .muted { font-size: 12px; font-weight: 400; }
 .marketplace-updates { display: grid; gap: 8px; }
 .marketplace-updates h3, .market-own h3 { margin: 0; font-size: 14px; font-weight: 600; }
