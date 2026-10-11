@@ -39,6 +39,7 @@ accessibility notes. In an installed package the pages are in `node_modules/@cod
 | A field's title with a small leading icon and an optional required asterisk drawn outside its name. | `FieldLabel` | [FieldLabel](../../docs/components/FieldLabel.md) |
 | A field for an amount of money, with the currency symbol before it and its code after it. | `MoneyInput` | [MoneyInput](../../docs/components/MoneyInput.md) |
 | One choice out of a few labelled options, each with an optional description. | `RadioGroup` | [RadioGroup](../../docs/components/RadioGroup.md) |
+| A search box with a leading magnifier inside one bordered box, so the border and the focus state surround both. | `SearchField` | [SearchField](../../docs/components/SearchField.md) |
 | A single-choice dropdown with groups, details, icons and full keyboard support. | `Select` | [Select](../../docs/components/Select.md) |
 | An on/off switch for a setting that applies at once, bare or as a titled settings row. | `Switch`, `SwitchField` | [Switch](../../docs/components/Switch.md) |
 | Tabs on a page, as quiet text buttons, with a panel for each. | `Tabs`, `TabPanel` | [Tabs](../../docs/components/Tabs.md) |

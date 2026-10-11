@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { DialogOverlay } from '@codepawlhq/orglet-ui';
+import { DialogOverlay, SearchField } from '@codepawlhq/orglet-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CornerDownLeft, Search, X } from 'lucide-react';
+import { CornerDownLeft, X } from 'lucide-react';
 import { Button } from './ui';
 import { Avatar, RosterAvatars } from './Avatar';
 import { relativeDay } from './SearchDialog';
@@ -72,14 +72,11 @@ export function SendToPicker({ open, count, names, options, onChoose, onClose }:
           </div>
           <Dialog.Close asChild><Button size="icon" aria-label={t('Đóng')}><X size={18} /></Button></Dialog.Close>
         </div>
-        <div className="send-to-search">
-          <Search size={16} aria-hidden="true" />
-          <input autoFocus role="combobox" aria-expanded={shown.length > 0} aria-controls="send-to-options" aria-activedescendant={activeOption ? `send-to-${activeOption.key}` : undefined} aria-autocomplete="list" aria-label={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+        <SearchField className="send-to-search" type="text" autoFocus role="combobox" aria-expanded={shown.length > 0} aria-controls="send-to-options" aria-activedescendant={activeOption ? `send-to-${activeOption.key}` : undefined} aria-autocomplete="list" aria-label={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
             if (event.key === 'ArrowDown') { event.preventDefault(); setActive(index => Math.min(index + 1, shown.length - 1)); }
             if (event.key === 'ArrowUp') { event.preventDefault(); setActive(index => Math.max(index - 1, 0)); }
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); choose(active); }
           }} />
-        </div>
         <ul className="send-to-options" id="send-to-options" role="listbox" aria-label={t('Nơi nhận')} ref={list}>
           {shown.map((option, index) => {
             const startsGroup = index === 0 || shown[index - 1].group !== option.group;

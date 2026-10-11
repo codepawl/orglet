@@ -29,7 +29,9 @@ try {
   // The catalog that ships with the app also lists a space; a catalog server from before spaces lists these two.
   for (const name of ['Research friend', 'Research and review']) assert.equal(await page.locator('.marketplace-listing').filter({ hasText: name }).count(), 1, `${name} is listed once`);
   assert.ok(await page.locator('.marketplace-listing').count() <= 3);
-  assert.match(await page.locator('.marketplace-source').innerText(), new RegExp(['Danh mục trực tuyến', 'Danh mục đã lưu trên máy', 'Danh mục CodePawl đi kèm app'].map(key => label(key)).join('|')));
+  // The live catalog shows no source line; a saved or shipped one names itself.
+  const source = page.locator('.marketplace-source');
+  if (await source.count() > 0) assert.match(await source.innerText(), new RegExp(['Danh mục đã lưu trên máy', 'Danh mục CodePawl đi kèm app'].map(key => label(key)).join('|')));
   await page.screenshot({ path: 'test-results/marketplace-light-wide.png' });
   await page.locator('.marketplace-listing').filter({ hasText: 'Research friend' }).getByRole('button', { name: label('Thêm'), exact: true }).click();
   await page.getByRole('heading', { name: label('Đang nhắn với {0}', ['Research friend']), exact: true }).waitFor();

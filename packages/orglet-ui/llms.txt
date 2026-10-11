@@ -26,6 +26,7 @@ Rules that hold for every component: text comes in as props, `className` is appl
 - [FieldLabel](docs/components/FieldLabel.md): A field's title with a small leading icon and an optional required asterisk drawn outside its name.
 - [MoneyInput](docs/components/MoneyInput.md): A field for an amount of money, with the currency symbol before it and its code after it.
 - [RadioGroup](docs/components/RadioGroup.md): One choice out of a few labelled options, each with an optional description.
+- [SearchField](docs/components/SearchField.md): A search box with a leading magnifier inside one bordered box, so the border and the focus state surround both.
 - [Select](docs/components/Select.md): A single-choice dropdown with groups, details, icons and full keyboard support.
 - [Switch](docs/components/Switch.md): An on/off switch for a setting that applies at once, bare or as a titled settings row.
 

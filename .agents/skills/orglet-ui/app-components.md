@@ -166,7 +166,7 @@ Settings and identity facts:
 
 ## Kit wrappers
 
-The app wraps these kit components. Import the wrapper from the app file; import from `@codepawlhq/orglet-ui` only for kit components with no wrapper (`Skeleton`, `Viewer`, `Input`, `Textarea`, `ToolbarToggleGroup`, `Tooltip`, `Badge`, `Card`, `Tabs`, `RadioGroup`, `Progress`).
+The app wraps these kit components. Import the wrapper from the app file; import from `@codepawlhq/orglet-ui` only for kit components with no wrapper (`Skeleton`, `Viewer`, `Input`, `Textarea`, `SearchField` (a search box with its magnifier inside the border), `ToolbarToggleGroup`, `Tooltip`, `Badge`, `Card`, `Tabs`, `RadioGroup`, `Progress`).
 
 | Need | Use | File |
 |---|---|---|

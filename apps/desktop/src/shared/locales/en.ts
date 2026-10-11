@@ -427,7 +427,6 @@ export const en: Dictionary = {
   "Có bản cập nhật": "Update available",
   "Cập nhật {0}": "Update {0}",
   "Danh mục CodePawl đi kèm app": "CodePawl catalog bundled with the app",
-  "Danh mục trực tuyến": "Online catalog",
   "Danh mục đã lưu trên máy": "Catalog saved on this computer",
   "Khám phá": "Discover",
   "Không tìm thấy phiên bản này trong danh mục đã kiểm tra.": "This version is not in the validated catalog.",

@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Checkbox, DialogOverlay, Input, Textarea, useReturnFocus } from '@codepawlhq/orglet-ui';
+import { Checkbox, DialogOverlay, SearchField, Textarea, useReturnFocus } from '@codepawlhq/orglet-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Forward, Search, X } from 'lucide-react';
+import { Forward, X } from 'lucide-react';
 import { Button } from './ui';
 import { Avatar, RosterAvatars } from './Avatar';
 import { relativeDay } from './SearchDialog';
@@ -80,9 +80,7 @@ export function ForwardPicker({ request, options, sending, onSend, onClose }: {
           </div>
           <Dialog.Close asChild><Button size="icon" aria-label={t('Đóng')}><X size={18} /></Button></Dialog.Close>
         </div>
-        <div className="send-to-search">
-          <Search size={16} aria-hidden="true" />
-          <Input autoFocus aria-label={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+        <SearchField className="send-to-search" autoFocus aria-label={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               list.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus();
@@ -93,7 +91,6 @@ export function ForwardPicker({ request, options, sending, onSend, onClose }: {
               if (first) toggle(first);
             }
           }} />
-        </div>
         <ul className="send-to-options forward-options" aria-label={t('Nơi nhận')} ref={list}>
           {shown.map((option, index) => {
             const startsGroup = index === 0 || shown[index - 1].group !== option.group;

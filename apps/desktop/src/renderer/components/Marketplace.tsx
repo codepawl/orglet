@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from './Avatar';
 import { SpaceMark } from './SpaceMark';
-import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, Search, SearchX, ShieldCheck, UserRoundPlus, X } from 'lucide-react';
+import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, SearchX, ShieldCheck, UserRoundPlus, X } from 'lucide-react';
 import type { MarketCatalogView, MarketDisplayListing, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
 import { orglet } from '../api';
 import { t, tMessage } from '../i18n';
@@ -13,7 +13,7 @@ import { useMarketModeration } from './MarketModeration';
 import { MARKET_SEED_BODIES } from '../../shared/market-seed';
 import { PageTabs } from './PageTabs';
 import { RowMenu } from './RowMenu';
-import { FieldError, Input } from '@codepawlhq/orglet-ui';
+import { FieldError, SearchField } from '@codepawlhq/orglet-ui';
 import { wideningText } from '../marketUpdateText';
 import { discoverSections, listingMatches, shownKind } from '../marketplaceDiscover';
 
@@ -113,7 +113,8 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     </PanelHeading>
     <PageTabs tabs={[{ id: 'discover', label: t('Khám phá') }, { id: 'own', label: t('Mục của tôi') }]} current={tab} onSelect={setTab} label={t('Các phần của marketplace')} />
     {tab === 'discover' ? <div className="marketplace-discover">
-    {catalog && <p className="muted marketplace-source" role="status">{catalog.source === 'online' ? t('Danh mục trực tuyến') : catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}{catalog.fetchedAt && ` · ${new Date(catalog.fetchedAt).toLocaleString()}`}</p>}
+    {/* The live catalog says nothing about itself (owner, 2026-10-11); only a list that is not live says where it came from. */}
+    {catalog && catalog.source !== 'online' && <p className="muted marketplace-source" role="status">{catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}</p>}
     {catalog?.error && <p className="muted" role="status">{tMessage(catalog.error)}</p>}
     {error && <FieldError className="error">{error}</FieldError>}
     {catalog?.source === 'cache' && !!catalog.cachedPages?.length && <Select label={t('Mở trang đã lưu')} value={catalog.pageCursor ?? ''} disabled={busy} options={[
@@ -123,10 +124,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
       setCatalog(await orglet.call('marketCatalog', { cursor: cursor || undefined }));
       setPreviousPages([]);
     })} />}
-    <div className="send-to-search marketplace-search">
-      <Search size={16} aria-hidden="true" />
-      <Input type="search" aria-label={t('Tìm mẫu')} placeholder={t('Tìm theo tên, mô tả, thẻ hoặc tác giả')} value={query} onChange={event => setQuery(event.target.value)} />
-    </div>
+    <SearchField className="marketplace-search" aria-label={t('Tìm mẫu')} placeholder={t('Tìm theo tên, mô tả, thẻ hoặc tác giả')} value={query} onChange={event => setQuery(event.target.value)} />
     {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <>
       {catalog.listings.length === 0 && <ul className="friends-sources"><li className="marketplace-empty muted">{t('Chưa có mẫu trên trang này. Bạn có thể làm mới hoặc mở một trang đã lưu.')}</li></ul>}
       {catalog.listings.length > 0 && shown.length === 0 && <p className="marketplace-no-match muted" role="status"><SearchX size={16} aria-hidden="true" />{t('Không có mẫu nào khớp "{0}".', [query.trim()])}</p>}
