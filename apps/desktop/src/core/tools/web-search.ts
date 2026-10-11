@@ -6,6 +6,8 @@ import type { IncomingHttpHeaders } from 'node:http';
 import type { WebSearchKeyProvider, WebSearchProvider, WebSearchResult } from '../../shared/web-tools';
 import { extractWebDocument } from './web-content';
 import { fetchWebText, MAX_WEB_BYTES, publicWebUrl, resolveAddress, type WebNetwork } from './web-network';
+import { braveSearch, searxngSearch, tavilySearch } from './web-search-keyed';
+import { addResult, excerpt, MAX_RESULTS, reasonOf, retryAfterSeconds, SearchConnectionError } from './web-search-common';
 
 /** What one search found, with where it was asked, before `WebTools` adds the query, the time and the trust line. */
 export type WebSearchFound = { provider: string; url: string; results: WebSearchResult[]; coverage: string };
@@ -17,6 +19,8 @@ export type WebSearchEngine = { search(query: string, signal: AbortSignal): Prom
 export type WebSearchSettings = {
   provider: WebSearchProvider;
   readKey?: (provider: WebSearchKeyProvider) => Promise<string | null>;
+  /** The SearXNG instance the person set; not a secret. */
+  instanceUrl?: string | null;
 };
 
 /** How the core reaches main for a saved search key; a test hands in its own. */
@@ -25,18 +29,65 @@ export type WebSearchRuntime = { readKey?: WebSearchSettings['readKey'] };
 /** Exa's hosted MCP server; it answers without a key on a free, rate-limited tier, and more with one. */
 export const EXA_MCP_URL = 'https://mcp.exa.ai/mcp';
 const EXA_SEARCH_TOOL = 'web_search_exa';
-const MAX_RESULTS = 10;
-const SNIPPET_CHARACTERS = 300;
 /** How long the courtesy DELETE that ends Exa's session may take before the connection is simply dropped. */
 const END_SESSION_MS = 3000;
 const LINKS_COVERAGE = 'Up to ten search links. Target pages have not been read or verified; use web_read_url for evidence.';
 const EXA_COVERAGE = 'Up to ten search results from Exa, each with a short excerpt Exa picked. Target pages have not been read or verified; use web_read_url for evidence.';
 
-/** The engine for the provider the person picked. Exa's saved key is read now, right before the search goes out. */
+/** What a search says when its provider needs a key and none is saved. */
+const KEY_NEEDED = {
+  tavily: 'Tavily cần API key. Thêm key trong Cài đặt → Tìm kiếm web, hoặc chọn nhà cung cấp khác.',
+  brave: 'Brave Search cần API key. Thêm key trong Cài đặt → Tìm kiếm web, hoặc chọn nhà cung cấp khác.',
+} as const;
+
+/**
+ * The engine for the provider the person picked. A saved key is read now, right before the search goes out. A provider
+ * that needs a key and has none fails with a plain sentence; it never falls back to another engine. Only Automatic
+ * tries more than one, and only the two engines that need no key.
+ */
 export async function webSearchEngine(settings: WebSearchSettings, network: WebNetwork): Promise<WebSearchEngine> {
-  if (settings.provider === 'duckduckgo') return duckDuckGoSearch(network);
-  const apiKey = await settings.readKey?.('exa') ?? null;
-  return exaSearch(network, apiKey);
+  switch (settings.provider) {
+    case 'duckduckgo': return duckDuckGoSearch(network);
+    case 'searxng': return searxngSearch(network, settings.instanceUrl);
+    case 'tavily':
+    case 'brave': {
+      const apiKey = await settings.readKey?.(settings.provider) ?? null;
+      if (!apiKey) throw new Error(KEY_NEEDED[settings.provider]);
+      return settings.provider === 'tavily' ? tavilySearch(network, apiKey) : braveSearch(network, apiKey);
+    }
+    case 'exa': return exaSearch(network, await settings.readKey?.('exa') ?? null);
+    case 'auto': return automaticSearch(network);
+  }
+}
+
+/** The failure as one line, uncut: the two reasons of Automatic must both read in full. */
+function wholeSentence(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').trim() || 'Lỗi không rõ.';
+}
+
+/**
+ * Automatic (the default): Exa's free tier without a key, then DuckDuckGo's results page when Exa refuses or cannot be
+ * reached. It never uses a key and never a keyed provider, and the result carries the name of the engine that answered.
+ * When both fail, one message gives both reasons. A stopped search stops; it does not start the second engine.
+ */
+export function automaticSearch(network: WebNetwork): WebSearchEngine {
+  return {
+    async search(query, signal) {
+      let exaReason: string;
+      try {
+        return await exaSearch(network, null).search(query, signal);
+      } catch (error) {
+        signal.throwIfAborted();
+        exaReason = wholeSentence(error);
+      }
+      try {
+        return await duckDuckGoSearch(network).search(query, signal);
+      } catch (error) {
+        signal.throwIfAborted();
+        throw new Error(`Tìm kiếm tự động không được. Exa: ${exaReason} DuckDuckGo: ${wholeSentence(error)}`);
+      }
+    },
+  };
 }
 
 /** DuckDuckGo's plain results page, read the way `web_read_url` reads any page. It often answers with a challenge. */
@@ -70,9 +121,6 @@ export function duckDuckGoSearch(network: WebNetwork): WebSearchEngine {
     },
   };
 }
-
-/** A failure to reach the provider at all, told apart from an answer the provider gave. */
-class SearchConnectionError extends Error {}
 
 /** A response's headers in the form `fetch` callers read. */
 function fetchHeaders(headers: IncomingHttpHeaders): Headers {
@@ -121,13 +169,6 @@ export function publicWebFetch(network: WebNetwork, signal: AbortSignal): FetchL
   };
 }
 
-/** Seconds from a Retry-After header, when it gives a plain number. */
-function retryAfterSeconds(value: string | null): number | undefined {
-  const seconds = Number(value);
-  if (!value || !Number.isFinite(seconds) || seconds < 0) return undefined;
-  return seconds;
-}
-
 /** The rate-limit message for the free tier, with when the next searches come back when Exa said so. */
 function freeLimitMessage(retryAfter: number | undefined): string {
   if (retryAfter === undefined) return 'Tìm kiếm miễn phí của Exa đang bị giới hạn lượt. Thêm Exa API key trong Cài đặt → Tìm kiếm web, hoặc thử lại sau.';
@@ -137,12 +178,6 @@ function freeLimitMessage(retryAfter: number | undefined): string {
   }
   const hours = Math.round(retryAfter / 3600);
   return `Tìm kiếm miễn phí của Exa đang bị giới hạn lượt, khoảng ${hours} giờ nữa mới có lượt mới. Thêm Exa API key trong Cài đặt → Tìm kiếm web, hoặc thử lại sau.`;
-}
-
-/** A short, single-line reason from whatever failed, without a stack. */
-function reasonOf(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/\s+/g, ' ').trim().slice(0, 200) || 'Lỗi không rõ.';
 }
 
 /**
@@ -161,29 +196,6 @@ export function exaFailure(error: unknown, keyed: boolean, retryAfter?: number):
   if (error instanceof SearchConnectionError) return new Error(`Không kết nối được tới Exa (${reason}). Kiểm tra mạng rồi thử lại.`);
   if (status !== undefined) return new Error(`Exa trả lỗi HTTP ${status}. Thử lại sau.`);
   return new Error(`Exa không tìm được: ${reason}`);
-}
-
-/** Text a search result's excerpt may show: one line, capped. */
-function excerpt(value: unknown): string | undefined {
-  const text = Array.isArray(value) ? value.filter(item => typeof item === 'string').join(' ') : typeof value === 'string' ? value : '';
-  const line = text.replace(/\s+/g, ' ').trim();
-  if (!line) return undefined;
-  const characters = Array.from(line);
-  return characters.length > SNIPPET_CHARACTERS ? `${characters.slice(0, SNIPPET_CHARACTERS).join('')}…` : line;
-}
-
-/** A result Exa described, kept only when its address is a public web page; the excerpt is Exa's, never Orglet's. */
-function addResult(results: WebSearchResult[], title: string | undefined, url: string | undefined, snippet: string | undefined) {
-  if (!url || results.length >= MAX_RESULTS) return;
-  let address: string;
-  try {
-    address = publicWebUrl(url).href;
-  } catch {
-    return;
-  }
-  if (results.some(result => result.url === address)) return;
-  const name = title?.replace(/\s+/g, ' ').trim().slice(0, 500) || address;
-  results.push(snippet ? { title: name, url: address, snippet } : { title: name, url: address });
 }
 
 /** Results from a JSON answer: `{ results: [...] }` or a bare list, with Exa's field names. */

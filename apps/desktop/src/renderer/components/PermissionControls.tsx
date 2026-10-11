@@ -14,6 +14,12 @@ import { t, translated } from '../i18n';
 import { browserLevels, type BrowserLevel } from '../../shared/browser';
 import { desktopLevels, type DesktopLevel } from '../../shared/desktop';
 
+/** The line under the web switch: the provider the person picked, or what Automatic does. */
+export function webSearchPermissionNote(provider: WebSearchProvider): string {
+  if (provider === 'auto') return t('Tìm tự động (Exa, rồi DuckDuckGo), đọc trang web công khai.');
+  return t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[provider]]);
+}
+
 export type PermissionWorker = Pick<Worker, 'id' | 'name' | 'provider'> & { connected: boolean };
 
 /** The folder's four levels as every folder control names them: a chat's and a schedule's (COD-294). */
@@ -187,7 +193,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       <FileDiff size={15} aria-hidden="true" />{t('Xem trước khi áp dụng')}
     </SwitchField>}
     <SwitchField checked={state.web} disabled={disabled} onChange={enabled => onCapability('network.web', enabled)}
-      description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[searchProvider]])}>
+      description={webSearchPermissionNote(searchProvider)}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
     </SwitchField>
     {/* Orglet's own browser (COD-261): a level like the folder's, so reading and acting share one control. */}

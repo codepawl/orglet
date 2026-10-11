@@ -86,7 +86,7 @@ const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
   archiveRetentionDays: 'Tự xóa mục đã lưu trữ', providerConcurrency: 'Yêu cầu cùng lúc mỗi nhà cung cấp', providerConsent: 'Provider được phép',
-  autoUpdate: 'Tự động cập nhật', marketAutoUpdate: 'Tự cập nhật mục từ Marketplace', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', showWork: 'Hiện cách Tí làm việc', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
+  autoUpdate: 'Tự động cập nhật', marketAutoUpdate: 'Tự cập nhật mục từ Marketplace', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', showWork: 'Hiện cách Tí làm việc', webSearchProvider: 'Nhà cung cấp tìm kiếm web', searxngUrl: 'Địa chỉ SearXNG',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
@@ -610,7 +610,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; marketAutoUpdate: boolean; backgroundNotifications: boolean; terminalAccess: boolean; showWork: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; marketAutoUpdate: boolean; backgroundNotifications: boolean; terminalAccess: boolean; showWork: boolean; webSearchProvider: WebSearchProvider; searxngUrl: string }>) => act(async () => {
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
     return t('Đã lưu');
   }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
@@ -810,8 +810,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <CustomConnectionsSection connections={workspace.customConnections ?? []} keys={connections.custom ?? {}} busy={busy} act={act} onConnections={changeConnections} />
             </>}
 
-            {tab === 'search' && <WebSearchSettings provider={workspace.webSearchProvider} hasKey={connections.search?.exa ?? false} busy={busy} act={act}
-              onProvider={value => void save({ webSearchProvider: value })} onConnections={onConnections} />}
+            {tab === 'search' && <WebSearchSettings provider={workspace.webSearchProvider} keys={connections.search ?? { exa: false, tavily: false, brave: false }} instanceUrl={workspace.searxngUrl ?? null} busy={busy} act={act}
+              onProvider={value => void save({ webSearchProvider: value })} onInstanceUrl={address => void save({ searxngUrl: address })} onConnections={onConnections} />}
 
             {tab === 'harness' && <>
               <div role="region" aria-label={t('Harness trên máy')}>

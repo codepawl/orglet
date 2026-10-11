@@ -243,6 +243,7 @@ export class CoreService {
   private modelListFailed = new Set<ModelListProviderId>();
   constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string, effort?: NativeEffortSetting) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}, browserHost?: BrowserHost, desktopHost?: DesktopHost, private ownPrograms: readonly string[] = []) {
     this.policy = new WorkPolicy(store, clock);
+    void this.migrateWebSearchProvider().catch(() => {});
     this.knowledge = new KnowledgeBase(store);
     this.knowledge.releaseDeletedOwners();
     this.chatSearch = new ChatSearch(store);
@@ -1259,10 +1260,28 @@ export class CoreService {
     // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.
     if (input.providerConsent) this.store.setSetting('providerConsent', input.providerConsent);
     if (input.webSearchProvider) this.store.setSetting('webSearchProvider', input.webSearchProvider);
+    // An empty address takes the instance away; the schema has already checked a given one.
+    if (input.searxngUrl !== undefined) {
+      if (input.searxngUrl) this.store.setSetting('searxngUrl', input.searxngUrl);
+      else this.store.clearSetting('searxngUrl');
+    }
+  }
+  /**
+   * Once per database: a saved choice of Exa with no Exa key moves to Automatic, which starts with the same keyless Exa
+   * and now has DuckDuckGo behind it. Exa with a key and DuckDuckGo stay as they were; so does a workspace that never chose.
+   */
+  private async migrateWebSearchProvider() {
+    if (this.store.setting<boolean>('webSearchMigrated', false)) return;
+    const saved = () => this.store.setting<unknown>('webSearchProvider', undefined);
+    if (saved() === 'exa') {
+      const key = await this.webSearchRuntime.readKey?.('exa').catch(() => null) ?? null;
+      if (!key && this.store.db.isOpen && saved() === 'exa') this.store.setSetting('webSearchProvider', 'auto');
+    }
+    if (this.store.db.isOpen) this.store.setSetting('webSearchMigrated', true);
   }
   /** Where `web_search` goes right now, and how it reaches main for the saved key (COD-266). */
   private webSearchSettings(): WebSearchSettings {
-    return { provider: this.store.webSearchProvider(), readKey: this.webSearchRuntime.readKey };
+    return { provider: this.store.webSearchProvider(), readKey: this.webSearchRuntime.readKey, instanceUrl: this.store.searxngUrl() };
   }
   /** One real query through the saved provider for Settings → Web search → Test; a failure is the plain error a worker would get. */
   private async testWebSearch(): Promise<WebSearchTest> {
@@ -1277,7 +1296,7 @@ export class CoreService {
       throw error;
     }
     const first = found.results[0];
-    return { provider: settings.provider, title: first?.title ?? null, url: first?.url ?? null };
+    return { provider: settings.provider, answeredBy: found.source.provider, title: first?.title ?? null, url: first?.url ?? null };
   }
   /** The settings a worker may propose, as the app holds them now; the same reads `workspace()` makes. */
   private currentSettings(): CurrentSettings {

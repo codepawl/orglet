@@ -41,7 +41,7 @@ export class WebSearchKeys {
 
   /** Which providers have a key that can still be read back; never the keys. */
   async status(): Promise<Record<WebSearchKeyProvider, boolean>> {
-    const status = { exa: false };
+    const status = { exa: false, tavily: false, brave: false };
     for (const provider of WebSearchKeyProvider.options) status[provider] = Boolean(await this.read(provider));
     return status;
   }

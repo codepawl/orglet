@@ -72,6 +72,8 @@ describe('the About tab links', () => {
       threads: 'https://www.threads.com/@codepawl',
       releases: 'https://github.com/codepawl/orglet/releases',
       exaKeys: 'https://dashboard.exa.ai/api-keys',
+      tavilyKeys: 'https://app.tavily.com',
+      braveKeys: 'https://api-dashboard.search.brave.com',
       privacy: 'https://codepawl.com/privacy',
       terms: 'https://codepawl.com/terms',
     });

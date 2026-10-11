@@ -57,9 +57,12 @@ The orglet gets the reason as an error and can read a URL you give it instead; t
 - **Exa's free search is rate-limited**: Exa without a key allows a limited number of searches from your network and then refuses until its limit resets, which can be hours (the message says about how long when Exa does). Add an Exa key in **Settings → Web search**, or wait.
 - **Exa rejected the saved API key**: the key was mistyped, revoked or has no credit. Save a new one, or remove it to go back to the free searches.
 - **Could not reach Exa**: the network is down, or something on it blocks `mcp.exa.ai`.
-- **The search service requires human verification**: DuckDuckGo answered with a challenge page instead of results. Switch the provider to Exa.
+- **The search service requires human verification**: DuckDuckGo answered with a challenge page instead of results. Switch the provider to Automatic or Exa.
+- **Tavily or Brave Search needs an API key**: add one in **Settings → Web search**, or pick a provider that needs none. **Tavily plan used up** means the key's monthly or pay-as-you-go limit is reached; **rejected the saved API key** means it was mistyped or revoked.
+- **SearXNG has JSON results turned off**: on the server add `json` to `search.formats` in `settings.yml` and restart it, or use another instance. A SearXNG on this computer or a private network cannot be used yet.
+- **Automatic search failed**: both Exa and DuckDuckGo failed; the message gives each reason.
 
-Orglet never switches to the other provider on its own. **Test** in **Settings → Web search** runs one search and shows what happens. Reading a page needs a public `http` or `https` address; private addresses and pages that need a login are refused.
+Only Automatic switches engines on its own, between Exa and DuckDuckGo; a provider you pick is never swapped. **Test** in **Settings → Web search** runs one search and shows what happens. Reading a page needs a public `http` or `https` address; private addresses and pages that need a login are refused.
 
 ## The ZIP build does not update
 

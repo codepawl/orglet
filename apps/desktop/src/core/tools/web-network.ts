@@ -40,7 +40,7 @@ export function publicWebUrl(raw: string): URL {
 }
 
 /** A request other than a page read: the web search provider's MCP client posts JSON-RPC (COD-266). */
-export type WebRequest = { method: 'POST' | 'DELETE'; headers: Record<string, string>; body?: Buffer };
+export type WebRequest = { method: 'GET' | 'POST' | 'DELETE'; headers: Record<string, string>; body?: Buffer };
 export type WebConnection = { url: URL; address: LookupAddress; signal: AbortSignal; request?: WebRequest };
 /** `cut` marks a body that stopped at the byte limit: the page was longer and only its start was read (COD-266). */
 export type WebResponse = { status: number; headers: IncomingHttpHeaders; body: Buffer; cut?: boolean };

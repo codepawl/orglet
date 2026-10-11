@@ -280,14 +280,14 @@ describe('web search in a run and in Settings (COD-266)', () => {
     } finally { store.close(); }
   });
 
-  it('defaults new and existing workspaces to Exa, keeps the choice, and leaves it and any key out of backups', async () => {
+  it('defaults new and existing workspaces to Automatic, keeps the choice, and leaves it and any key out of backups', async () => {
     const store = new Store(':memory:');
     try {
       const core = new CoreService(store, () => {}, async () => { throw new Error('No model in this test.'); });
-      expect(store.workspace().webSearchProvider).toBe('exa');
+      expect(store.workspace().webSearchProvider).toBe('auto');
       // A value a later build wrote, or a hand edit, reads as the default instead of breaking the workspace.
       store.setSetting('webSearchProvider', 'bing');
-      expect(store.workspace().webSearchProvider).toBe('exa');
+      expect(store.workspace().webSearchProvider).toBe('auto');
       await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, webSearchProvider: 'duckduckgo' });
       expect(store.workspace().webSearchProvider).toBe('duckduckgo');
       await core.command('settings', { theme: 'dark', connectionLimitMicros: 5_000_000 });
@@ -307,7 +307,8 @@ describe('web search in a run and in Settings (COD-266)', () => {
       vi.spyOn(webNetwork, 'connect').mockImplementation(network.connect);
       const readKey = vi.fn(async () => 'exa-key-0123456789abcdef');
       const core = new CoreService(store, () => {}, undefined as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, { readKey });
-      expect(await core.command('testWebSearch', {})).toEqual({ provider: 'exa', title: 'Node.js — Documentation', url: 'https://nodejs.org/docs/latest/api/' });
+      await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, webSearchProvider: 'exa' });
+      expect(await core.command('testWebSearch', {})).toEqual({ provider: 'exa', answeredBy: 'Exa', title: 'Node.js — Documentation', url: 'https://nodejs.org/docs/latest/api/' });
       expect(readKey).toHaveBeenCalledWith('exa');
       expect(exchanges.some(exchange => exchange.headers['x-api-key'] === 'exa-key-0123456789abcdef')).toBe(true);
       network.connect.mockImplementation(async () => rateLimitedResponse());
@@ -315,7 +316,7 @@ describe('web search in a run and in Settings (COD-266)', () => {
       await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, webSearchProvider: 'duckduckgo' });
       network.connect.mockImplementation(async () => ({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8' },
         body: Buffer.from('<a class="result__a" href="https://en.wikipedia.org/">Wikipedia</a>') }));
-      expect(await core.command('testWebSearch', {})).toEqual({ provider: 'duckduckgo', title: 'Wikipedia', url: 'https://en.wikipedia.org/' });
+      expect(await core.command('testWebSearch', {})).toEqual({ provider: 'duckduckgo', answeredBy: 'DuckDuckGo HTML', title: 'Wikipedia', url: 'https://en.wikipedia.org/' });
       expect(network.resolve).toHaveBeenLastCalledWith('html.duckduckgo.com');
     } finally { store.close(); }
   });
@@ -336,18 +337,18 @@ describe('web search keys in main (COD-266)', () => {
     const directory = await mkdtemp(join(tmpdir(), 'orglet-search-keys-'));
     try {
       const keys = new WebSearchKeys(directory, encryption);
-      expect(await keys.status()).toEqual({ exa: false });
+      expect(await keys.status()).toEqual({ exa: false, tavily: false, brave: false });
       expect(await keys.read('exa')).toBeNull();
       await keys.save('exa', '0a1b2c3d-4e5f-6789-abcd-ef0123456789');
       expect(await readdir(directory)).toEqual(['search-exa.credential']);
       expect(await readFile(join(directory, 'search-exa.credential'), 'utf8')).not.toContain('0a1b2c3d');
       expect(await keys.read('exa')).toBe('0a1b2c3d-4e5f-6789-abcd-ef0123456789');
-      expect(await keys.status()).toEqual({ exa: true });
+      expect(await keys.status()).toEqual({ exa: true, tavily: false, brave: false });
       await expect(keys.save('exa', 'short')).rejects.toThrow('API key không hợp lệ.');
       await expect(keys.save('exa', 'has spaces in the middle of it')).rejects.toThrow('API key không hợp lệ.');
       await keys.remove('exa');
       await keys.remove('exa');
-      expect(await keys.status()).toEqual({ exa: false });
+      expect(await keys.status()).toEqual({ exa: false, tavily: false, brave: false });
       await expect(new WebSearchKeys(directory, { ...encryption, isEncryptionAvailable: () => false }).save('exa', '0a1b2c3d-4e5f-6789-abcd-ef0123456789'))
         .rejects.toThrow('OS credential storage không khả dụng.');
       await expect(new WebSearchKeys(directory, { ...encryption, getSelectedStorageBackend: () => 'basic_text' }, 'linux').save('exa', '0a1b2c3d-4e5f-6789-abcd-ef0123456789'))
@@ -359,6 +360,6 @@ describe('web search keys in main (COD-266)', () => {
   });
 
   it('tells the window only whether a search key is saved', () => {
-    expect(emptyConnections().search).toEqual({ exa: false });
+    expect(emptyConnections().search).toEqual({ exa: false, tavily: false, brave: false });
   });
 });
