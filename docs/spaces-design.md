@@ -61,7 +61,7 @@ A category of loose channels gets one action: **Make a space from this category*
 
 - **Rail.** Home comes first, then one tile for each space, with its initial on its colour. The `#` tile follows when channels outside a space exist. Activity, Library and Schedules stay last. The **+** menu gains **New space**.
 - **Sidebar.** For a space: its name with a menu (settings, members, new category, new channel), then its channels under their categories. A channel that lists its own orglets shows a lock before its name.
-- **Member column.** The orglets in the open channel, with the person first. In a space, its other orglets follow in a second, dimmed group. Their menu has **Add to this channel**.
+- **Member column.** The orglets in the open channel, with the person first. An orglet taken out of the channel leaves the column; the channel's settings add it back.
 - **Space settings.** One dialog: name and colour, orglets, categories. It follows `ChannelDialog`.
 - **Moving a channel.** Drag in the sidebar, or **Move to** in the channel's menu. A channel moved into a space keeps only the orglets the space has. The app names the orglets it drops before it moves.
 

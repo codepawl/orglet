@@ -1,10 +1,11 @@
-import { createContext, useContext, useState, type PointerEvent, type ReactNode } from 'react';
+import { createContext, useContext, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Folder, FolderOpen } from 'lucide-react';
 import { Tooltip } from '@codepawlhq/orglet-ui';
 import { PanelLeft, Plus } from './icons';
 import { Button } from './ui';
 import { t } from '../i18n';
 import { RowMenu, type RowMenuItem } from './RowMenu';
+import { useReorder } from './SidebarTree';
 import type { Area } from '../areas';
 
 /**
@@ -46,7 +47,10 @@ const TipContext = createContext<TipControl>({ show: () => {}, hide: () => {} })
 /** The gap between a tile and its name. */
 const TIP_GAP = 10;
 
-function Tile({ entry }: { entry: AreaRailEntry }) {
+/** What a tile takes from the list it can be dragged in: Alt+Arrow moves it from the keyboard. */
+type TileMove = (event: KeyboardEvent<HTMLElement>) => void;
+
+function Tile({ entry, onMoveKey }: { entry: AreaRailEntry; onMoveKey?: TileMove }) {
   const tip = useContext(TipContext);
   // A folded sidebar already shows what the tile lists while the pointer rests on it, so the name stays out of its way.
   const enter = (event: PointerEvent<HTMLButtonElement>) => {
@@ -59,7 +63,7 @@ function Tile({ entry }: { entry: AreaRailEntry }) {
   };
   return <div className="area-tile-slot">
     <button type="button" className={`area-tile${entry.active ? ' active' : ''}`} aria-label={entry.ariaLabel ?? entry.label} data-name={entry.label} aria-current={entry.active ? 'page' : undefined}
-      onClick={() => { tip.hide(); entry.onSelect(); }} onPointerEnter={enter} onPointerLeave={leave} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(entry.label, event.currentTarget); }} onBlur={tip.hide}>
+      onClick={() => { tip.hide(); entry.onSelect(); }} onKeyDown={onMoveKey} onPointerEnter={enter} onPointerLeave={leave} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(entry.label, event.currentTarget); }} onBlur={tip.hide}>
       {entry.active && entry.activeIcon ? entry.activeIcon : entry.icon}
       {/* A dot, not a number (user, 2026-10-05): the tile's accessible name carries the count where one matters. */}
       {entry.count ? <span className={`area-dot ${entry.countTone ?? 'quiet'}`} aria-hidden="true" /> : null}
@@ -68,8 +72,9 @@ function Tile({ entry }: { entry: AreaRailEntry }) {
   </div>;
 }
 
-function FolderTiles({ folder }: { folder: AreaRailFolder }) {
+function FolderTiles({ folder, onReorder }: { folder: AreaRailFolder; onReorder: (keys: string[]) => void }) {
   const tip = useContext(TipContext);
+  const inside = useReorder(folder.entries.map(entry => entry.key), onReorder);
   const waiting = folder.entries.reduce((total, entry) => total + (entry.count ?? 0), 0);
   const holdsOpenPage = folder.entries.some(entry => entry.active);
   return <div className={`area-folder${folder.open ? ' open' : ''}`}>
@@ -81,7 +86,11 @@ function FolderTiles({ folder }: { folder: AreaRailFolder }) {
       </button>
       <RowMenu label={t('Tùy chọn thư mục {0}', [folder.label])} className="area-tile-menu" align="start" contextMenuOf=".area-tile-slot" items={folder.menuItems} />
     </div>
-    {folder.open && <ul className="area-rail-list" aria-label={folder.label}>{folder.entries.map(entry => <li key={entry.key}><Tile entry={entry} /></li>)}</ul>}
+    {folder.open && <ul className="area-rail-list" aria-label={folder.label}>{inside.order.flatMap(key => folder.entries.filter(entry => entry.key === key)).map(entry => {
+      const { ref, style, dragging, onMoveKey, ...pointer } = inside.bind(entry.key);
+      // The folder's own list is dragged apart from the rail's: the press must not also lift the folder.
+      return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : undefined} {...pointer} onPointerDown={event => { event.stopPropagation(); pointer.onPointerDown(event); }}><Tile entry={entry} onMoveKey={onMoveKey} /></li>;
+    })}</ul>}
   </div>;
 }
 
@@ -93,11 +102,16 @@ function FolderTiles({ folder }: { folder: AreaRailFolder }) {
  * A tile's name shows beside it while the pointer is on it (user, 2026-10-05), the way Discord names a server.
  * Spaces can sit in folders (user, 2026-10-05): a folder is an outlined group with its own tile, which opens and closes it.
  */
-export function AreaRail({ entries, spaces, onCreateSpace, onHover, onOpenSidebar, trail }: {
+export function AreaRail({ entries, spaces, onReorderSpaces, onCreateSpace, onHover, onOpenSidebar, trail }: {
   /** The app's own places: Home, Activity, Library, Schedules. */
   entries: readonly AreaRailEntry[];
   /** The person's spaces and their folders, under a divider of their own (user, 2026-10-05), the way Discord parts its servers from Home. */
   spaces: readonly (AreaRailEntry | AreaRailFolder)[];
+  /**
+   * Holding a space's tile lifts it, and dropping it gives every space's key in the new order (owner, 2026-10-11). A
+   * folder moves as one tile with the spaces in it; a space inside a folder moves among that folder's spaces.
+   */
+  onReorderSpaces: (spaceKeys: string[]) => void;
   /** The **+** under the spaces makes a space and nothing else (user, 2026-10-05): the rail lists spaces, so that is what it adds. */
   onCreateSpace: () => void;
   /** Back and forward along the places the person has been (user, 2026-10-05), at the top of the rail the way Discord has them. */
@@ -108,6 +122,14 @@ export function AreaRail({ entries, spaces, onCreateSpace, onHover, onOpenSideba
   onOpenSidebar?: () => void;
 }) {
   const [tip, setTip] = useState<Tip>();
+  const spaceKeysUnder = (key: string, insideFolder?: { key: string; keys: string[] }) => {
+    const item = spaces.find(entry => entry.key === key);
+    if (!item) return [];
+    if (!('kind' in item)) return [item.key];
+    return insideFolder?.key === item.key ? insideFolder.keys : item.entries.map(entry => entry.key);
+  };
+  const rail = useReorder(spaces.map(entry => entry.key), keys => onReorderSpaces(keys.flatMap(key => spaceKeysUnder(key))));
+  const reorderInFolder = (folderKey: string, keys: string[]) => onReorderSpaces(rail.order.flatMap(key => spaceKeysUnder(key, { key: folderKey, keys })));
   const control: TipControl = {
     show: (label, tile) => {
       const box = tile.getBoundingClientRect();
@@ -130,7 +152,12 @@ export function AreaRail({ entries, spaces, onCreateSpace, onHover, onOpenSideba
     </ul>
     {spaces.length > 0 && <span className="area-rail-divider" aria-hidden="true" />}
     {spaces.length > 0 && <ul className="area-rail-list" aria-label={t('Không gian')}>
-      {spaces.map(entry => <li key={entry.key}>{'kind' in entry ? <FolderTiles folder={entry} /> : <Tile entry={entry} />}</li>)}
+      {rail.order.flatMap(key => spaces.filter(entry => entry.key === key)).map(entry => {
+        const { ref, style, dragging, onMoveKey, ...pointer } = rail.bind(entry.key);
+        return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : undefined} {...pointer}>
+          {'kind' in entry ? <FolderTiles folder={entry} onReorder={keys => reorderInFolder(entry.key, keys)} /> : <Tile entry={entry} onMoveKey={onMoveKey} />}
+        </li>;
+      })}
     </ul>}
     <button type="button" className="area-tile area-create" aria-label={t('Tạo không gian')} data-name={t('Tạo không gian')} onClick={() => { control.hide(); onCreateSpace(); }}
       onPointerEnter={event => control.show(t('Tạo không gian'), event.currentTarget)} onPointerLeave={control.hide} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) control.show(t('Tạo không gian'), event.currentTarget); }} onBlur={control.hide}>

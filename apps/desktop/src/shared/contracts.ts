@@ -501,7 +501,7 @@ export const commands = {
   updateTask: z.object({ localOnly: z.boolean().optional(), id: Id, title: z.string().trim().max(120), assignee: z.discriminatedUnion('kind', [z.object({ kind: z.literal('workers'), workerIds: z.array(Id).min(1).max(50) }).strict(), z.object({ kind: z.literal('team'), teamId: Id }).strict(), z.object({ kind: z.literal('all') }).strict()]), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   // The order the person keeps rows in. `channels` and `categories` are the order inside spaces: one list each for
   // every space, since a channel and a category belong to one space only.
-  reorder: z.object({ kind: z.enum(['teams', 'workers', 'channels', 'categories']), ids: z.array(Id).max(1000) }).strict(),
+  reorder: z.object({ kind: z.enum(['teams', 'workers', 'channels', 'categories', 'spaces']), ids: z.array(Id).max(1000) }).strict(),
   // Colours the user made in the avatar picker, newest first, offered to every worker.
   saveAvatarColors: z.object({ colors: z.array(z.string().regex(/^#[0-9a-f]{6}$/)).max(16).refine(items => new Set(items).size === items.length, 'Duplicate colour') }).strict(),
   refreshCurrency: z.object({}).strict(),

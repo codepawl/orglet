@@ -137,6 +137,20 @@ describe('spaces in the core', () => {
     await expect(core.command('createChannel', { name: 'lost', topic: '', members: [orglet(scout.id)], spaceId: copy.id })).rejects.toThrow('Không tìm thấy không gian');
   });
 
+  it('puts the spaces in the order the rail was dragged into, and keeps a space the list leaves out', async () => {
+    const made: string[] = [];
+    for (const name of ['One', 'Two', 'Three']) made.push(await core.command('createSpace', { name, orgletIds: [scout.id], categories: [] }) as string);
+    const order = () => store.workspace().spaces.map(space => space.name);
+    await core.command('reorder', { kind: 'spaces', ids: [made[2], made[0], made[1]] });
+    expect(order()).toEqual(['Three', 'One', 'Two']);
+    // A list that names one space moves it first; the others keep their order behind it.
+    await core.command('reorder', { kind: 'spaces', ids: [made[1]] });
+    expect(order()).toEqual(['Two', 'Three', 'One']);
+    // An id that is no space changes nothing, and no space is lost or doubled.
+    await core.command('reorder', { kind: 'spaces', ids: [made[0], '40000000-0000-4000-8000-000000000000', made[0]] });
+    expect(order()).toEqual(['One', 'Two', 'Three']);
+  });
+
   it('keeps the folder a space names until an edit changes it or takes it out', async () => {
     const spaceId = await core.command('createSpace', { name: 'Launch', orgletIds: [scout.id], categories: [], folder: '  Clients ' }) as string;
     const folderOf = () => store.workspace().spaces.find(space => space.id === spaceId)!.folder;

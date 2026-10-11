@@ -108,22 +108,23 @@ try {
   assert.ok(row.toolCapabilities.includes('network.web'), 'the channel started with what its space sets');
   await page.locator('.members-pane').waitFor();
   assert.equal(await page.locator('.members-pane .member-item').count(), 2, 'the member column lists the two orglets');
-  assert.equal(await page.locator('.members-others').count(), 0, 'a channel that takes everyone has nobody left out');
   await shot(page, 'space-channel');
 
-  // The channel gets its own list: a lock in the sidebar, and the orglet left out is offered in the member column.
+  // The channel gets its own list: a lock in the sidebar, and the orglet left out is gone from the member column.
   await page.locator('.members-pane .member-item').filter({ hasText: second }).locator('.member-row').click({ button: 'right' });
   await page.getByRole('menuitem', { name: label('Xóa khỏi kênh'), exact: true }).click();
   await page.getByRole('menuitem', { name: label('Xóa khỏi kênh'), exact: true }).click();
-  await page.locator('.members-others .member-item').waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('.members-pane .member-item').length === 1);
   await page.locator('.sidebar .channel-hash .lucide-lock').waitFor();
   let listed = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
   assert.equal(listed.channel.access, 'listed');
   assert.equal(listed.assignees.length, 1);
   await shot(page, 'listed-channel');
-  await page.locator('.members-others .member-item').first().locator('.member-row').click({ button: 'right' });
-  await page.getByRole('menuitem', { name: label('Thêm vào kênh này'), exact: true }).click();
-  await page.locator('.members-others').waitFor({ state: 'detached' });
+  // The orglet comes back through the channel's own settings; here the same save is made directly.
+  await page.evaluate(async ({ channel, orgletIds }) => {
+    await window.orglet.call('updateChannel', { id: channel.id, name: channel.name, topic: channel.topic ?? '', members: orgletIds.map(id => ({ kind: 'orglet', id })), access: 'listed' });
+  }, { channel: listed.channel, orgletIds: made.orgletIds });
+  await page.waitForFunction(() => document.querySelectorAll('.members-pane .member-item').length === 2);
   listed = (await workspace(page)).tasks.find(task => task.channel?.name === 'general');
   assert.equal(listed.assignees.length, 2, 'the orglet is back in the channel');
 

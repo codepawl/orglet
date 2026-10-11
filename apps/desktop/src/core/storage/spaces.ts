@@ -39,6 +39,18 @@ export class Spaces {
     return space.id;
   }
 
+  /**
+   * Puts the saved spaces in the order the rail was dragged into. A space the list leaves out keeps its place after
+   * the listed ones, and a row this build cannot read stays in the setting, at the end.
+   */
+  reorder(spaceIds: readonly string[]) {
+    const rows = this.store.setting<unknown[]>(SPACES, []);
+    const idOf = (row: unknown) => (typeof row === 'object' && row !== null && 'id' in row ? String((row as { id: unknown }).id) : undefined);
+    const listed = [...new Set(spaceIds)].flatMap(spaceId => rows.filter(row => idOf(row) === spaceId).slice(0, 1));
+    const rest = rows.filter(row => !listed.includes(row));
+    this.store.setSetting(SPACES, [...listed, ...rest]);
+  }
+
   update(spaceId: string, fields: SpaceFields) {
     const spaces = storedSpaces(this.store);
     const current = spaces.find(space => space.id === spaceId);

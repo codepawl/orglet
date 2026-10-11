@@ -131,7 +131,7 @@ import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, 
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { SpaceHomePage } from './components/SpaceHomePage';
 import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
-import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
+import { spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
 import { ConnectWays, type ConnectWay } from './components/ConnectWays';
 import { useSavedMessages } from './saved';
@@ -2763,7 +2763,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onReorderSpaces={keys => { void action(() => orglet.call('reorder', { kind: 'spaces', ids: keys.map(key => key.slice('space:'.length)) })); }} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
@@ -2873,12 +2873,6 @@ export function App() {
     </main>
     {membersShown && headerChannel && <MemberColumn onYou={() => openSettings('account')} you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
       onMessage={member => { if (member.unfriendedAt) { toast(t('Kết bạn lại với {0} để nhắn riêng.', [member.name]), 'info', member.name, { action: { label: t('Kết bạn lại'), onSelect: () => befriendOrglet(member.id) } }); return; } clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
-      others={headerSpace && headerChannel.access === 'listed' ? workspace.workers.filter(worker => scopeOrgletIds(headerSpace, headerChannel.categoryId).includes(worker.id) && !headerChannel.workers.some(member => member.id === worker.id)) : []}
-      onAdd={member => action(async () => {
-        const members = [...headerChannel.workers, member].map(item => ({ kind: 'orglet' as const, id: item.id }));
-        await orglet.call('updateChannel', { id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic ?? '', members, access: 'listed' });
-        toast(t('Đã thêm {0} vào kênh', [member.name]), 'success', channelLabel(headerChannel.name));
-      }, channelLabel(headerChannel.name))}
       removable={member => member.id !== crewLeadId && (!headerChannel.crewId || headerChannel.workers.length > 2)}
       onRemove={member => action(async () => {
         // The channel may have been made from a crew as one member: the orglets left are listed one by one.
