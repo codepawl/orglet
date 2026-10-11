@@ -141,6 +141,11 @@ const relinkSourceInput = z.object({ taskId: Id, sourceId: Id, path: z.string().
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
 
 /** The empty chat a command names: one worker, a team, or the orglets of a group chat that has not started (COD-215). */
+/** How many aliases of a list are named by the model they stand for (Claude Code), to tell a fuller reading from a thinner one. */
+function namedAliases(row: Pick<ModelListRow, 'models'>): number {
+  return row.models.filter(model => model.source === 'alias' && model.resolvedId).length;
+}
+
 /** A cached list is fetched again after a day, or at its `retryAfter` when a fetch learned nothing (COD-338). */
 function modelListStale(row: ModelListRow, now: Date): boolean {
   if (row.retryAfter) return now.getTime() >= new Date(row.retryAfter).getTime();
@@ -1634,10 +1639,12 @@ export class CoreService {
     const work = fetchProviderList(provider, this.modelListFetchOptions(selectedOllamaModel)).then(row => {
       if ((this.modelListEpoch.get(provider) ?? 0) !== epoch) return previous ?? row;
       this.modelListFailed.delete(provider);
-      // A fetch that learned nothing never replaces a list that did; it only puts off the next try (COD-338).
+      // A fetch that learned less never replaces a list that learned more; it only puts off the next try (COD-338).
+      // A list with no retry learned everything; between two partial ones, the one that named more aliases stays.
+      const learnedLess = Boolean(row.retryAfter && previous && (!previous.retryAfter || namedAliases(previous) > namedAliases(row)));
       const kept = row.error && previous?.retryAfter === EFFORT_METADATA_REFRESH_AT
         ? { ...previous, error: row.error, retryAfter: new Date(this.clock().getTime() + 10 * 60_000).toISOString() }
-        : row.retryAfter && previous && !previous.retryAfter ? { ...previous, retryAfter: row.retryAfter } : row;
+        : learnedLess && previous ? { ...previous, retryAfter: row.retryAfter } : row;
       this.writeModelListRow(provider, kept);
       return this.modelListMemory.byProvider[provider] ?? kept;
     }).catch(error => {

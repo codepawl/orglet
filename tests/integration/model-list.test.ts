@@ -295,6 +295,33 @@ describe('model list fetch adapters', () => {
     expect(refreshed.stale).toBe(false);
   });
 
+  it('asks Claude Code again soon when some starts did not answer, though the Models API did', async () => {
+    let answering = false;
+    let current = new Date('2026-10-11T08:00:00Z');
+    const resolved: Record<string, string> = { default: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-5-5', fable: 'claude-fable-5-1' };
+    const server = await listen((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ data: Object.values(resolved).map(id => ({ id, display_name: id })), has_more: false }));
+    });
+    try {
+      const core = coreFor(store(), {
+        claudeStart: async (_executable, _env, alias) => answering || alias === 'opus' ? resolved[alias ?? 'default'] : undefined,
+        claudeToken: async () => 'fixture-token',
+        endpoints: { anthropic: server.url },
+      }, () => current, { detect: async () => [signedIn('claude-code', '/bin/claude')], execute: async () => { throw new Error('no exec'); } });
+      const first = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+      expect(first.models.find(model => model.id === 'sonnet')?.resolvedId).toBeUndefined();
+
+      answering = true;
+      current = new Date('2026-10-11T08:11:00Z');
+      expect((await core.command('modelList', { provider: 'claude-code' }) as ModelListResult).stale).toBe(true);
+      await core.waitForModelListRefresh('claude-code');
+      const refreshed = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+      expect(refreshed.models.find(model => model.id === 'sonnet')?.resolvedId).toBe('claude-sonnet-5-5');
+      expect(refreshed.models.filter(model => model.source === 'native').map(model => model.id)).not.toContain('claude-sonnet-5-5');
+    } finally { server.close(); }
+  });
+
   it('never replaces a Claude Code list that named its models with one that learned nothing (COD-338)', async () => {
     let answering = true;
     let current = new Date('2026-09-30T01:00:00Z');
