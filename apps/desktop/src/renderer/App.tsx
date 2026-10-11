@@ -83,6 +83,7 @@ import { workerModelLabel, providerName } from './components/workerModel';
 import { customProviderId } from '../shared/custom-connections';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
+import { ComposerAccount } from './components/ComposerAccount';
 import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
 import { useAppChangeNotices } from './appChangeNotices';
@@ -2027,11 +2028,18 @@ export function App() {
   // carries the model the worker will answer with instead of a list holding that one name (user, 2026-09-19).
   // A chat with nobody chosen yet keeps the recipient list, where it is how you choose. A channel, including one
   // where the lead splits the work (COD-369), is named in the header, so its prompt bar carries neither control.
+  // The harness behind a one-to-one chat, for the account chip beside the model: none for an API connection.
+  const composerHarness = worker && !team ? harnesses?.find(item => item.id === worker.provider) : undefined;
   const composerTrailing = emptyChannel || team ? undefined
     : worker && !team && worker.provider !== 'demo'
       // An empty choice means whatever the provider defaults to, and a stored id may not be empty, so it is dropped.
-      ? <ComposerModel worker={{ ...worker, provider: worker.provider }}
-        onChange={modelId => action(() => orglet.call('saveWorker', { ...worker, modelId: modelId || undefined }))} />
+      ? <>
+        {composerHarness && <ComposerAccount harness={composerHarness}
+          onSelect={accountId => action(async () => { setHarnesses(await orglet.call('selectHarnessAccount', { harness: composerHarness.id, id: accountId })); })}
+          onManage={() => openSettings('harness')} />}
+        <ComposerModel worker={{ ...worker, provider: worker.provider }}
+          onChange={modelId => action(() => orglet.call('saveWorker', { ...worker, modelId: modelId || undefined }))} />
+      </>
       : recipientOptions.length > 0
         ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [worker?.name ?? t('Tí')])} value={recipientValue} onChange={pickRecipient} showDetail={false} showIcon={false} menuMinWidth={320} options={recipientOptions} />
         : undefined;
