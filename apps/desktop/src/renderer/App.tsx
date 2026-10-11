@@ -2511,13 +2511,17 @@ export function App() {
         // A space opens on a channel (owner, 2026-10-11): the one last on screen there, else its first; its own page
         // only when it has no channel yet.
         const landing = spaceLandingChannel(channelEntries, space, workspace.channelOrder ?? [], readSpaceChannels()[space.id]);
-        if (landing?.kind === 'chat') { openTask(landing.task.id); return; }
-        if (landing) { showEmptyChannel(landing.channel.id); return; }
+        // The sidebar goes to the space whatever opens: a crew's empty channel opens as the crew's chat, which does
+        // not change the area by itself.
+        setOpenSpace(space.id);
+        setArea('channels');
+        // Opening a chat closes the sidebar laid over a narrow window; the tile was a way to the space's list, so it stays.
+        const keepList = () => { if (matchMedia('(max-width: 780px)').matches) setSidebar(true); };
+        if (landing?.kind === 'chat') { openTask(landing.task.id); keepList(); return; }
+        if (landing) { showEmptyChannel(landing.channel.id); keepList(); return; }
         clearSelection();
         leaveThread();
         setTeamId('');
-        setOpenSpace(space.id);
-        setArea('channels');
         setSpaceHomeOpen(true);
       },
     })),
