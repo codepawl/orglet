@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import type { Worker } from '../../shared/contracts';
-import type { HarnessPlan } from '../../shared/composer-usage';
 import { checkedChoiceValue, modelChoices, type ModelChoice } from '../../shared/modelChoices';
 import { modelMenuRows } from '../../shared/model-menu';
 import type { ModelEntry } from '../../shared/models';
@@ -36,13 +35,11 @@ function menuRow(worker: ConnectedWorker, choice: ModelChoice): ModelMenuRow {
  *
  * Each row is the model's maker's mark and its versioned name; the one that runs when nothing is set wears Default and
  * saves nothing, so the orglet keeps following the CLI's default. Older models sit in a panel beside the menu under
- * More models (COD-332), and the plan allowance of the harness behind the chat sits at the top (`plan`).
+ * More models (COD-332). The plan allowance is with the context ring beside it (`UsageRing`).
  */
-export function ComposerModel({ worker, plan, onChange, onOpenSettings }: {
+export function ComposerModel({ worker, onChange }: {
   worker: ConnectedWorker;
-  plan?: HarnessPlan | undefined;
   onChange: (modelId: string) => void;
-  onOpenSettings: () => void;
 }) {
   // The session's copy of the list (COD-218): fetched while the worker's row rested under the pointer, or by the
   // dialog, so the menu is full the first time it opens. Until it lands the menu offers the default and the saved id.
@@ -80,8 +77,6 @@ export function ComposerModel({ worker, plan, onChange, onOpenSettings }: {
     mainRows={main.map(choice => menuRow(worker, choice))}
     {...(currentOutsideMain ? { currentOutsideMain } : {})}
     sideRows={sidePanel.map(choice => menuRow(worker, choice))}
-    {...(plan ? { plan } : {})}
     onSelect={onChange}
-    onOpenSettings={onOpenSettings}
   />;
 }

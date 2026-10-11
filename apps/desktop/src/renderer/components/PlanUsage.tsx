@@ -195,15 +195,17 @@ export function PlanSection({ plan, now }: { plan: HarnessPlan; now?: Date }) {
 /**
  * The ring under the message box (COD-326): how full the context window is, the fullest among the chat's orglets,
  * muted until 80%, then the warning colour, then the error colour at 100%. A click opens the context window of the
- * model each orglet will use next. Plan allowances are not here: they sit at the top of the model menu
- * (`ModelMenu`; owner, 2026-10-11).
+ * model each orglet will use next, and under it the plan allowance of each harness behind the chat (owner, 2026-10-12:
+ * usage lives with the context, and the ring itself stays the context's). A chat whose context is not known yet but
+ * whose harness reports a plan still has the ring, empty, so the allowance can be opened.
  */
-export function UsageRing({ context }: { context?: ChatContext }) {
+export function UsageRing({ context, plans = [], onOpenSettings }: { context?: ChatContext; plans?: readonly HarnessPlan[]; onOpenSettings?: () => void }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  const ring = usageRingFor(context);
-  if (!ring || !context) return null;
-  const label = t('Ngữ cảnh: {0}%', [Math.round(ring.percent)]);
+  const contextRing = usageRingFor(context);
+  if (!contextRing && plans.length === 0) return null;
+  const ring = contextRing ?? { percent: 0, tone: 'normal' as const };
+  const label = contextRing ? t('Ngữ cảnh: {0}%', [Math.round(ring.percent)]) : t('Hạn mức gói');
   return <>
     <Tooltip label={label}>
       <button ref={trigger} type="button" className="usage-ring" data-tone={ring.tone} aria-haspopup="dialog" aria-expanded={open}
@@ -211,8 +213,10 @@ export function UsageRing({ context }: { context?: ChatContext }) {
         <UsageRingGlyph percent={ring.percent} />
       </button>
     </Tooltip>
-    <AnchoredPopover anchor={trigger} open={open} onClose={() => setOpen(false)} label={t('Cửa sổ ngữ cảnh')} className="usage-details">
-      <ContextSection context={context} />
+    <AnchoredPopover anchor={trigger} open={open} onClose={() => setOpen(false)} label={contextRing ? t('Cửa sổ ngữ cảnh') : t('Hạn mức gói')} className="usage-details">
+      {contextRing && context && <ContextSection context={context} />}
+      {plans.map(plan => <PlanSection key={`${plan.harness.id}:${plan.usage.accountId}`} plan={plan} />)}
+      {plans.length > 0 && onOpenSettings && <Button type="button" variant="outline" className="usage-settings" onClick={() => { setOpen(false); onOpenSettings(); }}>{t('Xem chi tiết')}</Button>}
     </AnchoredPopover>
   </>;
 }

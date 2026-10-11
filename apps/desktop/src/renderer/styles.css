@@ -537,8 +537,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-model-chevron { flex-shrink:0; color:var(--muted); }
 .model-menu { width:max-content; min-width:300px; max-width:calc(100vw - 24px); padding:6px; }
 .model-menu-list,.model-menu-side { display:flex; flex-direction:column; gap:2px; }
-.model-menu-plan { display:flex; flex-direction:column; gap:8px; padding:8px 10px 10px; margin-bottom:4px; border-radius:8px; background:var(--surface); }
-.model-menu-plan .usage-settings { align-self:flex-start; min-height:28px; padding:0 10px; font-size:12px; }
+.usage-details .usage-settings { align-self:flex-start; min-height:28px; padding:0 10px; font-size:12px; }
 /* The rows are the kit's Button, so the kit's size, border and centring give way to the menu row's. */
 .model-menu .model-option { justify-content:flex-start; gap:10px; min-height:0; padding:8px 10px; border:0; border-radius:8px; font-size:inherit; font-weight:inherit; }
 .model-option-chevron { flex-shrink:0; color:var(--muted); }

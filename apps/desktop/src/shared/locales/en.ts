@@ -2545,6 +2545,7 @@ export const en: Dictionary = {
   'Đổi Tí, skill, kênh hay model thì cần lưu lịch lại.': 'Changing the orglet, skill, channel or model needs the schedule saved again.',
   // Model picker on the prompt bar of a one-to-one chat (components/ComposerModel.tsx).
   'Model của {0}': "{0}'s model",
+  'Mức suy nghĩ của {0}': 'Thinking effort of {0}',
   // Model rows in both pickers (COD-332): older models sit under this row, and the empty ID field names the default.
   'Thêm model': 'More models',
   'Mặc định · {0}': 'Default · {0}',
