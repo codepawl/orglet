@@ -125,6 +125,11 @@ export class KnowledgeBase {
     this.memory(memoryId);
     this.store.transaction(() => this.deleteRows(memoryId));
   }
+  /** A note the person deletes goes the way a memory does: the row, its search entry and every revision, and other computers are told. */
+  deleteNote(noteId: string) {
+    this.store.get<Knowledge>('knowledge', noteId);
+    this.store.transaction(() => this.deleteRows(noteId));
+  }
   /**
    * Memories learned only in this chat: every revision points at it, or at a chat that is already gone. One also
    * merged from another chat that still exists stays with that chat.
