@@ -52,6 +52,29 @@ export class Spaces {
     });
   }
 
+  /**
+   * Takes an orglet out of a space and out of every channel in it, through the same save the space editor uses. A
+   * channel where this orglet was the only one takes the space's orglets first, and a channel it led hands the lead
+   * to its first remaining member.
+   */
+  removeOrglet(spaceId: string, workerId: string) {
+    const current = storedSpaces(this.store).find(space => space.id === spaceId);
+    if (!current) throw new Error(SPACE_NOT_FOUND);
+    const channelIds = this.channels.inSpace(spaceId);
+    for (const channelId of channelIds) this.assertChannelIdle(channelId);
+    const stays = (orgletId: string) => orgletId !== workerId;
+    this.store.transaction(() => {
+      for (const channelId of channelIds) this.channels.inheritIfOnlyOrglet(channelId, workerId);
+      for (const channelId of channelIds) this.channels.handLeadOver(channelId, workerId);
+      this.update(spaceId, {
+        name: current.name,
+        color: current.color,
+        orgletIds: current.orgletIds.filter(stays),
+        categories: current.categories.map(category => ({ id: category.id, name: category.name, ...(category.orgletIds ? { orgletIds: category.orgletIds.filter(stays) } : {}) })),
+      });
+    });
+  }
+
   /** Removes the space. Its channels stay, outside every space, each with the orglets it had. */
   delete(spaceId: string) {
     const spaces = storedSpaces(this.store);

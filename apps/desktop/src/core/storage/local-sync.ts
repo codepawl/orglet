@@ -592,7 +592,7 @@ export class LocalSync {
         if (!spaces.some(current => current.id === space.id)) this.record({ kind: 'space', value: space, deleted: true });
       }
     } else if (key === 'entityState') {
-      const State = z.object({ workers: z.record(Id, z.object({ archivedAt: z.string().optional(), deletedAt: z.string().optional() })),
+      const State = z.object({ workers: z.record(Id, z.object({ archivedAt: z.string().optional(), deletedAt: z.string().optional(), unfriendedAt: z.string().optional() })),
         teams: z.record(Id, z.object({ archivedAt: z.string().optional(), deletedAt: z.string().optional() })) });
       const current = State.parse(value);
       const before = State.parse(previous ?? { workers: {}, teams: {} });

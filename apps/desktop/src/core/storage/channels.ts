@@ -312,6 +312,38 @@ export class Channels {
     this.save(channelId, { ...this.unchanged(current), ...(categoryGone ? { categoryId: null } : {}) }, true);
   }
 
+  /**
+   * Before an orglet leaves, the lead's job passes to the first member who stays, as a new revision of the crew
+   * record. A channel the orglet does not lead is left alone.
+   */
+  handLeadOver(channelId: string, workerId: string) {
+    const current = this.recordById(channelId);
+    const crew = current.crewId ? this.store.get<Team>('teams', current.crewId) : undefined;
+    if (!crew || crew.synthesizerId !== workerId) return;
+    const next = orgletMembers(current.members, this.roster()).find(member => member.id !== workerId);
+    if (!next) throw new Error(CHANNEL_HAS_NO_ORGLETS);
+    this.save(channelId, { ...this.unchanged(current), lead: { synthesizerId: next.id } }, true);
+  }
+
+  /**
+   * A channel of a space with its own list, where this orglet is the only one, takes its space's orglets instead. It
+   * runs before the orglet leaves the space, so the channel is not left with nobody to answer.
+   */
+  inheritIfOnlyOrglet(channelId: string, workerId: string) {
+    const current = this.recordById(channelId);
+    const orglets = current.members.filter(member => member.kind === 'orglet');
+    if (orglets.length !== 1 || orglets[0].id !== workerId) return;
+    this.save(channelId, { ...this.unchanged(current), access: 'inherit' }, true);
+  }
+
+  /** Takes an orglet out of a channel outside every space; the lead's job passes on first if it was theirs. */
+  removeOrglet(channelId: string, workerId: string) {
+    this.handLeadOver(channelId, workerId);
+    const current = this.recordById(channelId);
+    const members = current.members.filter(member => member.kind !== 'orglet' || member.id !== workerId);
+    this.save(channelId, { ...this.unchanged(current), members }, true);
+  }
+
   /** Puts a channel outside every space into one, keeping its own list of the orglets the space has. */
   joinSpace(channelId: string, spaceId: string) {
     this.save(channelId, { ...this.unchanged(this.recordById(channelId)), spaceId, access: 'listed' }, true);
@@ -487,8 +519,12 @@ export class Channels {
 
   /** The members as orglets, without the ones that left the workspace. */
   private stillListed(members: readonly ChannelMember[]): ChannelMember[] {
+    return orgletMembers(members, this.roster());
+  }
+
+  private roster(): Roster {
     const workspace = this.store.workspace();
-    return orgletMembers(members, { workers: workspace.workers, teams: workspace.teams });
+    return { workers: workspace.workers, teams: workspace.teams };
   }
 
   /** The members as listed orglets: a crew joins as its orglets, and one that left the workspace is refused. */

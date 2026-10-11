@@ -11,7 +11,7 @@ import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDir
 import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView, type WorkspacePermission } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { z } from 'zod';
-import { commands, CredentialProvider, Id, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
+import { commands, CredentialProvider, Id, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine, type UnfriendResult } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { BudgetLedger } from './budgets/ledger';
 import { Checkpoints } from './storage/checkpoints';
@@ -69,6 +69,7 @@ import { SideThreads } from './orchestration/side-threads';
 import { adoptCrews, Channels, channelForGroup } from './storage/channels';
 import { Spaces, storedSpaces } from './storage/spaces';
 import { spaceChatCapabilities } from '../shared/spaces';
+import { orgletPlaces } from '../shared/unfriend';
 import type { SpaceTemplate } from '../shared/space-template';
 import { isLegacyGroupChat } from '../shared/channels';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
@@ -1047,6 +1048,17 @@ export class CoreService {
         this.assertEntityRevision(input.kind, input.id, input.expectedRevision, input.expectedName);
         this.deleteEntity(input.kind, input.id); this.notify(); return;
       }
+      case 'unfriendWorker': {
+        const result = this.unfriendWorker(commands.unfriendWorker.parse(args));
+        this.notify();
+        return result;
+      }
+      case 'befriendWorker': {
+        const input = commands.befriendWorker.parse(args);
+        if (!this.entity('worker', input.id)) throw new Error('Không tìm thấy mục này.');
+        this.setEntityState('worker', input.id, this.stateWithout(input.id, 'unfriendedAt'));
+        this.notify(); return;
+      }
       case 'updateTask': {
         const input = commands.updateTask.parse(args);
         const task = this.store.get<Task>('tasks', input.id);
@@ -1691,11 +1703,16 @@ export class CoreService {
     const row = this.store.get<Worker | Team>(`${kind}s`, entityId);
     return state?.deletedAt ? undefined : { row, archived: Boolean(state?.archivedAt) };
   }
-  private setEntityState(kind: 'worker' | 'team', entityId: string, next: { archivedAt?: string; deletedAt?: string }) {
+  private setEntityState(kind: 'worker' | 'team', entityId: string, next: { archivedAt?: string; deletedAt?: string; unfriendedAt?: string }) {
     const state = this.store.entityState();
     const group = { ...state[`${kind}s`] };
-    if (next.archivedAt || next.deletedAt) group[entityId] = next; else delete group[entityId];
+    if (next.archivedAt || next.deletedAt || next.unfriendedAt) group[entityId] = next; else delete group[entityId];
     this.store.setSetting('entityState', { ...state, [`${kind}s`]: group });
+  }
+  /** A worker's entity state without one field, so clearing it keeps the others. */
+  private stateWithout(workerId: string, field: 'unfriendedAt'): { archivedAt?: string; deletedAt?: string; unfriendedAt?: string } {
+    const { [field]: _removed, ...rest } = this.store.entityState().workers[workerId] ?? {};
+    return rest;
   }
   /** Refuses to archive or delete a worker or team that something still depends on, naming what to change first. */
   private assertRemovable(kind: 'worker' | 'team', entityId: string) {
@@ -1705,9 +1722,59 @@ export class CoreService {
     const name = found.row.name;
     const blocker = removalBlocker(workspace, kind, entityId);
     if (blocker?.kind === 'crews') throw new Error(leaveCrewsMessage(name, blocker.crews.map(crew => crew.name)));
-    if (blocker?.kind === 'schedule') throw new Error(stopScheduleMessage(blocker.schedule.name));
+    this.assertNotRunning(kind, entityId);
+  }
+  /** Refuses while an enabled schedule runs the worker or team, or one of its chats is queued or running. */
+  private assertNotRunning(kind: 'worker' | 'team', entityId: string) {
+    const schedule = this.store.workspace().routines.find(item => item.enabled && runBy(item.task, kind, entityId));
+    if (schedule) throw new Error(stopScheduleMessage(schedule.name));
     const uses = (task: Task) => runBy(task, kind, entityId) || (kind === 'worker' && task.assignees === 'all');
     if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && uses(task))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
+  }
+  /**
+   * Unfriends an orglet: it leaves the person's DMs, and leaves each space or channel it is in unless the person kept
+   * it there. A place that would be left with no orglet always keeps it. With no place left the orglet is deleted as
+   * `deleteEntity` does; otherwise it is marked unfriended and keeps working in the places that kept it.
+   */
+  private unfriendWorker(input: Args<'unfriendWorker'>): UnfriendResult {
+    this.assertAssignable('worker', input.id);
+    this.assertNotRunning('worker', input.id);
+    // A crew made some other way is given its channel first, so every crew shows up as a place.
+    adoptCrews(this.store, () => this.clock().toISOString());
+    const places = orgletPlaces(this.store.workspace(), input.id);
+    const isKept = (place: { kind: string; id: string }) => input.keep.some(kept => kept.kind === place.kind && kept.id === place.id);
+    const kicked = places.filter(place => place.canKick && !isKept(place));
+    for (const place of kicked) {
+      if (place.kind === 'channel') this.assertChannelIdle(place.id);
+    }
+    this.store.transaction(() => {
+      for (const place of kicked) {
+        if (place.kind === 'space') this.spaces.removeOrglet(place.id, input.id);
+        else this.channels.removeOrglet(place.id, input.id);
+      }
+      if (kicked.length === places.length) {
+        this.deleteEntity('worker', input.id);
+        return;
+      }
+      this.setEntityState('worker', input.id, { unfriendedAt: this.clock().toISOString() });
+      this.archiveDirectChats(input.id);
+    });
+    const outcome = kicked.length === places.length ? 'deleted' : 'unfriended';
+    return { outcome, kicked: kicked.length, kept: places.length - kicked.length };
+  }
+  /** The orglet's own DM chats (its main chat and side threads) are archived, not deleted. */
+  private archiveDirectChats(workerId: string) {
+    const archivedAt = this.clock().toISOString();
+    for (const task of this.store.all<Task>('tasks')) {
+      const isDirect = task.workerId === workerId && !task.deletedAt && !task.archivedAt && !task.channel && !task.teamId && !task.assignees && !task.routineId;
+      if (isDirect) this.store.update('tasks', { ...task, archivedAt });
+    }
+  }
+  /** A direct message with an unfriended orglet cannot start; the places that kept it still work. */
+  private assertNotUnfriended(workerId: string) {
+    if (!this.store.entityState().workers[workerId]?.unfriendedAt) return;
+    const name = this.store.get<Worker>('workers', workerId).name;
+    throw new Error(`Kết bạn lại với ${name} trước khi nhắn riêng.`);
   }
   private assertEntityRevision(kind: 'worker' | 'team', entityId: string | undefined, expectedRevision?: number, expectedName?: string): void {
     if (expectedRevision === undefined && expectedName === undefined) return;
@@ -1938,6 +2005,7 @@ export class CoreService {
    */
   private startSideThread(input: Args<'startSideThread'>): string {
     const main = this.liveTask(input.taskId);
+    this.assertNotUnfriended(main.workerId);
     this.sideThreads.assertCanStart(main);
     const sourceIds = [...new Set(input.sourceIds)];
     if (sourceIds.some(sourceId => !main.sourceIds.includes(sourceId))) throw new Error('Chat phụ chỉ mang theo tệp đã có trong chat chính.');
@@ -2218,6 +2286,7 @@ export class CoreService {
     const { channelId, ...given } = rawInput;
     const waiting = channelId && !routine ? this.channels.waiting(channelId) : undefined;
     const input = this.firstMessageInput(given, waiting);
+    if (!routine && !waiting && !input.teamId && !input.assignees) this.assertNotUnfriended(input.workerId);
     // The first message of a worker, team or group chat takes the permissions chosen while the chat was still empty.
     const liveChat = this.isLiveChatStart(input, routine) && input.toolCapabilities === undefined;
     // A channel in a space with no choice of its own starts with what its space sets (docs/spaces-design.md).

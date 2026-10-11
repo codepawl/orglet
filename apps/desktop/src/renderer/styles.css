@@ -3588,3 +3588,13 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .terminal-journal-text { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .terminal-journal-operation { color:var(--text); }
 .terminal-journal-detail { color:var(--muted); font-size:13px; }
+/* Unfriend dialog: the places an orglet is in, each a checkbox row, then what the choice does. */
+.unfriend-dialog { display:flex; flex-direction:column; gap:14px; }
+.unfriend-dialog p { margin:0; }
+.unfriend-places { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
+.unfriend-place { padding:6px 10px; border-radius:10px; }
+.unfriend-place-name { display:inline-flex; align-items:center; gap:8px; min-width:0; }
+.unfriend-place-name > svg { flex-shrink:0; }
+.unfriend-status.error { color:var(--error); }
+.unfriend-actions { display:flex; justify-content:flex-end; gap:8px; }
+.org-drawer:has(.unfriend-dialog) { width:min(520px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }

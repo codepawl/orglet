@@ -139,7 +139,7 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
     if (!found) return [];
     const orglets = found.result.orgletIds.flatMap((id): SearchRow[] => {
       const worker = workspace.workers.find(item => item.id === id);
-      return worker ? [{ key: `orglet:${id}`, kind: 'orglet', worker }] : [];
+      return worker && !worker.unfriendedAt ? [{ key: `orglet:${id}`, kind: 'orglet', worker }] : [];
     });
     // Archived orglets are not in the search index: their names are matched here, and the row says they are archived.
     const typed = found.query.trim().toLocaleLowerCase();

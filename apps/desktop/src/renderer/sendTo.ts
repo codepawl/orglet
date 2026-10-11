@@ -3,6 +3,7 @@ import { taskWorkers, teamRoster } from './assignees';
 import { t } from './i18n';
 import { chatHeadline } from '../shared/forward';
 import { channelLabel } from '../shared/channels';
+import { directMessageWorkers } from './unfriendChoice';
 
 /**
  * The places files sent from Explorer can go (COD-246): the most recent chats first, then every orglet and every
@@ -70,7 +71,7 @@ export function sendToOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | '
     if (routine) return { ...option, detail: t('lịch · {0}', [routine.name]) };
     return option;
   });
-  const orglets = workspace.workers.map((worker): SendToOption => ({
+  const orglets = directMessageWorkers(workspace.workers).map((worker): SendToOption => ({
     key: `worker:${worker.id}`,
     group: 'orglets',
     target: { kind: 'worker', id: worker.id },
