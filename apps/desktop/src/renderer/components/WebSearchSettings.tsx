@@ -18,7 +18,7 @@ const SAVED_KEY_MASK = '••••••••••••••••';
 
 /** What each provider is and whether it needs a key: one short line under its name in the list and under the picker. */
 const providerNotes: Record<WebSearchProvider, string> = translated({
-  auto: 'Exa miễn phí, rồi DuckDuckGo khi Exa hết lượt. Không cần key hay cài đặt.',
+  auto: 'Exa miễn phí, rồi DuckDuckGo. Không cần key hay cài đặt.',
   exa: 'Miễn phí, không cần key; có giới hạn lượt.',
   tavily: 'Cần key. Gói miễn phí có 1.000 lượt tìm mỗi tháng.',
   brave: 'Cần key từ trang quản lý của Brave.',

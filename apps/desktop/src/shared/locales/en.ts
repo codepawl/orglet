@@ -3741,7 +3741,7 @@ export const en: Dictionary = {
   'Exa trả lỗi HTTP {0}. Thử lại sau.': 'Exa returned HTTP {0}. Try again later.',
   'Exa không tìm được: {0}': 'Exa could not search: {0}',
   'Exa không trả danh sách kết quả đọc được. Thử lại hoặc cung cấp URL.': 'Exa did not return a readable result list. Retry or provide a URL.',
-  'Exa miễn phí, rồi DuckDuckGo khi Exa hết lượt. Không cần key hay cài đặt.': 'Free Exa first, then DuckDuckGo when Exa runs out. No key or setup.',
+  'Exa miễn phí, rồi DuckDuckGo. Không cần key hay cài đặt.': 'Free Exa, then DuckDuckGo. No key or setup.',
   'Cần key. Gói miễn phí có 1.000 lượt tìm mỗi tháng.': 'Needs a key. The free plan has 1,000 searches a month.',
   'Cần key từ trang quản lý của Brave.': 'Needs a key from Brave’s dashboard.',
   'Máy chủ SearXNG bạn tự chạy hoặc tin cậy. Không cần key.': 'A SearXNG server you run or trust. No key.',
