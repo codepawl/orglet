@@ -56,10 +56,10 @@ describe('skills and commands', () => {
     const candidate = skillCandidate({ folderName: 'reviewer', text });
     expect(candidate.blocked).toBeUndefined();
     const inspected = inspectPackage(candidate.skillPackage);
-    expect(inspected.metadata).toEqual({ name: 'reviewer', description: 'Reviews.', license: 'MIT', metadata: { author: 'me', count: '3' }, 'allowed-tools': 'Read reply' });
+    expect(inspected.metadata).toEqual({ name: 'reviewer', description: 'Reviews.', license: 'MIT', metadata: { author: 'me', count: '3' }, 'allowed-tools': 'reply' });
     for (const field of ['hooks', 'model', 'argument-hint', 'something-new']) expect(candidate.notes).toContain(`${field}: Orglet không dùng`);
     expect(candidate.notes.some(note => note.startsWith('metadata.nested'))).toBe(true);
-    expect(candidate.notes.some(note => note.includes('allowed-tools'))).toBe(true);
+    expect(candidate.notes).toContain('allowed-tools: bỏ các công cụ Orglet chưa có');
     expect(inspected.content).toBe('Body here');
   });
   it('notes command injection and $ARGUMENTS and leaves them as text', () => {

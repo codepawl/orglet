@@ -20,6 +20,8 @@ Only when you open the dialog, and only these places:
 | `~/.claude/agents/**/*.md` | Subagents |
 | `mcpServers` in `~/.claude.json` | MCP servers for your user |
 
+If you set `CLAUDE_CONFIG_DIR` for Claude Code, Orglet reads that folder, and the `.claude.json` in it, instead.
+
 The dialog says which folder it read. **Choose a project folder** reads a project instead: its `.claude` folder, its `.mcp.json`, and the servers `~/.claude.json` keeps for that project. **Read the home folder** goes back.
 
 Orglet reads only the `mcpServers` objects of `~/.claude.json`. It does not read, show or keep your account or anything else in that file.
@@ -35,7 +37,7 @@ Every item has a checkbox. An item whose name already exists in Orglet says **Al
 - No `name`: the folder name is used, in lowercase with hyphens. A command in a subfolder is named `folder-file`.
 - No `description`: the first line of the body is used. `when_to_use` is added after the description. The description is cut to 1,024 characters.
 - Orglet keeps `license`, `compatibility`, `metadata` and `allowed-tools`. Every other field is left out, and the item lists each one, for example "hooks: not used by Orglet".
-- `allowed-tools` that names a tool Orglet does not have makes the review block the package. The item says so.
+- From `allowed-tools`, Orglet keeps only the tools it has. Claude Code's own tool names, such as `Read` or `Bash(git log:*)`, are left out, and the item says so.
 - Text such as `` !`command` `` and `$ARGUMENTS` stays text. Orglet does not run or fill it, and the item says so.
 
 **Subagents** become orglets. The file's name, description and body become the orglet's name, description and instructions.

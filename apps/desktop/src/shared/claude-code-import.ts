@@ -179,8 +179,6 @@ export function skillCandidate(options: { folderName: string; text: string; extr
   } catch (error) {
     return { name, description, notes, blocked: error instanceof Error ? error.message : 'Gói skill không hợp lệ.' };
   }
-  const unsupported = (metadata['allowed-tools']?.split(/\s+/).filter(Boolean) ?? []).filter(tool => !supportedTools.has(tool));
-  if (unsupported.length) notes.push('allowed-tools nêu công cụ Orglet chưa có, nên bước review sẽ chặn gói này.');
   return { name, description, notes, skillPackage };
 }
 
@@ -196,8 +194,12 @@ function keptMetadata(fields: Record<string, unknown>, notes: string[]): Partial
   const tools = fields['allowed-tools'];
   const toolText = Array.isArray(tools) ? nameList(tools).join(' ') : scalar(tools);
   if (toolText) {
-    if (toolText.length <= 2000) kept['allowed-tools'] = toolText;
-    else notes.push('allowed-tools: dài hơn 2.000 ký tự nên bị bỏ');
+    // Claude Code's tool names (Read, Bash(git log:*)) are not Orglet's, and the review blocks a package that names a
+    // tool Orglet lacks. Leaving them out never widens what the skill may do.
+    const named = toolText.split(/[\s,]+/).filter(Boolean);
+    const known = named.filter(tool => supportedTools.has(tool));
+    if (known.length < named.length) notes.push('allowed-tools: bỏ các công cụ Orglet chưa có');
+    if (known.length) kept['allowed-tools'] = known.join(' ');
   }
   const extra = fields.metadata;
   if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
