@@ -28,6 +28,8 @@ describe('adding a crew listing', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orglet-market-crew-space-'));
     store = new Store(join(directory, 'state.sqlite'));
+    // These cases update by hand; the automatic path, on by default, would take the update first.
+    store.setSetting('marketAutoUpdate', false);
     core = new CoreService(store, () => {}, async () => { throw new Error('Adding a listing never calls a model.'); });
     servedVersion = 1;
     servedBody = MARKET_SEED_BODIES['research-review:1'];

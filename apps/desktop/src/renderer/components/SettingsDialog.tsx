@@ -1,6 +1,6 @@
 import { TabbedDialog, Tooltip } from '@codepawlhq/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Archive, Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut, CircleUserRound } from 'lucide-react';
+import { Archive, Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut, CircleUserRound } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
@@ -15,8 +15,6 @@ import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FO
 import { Button } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
-import { BudgetReconciliation } from './BudgetReconciliation';
-import { formatMoney } from './money';
 import { currencies, CurrencyCode, usdCurrency } from '../../shared/currency';
 import { ProviderMark } from './ProviderMark';
 import { StatusMark, type StatusMarkState } from './StatusMark';
@@ -40,7 +38,6 @@ import { orglet } from '../api';
 import { CommandBlock, Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
-import { chatHeadline } from '../../shared/forward';
 import { forgetAllDrafts } from '../drafts';
 import { DecisionModelSetup } from './DecisionModelSetup';
 import { AccountSettings } from './AccountSettings';
@@ -60,7 +57,10 @@ const accentSwatches = avatarPalette.map(color => currentAccentColor(color));
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
 
-export type SettingsTab = 'general' | 'chat' | 'archive' | 'connections' | 'search' | 'harness' | 'mcp' | 'browser' | 'usage' | 'data' | 'account' | 'about';
+/** The value of the Add account row in a harness's account list; never an account, since that row is an action. */
+const ADD_ACCOUNT_ROW = '\u0000add';
+
+export type SettingsTab = 'general' | 'chat' | 'archive' | 'connections' | 'search' | 'harness' | 'mcp' | 'browser' | 'data' | 'account' | 'about';
 // Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   // The optional CodePawl account (COD-337); nothing syncs yet. First, as Account (owner, 2026-09-30).
@@ -77,7 +77,6 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
   // The browser orglets read pages in, and the profiles the person signs in to themselves (COD-261).
   { id: 'browser', label: 'Trình duyệt', icon: <AppWindow size={16} /> },
-  { id: 'usage', label: 'Chi phí', icon: <Wallet size={16} /> },
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
   { id: 'about', label: 'Giới thiệu', icon: <Info size={16} /> },
 ];
@@ -98,7 +97,6 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
   harness: 'Đăng nhập lỗi thì Orglet dừng lại, không tự đổi sang kết nối khác.',
   mcp: 'Tí hỏi bạn trước mỗi lần gọi công cụ.',
   browser: 'Tí đọc trang trong cửa sổ riêng, không dùng hồ sơ của bạn.',
-  usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
 };
 
 /** Who is signed in and on which plan, as one line: "an@example.com · ChatGPT Plus". */
@@ -239,10 +237,12 @@ function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove, o
   return <div className="harness-account" ref={row}>
     <Select size="sm" className="harness-account-select" ariaLabel={t('Tài khoản {0}', [item.name])} value={item.accountId} disabled={busy}
       menuMinWidth={360} showDetail={false}
-      onChange={onSelect}
+      onChange={accountId => { if (accountId !== ADD_ACCOUNT_ROW) onSelect(accountId); }}
       options={[
         { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: summaryOf(SYSTEM_ACCOUNT_ID) ?? t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },
         ...item.accounts.map(account => ({ value: account.id, label: account.label, detail: summaryOf(account.id), icon: <UserRound size={16} /> })),
+        // Adding an account is where a person looks for it: at the end of the list of accounts (owner, 2026-10-12).
+        ...(item.accountsSignInApart ? [{ value: ADD_ACCOUNT_ROW, label: t('Thêm tài khoản'), icon: <UserPlus size={16} />, spaced: true, onSelect: () => setEditing({ label: '' }) }] : []),
       ]} />
     {/* Where the CLI lives, which folder this account signs in from, and why no account can be added where the CLI
         keeps one sign-in per computer: detail behind the "i", not a line in the row. */}
@@ -602,12 +602,6 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const customAccent = !accentSwatches.some(color => color.toLowerCase() === accent.toLowerCase());
   useEffect(() => { if (!open) { setKeyDrafts({}); setEditing({}); setReplacing({}); } }, [open, currency.code, currency.rate]);
 
-  /** A budget reservation is named by the chat it belongs to, the way the reconciliation list names it. */
-  const reservationName = (reservationId: string) => {
-    const reservation = workspace.budgetReservations.find(item => item.id === reservationId);
-    const task = workspace.tasks.find(item => item.id === reservation?.taskId);
-    return task?.title || (task ? chatHeadline(task) : undefined) || reservation?.taskId;
-  };
   /** Runs one change and toasts its outcome; `about` names the setting or provider it concerned, for the notice centre. */
   const act = async (action: () => Promise<string | void>, about?: string) => {
     setBusy(true);
@@ -695,6 +689,12 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 title={t('Phông chữ code')} description={t('Code, đường dẫn, giá trị kỹ thuật.')}
                 onPick={family => void save({ codeFont: family })} />
               <CodeFontPreview />
+              <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Lưu bằng USD theo giá provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>
+                <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); }, t('Tiền tệ'))} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
+              </Row>
+              {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Mỗi 12 giờ từ open.er-api.com, không gửi dữ liệu của bạn.')}>
+                <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá'); }, t('Tỷ giá'))}><RefreshCw size={14} />{t('Cập nhật')}</Button>
+              </Row>}
             </>}
 
             {tab === 'chat' && <>
@@ -891,29 +891,6 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             {tab === 'mcp' && <McpSettings workspace={workspace} busy={busy} act={act} editing={mcpEditing} onEdit={setMcpEditing} />}
             {tab === 'browser' && <BrowserProfilesSettings busy={busy} act={act} creating={creatingProfile} onCreating={setCreatingProfile} />}
 
-            {tab === 'usage' && <>
-              <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
-              <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{workspace.usage.uncertainCount === 1 ? t('1 yêu cầu chưa rõ chi phí.') : t('{0} yêu cầu chưa rõ chi phí.', [workspace.usage.uncertainCount])}</span> : t('Yêu cầu đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
-              {(workspace.usage.unpricedDecisionCalls ?? 0) > 0 && <Row title={t('Câu hỏi nền chưa rõ chi phí')} description={<span className="error">{t('Model quyết định hỏi qua kết nối chưa có giá đã xác minh, hoặc nhà cung cấp không báo số token. Số token vẫn được tính.')}</span>}><span className="setting-value">{workspace.usage.unpricedDecisionCalls}</span></Row>}
-              <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Lưu bằng USD theo giá provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>
-                <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); }, t('Tiền tệ'))} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
-              </Row>
-              {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Mỗi 12 giờ từ open.er-api.com, không gửi dữ liệu của bạn.')}>
-                <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá'); }, t('Tỷ giá'))}><RefreshCw size={14} />{t('Cập nhật')}</Button>
-              </Row>}
-              <BudgetReconciliation workspace={workspace} busy={busy} onReconcile={async (reservationId, amountMicros, source) => {
-                setBusy(true);
-                try {
-                  await orglet.call('reconcileBudget', { reservationId, amountMicros, source });
-                  toast(t('Đã lưu đối soát chi phí.'), 'success', reservationName(reservationId));
-                } catch (error) {
-                  toast((error as Error).message, 'error', reservationName(reservationId));
-                  throw error;
-                } finally {
-                  setBusy(false);
-                }
-              }} />
-            </>}
 
             {tab === 'data' && <>
               <Row title={t('Sao lưu')} description={t('Lưu Tí, kênh và cuộc trò chuyện vào một tệp.')}>

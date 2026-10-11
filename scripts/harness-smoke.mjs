@@ -98,8 +98,6 @@ try {
   assert.equal(await page.evaluate(() => { const panel = document.querySelector('.org-tabbed-dialog-panel'); return panel.scrollWidth > panel.clientWidth + 1; }), false);
   await page.screenshot({ path: 'test-results/settings-connections-narrow.png' });
   await page.setViewportSize({ width: 1200, height: 820 });
-  await page.getByRole('tab', { name: label('Chi phí'), exact: true }).click();
-  await page.screenshot({ path: 'test-results/settings-usage.png' });
   await page.keyboard.press('Escape');
   // The narrow viewport collapsed the sidebar; reopen it before using row menus.
   await expandSidebar(page);

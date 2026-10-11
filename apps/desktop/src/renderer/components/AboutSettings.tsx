@@ -260,9 +260,9 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, onMarketAutoUpdat
           : <Button variant="outline" disabled={busy || !update || update.status === 'checking' || update.status === 'downloading'} onClick={checkNow}><RefreshCw size={14} />{t('Kiểm tra')}</Button>}
     </Row>
     <Row id="auto-update-label" title={t('Tự động cập nhật')} description={t('Tải ngầm bản mới rồi báo để bạn khởi động lại.')}>
-      <Switch checked={workspace.autoUpdate} disabled={busy || unsupported} labelledBy="auto-update-label" onChange={onAutoUpdate} />
+      <Switch checked={workspace.autoUpdate} disabled={busy} labelledBy="auto-update-label" onChange={onAutoUpdate} />
     </Row>
-    <Row id="market-auto-update-label" title={t('Tự cập nhật mục từ Marketplace')} description={t('Một bản cập nhật đổi cách một Tí làm việc, nên mặc định app chờ bạn. Bản bạn đã chỉnh sửa hoặc bản mở rộng quyền vẫn luôn chờ bạn xem.')}>
+    <Row id="market-auto-update-label" title={t('Tự cập nhật mục từ Marketplace')} description={t('Bản mới của một mục bạn đã thêm được áp dụng ngầm. Bản bạn đã chỉnh sửa hoặc bản mở rộng quyền vẫn luôn chờ bạn xem.')}>
       <Switch checked={workspace.marketAutoUpdate} disabled={busy} labelledBy="market-auto-update-label" onChange={onMarketAutoUpdate} />
     </Row>
     <MarketUpdatesBlock workspace={workspace} busy={busy} act={act} />

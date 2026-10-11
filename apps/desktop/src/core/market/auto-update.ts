@@ -21,7 +21,7 @@ export class MarketAutoUpdates {
   constructor(private readonly store: Store, private readonly market: Marketplace, private readonly notify: () => void, private readonly clock: () => Date) {}
 
   enabled(): boolean {
-    return this.store.setting<boolean>('marketAutoUpdate', false) === true;
+    return this.store.setting<boolean>('marketAutoUpdate', true) === true;
   }
 
   /** The newest record of each installed item that is still worth showing, newest first. */

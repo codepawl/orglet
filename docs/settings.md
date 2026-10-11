@@ -49,11 +49,10 @@ The browser Orglet found (Chrome, or Edge when Chrome is not installed), the **C
 
 ## Costs
 
-- **Concurrent requests per provider** (1–8): how many model requests may be in flight at once across all chats. Above 4, a short note says that more at once means more spend at once. Orglet sets no spending limit; set one with the provider.
-- **Allowed providers**.
-- **Charges to reconcile**: requests that failed or came back without usage keep their reservation. After checking the provider's usage page, enter the actual amount; enter zero only when the provider shows zero. See [Connections → Costs](connections.md#costs).
+Settings has no Costs page (owner, 2026-10-12). Orglet sets no spending limit and keeps no bill: set limits and read what you spent with the provider. A chat still shows what its own requests cost, at the top of the chat.
 
-These numbers cover requests Orglet makes through an API key. Harness runs use the CLI's own plan and are not counted here.
+- **Currency** is under **General**: the currency those amounts are shown in. They are stored in USD at the provider's prices and converted for display.
+- **Concurrent requests per provider** (1–8) is under **Chat**: how many model requests may be in flight at once across all chats.
 
 ## Data
 

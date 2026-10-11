@@ -25,6 +25,8 @@ try {
   let page = await app.firstWindow();
   await page.setViewportSize({ width: 1200, height: 820 });
   await useEnglish(page);
+  // This smoke updates copies by hand; the automatic path, on by default, would apply the update before it looks.
+  await page.evaluate(() => window.orglet.call('settings', { theme: 'system', marketAutoUpdate: false }));
   await openDiscover(page);
   // The catalog that ships with the app also lists a space; a catalog server from before spaces lists these two.
   for (const name of ['Research friend', 'Research and review']) assert.equal(await page.locator('.marketplace-listing').filter({ hasText: name }).count(), 1, `${name} is listed once`);
