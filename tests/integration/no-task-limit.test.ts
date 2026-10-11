@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { commands, ChannelLeadSettings, TeamInput, RoutineInput, TaskInput, type Task, type Team, type Worker } from '../../apps/desktop/src/shared/contracts';
+import { commands, LEGACY_CONNECTION_LIMIT_MICROS, ChannelLeadSettings, TeamInput, RoutineInput, TaskInput, type Task, type Team, type Worker } from '../../apps/desktop/src/shared/contracts';
 import { SyncRoutine } from '../../apps/desktop/src/shared/sync-records';
 import { ProposeCrew, ProposeOrglet } from '../../apps/desktop/src/shared/app-proposals';
 import { updateWidening } from '../../apps/desktop/src/core/market/widening';
 import { Schedule } from '../../apps/desktop/src/shared/schedule';
 import { parseArguments } from '../../apps/desktop/src/cli/arguments';
+import { Backups } from '../../apps/desktop/src/core/storage/backup';
 
 // A chat, crew or orglet has no spending limit of its own (owner, 2026-10-11). Older rows, backups, sync records and
 // terminal commands still carry `budgetMicros`; it is accepted and ignored.
@@ -128,5 +129,18 @@ describe('older data that still carries a money limit', () => {
       team: { ...crew, monthlyBudgetMicros: 900_000_000, taskBudgetMicros: 90_000_000, memberKeys: ['lead'], synthesizerKey: 'lead' },
     } as never;
     expect(updateWidening(store, origin, template)).toEqual([]);
+  });
+});
+
+describe('a backup made now still restores on a released app', () => {
+  it('writes the fixed connection amount a released app requires in a backup\'s settings', () => {
+    const store = new Store(':memory:');
+    try {
+      const payload = JSON.parse(new Backups(store, () => false, () => {}).export()).payload;
+      expect(payload.settings.connectionLimitMicros).toBe(LEGACY_CONNECTION_LIMIT_MICROS);
+      expect(LEGACY_CONNECTION_LIMIT_MICROS).toBe(5_000_000);
+    } finally {
+      store.close();
+    }
   });
 });

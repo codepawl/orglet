@@ -9,7 +9,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { Store, now, id, seedSkill, seedWorker } from './database';
 import { removeSeed } from './factory-seed';
 import { DELETED_CHAT_TEXT, deletedRunSnapshot } from './deleted-chat';
-import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, RunContextUse, TeamPlan, PlanAssignment } from '../../shared/contracts';
+import { Id, LEGACY_CONNECTION_LIMIT_MICROS, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, RunContextUse, TeamPlan, PlanAssignment } from '../../shared/contracts';
 import { DatasetProfile, DataFormat } from '../../shared/profiles';
 import { PreflightRecord } from '../../shared/preflight';
 import { SkillPackage } from '../../shared/skill-package';
@@ -527,7 +527,7 @@ function snapshot(store: Store): Payload {
     reservationReviews: store.db.prepare('SELECT * FROM reservation_reviews ORDER BY rowid').all(),
     ledgerCache: store.db.prepare('SELECT * FROM ledger_cache ORDER BY rowid').all(),
     // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
-    settings: { theme: store.setting('theme', 'system') },
+    settings: { theme: store.setting('theme', 'system'), connectionLimitMicros: LEGACY_CONNECTION_LIMIT_MICROS },
   });
 }
 

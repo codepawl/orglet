@@ -140,6 +140,8 @@ export const TeamInput = z.object({
  * here reads it back (owner, 2026-10-11).
  */
 export const LEGACY_MONTHLY_BUDGET_MICROS = 5_000_000;
+/** Released apps require a connection limit in a backup's settings; this build writes this value for them and reads none back (owner, 2026-10-11). */
+export const LEGACY_CONNECTION_LIMIT_MICROS = 5_000_000;
 export type Team = z.infer<typeof TeamInput> & { id: string; revision: number };
 /**
  * A channel's settings when the lead splits the work (COD-369): what a crew's editor used to set, minus the name and
