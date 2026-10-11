@@ -356,6 +356,9 @@ describe('the setting, the migration and the keys', () => {
       expect(store.workspace().searxngUrl).toBe('https://searx.example.org/');
       await core.command('settings', { ...settings, searxngUrl: '' });
       expect(store.workspace().searxngUrl).toBeNull();
+      // A caller that sends the whole workspace back (as the workspace reads) passes the address, or null, unchanged.
+      await core.command('settings', { ...settings, ...store.workspace() });
+      expect(store.workspace().searxngUrl).toBeNull();
       await expect(core.command('settings', { ...settings, webSearchProvider: 'bing' })).rejects.toThrow();
     } finally { store.close(); }
   });
