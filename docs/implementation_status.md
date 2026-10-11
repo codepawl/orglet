@@ -491,3 +491,7 @@ Still unverified here: installing and uninstalling the signed Setup on another c
 ## 2026-10-12: deleting a message
 
 A message's right-click menu ends with **Delete message** for the person's own messages and orglets' answers. The deletion is local to the computer (`deleted_messages`, a sync fence on the message's record key); other computers keep their copy until a later release adds a deletion record. This build's pull skips records of an unknown kind. Checked with the real core in `tests/integration/delete-message.test.ts` and `tests/integration/delete-message-sync.test.ts`; not checked in the packaged app or against a live account.
+
+## 2026-10-12: import from Claude Code
+
+**Library, Skills, Import from Claude Code** lists what `~/.claude` (or a project folder the person picks) holds and imports the checked items: skills and commands as unreviewed skill packages through the existing import, subagents as orglets (model only when Claude Code is connected, no permission, folder or MCP grant), and MCP servers through the existing MCP import. Claude Code fields Orglet does not use are named on each item. `${VAR:-default}` is resolved; a `${VAR}` without a default is never read from the app's environment. Checked with `tests/integration/claude-code-import.test.ts` on fake folders only; not yet looked at on the rendered screen or with a real Claude Code folder. See [import-from-claude-code.md](import-from-claude-code.md).
