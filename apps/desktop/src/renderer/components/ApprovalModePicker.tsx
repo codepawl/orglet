@@ -1,41 +1,26 @@
 import { useContext, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { Check, ChevronDown, FileDiff, FolderCheck, ListTodo, type LucideIcon } from 'lucide-react';
+import { Check, ChevronDown, FileDiff, FolderCheck, ListTodo, ShieldOff, TriangleAlert, Zap, type LucideIcon } from 'lucide-react';
 import { AnchoredPopover } from './AnchoredPopover';
-import { approvalModeOf, approvalModes, capabilitiesForMode, changesMode, folderNeedFor, type ApprovalMode, type FolderNeed } from '../../shared/approval-mode';
+import { approvalModeOf, approvalModes, capabilitiesForMode, changesMode, folderNeedFor, type ApprovalMode, type ChangesMode, type FolderNeed } from '../../shared/approval-mode';
 import type { ToolCapability } from '../../shared/tool-policy';
 import type { WorkspaceLevel } from '../../shared/capability-status';
 import { setPlanFirst, usePlanFirst } from '../planFirst';
-import { t, translated } from '../i18n';
+import { useDecisionModelSetting } from '../decisionModelSetting';
+import { decisionModelMissing, modeNames, modeRowNote, needsBypassConfirmation, type ModeRowState } from '../approvalModeText';
+import { t } from '../i18n';
 import { Button } from './ui';
+import { confirmAction } from './confirm';
 import { MessageBoxFocus } from './SourcePicker';
 
-const modeNames: Record<ApprovalMode, string> = translated({
-  ask: 'Hỏi trước khi áp dụng',
-  apply: 'Tự áp dụng thay đổi',
-  plan: 'Lên kế hoạch trước',
-});
+const modeIcons: Record<ApprovalMode, LucideIcon> = { auto: Zap, manual: FileDiff, acceptEdits: FolderCheck, plan: ListTodo, bypass: ShieldOff };
 
-const modeDescriptions: Record<ApprovalMode, string> = translated({
-  ask: 'Bạn xem trước khi áp dụng.',
-  apply: 'Áp dụng khi Tí làm xong.',
-  plan: 'Chỉ lên kế hoạch, chưa sửa gì.',
-});
-
-const folderNeedNotes: Record<Exclude<FolderNeed, undefined>, string> = translated({
-  pick: 'Cần thư mục làm việc',
-  edit: 'Cần quyền sửa thư mục',
-});
-
-const modeIcons: Record<ApprovalMode, LucideIcon> = { ask: FileDiff, apply: FolderCheck, plan: ListTodo };
-
-/** One row's state: why it cannot be chosen here, or what choosing it asks for first. */
-export type ModeRowState = { locked?: string; folderNeed?: FolderNeed };
+export type { ModeRowState };
 
 /**
  * The approval mode beside the add button under the prompt bar (COD-367, from the owner's reference of Claude Code's
  * mode menu): a quiet button naming the current mode, opening a menu titled Mode with one row per mode, its one-line
  * description under the name and its number at the end, a check on the current one. Arrows and Enter move and choose,
- * and 1, 2, 3 choose while the menu is open. A row that needs a working folder says so and still takes the click: the
+ * and 1 to 5 choose while the menu is open. A row that needs a working folder says so and still takes the click: the
  * parent then asks for the folder. A locked row (a side thread's permissions, a crew's hand-in) says why and does nothing.
  * Props in, choice out: the parent owns what a mode means.
  */
@@ -43,14 +28,15 @@ export function ApprovalModePicker({ mode, rows, disabled, onSelect }: {
   mode: ApprovalMode;
   rows: Record<ApprovalMode, ModeRowState>;
   disabled?: boolean;
-  onSelect: (mode: ApprovalMode) => void;
+  onSelect: (mode: ApprovalMode) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const focusMessageBox = useContext(MessageBoxFocus);
-  const CurrentIcon = modeIcons[mode];
+  // While Bypass is on the bar says so without opening the menu: a warning mark that no other mode wears.
+  const CurrentIcon = mode === 'bypass' ? TriangleAlert : modeIcons[mode];
 
   const close = () => setOpen(false);
   // The popover focuses its first row once placed; the current mode is where the keyboard should start, as in a radio group.
@@ -91,8 +77,8 @@ export function ApprovalModePicker({ mode, rows, disabled, onSelect }: {
   };
 
   return <>
-    <Button ref={trigger} type="button" variant="ghost" className="composer-mode" disabled={disabled}
-      aria-haspopup="menu" aria-expanded={open} aria-label={t('Chế độ: {0}', [modeNames[mode]])} title={modeDescriptions[mode]}
+    <Button ref={trigger} type="button" variant="ghost" className={mode === 'bypass' ? 'composer-mode composer-mode-bypass' : 'composer-mode'} disabled={disabled}
+      aria-haspopup="menu" aria-expanded={open} aria-label={t('Chế độ: {0}', [modeNames[mode]])}
       onClick={() => setOpen(current => !current)}>
       <CurrentIcon size={14} aria-hidden="true" />
       <span className="composer-mode-name">{modeNames[mode]}</span>
@@ -107,12 +93,12 @@ export function ApprovalModePicker({ mode, rows, disabled, onSelect }: {
           const Icon = modeIcons[item];
           const state = rows[item];
           const current = item === mode;
-          const note = state.locked ?? (state.folderNeed ? folderNeedNotes[state.folderNeed] : modeDescriptions[item]);
+          const note = modeRowNote(item, state);
           return <button key={item} type="button" role="menuitemradio" aria-checked={current} aria-disabled={state.locked !== undefined || undefined}
             tabIndex={current ? 0 : -1} aria-keyshortcuts={String(index + 1)} className="mode-option" onClick={() => choose(item)}>
             <Icon size={16} aria-hidden="true" className="mode-option-icon" />
             <span className="mode-option-text">
-              <span className="mode-option-name">{modeNames[item]}</span>
+              <span className="mode-option-name">{modeNames[item]}{item === 'auto' && <span className="mode-option-badge">{t('Mặc định')}</span>}</span>
               <span className="mode-option-note">{note}</span>
             </span>
             <Check size={15} aria-hidden="true" className="mode-option-check" />
@@ -128,7 +114,7 @@ export function ApprovalModePicker({ mode, rows, disabled, onSelect }: {
 export type ModeChange = { capabilities?: ToolCapability[]; folder?: Exclude<FolderNeed, undefined> };
 
 /** Why a mode cannot be chosen in this chat, or undefined when it can. */
-function modeLock(input: { item: Exclude<ApprovalMode, 'plan'>; current: Exclude<ApprovalMode, 'plan'>; sideThread: boolean; appliesAtOnce: boolean }): string | undefined {
+function modeLock(input: { item: ChangesMode; current: ChangesMode; sideThread: boolean; appliesAtOnce: boolean }): string | undefined {
   if (input.item === input.current) return undefined;
   if (input.sideThread) return t('Chat phụ dùng quyền của chat chính. Đổi ở chat chính.');
   if (input.appliesAtOnce) return t('Kênh áp dụng thay đổi của từng Tí ngay khi Tí đó xong.');
@@ -136,11 +122,11 @@ function modeLock(input: { item: Exclude<ApprovalMode, 'plan'>; current: Exclude
 }
 
 /**
- * The picker bound to one chat's message bar. Ask before applying and Apply changes are the chat's `workspace.apply`,
- * the value Details shows as Review before applying, so changing either control shows in the other; Plan first is the
- * bar's own choice for its next message (`planFirst.ts`). A crew or a channel hands each orglet's changes in as it
- * finishes, so Ask is locked there; a side thread takes its permissions from its main chat, so only its current mode
- * and Plan first can be chosen there.
+ * The picker bound to one chat's message bar. Manual and Accept edits are the chat's `workspace.apply` (what Details
+ * shows as Review before applying, so changing either control shows in the other); Auto and Bypass add `approval.auto`
+ * or `approval.bypass` to it, and Bypass asks once before it is turned on. Plan is the bar's own choice for its next
+ * message (`planFirst.ts`). A crew or a channel hands each orglet's changes in as it finishes, so only its own mode
+ * is open there; a side thread takes its permissions from its main chat, so only its current mode and Plan can be chosen.
  */
 export function ChatModePicker({ planKey, capabilities, level, appliesAtOnce, sideThread, disabled, onChange }: {
   /** The bar's key (`task:<id>` or an empty chat's), which Plan first is kept under. */
@@ -154,16 +140,27 @@ export function ChatModePicker({ planKey, capabilities, level, appliesAtOnce, si
   onChange: (change: ModeChange) => void;
 }) {
   const planFirst = usePlanFirst(planKey);
+  const noDecisionModel = decisionModelMissing(useDecisionModelSetting());
   const current = changesMode(capabilities, appliesAtOnce);
   const mode = approvalModeOf({ capabilities, planFirst, appliesAtOnce });
-  const rowFor = (item: Exclude<ApprovalMode, 'plan'>): ModeRowState => {
+  const rowFor = (item: ChangesMode): ModeRowState => {
     const locked = modeLock({ item, current, sideThread, appliesAtOnce });
     if (locked !== undefined) return { locked };
     // A side thread cannot widen its folder either; its main chat owns that.
-    return { folderNeed: sideThread ? undefined : folderNeedFor(item, level) };
+    return { folderNeed: sideThread ? undefined : folderNeedFor(item, level), decisionModelMissing: noDecisionModel };
   };
-  const rows: Record<ApprovalMode, ModeRowState> = { ask: rowFor('ask'), apply: rowFor('apply'), plan: {} };
-  const select = (chosen: ApprovalMode) => {
+  const rows: Record<ApprovalMode, ModeRowState> = {
+    auto: rowFor('auto'), manual: rowFor('manual'), acceptEdits: rowFor('acceptEdits'), plan: {}, bypass: rowFor('bypass'),
+  };
+  const select = async (chosen: ApprovalMode) => {
+    if (needsBypassConfirmation(chosen, current)) {
+      const confirmed = await confirmAction({
+        title: t('Bật Bỏ qua quyền cho chat này?'),
+        description: t('Orglet sẽ không hỏi trước khi gọi công cụ, thao tác trên trang và ứng dụng, hay mượn chuột.'),
+        confirmLabel: t('Bật chế độ'),
+      });
+      if (!confirmed) return;
+    }
     setPlanFirst(planKey, chosen === 'plan');
     if (chosen === 'plan') return;
     const change: ModeChange = {};

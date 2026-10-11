@@ -9,6 +9,7 @@ import { RowMenu } from './RowMenu';
 import { StatusMark } from './StatusMark';
 import { currentLocale, t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
+import { approvedByLabel } from '../approvalModeText';
 import { toast } from './toast';
 import { BrowserLiveExpand, BrowserLivePanel } from './BrowserLiveView';
 
@@ -184,6 +185,8 @@ function stepMeta(action: BrowserAction, askingActionId: string | undefined): st
   if (asked) meta.push(t('hỏi trước'));
   if (asked && action.outcome === 'done') meta.push(t('đã cho phép'));
   if (action.outcome !== 'done') meta.push(outcomeNames[action.outcome]);
+  const approvedBy = approvedByLabel(action.approvedBy);
+  if (approvedBy) meta.push(approvedBy);
   return meta;
 }
 

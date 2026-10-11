@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolCapability } from './tool-policy';
+import { ApprovedBy, type ToolCapability } from './tool-policy';
 
 /**
  * Desktop apps (COD-261, phase 2a): an orglet reads and uses the windows of programs the person granted to the chat,
@@ -191,6 +191,8 @@ export const DesktopAction = z.object({
   screenshotId: z.uuid().nullable(),
   /** How long a borrow held the real mouse and keyboard; null for every other step. */
   durationMs: z.number().int().nonnegative().nullable(),
+  /** Who allowed a step that asked: the person, or Auto or Bypass mode. Null for a step that never asked. */
+  approvedBy: ApprovedBy.nullable(),
   at: z.iso.datetime(),
 }).strict();
 export type DesktopAction = z.infer<typeof DesktopAction>;

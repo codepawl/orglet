@@ -450,7 +450,7 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
   };
   /**
    * Follow the plan under a Plan first answer (COD-367): the go-ahead as the chat's next message, replying to the plan,
-   * with the chat's files and in the chat's own mode (Ask before applying or Apply changes), so the bar leaves Plan
+   * with the chat's files and in the chat's own mode (any but Plan), so the bar leaves Plan
    * first. The message carries no Plan first, so its run is offered the edit and command tools the chat allows.
    */
   const followPlan = (plan: Artifact) => {

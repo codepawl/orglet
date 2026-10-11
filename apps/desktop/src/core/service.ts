@@ -97,7 +97,7 @@ import { DecisionBackendUnavailable } from './decisions/codex';
 import { QuietRunReview } from './orchestration/quiet-runs';
 import { ScheduleDelivery } from './orchestration/schedule-delivery';
 import { askKnowledgeFit } from './decisions/knowledge-fit';
-import { actionRiskOpinion } from './decisions/action-risk';
+import { actionRiskOpinion, autoApprovalOver } from './decisions/action-risk';
 import { PermissionSuggestions } from './orchestration/permission-suggestions';
 import { TurnRouting } from './orchestration/turn-routing';
 
@@ -301,6 +301,11 @@ export class CoreService {
     const secondOpinion = actionRiskOpinion(() => this.decisions);
     this.browser.secondOpinion = secondOpinion;
     this.desktop.secondOpinion = secondOpinion;
+    // Auto mode (chat modes): the same question and threshold decide whether a held action may go ahead unasked.
+    const autoApproval = autoApprovalOver(() => this.decisions);
+    this.browser.autoApproval = autoApproval;
+    this.desktop.autoApproval = autoApproval;
+    this.runner.autoApproval = autoApproval;
     this.permissionSuggestions = new PermissionSuggestions(() => this.decisions);
     this.turnRouting = new TurnRouting(store, () => this.decisions, clock);
     this.policy.captureHandoffs();

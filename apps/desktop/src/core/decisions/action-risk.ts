@@ -5,7 +5,7 @@ import { decideWithin, type Decider, type DecisionContext } from './budget';
  * The decision model's second opinion on a step in Orglet's browser or a desktop app (COD-306): does it send, pay, delete or
  * publish something? The word rules (`browser-risk.ts`, `desktop-risk.ts`) stay the authority. This is asked only
  * about a step they let through, in a chat where the person can answer, and a yes can only add the approval card the
- * rules did not ask for; nothing here removes or skips an ask. The wording was chosen on `scripts/tacet/action_cases.json`
+ * rules did not ask for. Only Auto mode (`askAutoApproval` below) may skip an ask, and only on a low score. The wording was chosen on `scripts/tacet/action_cases.json`
  * with the on-device model the decision model used before it moved to an API; it has not been re-measured against a hosted model.
  */
 
@@ -14,7 +14,9 @@ export type ActionToJudge =
   | { surface: 'browser'; kind: 'click'; element: string; role: string; site: string; page: string }
   | { surface: 'browser'; kind: 'press'; key: string; element: string; role: string; site: string; page: string }
   | { surface: 'browser'; kind: 'type'; text: string; element: string; role: string; site: string; page: string }
-  | { surface: 'desktop'; kind: 'invoke' | 'toggle'; element: string; controlType: string; program: string; window: string; inDialog: boolean };
+  | { surface: 'desktop'; kind: 'invoke' | 'toggle'; element: string; controlType: string; program: string; window: string; inDialog: boolean }
+  /** A call to a tool of an MCP server. Judged only in Auto mode, which asks "may it go ahead" and never adds an approval card. */
+  | { surface: 'mcp'; server: string; tool: string; argumentsText: string };
 
 /** One sentence and a few names: far below this. */
 export const ACTION_RISK_MAX_LENGTH = 256;
@@ -26,6 +28,7 @@ const quoted = (text: string, limit = NAME_CHARS) => `"${cleaned(text, limit)}"`
 
 /** The step as one plain English sentence: what is done, to which element, where. */
 export function actionDescription(action: ActionToJudge): string {
+  if (action.surface === 'mcp') return `Call the tool ${quoted(action.tool)} of the server ${quoted(action.server)} with ${quoted(action.argumentsText, TYPED_CHARS)}.`;
   if (action.surface === 'desktop') {
     const verb = action.kind === 'toggle' ? 'Toggle' : 'Press';
     const dialog = action.inDialog ? ' (a dialog)' : '';
@@ -39,6 +42,7 @@ export function actionDescription(action: ActionToJudge): string {
 
 /** The step as named fields, the way a trace row reads: the action, the element and where it is. */
 export function actionFields(action: ActionToJudge): DecisionState {
+  if (action.surface === 'mcp') return { action: 'call a tool', tool: cleaned(action.tool), server: cleaned(action.server), arguments: cleaned(action.argumentsText, TYPED_CHARS) };
   if (action.surface === 'desktop') {
     return { action: action.kind === 'toggle' ? 'toggle' : 'press', element: cleaned(action.element), element_type: action.controlType, window: cleaned(action.window), app: action.program, ...(action.inDialog ? { dialog: true } : {}) };
   }
@@ -110,6 +114,29 @@ export type SecondOpinion = {
 /** The second opinion over the app's the decision model service, read afresh on every call since the service can be replaced. */
 export function actionRiskOpinion(decider: () => Decider): SecondOpinion {
   return { judge: (action, context) => askActionRisk(decider(), action, undefined, context) };
+}
+
+/**
+ * Auto mode's question about a held action: may it go ahead without the person? `approve` only when the decision model
+ * answered in time and scored the action below the risk threshold above; no decision model, a late or unreadable answer
+ * and a score at or above the threshold all give `ask`, which leaves the action to the person as it was.
+ */
+export type AutoVerdict = 'approve' | 'ask';
+
+export async function askAutoApproval(decider: Decider, action: ActionToJudge, budgetMs = ACTION_RISK_BUDGET_MS, context?: DecisionContext): Promise<AutoVerdict> {
+  const opinion = await askActionRisk(decider, action, budgetMs, context);
+  if (!opinion) return 'ask';
+  return opinion.risky ? 'ask' : 'approve';
+}
+
+/** What the tools hold for Auto mode: a way to ask about one held action. */
+export type AutoApproval = {
+  mayGoAhead(action: ActionToJudge, context?: DecisionContext): Promise<AutoVerdict>;
+};
+
+/** Auto approval over the app's decision model service, read afresh on every call like the second opinion. */
+export function autoApprovalOver(decider: () => Decider): AutoApproval {
+  return { mayGoAhead: (action, context) => askAutoApproval(decider(), action, undefined, context) };
 }
 
 /** How likely the step sends, pays, deletes or publishes, from 0 to 1; undefined when the answers are not the expected ones. */

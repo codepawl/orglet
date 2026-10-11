@@ -11,7 +11,7 @@ import { t } from './i18n';
  */
 export type TraceKind =
   | 'memory' | 'knowledge'
-  | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'folder' | 'move' | 'delete' | 'command' | 'mcp'
+  | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'folder' | 'move' | 'delete' | 'command' | 'mcp' | 'mcp_approved'
   | 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
   | 'browser_click' | 'browser_type' | 'browser_select' | 'browser_press' | 'browser_wait' | 'browser_asked'
   | 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked' | 'desktop_borrow'
@@ -44,6 +44,8 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Đã đọc tài nguyên skill: (.+)$/, kind: 'skill' },
   // An MCP call names the tool and its server, "search_issues · GitHub" (COD-241).
   { pattern: /^Đã dùng công cụ MCP: (.+)$/, kind: 'mcp' },
+  // A call Auto or Bypass allowed says so before the call's own line, which is the one the summary counts.
+  { pattern: /^Chế độ (?:Tự động|Bỏ qua quyền) đã cho phép công cụ MCP: /, kind: 'mcp_approved', note: true },
   { pattern: /^(?:Công cụ MCP không thành công|Bạn đã từ chối công cụ MCP|Công cụ MCP chưa được phép trong chat này): /, kind: 'failed', note: true },
   { pattern: /^Không khởi động được máy chủ MCP /, kind: 'failed', note: true },
   { pattern: /^Đã đọc trang web dưới dạng dữ liệu không đáng tin\.$/, kind: 'web_read' },
@@ -202,7 +204,7 @@ export function liveTraceOf(memories: readonly RunMemory[] | undefined, steps: r
  * Which summary count a row adds to; every browser or desktop step counts as one kind. A web search and a web page read
  * count apart: one count for both read "Went online 6 times", which did not say what the orglet did (dogfood, 2026-09-26).
  */
-type SummaryKind = Exclude<TraceKind, BrowserKind | DesktopKind> | 'browser' | 'desktop';
+type SummaryKind = Exclude<TraceKind, BrowserKind | DesktopKind | 'mcp_approved'> | 'browser' | 'desktop';
 type DesktopKind = 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked' | 'desktop_borrow';
 const desktopKinds: readonly TraceKind[] = ['desktop_read', 'desktop_find', 'desktop_screenshot', 'desktop_act', 'desktop_asked', 'desktop_borrow'];
 type BrowserKind = 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
@@ -252,6 +254,7 @@ function countPhrase(kind: SummaryKind, count: number): string {
 export function traceSummary(entries: readonly TraceEntry[]): string {
   const counts = new Map<SummaryKind, number>();
   for (const entry of entries) {
+    if (entry.kind === 'mcp_approved') continue;
     const kind = summaryKindOf(entry.kind);
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }

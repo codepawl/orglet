@@ -513,6 +513,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .mode-option-check { flex-shrink:0; color:var(--accent); visibility:hidden; }
 .mode-option[aria-checked=true] .mode-option-check { visibility:visible; }
 .mode-option-key { flex-shrink:0; min-width:18px; font:inherit; font-size:12px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
+.mode-option-name { display:flex; align-items:center; gap:6px; }
+.mode-option-badge { padding:1px 6px; border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:500; }
+.composer-toolbar .composer-mode-bypass,.composer-toolbar .composer-mode-bypass svg:first-child { color:var(--warning); }
 .composer-toolbar-end { margin-left:auto; padding-left:4px; display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
 .composer-trailing { display:flex; align-items:center; min-width:0; max-width:min(220px,42vw); }
 /* With the account chip beside the model there are two names to fit. */

@@ -293,6 +293,10 @@ export class Store {
       // How long a borrow held the real mouse and keyboard (phase 2b). A nullable column, which older builds ignore.
       const desktopColumns = new Set((this.db.prepare('PRAGMA table_info(desktop_actions)').all() as { name: string }[]).map(column => column.name));
       if (!desktopColumns.has('duration_ms')) this.db.exec('ALTER TABLE desktop_actions ADD COLUMN duration_ms INTEGER');
+      // Who allowed a step that asked: the person, or Auto or Bypass mode. Nullable columns, which older builds ignore.
+      if (!desktopColumns.has('approved_by')) this.db.exec('ALTER TABLE desktop_actions ADD COLUMN approved_by TEXT');
+      const browserColumns = new Set((this.db.prepare('PRAGMA table_info(browser_actions)').all() as { name: string }[]).map(column => column.name));
+      if (!browserColumns.has('approved_by')) this.db.exec('ALTER TABLE browser_actions ADD COLUMN approved_by TEXT');
       // The prompt tokens of a settled request that a provider read from or wrote to its cache (COD-358), parts of the
       // ledger row's input tokens. A table of its own rather than ledger columns, because older builds insert ledger
       // rows by position; they ignore this table.
