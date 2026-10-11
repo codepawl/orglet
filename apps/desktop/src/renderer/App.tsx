@@ -1940,12 +1940,12 @@ export function App() {
       const dwell = (resting: boolean) => dwellChat(task.id, resting);
       if (chat.kind === 'schedule') {
         const routine = chat.routine;
-        return <ScheduleRunRow key={`schedule-${routine.id}`} name={routine.name} active={selected === task.id} status={status} onOpen={open} onDwell={dwell}
+        return <ScheduleRunRow key={`schedule-${routine.id}`} name={routine.name} active={!friendsOpen && selected === task.id} status={status} onOpen={open} onDwell={dwell}
           onOpenSchedule={() => openRoutines({ editing: true, routine })} onArchive={() => archiveTask(task.id, true)} onDelete={() => deleteTask(task.id)} />;
       }
       // The row that opened the thread beside its chat is also the toggle that closes it again.
       const shownBeside = threadOpen && sideThread?.taskId === task.id;
-      return <SideThreadRow key={task.id} name={taskName(task.id) ?? task.brief} active={selected === task.id || shownBeside} status={status} onOpen={shownBeside ? () => setPanel(null) : open} onDwell={dwell}
+      return <SideThreadRow key={task.id} name={taskName(task.id) ?? task.brief} active={!friendsOpen && (selected === task.id || shownBeside)} status={status} onOpen={shownBeside ? () => setPanel(null) : open} onDwell={dwell}
         onRename={title => renameTask(task.id, title)} onArchive={() => archiveTask(task.id, true)} onDelete={() => deleteTask(task.id)} />;
     }} />;
     return { children, childrenLabel };
@@ -2421,7 +2421,7 @@ export function App() {
           }
           const chat = entry.task;
           const name = channelNameOf(chat, taskWorkers(chat, workspace).map(member => member.name));
-          return <ChannelRow key={chat.id} name={name} locked={Boolean(chat.channel?.spaceId) && chat.channel?.access === 'listed'} dragId={chat.channel?.spaceId ? chat.channel.id : undefined} active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
+          return <ChannelRow key={chat.id} name={name} locked={Boolean(chat.channel?.spaceId) && chat.channel?.access === 'listed'} dragId={chat.channel?.spaceId ? chat.channel.id : undefined} active={!friendsOpen && selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
             onOpen={() => { clearSelection(); openTask(chat.id); }} onDwell={resting => dwellChat(chat.id, resting)}
             onEdit={() => chat.channel && setChannelDraft({ id: chat.channel.id, name: chat.channel.name, topic: chat.channel.topic, members: chat.channel.members, crewId: chat.channel.crewId, category: chat.channel.category, spaceId: chat.channel.spaceId, categoryId: chat.channel.categoryId, access: chat.channel.access })}
             onPublish={workspace.teams.some(team => team.id === chat.channel?.crewId) ? () => {
@@ -2731,7 +2731,7 @@ export function App() {
       </SidebarSection>}
       <SidebarSection id="workers" title={t('Tin riêng')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
         {selection.section === 'workers' && selectionBar}
-        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => item !== undefined && !item.unfriendedAt).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
+        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => item !== undefined && !item.unfriendedAt).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!friendsOpen && !teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, workerUnfriendItem(item)]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!orderedWorkers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
