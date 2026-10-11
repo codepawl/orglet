@@ -1698,7 +1698,6 @@ export const en: Dictionary = {
   'Hướng dẫn': 'Instructions',
   'Kỹ năng': 'Skill',
   'Nhóm linh vật': 'Mascot group',
-  'Ngẫu nhiên': 'Random',
   '5 giờ': '5 hours',
   '7 ngày': '7 days',
   'Gói Claude Code đã dùng {0}% hạn mức 5 giờ, làm mới lúc {1}.': 'Your Claude Code plan has used {0}% of its 5-hour limit. It resets at {1}.',
