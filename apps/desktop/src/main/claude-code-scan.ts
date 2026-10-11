@@ -17,7 +17,11 @@ import { readSkillDirectory } from './skill-files';
  */
 
 export type ExistingNames = { skills: ReadonlySet<string>; workers: ReadonlySet<string>; mcp: ReadonlySet<string> };
-export type ScanOptions = { home: string; projectFolder?: string; existing: ExistingNames };
+/**
+ * `configFolder` is Claude Code's own `CLAUDE_CONFIG_DIR`: when the person set it, their skills, commands, subagents
+ * and `.claude.json` live there instead of in `~/.claude` and `~/.claude.json`. A project folder is read the same either way.
+ */
+export type ScanOptions = { home: string; configFolder?: string; projectFolder?: string; existing: ExistingNames };
 
 const MAX_FILES_PER_FOLDER = 500;
 const MAX_DEPTH = 8;
@@ -46,8 +50,7 @@ async function names(folder: string): Promise<import('node:fs').Dirent[]> {
 }
 
 export async function scanClaudeCode(options: ScanOptions): Promise<{ listing: ClaudeCodeListing; entries: ClaudeCodeEntry[] }> {
-  const base = options.projectFolder ?? options.home;
-  const root = join(base, '.claude');
+  const root = options.projectFolder ? join(options.projectFolder, '.claude') : options.configFolder ?? join(options.home, '.claude');
   const warnings: string[] = [];
   const allowed = [await realOrUndefined(root), await realOrUndefined(options.home)].filter((path): path is string => Boolean(path));
   /** A link is followed only when it ends up inside the folder being read or the person's home. */
@@ -62,7 +65,7 @@ export async function scanClaudeCode(options: ScanOptions): Promise<{ listing: C
     ...await scanMcp(options, warnings),
   ];
   markDuplicates(entries);
-  const label = options.projectFolder ? options.projectFolder : '~/.claude';
+  const label = options.projectFolder ?? options.configFolder ?? '~/.claude';
   return { listing: { folder: label, project: Boolean(options.projectFolder), items: entries.map(entry => entry.item), warnings }, entries };
 }
 
@@ -209,7 +212,7 @@ async function scanMcp(options: ScanOptions, warnings: string[]): Promise<Claude
     if ('value' in project && project.value && typeof project.value === 'object') add('project', (project.value as Record<string, unknown>).mcpServers, '.mcp.json');
     if ('unreadable' in project) warnings.push('Không đọc được .mcp.json.');
   }
-  const account = await readJson(join(options.home, '.claude.json'), CLAUDE_JSON_LIMIT);
+  const account = await readJson(join(options.configFolder ?? options.home, '.claude.json'), CLAUDE_JSON_LIMIT);
   if ('value' in account) {
     // Only the two `mcpServers` objects are picked out; the account and everything else in the file stay unread.
     const servers = claudeJsonServers(account.value, options.projectFolder);

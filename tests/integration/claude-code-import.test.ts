@@ -228,6 +228,16 @@ describe('scanner and import on a fake folder', () => {
     expect(entries).toEqual([]);
   });
 
+  it('reads the folder CLAUDE_CONFIG_DIR names instead of ~/.claude and ~/.claude.json', async () => {
+    await build();
+    const config = join(temp, 'config');
+    await write(join(config, 'commands', 'tidy.md'), '---\ndescription: Tidies.\n---\nTidy up.');
+    await write(join(config, '.claude.json'), JSON.stringify({ mcpServers: { moved: { command: 'node', args: ['m.js'] } } }));
+    const { listing } = await scanClaudeCode({ home, configFolder: config, existing: nothingHere });
+    expect(listing.items.map(item => item.name).sort()).toEqual(['moved', 'tidy']);
+    expect(listing.folder).toBe(config);
+  });
+
   it('reads a project: its .claude, its .mcp.json and the local servers of that project only', async () => {
     const project = join(temp, 'project');
     await build();

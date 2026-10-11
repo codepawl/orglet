@@ -1242,6 +1242,7 @@ async function start() {
     const lower = (names: string[]) => new Set(names.map(name => name.toLowerCase()));
     return scanClaudeCode({
       home: homedir(),
+      ...(process.env.CLAUDE_CONFIG_DIR ? { configFolder: process.env.CLAUDE_CONFIG_DIR } : {}),
       ...(claudeCodeProject ? { projectFolder: claudeCodeProject } : {}),
       existing: { skills: lower(workspace.skills.map(skill => skill.name)), workers: lower(workspace.workers.map(worker => worker.name)), mcp: lower(workspace.mcpServers.map(server => server.name)) },
     });
