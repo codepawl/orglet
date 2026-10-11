@@ -1123,6 +1123,8 @@ export class CoreService {
       }
       case 'reorder': {
         const input = commands.reorder.parse(args);
+        // Spaces have no order beside them: the rail draws them in the order they are saved, so that list is rewritten.
+        if (input.kind === 'spaces') { this.spaces.reorder(input.ids); this.notify(); return; }
         this.store.setSetting('sidebarOrder', { ...this.store.setting<Record<string, string[]>>('sidebarOrder', {}), [input.kind]: input.ids }); this.notify(); return;
       }
       case 'saveAvatarColors': {

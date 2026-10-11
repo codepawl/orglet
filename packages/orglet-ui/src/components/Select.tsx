@@ -139,9 +139,9 @@ export function Select({
       const maxHeight = Math.floor(Math.max(Math.min(natural, placeAbove ? above : below), Math.min(natural, MIN_HEIGHT)));
       const scrolls = maxHeight < full;
       const width = Math.min(Math.max(rect.width, menuMinWidth), innerWidth - EDGE * 2);
-      // A menu wider than its trigger grows toward the middle of the window, so right-hand controls keep it inside their dialog.
-      const preferred = rect.left + rect.width / 2 > innerWidth / 2 ? rect.right - width : rect.left;
-      const left = Math.min(Math.max(preferred, EDGE), innerWidth - width - EDGE);
+      // The menu's left edge sits on the trigger's left edge and a wider menu grows to the right (owner, 2026-10-11);
+      // it only moves left when it would leave the window.
+      const left = Math.min(Math.max(rect.left, EDGE), innerWidth - width - EDGE);
       const top = placeAbove ? rect.top - GAP - maxHeight : rect.bottom + GAP;
       const host = container();
       // A fixed-position dialog is the containing block for the menu, so the menu is placed relative to it.

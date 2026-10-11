@@ -9,7 +9,11 @@ import type { SidebarSelection } from './sidebarSelection';
  * the orglets its members expand to, the way a group chat used to be before its first message (COD-215). Its first
  * message creates the row with `channelId`, and from then on it is an ordinary chat row with a `channel` record.
  */
-export type OpenEmptyChannel = { channelId: string; name: string; topic?: string; members: ChannelMember[]; workerIds: string[] };
+export type OpenEmptyChannel = {
+  channelId: string; name: string; topic?: string; members: ChannelMember[]; workerIds: string[];
+  /** Where the channel sits. Without these the window took a channel in a space for a loose one. */
+  spaceId?: string; categoryId?: string; access?: EmptyChannel['access'];
+};
 
 type Roster = { workers: readonly { id: string }[]; teams: readonly { id: string; memberIds: readonly string[]; synthesizerId: string }[] };
 
@@ -19,7 +23,10 @@ export function openEmptyChannel(channelId: string | undefined, channels: readon
   const channel = channels.find(item => item.id === channelId);
   if (!channel) return undefined;
   const workerIds = channelOrgletIds(channel.members, roster);
-  return { channelId: channel.id, name: channel.name, ...(channel.topic ? { topic: channel.topic } : {}), members: channel.members, workerIds };
+  return {
+    channelId: channel.id, name: channel.name, ...(channel.topic ? { topic: channel.topic } : {}), members: channel.members, workerIds,
+    ...(channel.spaceId ? { spaceId: channel.spaceId, categoryId: channel.categoryId, access: channel.access } : {}),
+  };
 }
 
 /** Where the empty channel's permissions and folder wait before its first message: under the orglets that answer. */

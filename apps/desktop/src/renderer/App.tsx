@@ -131,7 +131,7 @@ import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, 
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { SpaceHomePage } from './components/SpaceHomePage';
 import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
-import { scopeOrgletIds, spaceChatCapabilities } from '../shared/spaces';
+import { spaceChatCapabilities } from '../shared/spaces';
 import { demoReplies, setDemoReplies } from './demoReplies';
 import { ConnectWays, type ConnectWay } from './components/ConnectWays';
 import { useSavedMessages } from './saved';
@@ -2093,7 +2093,7 @@ export function App() {
   // The channel on screen, written in or still empty (COD-361): its header is `#name`, its topic and its members' faces.
   const openChannelRow = openRow && isChannelChat(openRow) ? openRow : undefined;
   const headerChannel = openChannelRow?.channel ? { id: openChannelRow.channel.id, name: openChannelRow.channel.name, topic: openChannelRow.channel.topic, members: openChannelRow.channel.members, crewId: openChannelRow.channel.crewId, category: openChannelRow.channel.category, spaceId: openChannelRow.channel.spaceId, categoryId: openChannelRow.channel.categoryId, access: openChannelRow.channel.access, workers: taskWorkers(openChannelRow, workspace), taskId: openChannelRow.id }
-    : !selected && emptyChannel ? { id: emptyChannel.channelId, name: emptyChannel.name, topic: emptyChannel.topic, members: emptyChannel.members, crewId: undefined, category: undefined, workers: channelWorkers, taskId: undefined }
+    : !selected && emptyChannel ? { id: emptyChannel.channelId, name: emptyChannel.name, topic: emptyChannel.topic, members: emptyChannel.members, crewId: undefined, category: undefined, spaceId: emptyChannel.spaceId, categoryId: emptyChannel.categoryId, access: emptyChannel.access, workers: channelWorkers, taskId: undefined }
     : !selected && crewChannel ? { id: crewChannel.id, name: crewChannel.name, topic: crewChannel.topic, members: crewChannel.members, crewId: crewChannel.crewId, category: crewChannel.category, spaceId: crewChannel.spaceId, categoryId: crewChannel.categoryId, access: crewChannel.access, workers: executionWorkers, taskId: undefined }
     : undefined;
   const editChannel = (initialTab?: 'members' | 'how', suggestLead?: boolean) => {
@@ -2467,6 +2467,17 @@ export function App() {
   const goToActivity = () => {
     if (!leavingPage(goToActivity)) setArea('activity');
   };
+  const openAddOrglet = () => {
+    if (friendsOpen) {
+      const first = orderedWorkers[0];
+      if (first) openWorker(first.id);
+      else {
+        clearSelection();
+        setFriendsOpen(false);
+      }
+    }
+    setAddOrgletOpen(true);
+  };
   const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
     { key: 'home', icon: <MessagesSquare size={20} />, activeIcon: ChatFilled, label: t('Trò chuyện'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
@@ -2686,8 +2697,9 @@ export function App() {
       <nav className="sidebar-nav" aria-label={t('Thêm Tí')}>
         {(['add', 'market'] as const).map(view => {
           const open = friendsOpen && homePage === view;
-          // Add orglet is a dialog over whatever is open; the marketplace is a page of Home.
-          if (view === 'add') return <Button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => setAddOrgletOpen(true)}>
+          // Add orglet is a dialog over a chat. Over the marketplace it read as part of that page, so the first orglet's
+          // chat opens behind it, or the no-orglet page when there is none (owner, 2026-10-11).
+          if (view === 'add') return <Button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={openAddOrglet}>
             <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm Tí')}</span>
           </Button>;
           return <button key={view} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => { clearSelection(); setHomePage(view); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>
@@ -2751,7 +2763,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onReorderSpaces={keys => { void action(() => orglet.call('reorder', { kind: 'spaces', ids: keys.map(key => key.slice('space:'.length)) })); }} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
@@ -2861,12 +2873,6 @@ export function App() {
     </main>
     {membersShown && headerChannel && <MemberColumn onYou={() => openSettings('account')} you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
       onMessage={member => { if (member.unfriendedAt) { toast(t('Kết bạn lại với {0} để nhắn riêng.', [member.name]), 'info', member.name, { action: { label: t('Kết bạn lại'), onSelect: () => befriendOrglet(member.id) } }); return; } clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
-      others={headerSpace && headerChannel.access === 'listed' ? workspace.workers.filter(worker => scopeOrgletIds(headerSpace, headerChannel.categoryId).includes(worker.id) && !headerChannel.workers.some(member => member.id === worker.id)) : []}
-      onAdd={member => action(async () => {
-        const members = [...headerChannel.workers, member].map(item => ({ kind: 'orglet' as const, id: item.id }));
-        await orglet.call('updateChannel', { id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic ?? '', members, access: 'listed' });
-        toast(t('Đã thêm {0} vào kênh', [member.name]), 'success', channelLabel(headerChannel.name));
-      }, channelLabel(headerChannel.name))}
       removable={member => member.id !== crewLeadId && (!headerChannel.crewId || headerChannel.workers.length > 2)}
       onRemove={member => action(async () => {
         // The channel may have been made from a crew as one member: the orglets left are listed one by one.
