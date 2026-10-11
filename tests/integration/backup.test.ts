@@ -28,7 +28,7 @@ function fixture(store: Store) {
   store.put('tasks', task); store.put('runs', run, { column: 'task_id', value: task.id });
   store.event(run.id, 'Fixture event');
   const ledger = new BudgetLedger(store);
-  const reservation = ledger.reserve(run.id, task.id, 'openai', 1000, 100_000, 5_000_000);
+  const reservation = ledger.reserve(run.id, task.id, 'openai', 1000);
   return { task, run, source, ledger, reservation };
 }
 const resign = (text: string, mutate: (payload: any) => void) => {
@@ -486,7 +486,7 @@ describe('restoring after deleting chats, and onto a new computer (COD-281)', ()
     store.update('tasks', { ...store.get<Task>('tasks', paid.task.id), inputRevision: 1, currentInput: laterInput });
     const laterRun: Run = { ...paid.run, id: id(), status: 'completed', snapshot: { ...paid.run.snapshot, input: laterInput, inputRevision: 1 } };
     store.put('runs', laterRun, { column: 'task_id', value: paid.task.id });
-    const laterReservation = paid.ledger.reserve(laterRun.id, paid.task.id, 'openai', 1000, 100_000, 5_000_000);
+    const laterReservation = paid.ledger.reserve(laterRun.id, paid.task.id, 'openai', 1000);
     paid.ledger.settle(laterReservation, 50, 50);
     const usage = store.usage();
     await core.command('eraseData', { scope: 'chats' });
@@ -514,7 +514,7 @@ describe('restoring after deleting chats, and onto a new computer (COD-281)', ()
       const run: Run = { ...paid.run, id: id(), status: 'completed', snapshot: { ...paid.run.snapshot,
         inputRevision: revision, input } };
       store.put('runs', run, { column: 'task_id', value: run.taskId });
-      const reservation = paid.ledger.reserve(run.id, paid.task.id, 'openai', 1000, 100_000, 5_000_000);
+      const reservation = paid.ledger.reserve(run.id, paid.task.id, 'openai', 1000);
       paid.ledger.settle(reservation, 50, 50);
       return messageId;
     };

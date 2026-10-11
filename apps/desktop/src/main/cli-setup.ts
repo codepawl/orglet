@@ -11,7 +11,6 @@ import { WebSearchKeyProvider } from '../shared/web-tools';
 import { GrantWorkspace, WorkspacePermissions, type WorkspaceGrantView } from '../shared/workspace-access';
 import { SpaceDefaults } from '../shared/spaces';
 import type { SetupBody } from '../cli/held-protocol';
-import { assigneeOf } from './cli-chat-admin';
 import { chatsOf, CliFailure, liveChatTask, matchChat, targetChat, type CoreRequest } from './cli-chats';
 import { checkedBackupPath, checkedFolder } from './cli-folders';
 import { spaceNamed } from './cli-spaces';
@@ -322,9 +321,8 @@ export class CliSetup {
 
   private async setLimit(body: Extract<SetupBody, { action: 'limit' }>): Promise<SetupOutcome> {
     const workspace = await this.workspace();
-    const { task, name } = await this.existingChat(workspace, body);
-    if (task.sideOf || task.routineId) throw new CliFailure('failed', 'Chỉ đổi được giới hạn của chat chính hoặc kênh.');
-    await this.request('updateTask', { id: task.id, title: task.title ?? '', assignee: assigneeOf(workspace, task, undefined), budgetMicros: body.budgetMicros });
+    const { name } = await this.existingChat(workspace, body);
+    // A task has no limit now, so an older `limit` command changes nothing.
     return { subject: name };
   }
 

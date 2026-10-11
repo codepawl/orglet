@@ -1,7 +1,7 @@
 import { t } from './text';
 import { COMPLETION_SHELLS, type CompletionShell } from './completion';
 import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, SHOW_TOPICS, UserMessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody, type ShowTopic } from './protocol';
-import { ClockTime, EVERY_HOURS_CHOICES, MAX_DAILY_CAP_MICROS } from '../shared/schedule';
+import { ClockTime, EVERY_HOURS_CHOICES } from '../shared/schedule';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { ProviderId } from '../shared/contracts';
 import { MAX_FORWARD_TARGETS } from '../shared/forward';
@@ -50,7 +50,7 @@ export type ParsedCommand =
   | { kind: 'market'; verb: 'list' | 'installed' | 'add' | 'update'; listingId?: string; installed?: string; confirmCode?: string; refresh: boolean; json: boolean }
   | { kind: 'space'; verb: SpaceVerb; space?: string; names: string[]; rename?: string; category?: string; chat?: string; channelName?: string; confirmName?: string; value?: string; position?: number; json: boolean }
   | { kind: 'schedule-notice'; schedule: string; action: 'dismiss' | 'catch-up'; json: boolean }
-  | ({ kind: 'chat-settings'; names?: string[]; budgetMicros?: number; json: boolean } & ChatTarget)
+  | ({ kind: 'chat-settings'; names?: string[]; json: boolean } & ChatTarget)
   | ({ kind: 'show'; what: ShowTopic; refresh: boolean; json: boolean } & Partial<{ to: string; chat: string }>)
   | { kind: 'update-check'; json: boolean }
   | { kind: 'completion'; shell: CompletionShell }
@@ -173,7 +173,7 @@ function withEntityAliases(help: string): string {
 
 export const COMMAND_HELP: Record<CommandName, string> = {
   config: t("Cách dùng: orglet config [--json]\n\nHiện cấu hình có thể sửa, ID, phiên bản, skill và tên kết nối.\nKhông bao gồm khóa hay quyền truy cập."),
-  create: withEntityAliases(t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nKênh cần name và members, một danh sách {\"kind\":\"orglet\",\"id\":\"<ID>\"}. topic và mode (turns hoặc lead) là tùy chọn. Khi lead chia việc, lead là cài đặt của nó: synthesizerId, instructions, workflow, monthlyBudgetMicros, maxConcurrentTasks và taskBudgetMicros.\nTên cũ memberIds và các trường của lead đặt ngoài lead vẫn dùng được.\nGiới hạn là số nguyên phần triệu USD.")),
+  create: withEntityAliases(t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nKênh cần name và members, một danh sách {\"kind\":\"orglet\",\"id\":\"<ID>\"}. topic và mode (turns hoặc lead) là tùy chọn. Khi lead chia việc, lead là cài đặt của nó: synthesizerId, instructions, workflow và maxConcurrentTasks.\nTên cũ memberIds và các trường của lead đặt ngoài lead vẫn dùng được.\nGiới hạn là số nguyên phần triệu USD.")),
   edit: withEntityAliases(t("Cách dùng: orglet edit <orglet|channel> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn của Tí; topic rỗng xóa chủ đề của kênh. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nKênh lần lượt trả lời chỉ nhận cài đặt lead khi có \"mode\": \"lead\".\nTrong TUI, /edit mở thiết lập của chat đang chọn.")),
   delete: withEntityAliases(`${t("Cách dùng: orglet delete <orglet|channel> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nKênh, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nKênh lần lượt trả lời đã có tin nhắn thì xóa như một chat (bên dưới).\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`),
   chat: `Usage: orglet chat [--to <name>]
@@ -253,7 +253,7 @@ Example:
   completion: t("Cách dùng: orglet completion <powershell|bash|zsh>\n\nIn đoạn mã tự hoàn thành cho shell đó: tên lệnh trước, rồi tên tùy chọn. Đoạn mã\nkhông hỏi app và không chứa tên Tí, chat hay không gian nào.\n\n  PowerShell   orglet completion powershell | Out-String | Invoke-Expression\n  bash         eval \"$(orglet completion bash)\"\n  zsh          eval \"$(orglet completion zsh)\"\n\nĐặt dòng đó vào tệp khởi động của shell để dùng mỗi lần mở."),
   market: t("Cách dùng: orglet market [--refresh] [--json]\n       orglet market installed [--json]\n       orglet market add <mã> [--json]\n\nLiệt kê marketplace: mã, loại, tên, tác giả và mô tả của từng mục. installed liệt kê\nnhững gì đã thêm từ marketplace và mục nào có bản cập nhật. add thêm bản hiện tại\ncủa một mục: các Tí của nó, cùng kênh hoặc không gian nó mang theo. Không cần tài khoản.\nXuất bản, duyệt và áp dụng bản cập nhật làm trong app, nơi bạn xem nội dung trước.\n\nTùy chọn:\n  --refresh      Tải lại danh mục thay vì dùng bản đã lưu\n  --json         In JSON cho máy đọc"),
   schedules: t("Cách dùng: orglet schedules [--json]\n\nLiệt kê lịch: bật hay tắt, Tí hoặc kênh chạy nó, khi nào chạy, lần tới, giới hạn mỗi\nlần và mỗi ngày. Số tiền trong --json là số nguyên phần triệu USD."),
-  schedule: t("Cách dùng: orglet schedule add \"<tên>\" --to <tên> --brief \"<việc>\" --every <khi> --at <HH:MM> --budget <USD> [tùy chọn]\n       orglet schedule edit \"<tên>\" [tùy chọn]\n       orglet schedule on|off \"<tên>\"\n       orglet schedule delete \"<tên>\" --confirm \"<tên>\"\n\nTạo, sửa, bật, tắt hoặc xóa một lịch. Lịch tạo ở đây không có quyền công cụ,\ntrình duyệt hay thư mục; các provider của Tí hoặc kênh phải được cho phép sẵn\ntrong Cài đặt của app. Chọn những thứ đó trong app. Chạy ngay: orglet run.\n\nTùy chọn:\n  --to <tên>            Tí hoặc kênh chạy lịch\n  --brief <việc>        Brief gửi mỗi lần chạy\n  --every <khi>         daily, weekdays, weekly, hoặc số giờ như 2h\n  --at <HH:MM>          Giờ chạy; với số giờ là giờ đầu tiên trong ngày\n  --day <ngày>          Ngày trong tuần cho weekly: mon, tue, …, sun\n  --timezone <vùng>     Múi giờ, như Asia/Ho_Chi_Minh; mặc định là của máy\n  --budget <USD>        Giới hạn mỗi lần chạy\n  --daily-cap <USD>     Giới hạn mỗi ngày (không bắt buộc)\n  --called              Chỉ chạy khi gọi bằng orglet run\n  --off                 Tạo lịch ở trạng thái tắt (add)\n  --rename <tên>        Tên mới (edit)\n  --json                In JSON cho máy đọc"),
+  schedule: t("Cách dùng: orglet schedule add \"<tên>\" --to <tên> --brief \"<việc>\" --every <khi> --at <HH:MM> [tùy chọn]\n       orglet schedule edit \"<tên>\" [tùy chọn]\n       orglet schedule on|off \"<tên>\"\n       orglet schedule delete \"<tên>\" --confirm \"<tên>\"\n\nTạo, sửa, bật, tắt hoặc xóa một lịch. Lịch tạo ở đây không có quyền công cụ,\ntrình duyệt hay thư mục; các provider của Tí hoặc kênh phải được cho phép sẵn\ntrong Cài đặt của app. Chọn những thứ đó trong app. Chạy ngay: orglet run.\n\nTùy chọn:\n  --to <tên>            Tí hoặc kênh chạy lịch\n  --brief <việc>        Brief gửi mỗi lần chạy\n  --every <khi>         daily, weekdays, weekly, hoặc số giờ như 2h\n  --at <HH:MM>          Giờ chạy; với số giờ là giờ đầu tiên trong ngày\n  --day <ngày>          Ngày trong tuần cho weekly: mon, tue, …, sun\n  --timezone <vùng>     Múi giờ, như Asia/Ho_Chi_Minh; mặc định là của máy\n  --daily-cap <USD>     Giới hạn mỗi ngày (không bắt buộc)\n  --called              Chỉ chạy khi gọi bằng orglet run\n  --off                 Tạo lịch ở trạng thái tắt (add)\n  --rename <tên>        Tên mới (edit)\n  --json                In JSON cho máy đọc"),
   search: t("Cách dùng: orglet search \"<từ cần tìm>\" [--json]\n\nTìm trong mọi tin nhắn, câu trả lời, tên chat, Tí và kênh, như ô tìm kiếm của app.\nKhông phân biệt hoa thường hay dấu. In mã chat để đọc bằng orglet read --chat.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
   running: t("Cách dùng: orglet running [--json]\n\nMọi lượt đang chạy, đang chờ đến lượt hoặc dừng ở checkpoint, trên mọi chat,\nnhư mục Đang chạy của app, kèm điều mỗi lượt đang chờ.\n\nTùy chọn:\n  --json     In JSON cho máy đọc"),
   library: t("Cách dùng: orglet library [memory|notes] [--to <tên>] [--query <từ>] [--json]\n\nGhi nhớ (mặc định) hoặc ghi chú trong Thư viện, kể cả mục đang chờ duyệt.\nDuyệt hay bỏ mục đang chờ trong app.\n\nTùy chọn:\n  --to <tên>       Chỉ của Tí hoặc kênh này\n  --query <từ>     Tìm như ô tìm kiếm của Thư viện\n  --json           In JSON cho máy đọc"),
@@ -305,12 +305,11 @@ Looks at the app without changing anything.
 Checks for a new version of Orglet and says what it found: up to date, downloading,
 ready to install, or why it could not check. Installing a downloaded update is done
 in the app.`,
-  assign: `Usage: orglet assign (--to <name> | --chat <id>) [--with <orglet>]... [--budget <USD>] [--json]
+  assign: `Usage: orglet assign (--to <name> | --chat <id>) [--with <orglet>]... [--json]
 
-Changes who answers a chat and its cost limit, as the chat's settings do in the app.
---with replaces the orglets (or names one channel with a lead alone). In a channel only
---budget applies; orglet members changes who is in it. The limit can only be lowered
-here: raising what a chat may spend is done in the app. A chat that is running is refused.`,
+Changes who answers a chat, as the chat's settings do in the app.
+--with replaces the orglets; in a channel, orglet members changes who is in it.
+A chat that is running is refused.`,
 };
 
 /** What the commands that grew for issue 554 add to their help; the older text stays as it was. */
@@ -698,12 +697,11 @@ function parseShow(options: Options): ParsedCommand {
   return { kind: 'show', what, refresh: options.refresh, json: options.json };
 }
 
-/** `orglet assign`: who answers a chat and its cost limit, which may only go down here. */
+/** `orglet assign`: who answers a chat. An older script's --budget is accepted and ignored (a task has no limit). */
 function parseAssign(options: Options): ParsedCommand {
   const names = options.members.map(name => name.trim()).filter(Boolean);
-  if (!names.length && options.budget === undefined) throw new UsageError(t("orglet assign cần --with <tên> hoặc --budget <USD>."));
-  const budgetMicros = options.budget === undefined ? undefined : parseUsd('--budget', options.budget, MAX_RUN_BUDGET_MICROS);
-  return { kind: 'chat-settings', ...requireTarget('assign', options), ...(names.length ? { names } : {}), ...(budgetMicros === undefined ? {} : { budgetMicros }), json: options.json };
+  if (!names.length && options.budget === undefined) throw new UsageError(t("orglet assign cần --with <tên>."));
+  return { kind: 'chat-settings', ...requireTarget('assign', options), ...(names.length ? { names } : {}), json: options.json };
 }
 
 /**
@@ -968,8 +966,6 @@ function parseSpace(options: Options): ParsedCommand {
 const SCHEDULE_VERBS = ['add', 'edit', 'on', 'off', 'delete', 'dismiss', 'catch-up'] as const;
 /** Weekday names `--day` takes, in the schedule's numbering: 0 is Sunday. */
 const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-const MICROS_PER_USD = 1_000_000;
-const MAX_RUN_BUDGET_MICROS = 100_000_000;
 
 /** `orglet schedule <add|edit|on|off|delete> "<name>" [options]`. */
 function parseSchedule(options: Options): ParsedCommand {
@@ -1004,8 +1000,6 @@ function scheduleFields(options: Options): ScheduleFields {
     ...(options.at !== undefined ? { time: parseClock(options.at) } : {}),
     ...(options.day !== undefined ? { weekday: parseWeekday(options.day) } : {}),
     ...(options.timezone?.trim() ? { timeZone: options.timezone.trim() } : {}),
-    ...(options.budget !== undefined ? { budgetMicros: parseUsd('--budget', options.budget, MAX_RUN_BUDGET_MICROS) } : {}),
-    ...(options.dailyCap !== undefined ? { dailyCapMicros: parseUsd('--daily-cap', options.dailyCap, MAX_DAILY_CAP_MICROS) } : {}),
     ...(options.called ? { trigger: 'called' as const } : {}),
     ...(options.off ? { enabled: false } : {}),
   };
@@ -1137,12 +1131,3 @@ function preferenceChanges(extra: Record<string, string>): PreferenceChanges {
 }
 
 const FORMAT_CHOICES = ['ask', 'text', 'markdown'] as const;
-
-/** A USD amount with up to six decimals, kept as integer micros the way the app stores money. */
-function parseUsd(option: string, value: string, maximumMicros: number): number {
-  const trimmed = value.trim().replace(/^\$/, '');
-  if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) throw new UsageError(t("{0} cần số tiền USD như 0.50.", option));
-  const micros = Math.round(Number(trimmed) * MICROS_PER_USD);
-  if (micros < 1000 || micros > maximumMicros) throw new UsageError(t("{0} cần từ 0.001 đến {1} USD.", option, maximumMicros / MICROS_PER_USD));
-  return micros;
-}

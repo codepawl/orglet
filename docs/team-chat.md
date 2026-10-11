@@ -186,7 +186,7 @@ A message sent with **Send in a new thread** (the menu in the toolbar row under 
 
 **Data.** A side thread is its own `tasks` row of the same `workerId`, with `sideOf: { taskId, throughRevision }`: the main chat it came from and that chat's `inputRevision` at that moment. It is an optional JSON field on the row, so no table changes and the schema version stays the same. `isOpenEnvelope` in `live-task.ts` excludes it from the live lookups. The sidebar lists a worker's open side threads under its row, newest first (`sideThreadsOf` in `apps/desktop/src/shared/side-threads.ts`), each with its own `StatusMark`; rename, archive and delete are the ordinary `renameTask`, `archiveTask` and `deleteTask`. The Send to picker (COD-246) keeps side threads in its recent chats, labelled `side thread · <orglet>` in a muted detail that never gives way to the name (`sideThread` on `SendToOption` in `renderer/sendTo.ts`); its orglet rows resolve through `liveWorkerTask`, so they always mean the main chat. Archiving or deleting the main chat leaves its side threads as they are. Backups carry `sideOf` and the main chat's `quotes`, and refuse a side thread whose main chat is in the backup but belongs to another worker, a crew or a group.
 
-**Starting.** The main chat is not touched: no revision, no run, and a run already working there keeps going. The side thread's message may only carry sources already in the main chat's `sourceIds`. Its limit is the worker's current **Limit per task**, applied to the side thread as its own chat; it runs through the same runner, provider slots and budget reservations as any chat, and moves through the same statuses. The Running view (COD-244) lists each running or waiting side thread as its own row, named like its row in the sidebar, and its Open chat opens the side thread; a side thread started while the main chat works waits behind it for the provider's slot like any other chat.
+**Starting.** The main chat is not touched: no revision, no run, and a run already working there keeps going. The side thread's message may only carry sources already in the main chat's `sourceIds`. It runs through the same runner and provider slots as any chat, and moves through the same statuses. The Running view (COD-244) lists each running or waiting side thread as its own row, named like its row in the sidebar, and its Open chat opens the side thread; a side thread started while the main chat works waits behind it for the provider's slot like any other chat.
 
 **Context.** The side thread's first turn (`inputRevision` 0, no stage) reads the main chat's turns up to `throughRevision` as a read-only `mainChat` layer (`mainChatTurns` in `core/context/thread.ts`): the last `MAIN_CHAT_TURNS` (6) turns, dropping the oldest while they are over `MAIN_CHAT_CHARS` (12 000 characters). It uses the same turn collection as the chat's own history, so the worker's own answers there read as `you`. The run's manifest records it as a `main_chat` entry with `mainChatTurns`, shown in **Details → Loaded context**. Later turns in the side thread read only that thread's history. A main chat deleted before the first turn runs leaves the layer out.
 
@@ -287,7 +287,7 @@ Each box shows the orglet's face and name, its status mark, and its part in two 
 | Turning ring | Working now. The box's border takes the working colour. |
 | Tick | Done. |
 | `!` | Did not finish (failed or interrupted), or waits for your answer. The box's border turns the error colour. |
-| Two bars | Paused, or waiting for budget. |
+| Two bars | Paused. |
 | Faint dotted ring | Cancelled. |
 
 **Where it comes from.** Nothing in the diagram is asked of a model. `crewPlanDiagram` in `apps/desktop/src/shared/crew-plan.ts` reads the turn's saved runs: the plan run's `snapshot.plan` (assignments with `brief` and `dependsOn`, `note`, `synthesisBrief`) and `snapshot.team` (member order and workflow), the latest member run for each assignment (so a part the lead reassigned shows the orglet that took it over), and the synthesis run. The rows follow the same rules as the team runner: a parallel crew places each assignment by its longest chain of `dependsOn`, and a sequential crew takes the first member in crew order whose dependencies have run. A member counts as delivered only when its run completed with a saved result. With more boxes in a row than fit, each shrinks to about 160px and the row then scrolls sideways inside the answer, fading at the edge that has more.
@@ -305,9 +305,9 @@ In a **team** or **group** chat, type `@` in the composer to pick a worker or `@
 
 Unknown `@` text is left as typed and does not change who runs.
 
-## Errors, budget, retry
+## Errors, retry
 
-Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết**, retry / resume / cancel on the same task). A failure does not open a new session. Cost still sits next to **Chi tiết**; settled tokens on the latest turn. If the compacted prompt is still over 200 KB, the send is refused (no reservation, no model call) with a repair message. Rolling summary and thread-memory retrieval are frozen on the run manifest (**Chi tiết → Context đã nạp**).
+Refuse and run errors stay on **this** thread (status copy, **Chi tiết**, retry / resume / cancel on the same task). A failure does not open a new session. Cost still sits next to **Chi tiết**; settled tokens on the latest turn. If the compacted prompt is still over 200 KB, the send is refused (no model call) with a repair message. Rolling summary and thread-memory retrieval are frozen on the run manifest (**Chi tiết → Context đã nạp**).
 
 ## Code
 

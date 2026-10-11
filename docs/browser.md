@@ -160,7 +160,7 @@ Signing in happens only here: on the pages of a run you took over, in the live v
 
 ## Schedules and crews
 
-A [schedule](routines.md) can read pages too. In the schedule's editor, under **Limits & permissions**, set **Browser** to **Read pages**, pick a profile and fill in its sites. Saving the schedule approves that profile and that list: change either and the schedule needs saving again before it runs. A schedule never acts on pages: nobody is there to answer a card, so **Read and act** is not offered and a schedule that carries it is not saved.
+A [schedule](routines.md) can read pages too. In the schedule's editor, under **Permissions**, set **Browser** to **Read pages**, pick a profile and fill in its sites. Saving the schedule approves that profile and that list: change either and the schedule needs saving again before it runs. A schedule never acts on pages: nobody is there to answer a card, so **Read and act** is not offered and a schedule that carries it is not saved.
 
 A crew's chat and a group chat have the same **Browser** control as any chat, and every member that runs in them may read pages under the chat's list. At **Read and act** they may type, click and choose, but a step that would ask you is refused.
 

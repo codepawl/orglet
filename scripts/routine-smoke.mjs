@@ -87,7 +87,7 @@ try {
   await openChannels(page);
   await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Research Review']), exact: true }).waitFor();
   await page.getByRole('button', { name: label('Tùy chọn kênh {0}', ['#Research Review']), exact: true }).click(); await page.getByRole('menuitem', { name: label('Thiết lập kênh') }).click();
-  await page.getByRole('tab', { name: label('Giới hạn & ca'), exact: true }).click();
+  await page.getByRole('tab', { name: label('Ca & đồng thời'), exact: true }).click();
   await page.getByLabel(label('Số công việc chạy đồng thời'), { exact: true }).fill('1');
   await page.getByRole('switch', { name: label('Giới hạn khung giờ làm việc'), exact: true }).click();
   await page.getByLabel(label('Timezone của ca'), { exact: true }).fill('UTC');

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { RunActivity } from '../shared/run-activity';
 import { FORWARD_NOTE_CHARS, MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
-import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency } from '../shared/schedule';
+import { ClockTime, EveryHours, ScheduleFrequency } from '../shared/schedule';
 import { FormatPreference, ProviderId } from '../shared/contracts';
 import { FontFamily } from '../shared/fonts';
 import { Language } from '../shared/i18n';
@@ -167,8 +167,8 @@ export const CliRequest = z.discriminatedUnion('op', [
     position: z.number().int().min(1).max(1000).optional(),
   }).strict(),
   z.object({ op: z.literal('schedule-notice'), token: CliToken, schedule: ScheduleName, action: z.enum(['dismiss', 'catch-up']) }).strict(),
-  // Who answers a chat and its cost limit. The limit may only go down here: raising what a chat may spend is a money limit the person sets in the window.
-  z.object({ op: z.literal('chat-settings'), token: CliToken, ...ChatTarget, names: z.array(ChatName).max(50).optional(), budgetMicros: z.number().int().min(1000).max(100_000_000).optional() }).strict(),
+  // Who answers a chat. `budgetMicros` is kept only so an older terminal command still parses; it is ignored (a task has no limit, owner 2026-10-11).
+  z.object({ op: z.literal('chat-settings'), token: CliToken, ...ChatTarget, names: z.array(ChatName).max(50).optional(), budgetMicros: z.number().int().min(0).max(100_000_000).optional() }).strict(),
   z.object({ op: z.literal('show'), token: CliToken, what: z.enum(SHOW_TOPICS), ...ChatTarget, refresh: z.boolean() }).strict(),
   z.object({ op: z.literal('update-check'), token: CliToken }).strict(),
   // A note waits for the person's review in the window before any orglet reads it.
@@ -192,8 +192,10 @@ export const CliRequest = z.discriminatedUnion('op', [
     weekday: z.number().int().min(0).max(6).optional(),
     everyHours: EveryHours.optional(),
     timeZone: z.string().trim().min(1).max(100).optional(),
-    budgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
-    dailyCapMicros: z.number().int().min(1000).max(MAX_DAILY_CAP_MICROS).optional(),
+    // Kept only so an older terminal command still parses; ignored (a task has no limit, owner 2026-10-11).
+    budgetMicros: z.number().int().min(0).max(100_000_000).optional(),
+    // Kept only so an older terminal command still parses; ignored (a schedule has no daily cap, owner, 2026-10-11).
+    dailyCapMicros: z.number().int().min(0).optional(),
     trigger: z.enum(['schedule', 'called']).optional(),
     enabled: z.boolean().optional(),
   }).strict(),
@@ -372,8 +374,6 @@ export type CliScheduleRow = {
   everyHours?: number;
   timeZone: string;
   nextDueAt: string;
-  budgetMicros: number;
-  dailyCapMicros?: number;
   runsToday?: number;
   spentTodayMicros?: number;
 };
@@ -434,7 +434,7 @@ export type MarketUpdateValue = { name: string; installedVersion: number; versio
 /** A row of `orglet show`: flat values the terminal prints as columns and `--json` keeps as they are. */
 export type ShowRow = Record<string, string | number | boolean | null>;
 export type ShowValue = { what: ShowTopic; rows: ShowRow[]; note?: string };
-export type ChatSettingsValue = { taskId: string; name: string; with: string[]; budgetMicros: number };
+export type ChatSettingsValue = { taskId: string; name: string; with: string[] };
 export type NoteValue = { id: string; short: string; title: string };
 export type ScheduleNoticeValue = { schedule: { id: string; name: string }; action: 'dismiss' | 'catch-up'; taskId?: string };
 /** What things added from the Marketplace have waiting, and what the automatic path did with them. */

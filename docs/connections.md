@@ -42,7 +42,7 @@ When a reply stops because the account ran out, the bar above the message box of
 
 Gemini CLI writes a transcript of every session under `.gemini/tmp` in its own folder and has no switch to turn that off, so each Orglet run leaves one there too. Claude Code and Codex runs keep no such record.
 
-**Cost.** Harness runs make no Orglet budget reservation. Claude Code reports an estimate per call, which the chat shows. An orglet on Claude Code runs on your plan with no cap unless you give it a **Limit per task**: the field is optional there and empty means no limit. When it has one, or when it works in a crew, a group chat or a schedule (which always carry a limit), Orglet passes what is left of that limit to Claude Code as its own cap, so a run that reaches it stops and the chat says **Waiting for budget** with the setting to raise. Orglets that were saved with the old $0.50 default the form used to force get no cap after updating; a limit you picked yourself is kept. Codex, Cursor Agent and Gemini CLI report no cost, so those runs are unknown spend against your plan. Gemini CLI does report its token counts, which the chat shows.
+**Cost.** Claude Code reports an estimate per call, which the chat shows. An orglet on Claude Code runs on your plan; Orglet passes it no cap. Codex, Cursor Agent and Gemini CLI report no cost, so those runs are unknown spend against your plan. Gemini CLI does report its token counts, which the chat shows.
 
 ## API keys
 
@@ -78,9 +78,9 @@ To check a connection, open its **⋮** menu and choose **Test connection**. Org
 
 **Cost.** The row in Settings and the model picker say which of three prices a connection has.
 
-- **Local · free.** A server on this computer or a private network (the same addresses plain `http://` is allowed for) costs nothing unless you enter a price. Requests hold nothing against your limits, so a chat can send message after message. The tokens are still counted.
-- **The price you entered.** Each request is held against the chat's **Limit per task**, the connection's monthly limit and the crew's limit at that price, then settled from the token counts the server reports, the same as the built-in paid APIs. An entered price also wins over the free default of a local server.
-- **Price unknown.** A server elsewhere with no price entered. Each request holds the rest of the chat's limit and then waits in **Charges to reconcile** until you enter the real amount. Until you do, the chat's limit stays taken, so the next message waits for budget.
+- **Local · free.** A server on this computer or a private network (the same addresses plain `http://` is allowed for) costs nothing unless you enter a price. The tokens are still counted.
+- **The price you entered.** Each request is priced at that rate and settled from the token counts the server reports, the same as the built-in paid APIs. An entered price also wins over the free default of a local server.
+- **Price unknown.** A server elsewhere with no price entered. Each request waits in **Charges to reconcile** until you enter the real amount. The chat goes on meanwhile; its cost shows as unknown until you do.
 
 A reply that comes back without token counts stays unknown in **Charges to reconcile** whatever the price, so a missing count is never read as zero. On a free connection it holds nothing.
 
@@ -94,12 +94,10 @@ Some connections have no model to fall back on: a custom connection, OpenCode Ze
 
 When the provider's own list marks the chosen model as deprecated, the picker shows a quiet chip; a sunset date appears only when the provider included one. OpenCode Zen and Go have no default: pick a model from that plan's list, and models the OpenCode docs put on another endpoint show as **Not supported**. Details: [model-list-fetch.md](model-list-fetch.md).
 
-## Cost limits
+## Costs
 
-Orglet counts only requests it makes itself through an API key. Harness runs count against their own plan, and Ollama is free.
+Orglet sets no spending limit. It records and shows what each chat used, and only for requests it makes itself through an API key; harness runs count against their own plan, and Ollama is free. To cap spending, set a limit with the provider.
 
-- **Limit per task** on an orglet or crew caps what one chat may spend. Raising it applies to the next turn of an existing chat.
-- **Settings → Costs & limits** sets a monthly limit per connection, how many requests may run at once per provider (1–8), and which providers are allowed. It also lists **Charges to reconcile**: requests that failed or came back without usage keep their reservation until you check the provider's bill and enter the real amount. Orglet never assumes a failed request was free.
-- A crew also has a monthly limit of its own.
+- **Settings → Costs** sets how many requests may run at once per provider (1–8), and which providers are allowed. It also lists **Charges to reconcile**: requests that failed or came back without usage stay unknown until you check the provider's bill and enter the real amount. Orglet never assumes a failed request was free.
 
 Cancelling a run stops further requests; a request already in flight may still be billed.

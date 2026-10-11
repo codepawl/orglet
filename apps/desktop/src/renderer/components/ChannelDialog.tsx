@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { Boxes, CalendarDays, Clock, Columns2, Combine, Download, FileUp, FolderTree, Globe, Hash, Layers, ListOrdered, Lock, MessageSquareQuote, MessagesSquare, ScrollText, SlidersHorizontal, UserRound, UsersRound, Wallet, Workflow } from 'lucide-react';
+import { Boxes, CalendarDays, Clock, Columns2, Combine, Download, FileUp, FolderTree, Globe, Hash, Layers, ListOrdered, Lock, MessageSquareQuote, MessagesSquare, ScrollText, SlidersHorizontal, UserRound, UsersRound, Workflow } from 'lucide-react';
 import { Input, Textarea } from '@codepawlhq/orglet-ui';
 import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type ChannelLeadSettings, type Team, type Worker, type Workspace } from '../../shared/contracts';
 import { CHANNEL_CATEGORY_LIMIT, CHANNEL_NAME_LIMIT, CHANNEL_TOPIC_LIMIT, MAX_CHANNEL_MEMBERS, type ChannelAccess, type ChannelMember, type ChannelMode } from '../../shared/channels';
 import { scopeOrgletIds } from '../../shared/spaces';
 import { TimeZone } from '../../shared/schedule';
-import { Button, FieldLabel, MoneyInput } from './ui';
+import { Button, FieldLabel } from './ui';
 import { Avatar } from './Avatar';
 import { ProviderMark } from './ProviderMark';
 import { Checkbox } from './Checkbox';
@@ -14,7 +14,6 @@ import { SwitchField } from './Switch';
 import { TabbedFormDialog } from './DialogTabs';
 import { fieldInvalid } from './fieldInvalid';
 import { fieldMessage } from '../fieldErrors';
-import { toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { categoryNames } from '../areas';
 import { t } from '../i18n';
@@ -26,7 +25,7 @@ type InvalidField = 'name' | 'members' | 'instructions' | 'limit' | 'taskBudget'
 const generalTab = { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> };
 const membersTab = { id: 'members' as const, label: 'Thành viên', icon: <UsersRound size={16} /> };
 const howTab = { id: 'how' as const, label: 'Cách làm việc', icon: <Workflow size={16} /> };
-const limitsTab = { id: 'limits' as const, label: 'Giới hạn & ca', icon: <Wallet size={16} /> };
+const limitsTab = { id: 'limits' as const, label: 'Ca & đồng thời', icon: <Clock size={16} /> };
 
 /**
  * The channel being edited, or the members a new one starts with (orglets picked in the sidebar). `crewId` names the
@@ -202,8 +201,6 @@ function useLeadSettings(crew: Team | undefined, orgletIds: readonly string[]) {
   const [instructions, setInstructions] = useState(crew?.instructions ?? t('Tự trả lời khi làm được một mình. Giao việc khi cần chuyên môn của Tí khác, kiểm tra kết quả và gửi lại khi còn lỗi. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.'));
   const [reviewPolicy, setReviewPolicy] = useState(crew?.reviewPolicy);
   const [preflight, setPreflight] = useState(crew?.preflight);
-  const [limit, setLimit] = useState(toAmount(crew?.monthlyBudgetMicros ?? 5_000_000));
-  const [taskBudget, setTaskBudget] = useState(toAmount(crew?.taskBudgetMicros ?? 500_000));
   const [concurrency, setConcurrency] = useState(crew?.maxConcurrentTasks ?? 4);
   const [shift, setShift] = useState(Boolean(crew?.workHours));
   const [shiftZone, setShiftZone] = useState(crew?.workHours?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -220,16 +217,12 @@ function useLeadSettings(crew: Team | undefined, orgletIds: readonly string[]) {
     const working = members.filter(id => id !== synthesizer || !crew || crew.memberIds.includes(crew.synthesizerId));
     if (working.length > MAX_CREW_MEMBERS) { fail('members', t('Khi Tí trưởng chia việc, kênh có tối đa {0} Tí làm phần việc.', [MAX_CREW_MEMBERS]), 'members'); return undefined; }
     if (!instructions.trim()) { fail('how', t('Hướng dẫn của Tí trưởng không được để trống.'), 'instructions'); return undefined; }
-    const monthlyBudgetMicros = toMicros(limit);
-    const taskBudgetMicros = toMicros(taskBudget);
-    if (!Number.isFinite(monthlyBudgetMicros) || monthlyBudgetMicros < 0) { fail('limits', t('Giới hạn chi phí phải là số không âm.'), 'limit'); return undefined; }
-    if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) { fail('limits', t('Giới hạn chi phí phải là số không âm.'), 'taskBudget'); return undefined; }
     if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > MAX_CREW_CONCURRENT_TASKS) { fail('limits', t('Số công việc chạy đồng thời từ 1 đến {0}.', [MAX_CREW_CONCURRENT_TASKS]), 'concurrency'); return undefined; }
     if (shift && !TimeZone.safeParse(shiftZone).success) { fail('limits', t('Timezone của ca không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.'), 'shiftZone'); return undefined; }
     if (shift && (!shiftDays.length || shiftStart === shiftEnd)) { fail('limits', t('Chọn ít nhất một ngày làm việc và giờ bắt đầu khác giờ kết thúc.'), 'shift'); return undefined; }
     return {
       synthesizerId: members.includes(synthesizer) ? synthesizer : members[0],
-      instructions, workflow, monthlyBudgetMicros, taskBudgetMicros, maxConcurrentTasks: concurrency,
+      instructions, workflow, maxConcurrentTasks: concurrency,
       workHours: shift ? { timeZone: shiftZone, start: shiftStart, end: shiftEnd, days: shiftDays } : null,
       preflight: preflight ?? null,
       reviewPolicy: reviewPolicy ?? null,
@@ -251,8 +244,6 @@ function useLeadSettings(crew: Team | undefined, orgletIds: readonly string[]) {
   </>;
 
   const limitFields = ({ invalid, flash, clearError, error }: FieldState): ReactNode => <>
-    <label><FieldLabel icon={Wallet} required>{t('Giới hạn kênh / tháng')}</FieldLabel><MoneyInput data-field="limit" type="number" min="0" step="any" value={limit} onChange={value => { setLimit(value); if (invalid === 'limit') clearError(); }} invalid={invalid === 'limit'} flash={flash} />{fieldMessage('limit', invalid, error)}</label>
-    <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="taskBudget" type="number" min="0" step="any" value={taskBudget} onChange={value => { setTaskBudget(value); if (invalid === 'taskBudget') clearError(); }} invalid={invalid === 'taskBudget'} flash={flash} />{fieldMessage('taskBudget', invalid, error)}</label>
     <label><FieldLabel icon={Layers} required>{t('Số công việc chạy đồng thời')}</FieldLabel><Input data-field="concurrency" type="number" min="1" max={MAX_CREW_CONCURRENT_TASKS} step="1" value={concurrency} onChange={event => { setConcurrency(Number(event.target.value)); if (invalid === 'concurrency') clearError(); }} invalid={invalid === 'concurrency'} flash={flash} />{fieldMessage('concurrency', invalid, error)}</label>
     {concurrency > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}</p>}
     <SwitchField checked={shift} onChange={setShift}>{t('Giới hạn khung giờ làm việc')}</SwitchField>

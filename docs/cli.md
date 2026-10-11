@@ -50,7 +50,7 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet preferences [--language …] [--theme …] [--titles …]` | Shows or changes the app's language, theme and looks. See [preferences](#preferences). |
 | `orglet show <connections\|spend\|changelog\|update\|browser\|desktop\|sources\|changes>` | Looks at the app without changing it. See [show, update and assign](#show-update-and-assign). |
 | `orglet update` | Checks for a new version and says what it found, then lists Marketplace items with an update |
-| `orglet assign --chat <id> [--with <name> …] [--budget <USD>]` | Changes who answers a chat and lowers its cost limit |
+| `orglet assign --chat <id> [--with <name> …] [--budget <USD>]` | Changes who answers a chat (`--budget` is accepted and ignored) |
 | `orglet schedules` | Lists schedules with their timing and limits |
 | `orglet spaces` | Lists spaces: the orglets in each, then each channel with its category, how it answers and who is in it, in the order the space shows them |
 | `orglet space add\|edit\|category\|uncategory\|move\|out\|delete` | Creates, changes or deletes a space and its categories, and moves a channel into or out of one. See [Spaces](#spaces). |
@@ -105,7 +105,7 @@ orglet grant folder-revoke --to <name>
 orglet grant schedule-folder watch|work <path> [--edit | --run]
 orglet grant file-revoke <source id>                         take a file back
 orglet grant mcp-enable <server> on|off      mcp --to <name> <server> [<tool>] allow|deny      mcp-remove <server>      mcp-sign-in <server> [--cancel]
-orglet grant limit --to <name> <USD>                         a chat's cost limit, up as well as down
+orglet grant limit --to <name> <USD>                         accepted and ignored: Orglet sets no spending limit
 orglet grant space-tools <space> [<capability…>]             what a new channel in a space starts with
 orglet grant decision-model off | <connection>:<model>…
 orglet grant analytics|cli-path|send-to on|off
@@ -214,7 +214,7 @@ The draft wraps with the terminal's width. For a long draft, only the rows aroun
 
 `orglet chat --to Researcher` skips the list and opens that chat. If the name fits several chats, or none, the list opens with it typed in.
 
-A message you send is the same turn the app's message box makes, with the same consent and cost limit as [send](#send). The answer is also in the app.
+A message you send is the same turn the app's message box makes, with the same consent as [send](#send). The answer is also in the app.
 
 Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, lists and quotes are shown as such, links print as their text followed by the address, and code blocks are kept exactly as written, indented. Switching chats keeps their terminal histories separate. `/read` retrieves the latest saved answer; `/clear` clears only the terminal view. Leaving restores the terminal screen that was there before chat opened.
 
@@ -258,7 +258,7 @@ orglet edit orglet "Researcher" --config patch.json
 orglet delete channel "Review channel" --confirm "Review channel"
 ```
 
-An orglet configuration requires `name`, `instructions`, `provider` and `skillId`. Optional fields are `modelId`, `description`, `taskBudgetMicros` and `avatar`. For example, replace `skillId` below with an ID from `orglet config`:
+An orglet configuration requires `name`, `instructions`, `provider` and `skillId`. Optional fields are `modelId`, `description` and `avatar`. For example, replace `skillId` below with an ID from `orglet config`:
 
 ```json
 {
@@ -397,7 +397,7 @@ By default the command waits for the turn to finish and prints the answer. A cha
 | `--timeout <seconds>` | How long to wait. The default is 600. When it runs out, the turn keeps running in the app. |
 | `--json` | Print the result as JSON |
 
-Sending gives the same consent the message box gives: the message and attached files go to the providers of the orglets that run. The cost limit is the chat's own, or the orglet's or channel's default for a new chat.
+Sending gives the same consent the message box gives: the message and attached files go to the providers of the orglets that run.
 
 ### read
 
@@ -431,7 +431,7 @@ Puts your reaction on a message: `agree`, `delighted`, `funny`, `unsure`, `watch
 orglet forward --to Researcher --message 2.1 --target Writer --target "Review channel" --note "Can you check this?"
 ```
 
-Forwards one message, the newest answer by default, to up to five orglets' or channels' chats. It arrives there as your own message with your note, and each chat answers it as a new turn with its own cost limit and permissions. Files the message had go by name only; attach the real files in the app. The command prints where it went and why any place refused it, and exits 1 if one did.
+Forwards one message, the newest answer by default, to up to five orglets' or channels' chats. It arrives there as your own message with your note, and each chat answers it as a new turn with its own permissions. Files the message had go by name only; attach the real files in the app. The command prints where it went and why any place refused it, and exits 1 if one did.
 
 ### revise
 
@@ -585,7 +585,7 @@ Brings the window forward and opens that chat. On Windows the taskbar button may
 orglet run "Invoice check" --file invoice.pdf
 ```
 
-Starts one of the app's schedules now: its brief goes to its orglet or channel, within its cost limit, with the files you attach added to the schedule's own sources. The command returns once the run has started, and the run appears in the app's sidebar under the orglet or channel it runs for, named after the schedule. It does not wait for the answer; the app says when the run is done, with a system notification if Orglet is in the background ([chat guide](chat-guide.md#while-orglet-is-in-the-background)).
+Starts one of the app's schedules now: its brief goes to its orglet or channel, with the files you attach added to the schedule's own sources. The command returns once the run has started, and the run appears in the app's sidebar under the orglet or channel it runs for, named after the schedule. It does not wait for the answer; the app says when the run is done, with a system notification if Orglet is in the background ([chat guide](chat-guide.md#while-orglet-is-in-the-background)).
 
 Any schedule can be started this way. A schedule set to **Only when called** runs in no other way. The schedule must:
 
@@ -625,8 +625,8 @@ After the app was closed over a schedule's time, the schedule shows a notice wit
 | `--at <HH:MM>` | When it runs; for hours, the first run of the day. Required for `add`. |
 | `--day <day>` | The weekday for `weekly`: `mon` to `sun`. Monday by default. |
 | `--timezone <zone>` | A time zone such as `Asia/Ho_Chi_Minh`. This computer's by default. |
-| `--budget <USD>` | The limit per run, such as `0.50`. Required for `add`. |
-| `--daily-cap <USD>` | The most its runs may cost in one day; at least the per-run limit. |
+| `--budget <USD>` | Accepted and ignored: a schedule has no spending limit. |
+| `--daily-cap <USD>` | Accepted and ignored, like `--budget`. |
 | `--called` | Runs only when `orglet run` calls it (**Only when called**). |
 | `--off` | With `add`, creates it switched off. |
 | `--rename "<name>"` | With `edit`, a new name. |
@@ -689,7 +689,7 @@ orglet assign --chat cccc0000 --with Writer --budget 0.25
 
 `browser` and `desktop` print a chat's journal, what each step touched and how it ended. `sources` lists the chat's files by name and size, not where they were picked from. `changes` lists what the chat's runs changed in the working folder, by working copy, with each change's path and status, and notes how many commands ran and how many are uncertain. It does not return the review token: applying or discarding a hand-in, and restoring a file, stay in the window.
 
-`assign` is the chat dialog's assignee and limit. `--with` replaces the orglets that answer (name one channel with a lead alone to give the chat to it); in a channel, `--with` is refused and `orglet members` changes who is in it. `--budget` can only lower the limit: raising what a chat may spend is done in the app. A chat that is running is refused by the core.
+`assign` is the chat dialog's assignee. `--with` replaces the orglets that answer (name one channel with a lead alone to give the chat to it); in a channel, `--with` is refused and `orglet members` changes who is in it. `--budget` is accepted and ignored. A chat that is running is refused by the core.
 
 ### Names
 

@@ -52,10 +52,10 @@ function fakeCore(options: { consent?: string[]; routines?: Routine[] } = {}) {
 }
 
 describe('orglet schedule arguments', () => {
-  it('parses add, edit, on, off and delete with timing and limits in USD', () => {
+  it('parses add, edit, on, off and delete with timing, and still accepts the old --daily-cap without using it', () => {
     expect(parseArguments(['schedule', 'add', 'Morning review', '--to', 'Researcher', '--brief', 'Review yesterday', '--every', 'weekly', '--day', 'friday', '--at', '8:30', '--timezone', 'Europe/Berlin', '--budget', '0.5', '--daily-cap', '$2'])).toEqual({
       kind: 'schedule-save',
-      fields: { name: 'Morning review', target: 'Researcher', brief: 'Review yesterday', frequency: 'weekly', time: '08:30', weekday: 5, timeZone: 'Europe/Berlin', budgetMicros: 500_000, dailyCapMicros: 2_000_000 },
+      fields: { name: 'Morning review', target: 'Researcher', brief: 'Review yesterday', frequency: 'weekly', time: '08:30', weekday: 5, timeZone: 'Europe/Berlin' },
       json: false,
     });
     expect(parseArguments(['schedule', 'add', 'Ping', '--to', 'R', '--brief', 'b', '--every', '2h', '--at', '09:00', '--budget', '0.01', '--called', '--off'])).toMatchObject({ fields: { frequency: 'hours', everyHours: 2, trigger: 'called', enabled: false } });
@@ -67,20 +67,24 @@ describe('orglet schedule arguments', () => {
 
   it('refuses mistakes as usage errors', () => {
     const mistakes = [['schedule'], ['schedule', 'make', 'X'], ['schedule', 'add'], ['schedule', 'on', 'X', '--at', '08:00'], ['schedule', 'delete', 'X'],
-      ['schedule', 'add', 'X', '--every', '5h'], ['schedule', 'add', 'X', '--at', '25:00'], ['schedule', 'add', 'X', '--day', 'someday'], ['schedule', 'add', 'X', '--budget', '0.0001'],
-      ['schedule', 'add', 'X', '--budget', '101'], ['schedule', 'add', 'X', '--rename', 'Y'], ['schedule', 'edit', 'X', '--off'], ['list', '--brief', 'x'], ['schedule', 'add', 'X', 'extra']];
+      ['schedule', 'add', 'X', '--every', '5h'], ['schedule', 'add', 'X', '--at', '25:00'], ['schedule', 'add', 'X', '--day', 'someday'],
+      ['schedule', 'add', 'X', '--rename', 'Y'], ['schedule', 'edit', 'X', '--off'], ['list', '--brief', 'x'], ['schedule', 'add', 'X', 'extra']];
     for (const mistake of mistakes) expect(() => parseArguments(mistake), mistake.join(' ')).toThrow(UsageError);
+    // An older script's --budget is accepted and ignored, whatever its value.
+    const withOldBudget = parseArguments(['schedule', 'add', 'X', '--to', 'R', '--brief', 'b', '--every', 'daily', '--at', '09:00', '--budget', '101']);
+    expect(withOldBudget).toMatchObject({ kind: 'schedule-save' });
+    expect(JSON.stringify(withOldBudget)).not.toContain('udget');
     expect(parseSlash('/schedule on Morning review')).toEqual({ kind: 'schedule', action: 'on', name: 'Morning review' });
     expect(parseSlash('/schedule add X').kind).toBe('usage');
   });
 });
 
 describe('orglet schedules in the app', () => {
-  it('lists schedules with their timing, limits and today', async () => {
+  it('lists schedules with their timing and today', async () => {
     const core = fakeCore();
     const value = await core.operations.run({ op: 'schedules', token }, core.signal) as SchedulesValue;
-    expect(value.schedules).toEqual([{ id: routineId, name: 'Morning review', enabled: true, target: 'Researcher', trigger: 'schedule', frequency: 'daily', time: '08:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh', nextDueAt: '2026-10-02T01:00:00.000Z', budgetMicros: 500_000, runsToday: 1, spentTodayMicros: 120_000 }]);
-    expect(formatSchedules(value)).toBe('  Morning review  on  Researcher  daily at 08:00 (Asia/Ho_Chi_Minh)  $0.50 per run');
+    expect(value.schedules).toEqual([{ id: routineId, name: 'Morning review', enabled: true, target: 'Researcher', trigger: 'schedule', frequency: 'daily', time: '08:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh', nextDueAt: '2026-10-02T01:00:00.000Z', runsToday: 1, spentTodayMicros: 120_000 }]);
+    expect(formatSchedules(value)).toBe('  Morning review  on  Researcher  daily at 08:00 (Asia/Ho_Chi_Minh)');
   });
 
   it('switches a schedule off the way its card does, and deletes only with its exact name', async () => {
@@ -99,10 +103,10 @@ describe('orglet schedules in the app', () => {
       name: 'Weekly notes', enabled: true,
       schedule: { timeZone: 'Europe/Berlin', time: '17:00', frequency: 'weekly', weekday: 5 },
       trigger: { kind: 'schedule' },
-      task: { workerId: researcherId, brief: 'Sum up the week', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['openai'], budgetMicros: 300_000 },
+      task: { workerId: researcherId, brief: 'Sum up the week', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['openai'] },
     });
     expect(value.schedule.name).toBe('Weekly notes');
-    await core.operations.run({ op: 'schedule-save', token, name: 'Samples', target: 'Sampler', brief: 'b', frequency: 'daily', time: '07:00', budgetMicros: 1000 }, core.signal);
+    await core.operations.run({ op: 'schedule-save', token, name: 'Samples', target: 'Sampler', brief: 'b', frequency: 'daily', time: '07:00' }, core.signal);
     expect((core.calls.at(-1)!.args as { task: { consent: boolean; providerScopes: string[] } }).task).toMatchObject({ consent: false, providerScopes: [] });
   });
 
@@ -122,7 +126,7 @@ describe('orglet schedules in the app', () => {
     await core.operations.run({ op: 'schedule-save', token, schedule: 'morning', time: '09:15', brief: 'Review today', dailyCapMicros: 2_000_000 }, core.signal);
     expect(core.saved()).toEqual({
       id: routineId, name: 'Morning review', enabled: true,
-      schedule: { ...routine().schedule, time: '09:15', dailyCapMicros: 2_000_000 },
+      schedule: { ...routine().schedule, time: '09:15' },
       trigger: { kind: 'schedule' },
       task: { ...routine().task, brief: 'Review today' },
     });
@@ -146,7 +150,7 @@ async function notUsed(): Promise<never> {
 describe('orglet chat session schedules', () => {
   it('lists schedules, switches one and runs one', async () => {
     const calls: string[] = [];
-    const row = { id: routineId, name: 'Morning review', enabled: true, target: 'Researcher', trigger: 'schedule' as const, frequency: 'daily' as const, time: '08:00', weekday: 1, timeZone: 'UTC', nextDueAt: '2026-10-02T08:00:00.000Z', budgetMicros: 500_000 };
+    const row = { id: routineId, name: 'Morning review', enabled: true, target: 'Researcher', trigger: 'schedule' as const, frequency: 'daily' as const, time: '08:00', weekday: 1, timeZone: 'UTC', nextDueAt: '2026-10-02T08:00:00.000Z' };
     const actions: ChatActionClient = {
       history: notUsed, reply: notUsed, react: notUsed, forward: notUsed, control: notUsed, answer: notUsed,
       chats: notUsed, side: notUsed, bring: notUsed, channel: notUsed, members: notUsed, rename: notUsed, archive: notUsed, spaces: notUsed,
@@ -169,7 +173,7 @@ describe('orglet chat session schedules', () => {
     input.end('/schedules\n/schedule off Morning review\n/schedule run Morning review\n/exit\n');
     expect(await running).toBe(0);
     expect(calls).toEqual(['enable Morning review false', 'run Morning review']);
-    expect(transcript).toContain('Morning review  on  Researcher  daily at 08:00 (UTC)  $0.50 per run');
+    expect(transcript).toContain('Morning review  on  Researcher  daily at 08:00 (UTC)');
     expect(transcript).toContain('Switched off the schedule Morning review.');
     expect(transcript).toContain('Started Morning review.');
   });

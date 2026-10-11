@@ -4,12 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { BudgetLedger, DailyCapReached } from '../../apps/desktop/src/core/budgets/ledger';
-import { UNFINISHED_TASK_STATUSES } from '../../apps/desktop/src/core/budgets/daily-cap';
-import { DAILY_CAP_REACHED, SKIPPED_PREVIOUS_RUNNING, Schedule, nextOccurrence, normalizedSchedule, runsPerDay, scheduleDay } from '../../apps/desktop/src/shared/schedule';
+import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
+import { SKIPPED_PREVIOUS_RUNNING, Schedule, nextOccurrence, normalizedSchedule, runsPerDay, scheduleDay } from '../../apps/desktop/src/shared/schedule';
 import type { Routine, RoutineToday, Task } from '../../apps/desktop/src/shared/contracts';
-import { backgroundNotices, blockedScheduleNotice, blockedSchedules, inAppNotice, quietRun, type ChatNames } from '../../apps/desktop/src/renderer/chatNotices';
-import { costCeiling, nextRunAt } from '../../apps/desktop/src/renderer/components/RoutinesPanel';
+import { backgroundNotices, inAppNotice, quietRun, type ChatNames } from '../../apps/desktop/src/renderer/chatNotices';
 import { cadenceInWords } from '../../apps/desktop/src/renderer/scheduleWords';
 import { setLanguage } from '../../apps/desktop/src/renderer/i18n';
 
@@ -94,25 +92,7 @@ describe('hourly and weekday schedule math (COD-288)', () => {
   });
 });
 
-describe('the editor and the card say what a schedule may cost (COD-288)', () => {
-  it('shows the ceiling before saving, or the lower daily cap', () => {
-    setLanguage('en');
-    const officeHours: Schedule = { ...hourly, window: { from: '09:00', to: '18:00' } };
-    expect(costCeiling(officeHours, 'schedule', 500_000, undefined)).toBe('Up to 9 runs a day · up to $4.50 a day at $0.50 per run.');
-    expect(costCeiling(officeHours, 'schedule', 500_000, 2_000_000)).toBe('Up to 9 runs a day · at most $2.00 a day, your cap.');
-    expect(costCeiling(officeHours, 'schedule', 500_000, 9_000_000)).toBe('Up to 9 runs a day · up to $4.50 a day at $0.50 per run.');
-    expect(costCeiling(daily, 'schedule', 500_000, undefined)).toBe('Up to 1 run a day · up to $0.50 a day.');
-    expect(costCeiling({ ...daily, frequency: 'weekly' }, 'schedule', 500_000, undefined)).toBe('Up to 1 run a week · up to $0.50 a week.');
-    expect(costCeiling(daily, 'folder', 500_000, 2_000_000)).toBe('At most $2.00 a day, however many times it runs.');
-  });
-
-  it('shows the next run on a later day once today\'s cap is reached', () => {
-    const officeHours: Schedule = { ...hourly, window: { from: '09:00', to: '18:00' } };
-    const capped = { schedule: officeHours, nextDueAt: '2026-01-05T04:00:00.000Z', notice: { at: '2026-01-05T03:10:00.000Z', reason: DAILY_CAP_REACHED } };
-    expect(nextRunAt(capped, '2026-01-05')).toBe('2026-01-06T02:00:00.000Z');
-    expect(nextRunAt({ ...capped, notice: undefined }, '2026-01-05')).toBe('2026-01-05T04:00:00.000Z');
-  });
-
+describe('the card names the cadence (COD-288)', () => {
   it('names the cadence in a few words', () => {
     setLanguage('en');
     expect(cadenceInWords(hourly)).toBe('Every hour');
@@ -145,16 +125,6 @@ describe('notices of an hourly schedule (COD-288)', () => {
     expect(backgroundNotices([failed, waiting, held], names, true)).toHaveLength(3);
     // A daily schedule's run is still news every time.
     expect(inAppNotice({ task: run('daily', 'morning', 'completed'), outcome: 'done' }, names)?.text).toBe('Morning note is ready');
-  });
-
-  it('says the day\'s cap once, as news rather than a problem', () => {
-    setLanguage('en');
-    const before = { ...office };
-    const capped = { ...office, notice: { at: '2026-09-27T05:00:00.000Z', reason: DAILY_CAP_REACHED } };
-    const blocked = blockedSchedules([before], [capped]);
-    expect(blocked).toHaveLength(1);
-    expect(blockedScheduleNotice(blocked[0])).toEqual({ text: 'Inbox sweep reached today\'s cost cap', tone: 'info', about: 'The schedule reached today\'s cost cap, so its remaining runs today are skipped. It runs again after midnight.' });
-    expect(blockedSchedules([capped], [capped])).toEqual([]);
   });
 });
 
@@ -226,77 +196,30 @@ describe('an hourly schedule and its daily cap, in the core (COD-288)', () => {
     expect(runsOf(capped.id)).toHaveLength(0);
   });
 
-  it('refuses a daily cap below one run\'s limit', async () => {
-    await expect(save({ ...hourly, dailyCapMicros: 50_000 })).rejects.toThrow('ít nhất bằng giới hạn mỗi lần chạy');
+  it('saves a small daily cap, because a run has no limit of its own to sit below it', async () => {
+    const routine = await save({ ...hourly, dailyCapMicros: 50_000 });
+    expect(routine.schedule.dailyCapMicros).toBe(50_000);
   });
 
-  it('skips the rest of the day once the next run\'s limit no longer fits under the cap, with one note', async () => {
-    const routine = await save({ ...hourly, dailyCapMicros: 150_000 });
-    await core.routines.runCalled(routine.id, []);
-    await idle();
-    await core.routines.runCalled(routine.id, []);
-    await idle();
-    expect(runsOf(routine.id).map(task => task.status)).toEqual(['completed', 'completed']);
-    expect(await today(routine.id)).toEqual({ day: '2026-01-05', runs: 2, spentMicros: 2 * RUN_COST_MICROS });
-    // 80,000 spent + a 100,000 limit is over the 150,000 cap.
-    await expect(core.routines.runCalled(routine.id, [])).rejects.toThrow(DAILY_CAP_REACHED);
-    const noted = routineOf(routine.id).notice;
-    expect(noted?.reason).toBe(DAILY_CAP_REACHED);
-    // The clock's own runs that day are skipped too, not queued as a catch-up, and the note is not written again.
-    await core.tick();
-    current = new Date('2026-01-05T02:00:00Z');
-    await core.tick();
-    expect(runsOf(routine.id)).toHaveLength(2);
-    expect(routineOf(routine.id).notice).toEqual(noted);
-    expect(routineOf(routine.id).pending).toBeNull();
-    expect(routineOf(routine.id).nextDueAt).toBe('2026-01-05T03:00:00.000Z');
-    expect(runsOf(routine.id).every(task => task.routineDay === '2026-01-05')).toBe(true);
-  });
-
-  it('resets the cap at midnight in the schedule\'s time zone, not in UTC', async () => {
-    const routine = await save({ ...hourly, dailyCapMicros: 150_000 });
-    current = new Date('2026-01-05T10:00:00Z');
-    await core.routines.runCalled(routine.id, []);
-    await idle();
-    await core.routines.runCalled(routine.id, []);
-    await idle();
-    current = new Date('2026-01-05T16:30:00Z'); // 23:30 in Ho Chi Minh City
-    await expect(core.routines.runCalled(routine.id, [])).rejects.toThrow(DAILY_CAP_REACHED);
-    current = new Date('2026-01-05T17:30:00Z'); // 00:30 the next day there, still the 5th in UTC
-    await core.tick();
+  it('never skips or stops a run for money, however far the day has gone past a saved daily cap', async () => {
+    const routine = await save({ ...hourly, dailyCapMicros: 70_000 });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await core.routines.runCalled(routine.id, []);
+      await idle();
+    }
+    expect(runsOf(routine.id).map(task => task.status)).toEqual(['completed', 'completed', 'completed']);
+    expect(await today(routine.id)).toEqual({ day: '2026-01-05', runs: 3, spentMicros: 3 * RUN_COST_MICROS });
     expect(routineOf(routine.id).notice).toBeUndefined();
-    await core.routines.runCalled(routine.id, []);
-    await idle();
-    expect(runsOf(routine.id).map(task => task.routineDay)).toEqual(['2026-01-05', '2026-01-05', '2026-01-06']);
-    expect(await today(routine.id)).toEqual({ day: '2026-01-06', runs: 1, spentMicros: RUN_COST_MICROS });
   });
 
-  it('counts a run still going at its whole limit, so starts at the same moment cannot share the last of the cap', async () => {
-    const routine = await save({ ...hourly, dailyCapMicros: 150_000 });
-    hold();
-    await core.tick();
-    current = new Date('2026-01-05T02:00:00Z');
-    const starts = await Promise.allSettled([core.routines.runCalled(routine.id, []), core.routines.runCalled(routine.id, []), core.tick()]);
-    expect(starts.filter(result => result.status === 'rejected').length).toBeGreaterThan(0);
-    expect(runsOf(routine.id)).toHaveLength(1);
-    expect(UNFINISHED_TASK_STATUSES.includes(runsOf(routine.id)[0].status)).toBe(true);
-    // Whatever other guard stops a second run, the cap alone would too: 100,000 held by the running one + 100,000.
-    expect(() => core.routines.admitRun(routineOf(routine.id), 100_000)).toThrow(DailyCapReached);
-    expect(core.routines.admitRun(routineOf(routine.id), 50_000)).toBe('2026-01-05');
-    letGo();
-    await idle();
-    expect(runsOf(routine.id)[0].status).toBe('completed');
-  });
-
-  it('refuses a request inside a run that would take the day past the cap', async () => {
+  it('does not refuse a request inside a run because the day passed the saved daily cap', async () => {
     const routine = await save({ ...hourly, dailyCapMicros: 150_000 });
     await core.routines.runCalled(routine.id, []);
     await idle();
     const [task] = runsOf(routine.id);
     const runId = store.detail(task.id).runs[0].id;
     const ledger = new BudgetLedger(store);
-    expect(() => ledger.reserve(runId, task.id, 'openai', 120_000, 1_000_000_000, 1_000_000_000)).toThrow(DailyCapReached);
-    expect(() => ledger.reserve(runId, task.id, 'openai', 100_000, 1_000_000_000, 1_000_000_000)).not.toThrow();
+    expect(() => ledger.reserve(runId, task.id, 'openai', 120_000)).not.toThrow();
   });
 
   it('skips an hour while the previous run is still going, says so once, and runs again once it ends', async () => {

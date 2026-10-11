@@ -440,7 +440,7 @@ describe('terminal composer', () => {
     } finally { await session.stop(); }
   });
 
-  it('saves a crew through the raw keyboard form with members, lead and limits', async () => {
+  it('saves a crew through the raw keyboard form with members and lead', async () => {
     const workerId = '11111111-1111-4111-8111-111111111111';
     const skillId = '22222222-2222-4222-8222-222222222222';
     const crewId = '33333333-3333-4333-8333-333333333333';
@@ -465,7 +465,7 @@ describe('terminal composer', () => {
       await session.key('\r');
       await session.key('Done'); await session.key('\r');
       await session.key('Save'); await session.key('\r');
-      expect(saved).toEqual([{ name: 'Review crew', instructions: 'Review together', memberIds: [workerId], synthesizerId: workerId, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 }]);
+      expect(saved).toEqual([{ name: 'Review crew', instructions: 'Review together', memberIds: [workerId], synthesizerId: workerId, workflow: 'parallel' }]);
       expect(session.sent).toEqual([]);
       expect(session.screen.text()).toContain('Saved channel Review crew.');
     } finally { await session.stop(); }

@@ -42,7 +42,6 @@ describe('proposal values', () => {
     expect(showChangeValue('provider', 'claude-code', context)).toBe('Claude Code');
     expect(showChangeValue('provider', 'anthropic', context)).toBe('Anthropic');
     expect(showChangeValue('workflow', 'sequential', context)).toBe('Sequential');
-    expect(showChangeValue('taskBudgetMicros', '400000', context)).toBe('$0.40');
     expect(showChangeValue('autoTitles', 'true', context)).toBe('On');
     expect(modelLabel('anthropic', 'claude-sonnet-4-5')).toBe('Anthropic · claude-sonnet-4-5');
     expect(modelLabel('claude-code', undefined)).toBe('Claude Code');

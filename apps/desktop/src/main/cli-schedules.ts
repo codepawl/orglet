@@ -114,7 +114,6 @@ function newRoutine(workspace: Workspace, request: SaveRequest): RoutineSave {
     excludedSources: [],
     consent: providerScopes.length > 0,
     providerScopes,
-    budgetMicros: requireField(request.budgetMicros, '--budget'),
   };
   const timing = {
     timeZone: request.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -125,7 +124,7 @@ function newRoutine(workspace: Workspace, request: SaveRequest): RoutineSave {
   return {
     name: requireField(request.name, 'name'),
     enabled: request.enabled ?? true,
-    schedule: { ...timing, ...hourly(request), ...dailyCap(request) },
+    schedule: { ...timing, ...hourly(request) },
     trigger: { kind: request.trigger ?? 'schedule' },
     task,
   };
@@ -142,7 +141,6 @@ function editedRoutine(workspace: Workspace, existing: Routine, request: SaveReq
     ...(request.frequency ? { frequency: request.frequency } : {}),
     ...(request.weekday !== undefined ? { weekday: request.weekday } : {}),
     ...hourly(request),
-    ...dailyCap(request),
   };
   const trigger = request.trigger ? { kind: request.trigger } : existing.trigger;
   return {
@@ -151,7 +149,7 @@ function editedRoutine(workspace: Workspace, existing: Routine, request: SaveReq
     enabled: request.enabled ?? existing.enabled,
     schedule,
     ...(trigger ? { trigger } : {}),
-    task: { ...task, ...(request.brief ? { brief: request.brief } : {}), ...(request.budgetMicros ? { budgetMicros: request.budgetMicros } : {}) },
+    task: { ...task, ...(request.brief ? { brief: request.brief } : {}), },
   };
 }
 
@@ -166,10 +164,6 @@ function movedTask(workspace: Workspace, existing: Routine, owner: Owner): TaskI
 
 function hourly(request: SaveRequest): Partial<Routine['schedule']> {
   return request.everyHours ? { everyHours: request.everyHours } : {};
-}
-
-function dailyCap(request: SaveRequest): Partial<Routine['schedule']> {
-  return request.dailyCapMicros ? { dailyCapMicros: request.dailyCapMicros } : {};
 }
 
 function ownerName(workspace: Workspace, routine: Routine): string {
@@ -191,8 +185,6 @@ function scheduleRow(workspace: Workspace, routine: Routine): CliScheduleRow {
     ...(routine.schedule.everyHours ? { everyHours: routine.schedule.everyHours } : {}),
     timeZone: routine.schedule.timeZone,
     nextDueAt: routine.nextDueAt,
-    budgetMicros: routine.task.budgetMicros,
-    ...(routine.schedule.dailyCapMicros ? { dailyCapMicros: routine.schedule.dailyCapMicros } : {}),
     ...(today ? { runsToday: today.runs, spentTodayMicros: today.spentMicros } : {}),
   };
 }

@@ -116,7 +116,7 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/unlock [setup]', t('Mở khóa bằng mã hiện trong cửa sổ Orglet để trả lời thẻ đang chờ ngay trong terminal')],
   ['/lock', t('Khóa lại: quên quyền đã mở khóa')],
   ['/approve [<lựa chọn>] [<mã thẻ>]', t('Xem thẻ đang chờ của chat này, hoặc trả lời nó bằng một lựa chọn')],
-  ['/grant <việc> …', t('Cấp quyền (thư mục, công cụ, MCP, giới hạn…) sau /unlock setup; giống orglet grant')],
+  ['/grant <việc> …', t('Cấp quyền (thư mục, công cụ, MCP…) sau /unlock setup; giống orglet grant')],
   ['/connect [search] <nhà cung cấp>', t('Lưu khóa API, hỏi khóa và không hiện khi gõ, sau /unlock setup')],
   ['/disconnect [search] <nhà cung cấp>', t('Xóa khóa đã lưu, sau /unlock setup')],
   ['/help', 'Show these commands'],

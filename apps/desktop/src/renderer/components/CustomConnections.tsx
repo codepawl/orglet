@@ -56,7 +56,7 @@ function emptyPriceNote(baseUrl: string): string {
   const checked = checkBaseUrl(baseUrl);
   if (!checked.ok) return t('Để trống thì máy chủ trên máy này hoặc mạng nội bộ được tính miễn phí; máy chủ khác chưa rõ giá.');
   if (connectionPricing({ baseUrl: checked.url }).kind === 'local') return t('Để trống thì miễn phí, vì máy chủ nằm trên máy này hoặc mạng nội bộ.');
-  return t('Để trống thì chưa rõ giá: mỗi request giữ chỗ phần còn lại của giới hạn mỗi task cho tới khi bạn đối soát.');
+  return t('Để trống thì chưa rõ giá: chi phí chỉ được ghi khi bạn đối soát.');
 }
 type Act = (action: () => Promise<string | void>, about?: string) => Promise<void>;
 

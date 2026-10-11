@@ -3,7 +3,7 @@
     "rawButton": 10,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 4,
+    "titleAttribute": 3,
     "hexColour": 0
   },
   "components/AboutSettings.tsx": {

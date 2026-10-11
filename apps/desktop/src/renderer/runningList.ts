@@ -93,7 +93,7 @@ export function waitLine(wait: RunWaitReason): string {
     case 'plan': return t('Chờ trưởng phòng phân việc');
     case 'members': return t('Chờ các thành viên xong để tổng hợp');
     case 'previous_turn': return t('Tin mới, chờ lượt đang chạy dừng');
-    case 'budget': return t('Chờ ngân sách · nâng giới hạn rồi tiếp tục');
+    case 'budget': return t('Đã tạm dừng');
     case 'approval': return t('Chờ bạn cho phép công cụ MCP: {0} · {1}', [wait.tool, wait.server]);
     case 'answer': return t('Chờ bạn trả lời câu hỏi của Tí');
     case 'starting': return t('Đang bắt đầu…');

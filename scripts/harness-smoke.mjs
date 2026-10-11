@@ -98,7 +98,7 @@ try {
   assert.equal(await page.evaluate(() => { const panel = document.querySelector('.org-tabbed-dialog-panel'); return panel.scrollWidth > panel.clientWidth + 1; }), false);
   await page.screenshot({ path: 'test-results/settings-connections-narrow.png' });
   await page.setViewportSize({ width: 1200, height: 820 });
-  await page.getByRole('tab', { name: label('Chi phí & giới hạn'), exact: true }).click();
+  await page.getByRole('tab', { name: label('Chi phí'), exact: true }).click();
   await page.screenshot({ path: 'test-results/settings-usage.png' });
   await page.keyboard.press('Escape');
   // The narrow viewport collapsed the sidebar; reopen it before using row menus.
@@ -119,12 +119,11 @@ try {
   await page.keyboard.press('Escape');
 
   await model.click(); await page.getByRole('option', { name: /^Claude Code/ }).click();
-  await page.getByText(label('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', ['Claude Code']), { exact: false }).waitFor();
+  await page.getByText(label('Chạy bằng {0} trên máy, tính theo gói của nó.', ['Claude Code']), { exact: false }).waitFor();
   await page.getByRole('button', { name: label('Lưu Tí'), exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Harness send gate');
   const send = page.getByRole('button', { name: label('Gửi tin nhắn'), exact: true });
-  assert.equal(await page.getByText(label('Giới hạn mỗi việc (USD)'), { exact: false }).count(), 0);
   await noDemo(page);
   assert.equal(await send.isDisabled(), true);
   // setupHint uses providerLabel ("Claude Code trên máy này"), not the short catalog name.
@@ -140,11 +139,10 @@ try {
   if (codex.status === 'auth_error') {
     const authFailModel = await editResearcher();
     await authFailModel.click(); await page.getByRole('option', { name: /^Codex/ }).click();
-    await page.getByText(label('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', ['Codex']), { exact: false }).waitFor();
+    await page.getByText(label('Chạy bằng {0} trên máy, tính theo gói của nó.', ['Codex']), { exact: false }).waitFor();
     await page.getByRole('button', { name: label('Lưu Tí'), exact: true }).click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
     await noDemo(page);
-    assert.equal(await page.getByText(label('Giới hạn mỗi việc (USD)'), { exact: false }).count(), 0);
     assert.equal(await send.isDisabled(), true);
     const authFailHint = hint.auth_error(label('Codex trên máy này'));
     await page.getByRole('button', { name: authFailHint, exact: true }).waitFor();

@@ -12,16 +12,16 @@ import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
 import { assertToolCall, mcpToolOf, mcpToolsOffered, offeredToolNames, toolCallProblem, type ToolCallProblem, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, ModelTeamPlan, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals, isPlanFirst, PLAN_FIRST_INSTRUCTION } from '../tools/catalog';
 import { z } from 'zod';
-import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, type Run, type RunContextUse, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, type Run, type RunContextUse, type Task, type Artifact, type Source, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
-import { BudgetLedger, BudgetError, affordableOutputTokens, holdFor } from '../budgets/ledger';
+import { BudgetLedger, BudgetError, holdFor } from '../budgets/ledger';
 import { Sources, fingerprint, imageWithheldMessage, unreadableSourceMessage } from '../tools/sources';
 import { imageSendable, withheldSourceNote, type MediaKind } from '../../shared/source-kinds';
 import { imageCount, imageTokenAllowance } from '../../shared/images';
 import type { PdfText } from '../tools/pdf-text';
 import { harnessSeesImages, modelSeesImages } from '../models/image-input';
 import type { MessageImage, ModelAdapter, ModelReply, ModelStop, RunMessage } from '../adapters/openai';
-import { maxOutputTokens, minOutputTokens } from '../adapters/catalog';
+import { maxOutputTokens } from '../adapters/catalog';
 import { acceptsForcedToolChoice } from '../adapters/anthropic';
 import { ProviderRequestError } from '../adapters/opencode';
 import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
@@ -120,18 +120,6 @@ function failureMessage(run: Run, error: Error, customConnections: readonly Cust
   return error.message;
 }
 
-/** Micro-dollars as "$0.50", keeping a third or fourth decimal only when the amount has one. */
-function dollars(micros: number) {
-  return `$${(micros / 1_000_000).toFixed(4).replace(/(\.\d\d[1-9]?)0+$/, '$1')}`;
-}
-
-/** What the chat says when the CLI stopped at the task's cap: the amount, and where that cap lives for this chat. */
-function harnessBudgetMessage(run: Run, budgetMicros: number) {
-  const name = harnessNames[run.snapshot.worker.provider as HarnessId] ?? providerNames[run.snapshot.worker.provider] ?? run.snapshot.worker.provider;
-  if (run.snapshot.team) return `${name} dừng vì chạm giới hạn mỗi task của chat này (${dollars(budgetMicros)}). Nâng Giới hạn mỗi task trong Thiết lập kênh → Giới hạn & ca, rồi thử lại.`;
-  return `${name} dừng vì chạm giới hạn mỗi task của chat này (${dollars(budgetMicros)}). Nâng Giới hạn mỗi task trong Thiết lập Tí, rồi thử lại.`;
-}
-
 /** CLI cost estimates accumulate in integer micros so each next call's cap is what the task has left. */
 function addHarnessCost(accumulatedMicros: number | undefined, costUsd: number) {
   const amount = Math.ceil(costUsd * 1_000_000);
@@ -159,12 +147,12 @@ function harnessRunTotalPhrase(total: HarnessRunTotal) {
 function harnessCostLine(name: string, costUsd: number | null, stopped = false, total?: HarnessRunTotal) {
   if (stopped) {
     if (costUsd === null) return `${name} dừng ở giới hạn; không báo chi phí.`;
-    if (total) return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
-    return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
+    if (total) return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó.`;
+    return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó.`;
   }
   if (costUsd === null) return `${name} đã trả lời; không báo chi phí.`;
-  if (total) return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
-  return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
+  if (total) return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó.`;
+  return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó.`;
 }
 
 /** The line after a harness answered: its price when it named one, else the tokens it counted, else neither. */
@@ -374,6 +362,8 @@ function finishingTools<Tool extends { type: string; function?: { name: string }
 }
 
 const MAX_REQUEST_BYTES = 200_000;
+/** What a request to a model with no verified price holds against the connection limit (a task has no limit of its own). */
+const UNKNOWN_PRICE_HOLD_MICROS = 1000;
 /** Attached text a CLI run gets read before its first step: per source and in all (see `preloadedReads`). */
 const PRELOAD_SOURCE_BYTES = 64 * 1024;
 const PRELOAD_TOTAL_BYTES = 128 * 1024;
@@ -633,18 +623,6 @@ export class Runner {
   }
   /** Runs waiting for a provider slot, in the order they will be served (COD-244). */
   slotWaits(): SlotWait[] { return this.slots.waiting(); }
-  /**
-   * The cap a harness call in this chat runs under, or undefined for none. A crew, a group chat and a scheduled run
-   * keep the limit saved for them. An orglet's own chat is capped only when that orglet has a limit of its own: a
-   * subscription harness otherwise runs on the person's plan, and the old forced $0.50 stopped real work after a few
-   * calls (COD-253).
-   */
-  private harnessLimitMicros(run: Run, task: Task): number | undefined {
-    if (run.snapshot.team || task.teamId || task.assignees || task.routineId) return task.budgetMicros;
-    const worker = this.store.all<Worker>('workers').find(candidate => candidate.id === task.workerId);
-    if (worker?.taskBudgetMicros === undefined) return undefined;
-    return task.budgetMicros;
-  }
   cancel(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.controller.abort(); }
   pause(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.paused = true; }
   assertResumable(run: Run) {
@@ -1307,15 +1285,8 @@ export class Runner {
             // Image bytes go out with this request only; the checkpoint keeps the references (COD-260).
             const outgoing = await this.withImageData(messages, task.sourceIds);
             if (isHarness(provider)) {
-              const limit = this.harnessLimitMicros(run, this.store.get<Task>('tasks', task.id));
-              if (limit === undefined) {
-                harnessRemainingUsd = undefined;
-              } else {
-                const usage = this.store.usage(task.id);
-                const remainingMicros = Math.max(0, limit - usage.chargedMicros - usage.reservedMicros - (checkpoint.harnessCostMicros ?? 0));
-                harnessRemainingUsd = Math.floor(remainingMicros / 100) / 10_000;
-                if (harnessRemainingUsd < 0.0001) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
-              }
+              // No per-task cap (owner, 2026-10-11): the CLI runs on the person's plan or account.
+              harnessRemainingUsd = undefined;
               this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
               try {
                 reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
@@ -1355,22 +1326,16 @@ export class Runner {
                 throw new Error('Request model không hoàn tất. Kiểm tra kết nối hoặc hạn mức gói trước khi thử lại.');
               }
             } else {
-              const teamBudget = task.teamSnapshot ? { id: task.teamSnapshot.id, limit: this.store.get<Team>('teams', task.teamSnapshot.id).monthlyBudgetMicros } : undefined;
 
-              const usage = this.store.usage(task.id);
-              const remainingMicros = task.budgetMicros - usage.chargedMicros - usage.reservedMicros;
-              const outputCap = resolved.rates
-                ? affordableOutputTokens(upperInput, minOutputTokens(provider), maxOutputTokens(provider), resolved.rates, remainingMicros)
-                : maxOutputTokens(provider);
-              const hold = resolved.rates
-                ? holdFor(upperInput, outputCap, resolved.rates)
-                : Math.max(1000, remainingMicros);
+              const outputCap = maxOutputTokens(provider);
+              // A price Orglet cannot verify holds a small placeholder; the connection limit still bounds the month.
+              const hold = resolved.rates ? holdFor(upperInput, outputCap, resolved.rates) : UNKNOWN_PRICE_HOLD_MICROS;
               if (!resolved.rates) this.event(run.id, 'Model tùy chỉnh chưa có giá đã xác minh trong Orglet. Chi phí được giữ chỗ chưa rõ.');
               const journal = (reservationId: string) => this.checkpoints.requested(checkpoint, reservationId);
               // A known price of zero (a free local custom connection) holds nothing, so it never waits for budget.
               const reservation = resolved.rates && hold === 0
                 ? ledger.reserveAtZeroPrice(run.id, task.id, provider, journal)
-                : ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, journal);
+                : ledger.reserve(run.id, task.id, provider, hold, journal);
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
                 reply = await this.modelActivity(run, String(step), signal, () => this.retryRefused(run, signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation, outputCap)));
@@ -1841,8 +1806,8 @@ export class Runner {
     } catch (error) {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
       // A file-system error names the private copy's full path; the person reads only the path inside it (COD-289).
-      const message = withoutCopyPaths(error instanceof HarnessTerminationError ? error.message : signal.aborted ? cancelledMessage(run.snapshot.worker.provider) : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.');
-      const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
+      const message = withoutCopyPaths(error instanceof HarnessTerminationError ? error.message : signal.aborted ? cancelledMessage(run.snapshot.worker.provider) : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.');
+      const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError ? 'waiting_budget' : 'failed';
       // A harness account out of plan usage is marked, so the chat can offer an account that still has room (COD-225).
       const handInBlocked = error instanceof HandInBlockedError && !signal.aborted ? error : undefined;
       const errorCode = error instanceof UnresolvedAttemptError || error instanceof ReportRejectedError ? error.code : handInBlocked ? handInBlocked.code : error instanceof HarnessLimitError && error.limit.kind === 'quota' ? 'plan_limit' : undefined;
@@ -2208,9 +2173,6 @@ export class Runner {
         await mkdir(dirname(join(directory, 'skill', resource.path)), { recursive: true });
         await writeFile(join(directory, 'skill', resource.path), Buffer.from(resource.base64, 'base64'), { flag: 'wx' });
       }
-      const usage = this.store.usage(task.id);
-      const limit = this.harnessLimitMicros(run, task);
-      const remainingUsd = limit === undefined ? undefined : Math.max(0, limit - usage.chargedMicros - usage.reservedMicros) / 1_000_000;
       // The propose_* tools live in the tool loop only, so a one-shot answer carries them as an appProposals array
       // under the same rules the loop applies (capability, never a plan or scheduled run) (COD-206).
       const withProposals = !!this.appProposals && proposalsAllowed(run, this.store.get<Task>('tasks', task.id));
@@ -2236,7 +2198,6 @@ export class Runner {
           prompt: harnessPrompt(messages, files, inlinesSources ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories, withSelfImprovement, withReactions, provider === 'codex' ? answerSchema : undefined),
           schema: provider === 'codex' ? codexOutputSchema : answerSchema,
           signal,
-          maxBudgetUsd: remainingUsd,
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
           ...(run.snapshot.effort?.support === 'supported' ? { effort: run.snapshot.effort.native } : {}),
           ...(attachedImages.length ? { images: attachedImages } : {}),

@@ -175,7 +175,7 @@ describe('orglet chats in the app', () => {
   it('starts a side thread from an orglet main chat only, carrying no permission of its own', async () => {
     const core = fakeCore();
     const value = await core.operations.run({ op: 'side-thread', token, to: 'res', message: 'try another way', ...wait }, core.signal) as SendValue;
-    expect(core.argsOf('startSideThread')).toEqual({ taskId: mainId, brief: 'try another way', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['openai'], budgetMicros: 300_000 });
+    expect(core.argsOf('startSideThread')).toEqual({ taskId: mainId, brief: 'try another way', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['openai'] });
     expect(value.chat).toMatchObject({ name: 'Try again', taskId: sideId });
     await expect(core.operations.run({ op: 'side-thread', token, to: 'review', message: 'x', ...wait }, core.signal)).rejects.toThrow('Chat phụ chỉ bắt đầu');
     expect(CliRequest.safeParse({ op: 'side-thread', token, to: 'res', message: 'x', ...wait, toolCapabilities: ['web'] }).success).toBe(false);
@@ -194,9 +194,9 @@ describe('orglet chats in the app', () => {
     await core.operations.run({ op: 'channel', token, names: ['writer', 'Review crew', 'Writer'], message: 'compare', topic: 'Ship it', ...wait }, core.signal);
     expect(core.argsOf('createChannel')).toEqual({ name: 'Writer, Review crew', topic: 'Ship it', members: [{ kind: 'orglet', id: writerId }, { kind: 'crew', id: crewId }] });
     // The crew answers as its orglets, after the orglets named on their own.
-    expect(core.argsOf('createTask')).toEqual({ workerId: writerId, assignees: [writerId, researcherId], channelId: newChannelId, brief: 'compare', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['anthropic', 'openai'], budgetMicros: 200_000 });
+    expect(core.argsOf('createTask')).toEqual({ workerId: writerId, assignees: [writerId, researcherId], channelId: newChannelId, brief: 'compare', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['anthropic', 'openai'] });
     await core.operations.run({ op: 'send', token, chat: 'cccc', message: 'again', files: [], ...wait }, core.signal);
-    expect(core.argsOf('reviseTask')).toMatchObject({ taskId: groupId, brief: 'again', providerScopes: ['openai', 'anthropic'], budgetMicros: 300_000 });
+    expect(core.argsOf('reviseTask')).toMatchObject({ taskId: groupId, brief: 'again', providerScopes: ['openai', 'anthropic'] });
     await core.operations.run({ op: 'members', token, chat: 'cccc', names: ['Researcher', 'Review crew'] }, core.signal);
     expect(core.argsOf('updateChannel')).toEqual({ id: channelId, name: 'launch', topic: 'Ship it', members: [{ kind: 'orglet', id: researcherId }, { kind: 'crew', id: crewId }] });
     await expect(core.operations.run({ op: 'members', token, chat: 'aaaa', names: ['Researcher', 'Writer'] }, core.signal)).rejects.toThrow('một kênh');

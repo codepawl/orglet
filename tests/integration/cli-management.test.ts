@@ -7,7 +7,7 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CliOperations } from '../../apps/desktop/src/main/cli-operations';
 import { CliRequest } from '../../apps/desktop/src/cli/protocol';
 import { ManagementCatalog, type ManagementClient, type ManagementResult, type ManagementTarget } from '../../apps/desktop/src/cli/management';
-import { ManagementEditor, parseDollarLimit } from '../../apps/desktop/src/cli/management-editor';
+import { ManagementEditor } from '../../apps/desktop/src/cli/management-editor';
 import { parseArguments, type ManagementCommand } from '../../apps/desktop/src/cli/arguments';
 import { runManagementCommand } from '../../apps/desktop/src/cli/management-command';
 import { completeSlash, parseSlash } from '../../apps/desktop/src/cli/slash';
@@ -179,9 +179,6 @@ describe('terminal editor and script inputs', () => {
     editor.submit('');
     const saved = await operations.run({ op: 'save-orglet', token, target: editor.target as ManagementTarget, config: editor.values }, signal) as ManagementResult;
     expect(store.get<Worker>('workers', saved.id).avatar).toEqual({ emoji: '🐾' });
-    expect(parseDollarLimit('0.100001', 100_000_000)).toBe(100_001);
-    expect(() => parseDollarLimit('0.000001', 100_000_000)).toThrow();
-    expect(() => parseDollarLimit('1.0000001', 100_000_000)).toThrow();
   });
 
   it('reads bounded JSON patches and never mutates on an ambiguous name or wrong confirmation', async () => {
@@ -239,7 +236,7 @@ describe('channels made and changed from the terminal', () => {
     const second = await secondOrglet();
     const created = await save({ name: 'launch', members: orgletMembers(first.id, second.id), lead: { synthesizerId: second.id, instructions: 'Combine the parts.', workflow: 'sequential', monthlyBudgetMicros: 7_000_000, maxConcurrentTasks: 2 } });
     const crew = store.get<Team>('teams', created.id);
-    expect(crew).toMatchObject({ name: 'launch', synthesizerId: second.id, instructions: 'Combine the parts.', workflow: 'sequential', monthlyBudgetMicros: 7_000_000, maxConcurrentTasks: 2 });
+    expect(crew).toMatchObject({ name: 'launch', synthesizerId: second.id, instructions: 'Combine the parts.', workflow: 'sequential', maxConcurrentTasks: 2 });
     expect(created.revision).toBe(crew.revision);
     expect(store.workspace().emptyChannels.find(item => item.id === created.channelId)).toMatchObject({ crewId: crew.id });
     const listed = (await catalog()).channels!.find(item => item.id === created.channelId)!;

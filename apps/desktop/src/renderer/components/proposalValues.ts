@@ -1,7 +1,6 @@
 import { demoReplies } from '../demoReplies';
 import type { AppProposal, AppProposalKind, ProposalChange } from '../../shared/app-proposals';
 import type { Skill, Worker } from '../../shared/contracts';
-import { formatMoney } from './money';
 import { providerName } from './workerModel';
 import { t } from '../i18n';
 import type { Schedule } from '../../shared/schedule';
@@ -24,7 +23,9 @@ export type ProposalContext = {
 export type ResolvedMember = { key: string; name: string; description?: string; worker?: Worker; proposal?: AppProposal; lead: boolean };
 
 const REF_PREFIX = 'ref:';
-const moneyFields = new Set(['taskBudgetMicros', 'monthlyBudgetMicros', 'dailyCapMicros']);
+/** Spending-limit fields a proposal saved before limits were removed may still carry; the card does not show them. */
+const spendingLimitFields = new Set(['taskBudgetMicros', 'monthlyBudgetMicros', 'dailyCapMicros']);
+export const withoutSpendingLimits = (changes: readonly ProposalChange[]): ProposalChange[] => changes.filter(change => !spendingLimitFields.has(change.field));
 const memberFields = new Set(['memberIds', 'synthesizerId']);
 const workflowNames: Record<string, string> = { sequential: 'Tuần tự', parallel: 'Song song' };
 
@@ -126,7 +127,6 @@ export function triggerInWords(value: string): string {
 }
 
 export function showChangeValue(field: string, value: string, context: ProposalContext): string {
-  if (moneyFields.has(field) && /^\d+$/.test(value)) return formatMoney(Number(value));
   if (value === 'true') return t('Bật');
   if (value === 'false') return t('Tắt');
   if (field === 'effort') return ({ auto: t('Tự động'), low: t('Thấp'), medium: t('Vừa'), high: t('Cao'), max: t('Tối đa') } as Record<string, string>)[value] ?? value;
@@ -150,7 +150,7 @@ export function orgletDetailChanges(proposal: AppProposal): ProposalChange[] {
   const fullInstructions = fields && typeof fields === 'object' && typeof (fields as { instructions?: unknown }).instructions === 'string'
     ? (fields as { instructions: string }).instructions : undefined;
   const modelId = proposal.changes.find(change => change.field === 'modelId');
-  return proposal.changes.flatMap(change => {
+  return withoutSpendingLimits(proposal.changes).flatMap(change => {
     if (change.field === 'name' && change.before === null) return [];
     if (change.field === 'modelId' && proposal.changes.some(item => item.field === 'provider')) return [];
     if (change.field === 'provider') return [{ ...change, after: modelLabel(change.after, modelId?.after), before: change.before === null ? null : modelLabel(change.before, modelId?.before ?? undefined) }];

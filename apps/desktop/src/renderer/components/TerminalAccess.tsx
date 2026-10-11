@@ -52,7 +52,7 @@ export function timeLeftText(endsAt: string, now: number): string {
 
 function scopeWords(scope: ElevationScope, operation: string | undefined): string {
   if (scope === 'one') return operation ?? t('Một thao tác duy nhất.');
-  if (scope === 'setup') return t('Cấp quyền (thư mục, công cụ, MCP, giới hạn chi phí…) và lưu khóa bí mật trong phiên terminal này, tối đa 15 phút.');
+  if (scope === 'setup') return t('Cấp quyền (thư mục, công cụ, MCP…) và lưu khóa bí mật trong phiên terminal này, tối đa 15 phút.');
   return t('Trả lời các thẻ đang chờ bạn duyệt (công cụ, thay đổi, đề xuất, ghi nhớ). Không cấp quyền mới và không lưu khóa bí mật.');
 }
 

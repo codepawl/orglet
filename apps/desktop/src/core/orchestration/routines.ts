@@ -11,8 +11,7 @@ import { Sources, fingerprint } from '../tools/sources';
 import { resolveWorkerModel } from '../models/resolve';
 import { readCustomConnections } from '../storage/custom-connections';
 import { defaultBrowserChoice } from '../../shared/browser';
-import { DailyCapReached } from '../budgets/ledger';
-import { UNFINISHED_TASK_STATUSES, daysSoFar, fitsDailyCap } from '../budgets/daily-cap';
+import { UNFINISHED_TASK_STATUSES, daysSoFar } from '../budgets/daily-cap';
 
 /** First tick after startup, a gap, or overdue delay above this is a miss — never auto-replayed. See docs/routines.md. */
 export const ROUTINE_MISS_MS = 30_000;
@@ -34,7 +33,6 @@ class WorkFolderUnavailable extends Error {}
 class PreviousRunBusy extends Error {}
 
 /** A daily cap below one run's limit would never let a run start. */
-export const CAP_BELOW_RUN_LIMIT ='Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.';
 
 /**
  * An hourly schedule runs again within the hour, so a run it could not start is skipped with a note on its card, and
@@ -134,7 +132,6 @@ export class Routines {
     // The same for the working folder (COD-294): left out keeps it, `null` takes it away.
     const workspace = this.normalizedWorkspace(input.workspace === undefined ? previous?.workspace : input.workspace ?? undefined, input.task);
     const schedule = normalizedSchedule(input.schedule);
-    if (schedule.dailyCapMicros !== undefined && schedule.dailyCapMicros < input.task.budgetMicros) throw new Error(CAP_BELOW_RUN_LIMIT);
     const { workspace: _workspace, ...rest } = input;
     const routine: Routine = { ...rest, schedule, ...(trigger ? { trigger } : {}), ...(workspace ? { workspace } : {}), id: input.id ?? id(), revision: (previous?.revision ?? 0) + 1, approvedConfig: this.configuration(input.task, trigger, workspace, schedule), nextDueAt: nextOccurrence(schedule, this.clock()), pending: null, ...(previous?.lastTaskId ? { lastTaskId: previous.lastTaskId } : {}) };
     this.store.put('routines', routine); this.notify(); return routine;
@@ -182,14 +179,9 @@ export class Routines {
     for (const [routineId, day] of Object.entries(days)) today[routineId] = { day, ...totals[routineId] };
     return today;
   }
-  /**
-   * The day a run of this routine starting now counts against, checked against the daily cap. Core calls it inside the
-   * transaction that writes the run's task, so two starts can never both take the last of the day's cap.
-   */
-  admitRun(routine: Routine, budgetMicros: number): string {
-    const day = scheduleDay(this.clock(), routine.schedule.timeZone);
-    if (!fitsDailyCap(this.store, routine, day, budgetMicros)) throw new DailyCapReached(DAILY_CAP_REACHED);
-    return day;
+  /** The day a run of this routine starting now counts against, in the schedule's time zone. */
+  dayOfRun(routine: Routine): string {
+    return scheduleDay(this.clock(), routine.schedule.timeZone);
   }
   /** Whether the task this routine started last is still going or waiting for the person. */
   previousRunActive(routineId: string): boolean {
@@ -278,7 +270,7 @@ export class Routines {
             // A missing folder is not a miss to catch up: running it again fails the same way until the schedule is
             // saved with a folder that is there. The card already carries the reason; the calendar moves on. A day
             // whose cap is reached skips its remaining runs the same way (COD-288).
-            if (error instanceof WorkFolderUnavailable || error instanceof DailyCapReached) this.advance(current, at);
+            if (error instanceof WorkFolderUnavailable) this.advance(current, at);
             else if (error instanceof PreviousRunBusy && runsHourly(current)) this.skip(current, at, error.message === PREVIOUS_CHANGES_WAIT ? PREVIOUS_CHANGES_WAIT : SKIPPED_PREVIOUS_RUNNING);
             else if (current.revision === routine.revision) this.defer(routine, at, error instanceof Error ? error.message : 'Không thể bắt đầu lịch.');
           }
@@ -323,8 +315,6 @@ export class Routines {
       if (routine.approvedConfig !== this.configuration(routine.task, routine.trigger, routine.workspace, routine.schedule)) throw new Error('Tí, skill, kênh hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
       if (this.previousRunActive(routine.id)) throw new PreviousRunBusy(previousRunMessage);
       if (this.previousChangesWait(routine.id)) throw new PreviousRunBusy(PREVIOUS_CHANGES_WAIT);
-      // Checked here so the card says so before anything else runs; core checks it again as it writes the task.
-      this.assertRoomToday(routine);
       for (const sourceId of routine.task.sourceIds) await this.sources.verify(sourceId, routine.task.sourceIds);
       const folder = routine.workspace ? await this.runFolder(routine) : undefined;
       const current = this.store.get<Routine>('routines', routine.id);
@@ -335,22 +325,9 @@ export class Routines {
         sourceIds: [...current.task.sourceIds, ...additions.sourceIds],
         excludedSources: [...(current.task.excludedSources ?? []), ...additions.excluded],
       };
-      // Core commits this updated occurrence, the new task and its folder grant in one transaction, and checks the
-      // daily cap inside it (`admitRun`).
-      try {
-        return this.dispatch(task, next(current), folder);
-      } catch (error) {
-        if (error instanceof DailyCapReached) this.note(routine.id, error.message);
-        throw error;
-      }
+      // Core commits this updated occurrence, the new task and its folder grant in one transaction.
+      return this.dispatch(task, next(current), folder);
     } finally { this.dispatching.delete(routine.id); }
-  }
-  /** Refuses a run whose whole limit no longer fits under today's cap, and says so on the card once (COD-288). */
-  private assertRoomToday(routine: Routine) {
-    const day = scheduleDay(this.clock(), routine.schedule.timeZone);
-    if (fitsDailyCap(this.store, routine, day, routine.task.budgetMicros)) return;
-    this.note(routine.id, DAILY_CAP_REACHED);
-    throw new DailyCapReached(DAILY_CAP_REACHED);
   }
 }
 

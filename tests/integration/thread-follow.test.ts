@@ -102,7 +102,7 @@ describe('what a turn without an answer says', () => {
     expect(unansweredTurnLine([runOf('a', 0, 'failed')], undefined).text).toBe('This turn didn’t finish.');
     expect(unansweredTurnLine([runOf('a', 0, 'cancelled', 'Đã hủy.')], runOf('a', 0, 'cancelled', 'Đã hủy.')).text).toBe('This turn was stopped before it answered.');
     expect(unansweredTurnLine([runOf('a', 0, 'waiting_input')], undefined).text).toBe('This turn stopped while it waited for you.');
-    expect(unansweredTurnLine([runOf('a', 0, 'waiting_budget')], undefined).text).toBe('This turn stopped when its budget ran out.');
+    expect(unansweredTurnLine([runOf('a', 0, 'waiting_budget')], undefined).text).toBe('This turn was paused before it answered.');
     expect(unansweredTurnLine([runOf('a', 0, 'paused')], undefined).text).toBe('This turn was paused before it answered.');
     expect(unansweredTurnLine([runOf('a', 0, 'interrupted')], undefined).text).toBe('This turn stopped partway because the app closed.');
     expect(unansweredTurnLine([runOf('a', 0, 'completed')], undefined).text).toBe('No reply to this message yet.');

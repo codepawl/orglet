@@ -167,7 +167,7 @@ describe('a channel where the lead splits the work', () => {
     const crewId = lead.channel!.crewId!;
     expect(lead).toMatchObject({ teamId: crewId, workerId: writer.id });
     expect(lead.assignees).toBeUndefined();
-    expect(store.get<Team>('teams', crewId)).toMatchObject({ name: 'room', memberIds: [scout.id, writer.id], synthesizerId: writer.id, workflow: 'sequential', monthlyBudgetMicros: 2_000_000, workHours: { start: '09:00' } });
+    expect(store.get<Team>('teams', crewId)).toMatchObject({ name: 'room', memberIds: [scout.id, writer.id], synthesizerId: writer.id, workflow: 'sequential', workHours: { start: '09:00' } });
 
     // Renaming the channel renames its crew; a setting left out keeps its value, null turns one off.
     await core.command('renameTask', { id: taskId, title: 'war-room' });

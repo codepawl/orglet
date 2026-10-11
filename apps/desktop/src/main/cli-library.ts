@@ -120,7 +120,7 @@ export class CliLibrary {
     const { op: _op, token: _token, ...fields } = request;
     const changes = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
     if (!Object.keys(changes).length) return preferencesOf(workspace);
-    await this.dependencies.request('settings', { theme: workspace.theme, connectionLimitMicros: workspace.connectionLimitMicros, ...changes });
+    await this.dependencies.request('settings', { theme: workspace.theme, ...changes });
     this.dependencies.settingsChanged?.({ ...(request.language ? { language: request.language } : {}), ...(request.theme ? { theme: request.theme } : {}) });
     return preferencesOf(await this.workspace());
   }

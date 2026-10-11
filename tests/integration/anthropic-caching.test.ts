@@ -10,7 +10,7 @@ import { AnthropicAdapter, acceptsForcedToolChoice } from '../../apps/desktop/sr
 import { ANTHROPIC_MAX_OUTPUT_TOKENS } from '../../apps/desktop/src/core/adapters/catalog';
 import type { NativeEffortSetting } from '../../apps/desktop/src/shared/effort';
 import type { ModelReply, RunMessage } from '../../apps/desktop/src/core/adapters/openai';
-import { BudgetLedger, affordableOutputTokens, cost, holdFor } from '../../apps/desktop/src/core/budgets/ledger';
+import { BudgetLedger, cost, holdFor } from '../../apps/desktop/src/core/budgets/ledger';
 import { resolveWorkerModel } from '../../apps/desktop/src/core/models/resolve';
 import { MISSING_CALL_INSTRUCTION, MODEL_STOP_MESSAGES } from '../../apps/desktop/src/core/orchestration/runner';
 import { CoreService } from '../../apps/desktop/src/core/service';
@@ -130,18 +130,6 @@ describe('Anthropic prompt caching (COD-358)', () => {
       }
     }
     expect(holdFor(1000, 0, sonnet)).toBe(cost(1000, 0, sonnet, { read: 0, write: 1000 }));
-  });
-
-  it('asks for a shorter answer when the budget left cannot hold the full output cap, never holding more than is left', () => {
-    const sonnet = resolveWorkerModel({ provider: 'anthropic' }).rates!;
-    expect(affordableOutputTokens(20_000, 4096, 16_000, sonnet, 1_000_000)).toBe(16_000);
-    const cap = affordableOutputTokens(20_000, 4096, 16_000, sonnet, 100_000);
-    expect(cap).toBeGreaterThan(4096);
-    expect(cap).toBeLessThan(16_000);
-    expect(holdFor(20_000, cap, sonnet)).toBeLessThanOrEqual(100_000);
-    expect(holdFor(20_000, cap + 1, sonnet)).toBeGreaterThan(100_000);
-    // Not even the floor fits: the full cap goes to the reservation, which refuses it.
-    expect(affordableOutputTokens(20_000, 4096, 16_000, sonnet, 1000)).toBe(16_000);
   });
 
   it('turns max_tokens, a full context and a refusal into stopped replies that run nothing', async () => {
@@ -268,14 +256,15 @@ describe('Anthropic runs in the runner (COD-358)', () => {
     expect(store.db.prepare('SELECT cache_read_tokens AS readTokens, cache_write_tokens AS writeTokens FROM ledger_cache').all()).toEqual([{ readTokens: 800, writeTokens: 100 }]);
   });
 
-  it('runs a chat whose budget cannot hold the full output cap with a smaller cap instead of waiting', async () => {
+  it('runs a chat that still carries a tiny per-task amount with the full output cap, never stopping at it', async () => {
     const worker = await anthropicWorker();
     replies.push(answer('Hi.'));
-    const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Hello', ...scope, budgetMicros: 200_000 }) as string;
+    const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Hello', ...scope, budgetMicros: 1000 }) as string;
     await until(() => store.detail(taskId).task.status !== 'running' && !core.runner.isActive(taskId));
-    expect(store.detail(taskId).task.status).toBe('completed');
-    expect(outputCaps[0]).toBeGreaterThanOrEqual(4096);
-    expect(outputCaps[0]).toBeLessThan(ANTHROPIC_MAX_OUTPUT_TOKENS);
+    const detail = store.detail(taskId);
+    expect(detail.task.status).toBe('completed');
+    expect(outputCaps[0]).toBe(ANTHROPIC_MAX_OUTPUT_TOKENS);
+    expect(detail.usage.chargedMicros).toBeGreaterThan(1000);
   });
 
   it('asks for the full output cap when the budget holds it', async () => {
@@ -291,11 +280,11 @@ describe('Anthropic runs in the runner (COD-358)', () => {
     const { taskId } = await firstTurn('Hello');
     const run = store.detail(taskId).runs[0];
     const hold = holdFor(5000, ANTHROPIC_MAX_OUTPUT_TOKENS, rates);
-    const reservation = ledger.reserve(run.id, taskId, 'anthropic', hold, 1_000_000, 5_000_000);
+    const reservation = ledger.reserve(run.id, taskId, 'anthropic', hold);
     ledger.settle(reservation, 5000, ANTHROPIC_MAX_OUTPUT_TOKENS, rates, { read: 0, write: 5000 });
     const settled = Number(store.db.prepare('SELECT amount FROM ledger WHERE reservation_id=?').get(reservation)!.amount);
     expect(settled).toBe(hold);
-    expect(() => ledger.reserve(run.id, taskId, 'anthropic', 1_000_000, 1_000_000, 5_000_000)).toThrow('Ngân sách');
+    expect(() => ledger.reserve(run.id, taskId, 'anthropic', 1_000_000)).not.toThrow();
   });
 
   it('stops a refused or cut-off reply with its reason after settling what it cost', async () => {

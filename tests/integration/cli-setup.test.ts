@@ -147,7 +147,7 @@ function operationsTable(): { name: string; body: HeldBody; core?: string; app?:
     { name: 'mcp-remove', body: { action: 'mcp-remove', server: 'Notes' }, app: 'removeMcpServer' },
     { name: 'mcp-sign-in', body: { action: 'mcp-sign-in', server: 'Notes' }, app: 'signInMcpServer' },
     { name: 'mcp sign-in cancel', body: { action: 'mcp-sign-in', server: 'Notes', cancel: true }, app: 'cancelMcpSignIn' },
-    { name: 'limit', body: { action: 'limit', ...chat, budgetMicros: 2_000_000 }, core: 'updateTask' },
+    { name: 'limit (an older command that changes nothing)', body: { action: 'limit', ...chat, budgetMicros: 2_000_000 } },
     { name: 'space-tools', body: { action: 'space-tools', space: 'Studio', capabilities: ['network.web'] }, core: 'updateSpace' },
     { name: 'decision-model', body: { action: 'decision-model', entries: [{ connection: 'openai', model: 'gpt-5-mini' }] }, core: 'saveDecisionModelSetting' },
     { name: 'switch', body: { action: 'switch', what: 'analytics', enabled: false }, app: 'setSwitch' },
@@ -453,7 +453,7 @@ describe('the grant, connect and disconnect commands', () => {
 
   it('turn what is typed into one body, and say usage mistakes as usage errors', () => {
     expect(parseSetupArguments(['grant', 'folder', '--to', 'Researcher', 'D:\\notes', '--edit']).body).toEqual({ action: 'folder', to: 'Researcher', path: 'D:\\notes', permissions: ['read', 'write'] });
-    expect(parseSetupArguments(['grant', 'limit', '--chat', 'ab12', '2.5']).body).toEqual({ action: 'limit', chat: 'ab12', budgetMicros: 2_500_000 });
+    expect(parseSetupArguments(['grant', 'limit', '--chat', 'ab12', '2.5']).body).toEqual({ action: 'limit', chat: 'ab12' });
     expect(parseSetupArguments(['grant', 'mcp', '--to', 'R', 'Notes', 'search', 'deny']).body).toEqual({ action: 'mcp-grant', to: 'R', server: 'Notes', tool: 'search', allowed: false });
     expect(parseSetupArguments(['grant', 'sync', '--confirm', 'An', 'replace']).body).toEqual({ action: 'sync', confirm: 'An', choice: 'replace' });
     expect(parseSetupArguments(['connect', 'search', 'exa'])).toMatchObject({ body: { action: 'search-key', provider: 'exa' } });

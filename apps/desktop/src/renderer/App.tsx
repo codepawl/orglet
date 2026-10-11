@@ -1248,7 +1248,6 @@ export function App() {
   const missingConnections = nativeProviders.filter(provider => !ready[provider]);
   // Choosing a model and attaching sources is the user's consent to send them; no separate permission step.
   // A channel is budgeted like a chat with the orglet that owns its row, the first one that answers.
-  const taskBudgetMicros = (team ?? channelWorkers[0] ?? worker)?.taskBudgetMicros ?? 500_000;
   const emptyChannelName = emptyChannel ? channelLabel(emptyChannel.name) : undefined;
   const unavailable = t('Chưa sẵn sàng');
   const recipientReady = (providers: Worker['provider'][]) => providers.every(provider => provider === 'demo' || ready[provider as keyof typeof ready]);
@@ -1295,10 +1294,10 @@ export function App() {
       const thread = team ? liveTeamTask(workspace!.tasks, team.id) : emptyChannel ? undefined : liveWorkerTask(workspace!.tasks, workerId);
       let chatId: string;
       if (thread) {
-        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros, ...planFirstInput(emptyDraftKey) });
+        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, ...planFirstInput(emptyDraftKey) });
         chatId = thread.id;
       } else {
-        chatId = await orglet.call('createTask', { ...firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }), ...planFirstInput(emptyDraftKey) });
+        chatId = await orglet.call('createTask', { ...firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders }), ...planFirstInput(emptyDraftKey) });
       }
       // The decision model reads the message once it is sent, for a permission the chat lacks; the new chat's bar shows it.
       readSentMessage(chatId, sentBrief, emptyChatHint?.enabled ?? false);
@@ -1342,8 +1341,8 @@ export function App() {
     const turn = { brief: message, sourceIds: [], excludedSources: [], consent: true, providerScopes };
     const thread = liveWorkerTask(workspace.tasks, asked.id);
     const chatId = thread
-      ? await orglet.call('reviseTask', { taskId: thread.id, ...turn, budgetMicros: thread.budgetMicros }).then(() => thread.id)
-      : await orglet.call('createTask', { workerId: asked.id, ...turn, budgetMicros: asked.taskBudgetMicros ?? 500_000 });
+      ? await orglet.call('reviseTask', { taskId: thread.id, ...turn }).then(() => thread.id)
+      : await orglet.call('createTask', { workerId: asked.id, ...turn });
     openTask(chatId);
     close();
     return true;
@@ -2820,7 +2819,7 @@ export function App() {
         actions={<>
           {/* The member column's toggle. Changing who is in the channel is a setting, so it lives in the chat's menu. */}
           {headerChannel && !sidePaneOpen && windowWidth > 1100 && <Button size="icon" className="topbar-members-toggle" aria-label={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')} title={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')} aria-pressed={membersOpen} onClick={toggleMembers}><Users size={18} /></Button>}
-          {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
+          {selected && detail && openTaskPaid && <span className="task-cost" role="status"><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0}', [formatMoney(openTaskUsed)])}</span>}
 
           {/* The chat is the screen; its files, changes, schedules and memory open from the menu, and a way back sits here (user, 2026-10-07). */}
           {(selected || team || worker || emptyChannel) && chatView === 'chat' && (windowWidth > 1000 || (windowWidth > 860 && !sidebar)) && <Button size="icon" className="topbar-details-toggle" aria-label={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')} title={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')} aria-pressed={detailsOpen} onClick={() => setPanel(detailsOpen ? null : 'activity')}><PanelRight size={18} /></Button>}
@@ -2855,7 +2854,7 @@ export function App() {
           {/* An orglet with no model: the ways to give it one take the place of the starters, which need a model. */}
           {!demoReplies() && emptyChatDemoWorker ? <ConnectWays orgletName={emptyChatDemoWorker.name} ways={connectWays(emptyChatDemoWorker)} /> : <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}
-            onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />}
+            onSchedule={worker && !team && !emptyChannel ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [] }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />}
         </div>
         <div className="thread-composer">
           {/* Nothing runs in an empty chat yet, so only a plan that ran out takes the island (user, 2026-10-06). */}
@@ -2956,7 +2955,7 @@ export function App() {
     {categoryDraft && <CategoryDialog key={`category:${categoryDraft.space.id}`} open draft={categoryDraft} workspace={workspace} onClose={() => setCategoryDraft(undefined)} />}
     {channelDraft && <ChannelDialog key={`channel:${channelDraft.id ?? 'new'}`} open draft={channelDraft} workspace={workspace} onClose={() => setChannelDraft(undefined)} onCreated={channelCreated} />}
     {privacyTaskId && workspace.tasks.find(task => task.id === privacyTaskId) && <LocalOnlyDialog key={`privacy:${privacyTaskId}`} task={workspace.tasks.find(task => task.id === privacyTaskId)!} workspace={workspace} onClose={() => setPrivacyTaskId(undefined)} />}
-    <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
+    <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} onClose={close} />
     <Toaster />
     <TerminalPairingDialog state={terminalAccess} />
     <TerminalAccessNotices state={terminalAccess} />

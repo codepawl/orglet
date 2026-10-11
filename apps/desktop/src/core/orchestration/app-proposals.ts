@@ -8,13 +8,8 @@ import { MAX_CREW_MEMBERS, RoutineInput, SkillInput, TeamInput, WorkerInput, typ
 import { Schedule, normalizedSchedule } from '../../shared/schedule';
 import { triggerOf, type RoutineTrigger, type WatchFolderView } from '../../shared/routine-triggers';
 import { Store, id, now } from '../storage/database';
-import { CAP_BELOW_RUN_LIMIT } from './routines';
 import { SelfImprovement } from './self-improvement';
 
-/** The one spending cap a worker chat starts with when its worker has none of its own (WorkerDialog's default). */
-const DEFAULT_TASK_BUDGET_MICROS = 500_000;
-/** The monthly cap a new crew gets when the proposal names none, the same one `createTemplate` gives. */
-const DEFAULT_TEAM_MONTHLY_BUDGET_MICROS = 5_000_000;
 const CHANGE_VALUE_LIMIT = 160;
 
 export type ProposedSettings = z.infer<typeof ProposeSettings>;
@@ -49,7 +44,7 @@ type MemberReference = { id: string } | { ref: string };
 type CrewPayload = { fields: Partial<Omit<z.infer<typeof TeamInput>, 'memberIds' | 'synthesizerId'>>; members?: MemberReference[]; lead?: MemberReference };
 type TemplatePayload = { team: MemberReference };
 type SkillPayload = { fields: Partial<z.infer<typeof SkillInput>> };
-type SchedulePayload = { fields: { name?: string; schedule?: Routine['schedule']; trigger?: RoutineTrigger; brief?: string; budgetMicros?: number; enabled?: boolean; target?: { worker: MemberReference } | { team: MemberReference } } };
+type SchedulePayload = { fields: { name?: string; schedule?: Routine['schedule']; trigger?: RoutineTrigger; brief?: string; budgetMicros?: number /* older proposals only: applied without it, ignored */; enabled?: boolean; target?: { worker: MemberReference } | { team: MemberReference } } };
 type SettingsPayload = { patch: Partial<CurrentSettings> };
 
 /** `null` and a missing key both mean the model left the field alone. */
@@ -129,7 +124,7 @@ function proposedSchedule(args: ScheduleArguments, current: Routine['schedule'] 
   const windowTo = given(args.windowTo);
   const hourlyFields = { everyHours: given(args.everyHours), weekdaysOnly: given(args.weekdaysOnly) };
   const hourlyGiven = Object.values(hourlyFields).some(value => value !== undefined) || windowFrom !== undefined || windowTo !== undefined;
-  const clockFields = { frequency: given(args.frequency), time: given(args.time), weekday: given(args.weekday), timeZone: given(args.timeZone), dailyCapMicros: given(args.dailyCapMicros) };
+  const clockFields = { frequency: given(args.frequency), time: given(args.time), weekday: given(args.weekday), timeZone: given(args.timeZone) };
   if (!hourlyGiven && Object.values(clockFields).every(value => value === undefined)) return undefined;
   const base: Routine['schedule'] = current ?? { frequency: 'daily', time: '09:00', weekday: 1, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
   const merged: Record<string, unknown> = { ...base, ...compact({ ...clockFields, ...hourlyFields }) };
@@ -217,14 +212,12 @@ export class AppProposals {
    */
   private scheduleSummary(routine: Routine) {
     const trigger = triggerOf(routine);
-    const { frequency, time, weekday, timeZone, everyHours, window, weekdaysOnly, dailyCapMicros } = routine.schedule;
+    const { frequency, time, weekday, timeZone, everyHours, window, weekdaysOnly } = routine.schedule;
     return {
       id: routine.id, name: routine.name, enabled: routine.enabled,
       start: trigger.kind === 'folder' ? { kind: trigger.kind, folderName: trigger.folderName } : { kind: trigger.kind },
       clock: { frequency, time, weekday, timeZone, ...(everyHours ? { everyHours } : {}), ...(window ? { window } : {}), ...(weekdaysOnly ? { weekdaysOnly } : {}) },
-      ...(dailyCapMicros !== undefined ? { dailyCapMicros } : {}),
       runsAs: routine.task.teamId ? { crewId: routine.task.teamId } : { orgletId: routine.task.workerId },
-      perRunBudgetMicros: routine.task.budgetMicros,
     };
   }
 
@@ -254,7 +247,6 @@ export class AppProposals {
       return { ref: value, title: found.title };
     };
     const proposer = run.snapshot.worker;
-    const proposerCap = proposer.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
     switch (name) {
       case 'propose_orglet': {
         const args = ProposeOrglet.partial().parse(rawArguments);
@@ -263,7 +255,7 @@ export class AppProposals {
         if (skillId) this.liveSkill(skillId);
         const chosen: Partial<WorkerInput> = {
           name: given(args.name), description: given(args.description), instructions: given(args.instructions),
-          provider: given(args.provider), modelId: given(args.modelId), effort: args.effort === 'auto' ? undefined : given(args.effort), skillId: skillRef ? undefined : skillId, taskBudgetMicros: given(args.taskBudgetMicros),
+          provider: given(args.provider), modelId: given(args.modelId), effort: args.effort === 'auto' ? undefined : given(args.effort), skillId: skillRef ? undefined : skillId,
         };
         const payload: OrgletPayload = { fields: chosen, ...(args.effort === 'auto' ? { resetEffort: true } : {}), ...(skillRef ? { skillRef: skillRef.ref } : {}) };
         const targetId = given(args.targetId);
@@ -272,8 +264,7 @@ export class AppProposals {
           const changes = editChanges(workerFields(current), { ...chosen, ...(skillRef ? { skillId: `ref:${skillRef.ref}` } : {}) });
           if (payload.resetEffort && current.effort) changes.push({ field: 'effort', before: current.effort, after: 'auto' });
           if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở Tí này.');
-          const raised = chosen.taskBudgetMicros !== undefined && chosen.taskBudgetMicros > (current.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS);
-          return { kind: 'orglet', action: 'edit', ref: given(args.ref), title: chosen.name ?? current.name, changes, payload: { ...payload, targetId }, hold: raised ? 'budget' : null };
+          return { kind: 'orglet', action: 'edit', ref: given(args.ref), title: chosen.name ?? current.name, changes, payload: { ...payload, targetId }, hold: null };
         }
         if (!chosen.name || !chosen.instructions) throw new ProposalError('Tạo Tí mới cần name và instructions.');
         const fields: Partial<WorkerInput> = {
@@ -281,11 +272,9 @@ export class AppProposals {
           provider: chosen.provider ?? proposer.provider,
           modelId: chosen.modelId ?? (chosen.provider ? undefined : proposer.modelId),
           skillId: skillRef ? undefined : chosen.skillId ?? proposer.skillId,
-          taskBudgetMicros: chosen.taskBudgetMicros ?? proposer.taskBudgetMicros,
         };
         const changes = creationChanges({ ...fields, ...(skillRef ? { skillId: `ref:${skillRef.ref}` } : {}) });
-        const raised = chosen.taskBudgetMicros !== undefined && chosen.taskBudgetMicros > proposerCap;
-        return { kind: 'orglet', action: 'create', ref: given(args.ref), title: chosen.name, changes, payload: { ...payload, fields }, hold: raised ? 'budget' : null };
+        return { kind: 'orglet', action: 'create', ref: given(args.ref), title: chosen.name, changes, payload: { ...payload, fields }, hold: null };
       }
       case 'propose_crew': {
         const args = ProposeCrew.partial().parse(rawArguments);
@@ -301,7 +290,6 @@ export class AppProposals {
         const leadName = leadId ? this.liveWorker(leadId).name : leadRef ? `ref:${leadRef.ref}` : undefined;
         const chosen: CrewPayload['fields'] = {
           name: given(args.name), instructions: given(args.instructions), workflow: given(args.workflow),
-          monthlyBudgetMicros: given(args.monthlyBudgetMicros), taskBudgetMicros: given(args.taskBudgetMicros),
         };
         const targetId = given(args.targetId);
         if (targetId) {
@@ -309,19 +297,15 @@ export class AppProposals {
           const currentView = { ...teamFields(current), memberIds: current.memberIds.map(memberId => this.workerName(memberId)), synthesizerId: this.workerName(current.synthesizerId) };
           const changes = editChanges(currentView, { ...chosen, memberIds: memberNames, synthesizerId: leadName });
           if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở kênh này.');
-          const raised = (chosen.monthlyBudgetMicros !== undefined && chosen.monthlyBudgetMicros > current.monthlyBudgetMicros)
-            || (chosen.taskBudgetMicros !== undefined && chosen.taskBudgetMicros > (current.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS));
           const payload: CrewPayload = { fields: chosen, ...(members ? { members } : {}), ...(lead ? { lead } : {}) };
-          return { kind: 'crew', action: 'edit', ref: given(args.ref), title: chosen.name ?? current.name, changes, payload: { ...payload, targetId }, hold: raised ? 'budget' : null };
+          return { kind: 'crew', action: 'edit', ref: given(args.ref), title: chosen.name ?? current.name, changes, payload: { ...payload, targetId }, hold: null };
         }
         if (!chosen.name || !chosen.instructions) throw new ProposalError('Tạo kênh mới cần name và instructions.');
         if (!members) throw new ProposalError('Tạo kênh mới cần ít nhất một thành viên (memberIds hoặc memberRefs).');
-        const fields: CrewPayload['fields'] = { ...chosen, workflow: chosen.workflow ?? 'parallel', monthlyBudgetMicros: chosen.monthlyBudgetMicros ?? DEFAULT_TEAM_MONTHLY_BUDGET_MICROS };
+        const fields: CrewPayload['fields'] = { ...chosen, workflow: chosen.workflow ?? 'parallel' };
         const changes = creationChanges({ ...fields, memberIds: memberNames, synthesizerId: leadName ?? memberNames![0] });
-        const raised = (chosen.monthlyBudgetMicros !== undefined && chosen.monthlyBudgetMicros > DEFAULT_TEAM_MONTHLY_BUDGET_MICROS)
-          || (chosen.taskBudgetMicros !== undefined && chosen.taskBudgetMicros > proposerCap);
         const payload: CrewPayload = { fields, members, lead: lead ?? members[0] };
-        return { kind: 'crew', action: 'create', ref: given(args.ref), title: chosen.name, changes, payload, hold: raised ? 'budget' : null };
+        return { kind: 'crew', action: 'create', ref: given(args.ref), title: chosen.name, changes, payload, hold: null };
       }
       case 'propose_crew_template': {
         const args = ProposeCrewTemplate.partial().parse(rawArguments);
@@ -408,19 +392,18 @@ export class AppProposals {
   private draftScheduleEdit(targetId: string, args: ScheduleArguments, target: SchedulePayload['fields']['target'], targetName: string | undefined): ReturnType<AppProposals['draft']> {
     const current = this.store.get<Routine>('routines', targetId);
     const schedule = proposedSchedule(args, current.schedule);
-    if (schedule?.dailyCapMicros !== undefined && schedule.dailyCapMicros < current.task.budgetMicros) throw new ProposalError(CAP_BELOW_RUN_LIMIT);
     const trigger = this.proposedStart(args, current.trigger);
     const enabled = given(args.enabled);
     const fields: SchedulePayload['fields'] = { name: given(args.name), brief: given(args.brief), schedule, trigger, target, enabled };
     const currentView = {
-      name: current.name, brief: current.task.brief, schedule: describeSchedule(current.schedule), dailyCapMicros: current.schedule.dailyCapMicros,
+      name: current.name, brief: current.task.brief, schedule: describeSchedule(current.schedule),
       trigger: describeTrigger(triggerOf(current)), target: current.task.teamId ? this.teamName(current.task.teamId) : this.workerName(current.task.workerId),
       enabled: current.enabled ? 'true' : 'false',
     };
     // Without a word on it, a change to an enabled schedule is saved switched off: turning it on again is the approval.
     const nextEnabled = enabled === undefined ? (current.enabled ? 'false' : undefined) : String(enabled);
     const changes = editChanges(currentView, {
-      name: fields.name, brief: fields.brief, schedule: schedule ? describeSchedule(schedule) : undefined, dailyCapMicros: schedule?.dailyCapMicros,
+      name: fields.name, brief: fields.brief, schedule: schedule ? describeSchedule(schedule) : undefined,
       trigger: trigger ? describeTrigger(trigger) : undefined, target: targetName, enabled: nextEnabled,
     });
     if (!changes.length) throw new ProposalError('Đề xuất không thay đổi gì ở lịch này.');
@@ -430,7 +413,6 @@ export class AppProposals {
   private draftScheduleCreation(run: Run, task: Task, args: ScheduleArguments, target: SchedulePayload['fields']['target'], targetName: string | undefined): ReturnType<AppProposals['draft']> {
     if (given(args.enabled) !== undefined) throw new ProposalError(NEW_SCHEDULE_IS_OFF);
     const proposer = run.snapshot.worker;
-    const proposerCap = proposer.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
     const name = given(args.name);
     const brief = given(args.brief);
     const trigger = this.proposedStart(args, undefined);
@@ -441,11 +423,9 @@ export class AppProposals {
     if (!name || !brief || (!startsOnFolder && !clockStated)) throw new ProposalError('Tạo lịch mới cần name, brief, frequency và time.');
     const schedule = proposedSchedule(args, undefined) ?? proposedSchedule({ ...args, frequency: 'daily', time: '09:00' }, undefined)!;
     const chatTarget: SchedulePayload['fields']['target'] = target ?? (task.teamId ? { team: { id: task.teamId } } : { worker: { id: proposer.id } });
-    const budgetMicros = 'team' in chatTarget && 'id' in chatTarget.team ? this.liveTeam(chatTarget.team.id).taskBudgetMicros ?? proposerCap : proposerCap;
-    if (schedule.dailyCapMicros !== undefined && schedule.dailyCapMicros < budgetMicros) throw new ProposalError(CAP_BELOW_RUN_LIMIT);
-    const fields: SchedulePayload['fields'] = { name, brief, schedule, target: chatTarget, budgetMicros, ...(trigger ? { trigger } : {}) };
+    const fields: SchedulePayload['fields'] = { name, brief, schedule, target: chatTarget, ...(trigger ? { trigger } : {}) };
     const changes = creationChanges({
-      name, brief, schedule: describeSchedule(schedule), dailyCapMicros: schedule.dailyCapMicros, trigger: trigger ? describeTrigger(trigger) : undefined,
+      name, brief, schedule: describeSchedule(schedule), trigger: trigger ? describeTrigger(trigger) : undefined,
       target: targetName ?? (task.teamId ? this.teamName(task.teamId) : proposer.name), enabled: 'false',
     });
     return { kind: 'schedule', action: 'create', title: name, changes, payload: { fields }, hold: null };
@@ -531,10 +511,10 @@ export class AppProposals {
         if (payload.targetId) {
           const current = this.liveWorker(payload.targetId);
           const previous = workerFields(current);
-          const saved = this.applier.saveWorker(WorkerInput.parse({ ...previous, ...compact(payload.fields), ...(payload.resetEffort ? { effort: undefined } : {}), ...(skillId ? { skillId } : {}), id: current.id }));
+          const saved = this.applier.saveWorker(WorkerInput.parse({ ...previous, ...compactWithoutTaskBudget(payload.fields), ...(payload.resetEffort ? { effort: undefined } : {}), ...(skillId ? { skillId } : {}), id: current.id }));
           return { target: { kind: 'worker', id: saved.id }, undo: { kind: 'restore', entity: 'worker', previous } };
         }
-        const saved = this.applier.saveWorker(WorkerInput.parse({ ...(avatar ? { avatar } : {}), ...compact(payload.fields), skillId }));
+        const saved = this.applier.saveWorker(WorkerInput.parse({ ...(avatar ? { avatar } : {}), ...compactWithoutTaskBudget(payload.fields), skillId }));
         return { target: { kind: 'worker', id: saved.id }, undo: { kind: 'delete', entity: 'worker', id: saved.id } };
       }
       case 'crew': {
@@ -544,10 +524,10 @@ export class AppProposals {
         if (payload.targetId) {
           const current = this.liveTeam(payload.targetId);
           const previous = teamFields(current);
-          const saved = this.applier.saveTeam(TeamInput.parse({ ...previous, ...compact(payload.fields), ...(memberIds ? { memberIds } : {}), ...(synthesizerId ? { synthesizerId } : {}), id: current.id }));
+          const saved = this.applier.saveTeam(TeamInput.parse({ ...previous, ...compactWithoutTaskBudget(payload.fields), ...(memberIds ? { memberIds } : {}), ...(synthesizerId ? { synthesizerId } : {}), id: current.id }));
           return { target: { kind: 'team', id: saved.id }, undo: { kind: 'restore', entity: 'team', previous } };
         }
-        const saved = this.applier.saveTeam(TeamInput.parse({ ...compact(payload.fields), memberIds, synthesizerId }));
+        const saved = this.applier.saveTeam(TeamInput.parse({ ...compactWithoutTaskBudget(payload.fields), memberIds, synthesizerId }));
         return { target: { kind: 'team', id: saved.id }, undo: { kind: 'delete', entity: 'team', id: saved.id } };
       }
       case 'crew_template': {
@@ -584,7 +564,7 @@ export class AppProposals {
         }
         const saved = this.applier.saveRoutine(RoutineInput.parse({
           name: payload.fields.name, enabled: false, schedule: payload.fields.schedule, ...(payload.fields.trigger ? { trigger: payload.fields.trigger } : {}),
-          task: { ...chat, brief: payload.fields.brief, sourceIds: [], consent: false, budgetMicros: payload.fields.budgetMicros ?? DEFAULT_TASK_BUDGET_MICROS },
+          task: { ...chat, brief: payload.fields.brief, sourceIds: [], consent: false },
         }));
         return { target: { kind: 'routine', id: saved.id } };
       }
@@ -669,6 +649,12 @@ export class AppProposals {
 }
 
 /** Drops the keys a proposal left alone, so a merge keeps the current values underneath. */
+/** An older proposal may carry a per-task budget; a task has no limit now, so applying one leaves the amount out. */
+function compactWithoutTaskBudget<Value extends Record<string, unknown> & { taskBudgetMicros?: unknown }>(fields: Value): Partial<Omit<Value, 'taskBudgetMicros'>> {
+  const { taskBudgetMicros: _ignored, ...kept } = fields;
+  return compact(kept);
+}
+
 function compact<Value extends Record<string, unknown>>(fields: Value): Partial<Value> {
   const kept: Partial<Value> = {};
   for (const [key, value] of Object.entries(fields)) if (value !== undefined) Object.assign(kept, { [key]: value });

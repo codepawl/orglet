@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { z } from 'zod';
-import { MAX_CREW_MEMBERS, type ChannelLeadSettings, type Task, type Team, type TeamInput, type Worker } from '../../shared/contracts';
+import { LEGACY_MONTHLY_BUDGET_MICROS, MAX_CREW_MEMBERS, type ChannelLeadSettings, type Task, type Team, type TeamInput, type Worker } from '../../shared/contracts';
 import { Channel, channelMode, channelNameFrom, channelOrgletIds, EmptyChannel, isLegacyGroupChat, MAX_CHANNEL_MEMBERS, orgletMembers, type ChannelAccess, type ChannelFields, type ChannelMember } from '../../shared/channels';
 import { membersOutsideScope, scopeOrgletIds } from '../../shared/spaces';
 import { SPACE_NOT_FOUND, storedSpaces } from './spaces';
@@ -19,8 +19,6 @@ const WIDER_THAN_ITS_PLACE = 'Kênh chỉ có thể có những Tí mà mục ho
 
 /** The lead's instructions a channel starts with when it is switched to the lead splitting the work. */
 export const DEFAULT_LEAD_INSTRUCTIONS = 'Gộp phần việc của từng Tí thành một câu trả lời. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.';
-const DEFAULT_MONTHLY_BUDGET_MICROS = 5_000_000;
-const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 const DEFAULT_CONCURRENT_TASKS = 4;
 
 /** A crew record as the crew editor saves it: a new one has no id yet. */
@@ -218,9 +216,9 @@ export function crewForChannel(name: string, orgletIds: readonly string[], setti
     memberIds,
     synthesizerId: lead,
     workflow: settings?.workflow ?? existing?.workflow ?? 'parallel',
-    monthlyBudgetMicros: settings?.monthlyBudgetMicros ?? existing?.monthlyBudgetMicros ?? DEFAULT_MONTHLY_BUDGET_MICROS,
+    monthlyBudgetMicros: existing?.monthlyBudgetMicros ?? LEGACY_MONTHLY_BUDGET_MICROS,
     maxConcurrentTasks: settings?.maxConcurrentTasks ?? existing?.maxConcurrentTasks ?? DEFAULT_CONCURRENT_TASKS,
-    taskBudgetMicros: settings?.taskBudgetMicros ?? existing?.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS,
+    taskBudgetMicros: settings?.taskBudgetMicros ?? existing?.taskBudgetMicros,
     ...optional,
   };
 }

@@ -1777,8 +1777,6 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-app { display:flex; flex-direction:column; gap:16px; }
 /* An hourly schedule's window and weekdays switches, and the daily cap with its ceiling under it (COD-288). */
 .routine-hours { display:flex; flex-direction:column; gap:12px; min-width:0; }
-.routine-cap { display:flex; flex-direction:column; gap:6px; min-width:0; }
-.routine-cap p { margin:0; }
 .routine-sources .org-panel-heading h3,.routine-folder .org-panel-heading h3 { font-size:13px; font-weight:500; }
 /* The watched folder: its name and its read-only level, never its path, which stays in the core. */
 .routine-folder-name { display:flex; align-items:center; gap:8px; min-width:0; margin:0; font-size:13px; }

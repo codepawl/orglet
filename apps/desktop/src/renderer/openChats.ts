@@ -184,7 +184,7 @@ export type OpenChatFacts = {
   status?: TaskStatus;
   /** The newest answer was opened. */
   seen: boolean;
-  /** A run stopped until the person acts: a checkpoint, a question, an MCP approval, the budget (`waitsForPerson`). */
+  /** A run stopped until the person acts: a checkpoint, a question, an MCP approval, an old budget stop (`waitsForPerson`). */
   waitsForPerson?: boolean;
   /** A run's changes wait for the person's review before reaching the folder (`heldForReview`). */
   heldForReview?: boolean;

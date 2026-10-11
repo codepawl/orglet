@@ -1,9 +1,9 @@
 import { demoReplies } from '../demoReplies';
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlignLeft, Brain, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
+import { AlignLeft, Brain, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, SlidersHorizontal } from 'lucide-react';
 import { isMemory } from '../../shared/knowledge';
 import { MemoryList } from './Memories';
-import { isPaidApi, type Connections, type Worker, type Workspace } from '../../shared/contracts';
+import { type Connections, type Worker, type Workspace } from '../../shared/contracts';
 import { Effort, modelEffort, resolveEffort } from '../../shared/effort';
 import { useCached } from '../prefetch';
 import { CATALOG_HINT_IDS } from '../../shared/models';
@@ -14,7 +14,7 @@ import { permissionsForLevel, type WorkspaceLevel } from '../../shared/capabilit
 import { snapshotCapabilities, withCapability, type ToolCapability } from '../../shared/tool-policy';
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import { harnessCatalog, harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
-import { FieldLabel, MoneyInput } from './ui';
+import { FieldLabel } from './ui';
 import { MarketProfileUpdate } from './Marketplace';
 import { Select, type SelectOption } from './Select';
 import { ModelPicker } from './ModelPicker';
@@ -29,7 +29,6 @@ import { fieldMessage } from '../fieldErrors';
 import { readiness, readyFirst, type ProviderChoice, type Readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
 import { PermissionControls, type FolderChoice } from './PermissionControls';
-import { toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
@@ -42,7 +41,7 @@ import { LocalOnlyControl } from './LocalOnlyControl';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
 type Tab = 'general' | 'skill' | 'permissions' | 'memory';
-type InvalidField = 'name' | 'instructions' | 'budget' | 'modelId';
+type InvalidField = 'name' | 'instructions' | 'modelId';
 const tabs = [
   { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'skill' as const, label: 'Kỹ năng', icon: <Sparkles size={16} /> },
@@ -50,34 +49,11 @@ const tabs = [
   { id: 'memory' as const, label: 'Ghi nhớ', icon: <Brain size={16} /> },
 ];
 
-/** How this connection's requests are charged, beside its model picker. */
-const DEFAULT_TASK_BUDGET = toAmount(500_000);
-
-/**
- * The limit field's starting text. Claude Code runs on the person's plan, so an orglet on it starts with no limit
- * (an empty field); a paid API needs one, so it starts at the default (COD-253).
- */
-function initialBudget(worker?: Worker): string {
-  if (worker?.taskBudgetMicros !== undefined) return toAmount(worker.taskBudgetMicros);
-  if (worker?.provider === 'claude-code') return '';
-  return DEFAULT_TASK_BUDGET;
-}
-
-/**
- * Keeps a limit the person typed and swaps only the untouched default: moving to Claude Code clears it, since that
- * runs on the person's plan, and moving to a paid API puts the default back into an empty field.
- */
-function budgetForProvider(current: string, provider: Worker['provider']): string {
-  if (provider === 'claude-code' && current === DEFAULT_TASK_BUDGET) return '';
-  if (provider !== 'claude-code' && current.trim() === '') return DEFAULT_TASK_BUDGET;
-  return current;
-}
-
 function customConnectionCostNote(connection: CustomConnection): string {
   const pricing = connectionPricing(connection);
   if (pricing.kind === 'local') return t('Máy chủ trên máy này hoặc mạng nội bộ: tính miễn phí. Nhập giá trong Cài đặt nếu bạn muốn tính khác.');
   if (pricing.kind === 'entered') return t('Tính theo giá bạn nhập: giữ chỗ trước mỗi request, chốt theo số token thật.');
-  return t('Orglet không biết giá của kết nối này: mỗi request giữ chỗ phần còn lại của giới hạn mỗi task cho tới khi bạn nhập chi phí thật trong Cài đặt → Chi phí & giới hạn.');
+  return t('Orglet không biết giá của kết nối này: chi phí chỉ được ghi khi bạn nhập chi phí thật trong Cài đặt → Chi phí.');
 }
 
 /**
@@ -157,7 +133,6 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const effortSupport = modelEffort(provider, effortEntry?.resolvedId ?? selectedModel ?? effortEntry?.id, effortEntry?.effort);
   const resolvedEffort = resolveEffort(effort || undefined, undefined, effortSupport.capability, effortSupport.transport, effortSupport.unsupported);
   const [skillId, setSkill] = useState(worker?.skillId ?? workspace.skills[0].id);
-  const [budget, setBudget] = useState(() => startsOnSuggestion ? budgetForProvider(worker ? initialBudget(worker) : DEFAULT_TASK_BUDGET, suggestedProvider) : initialBudget(worker));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
   const [description, setDescription] = useState(worker?.description ?? '');
   const [localOnly, setLocalOnly] = useState(Boolean(worker && workspace.syncLocalOnly?.workers.includes(worker.id)));
@@ -176,12 +151,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     if (!startsOnSuggestion || providerPicked || suggestedProvider === provider) return;
     setProvider(suggestedProvider);
     setModelId('');
-    setBudget(current => budgetForProvider(current, suggestedProvider));
   }, [startsOnSuggestion, providerPicked, suggestedProvider, provider]);
   const customConnection = findCustomConnection(workspace.customConnections, provider);
-  const paid = isPaidApi(provider);
-  // Claude Code is the one harness that takes a spending cap, so its chat's limit is set here too.
-  const capped = paid || provider === 'claude-code';
   const skill = workspace.skills.find(item => item.id === skillId);
   // A new worker nobody picked a face for starts on one the other workers do not show, face or colour, and keeps it
   // once saved; picking anything in the avatar picker takes over from there.
@@ -209,10 +180,6 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const submit = async () => {
     if (!name.trim()) return fail('general', t('Nhập tên Tí.'), 'name');
     if (!instructions.trim()) return fail('general', t('Hướng dẫn không được để trống.'), 'instructions');
-    // An empty limit on Claude Code means none: it runs on the person's plan (COD-253).
-    const uncapped = provider === 'claude-code' && budget.trim() === '';
-    const taskBudgetMicros = uncapped ? undefined : toMicros(budget);
-    if (taskBudgetMicros !== undefined && (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0)) return fail('general', t('Giới hạn mỗi task phải là số không âm.'), 'budget');
     const trimmedModel = modelId.trim();
     if (trimmedModel.length > 200) return fail('general', t('ID model tối đa 200 ký tự.'), 'modelId');
     const modelIssue = openCodeModelIssue(provider, trimmedModel);
@@ -223,7 +190,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     const pickedServers = mcpServerIds.filter(serverId => (workspace.mcpServers ?? []).some(server => server.id === serverId));
     setBusy(true); clearError();
     try {
-      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, localOnly, ...(effort ? { effort } : {}), ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, localOnly, ...(effort ? { effort } : {}), ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name);
       if (!worker) onCreated?.(saved.id);
@@ -243,7 +210,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} />{fieldMessage('instructions', invalid, error)}</label>
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
       <LocalOnlyControl checked={localOnly} onChange={setLocalOnly} permanent={worker && workspace.syncLocalOnly?.permanentWorkers?.includes(worker.id)} worker />
-      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProviderPicked(true); setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
+      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProviderPicked(true); setProvider(next); if (next !== provider) { setModelId(''); } }}
         options={providerOptions} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} required={modelIdRequired(provider)} />}
       {provider !== 'demo' && fieldMessage('modelId', invalid, error)}
@@ -255,14 +222,12 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         {resolvedEffort.support === 'unknown' && <p className="muted">{t('Chưa xác minh mức suy nghĩ cho model và kết nối này; lần chạy giữ mặc định của kết nối.')}</p>}
         {resolvedEffort.support === 'unsupported' && <p className="muted">{t('Model và kết nối này không hỗ trợ mức suy nghĩ đã chọn; lần chạy giữ mặc định của kết nối.')}</p>}
       </>}
-      {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
-      {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}
-      {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}
+      {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó.', [harnessNames[provider]])}</p>}
+      {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434.')}</p>}
+      {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request.')}</p>}
       {customConnection && <p className="muted">{customConnectionCostNote(customConnection)}</p>}
-      {provider === 'codepawl' && <p className="muted">{t('CodePawl router có hạn mức miễn phí mỗi ngày và gói riêng; Orglet không giữ chỗ ngân sách cho khoản này.')}</p>}
-      {provider === 'opencode-go' && <p className="muted">{t('Tính vào hạn mức gói Go, không qua ngân sách Orglet. Bật Use balance thì phần vượt trừ vào số dư Zen.')}</p>}
-      {capped && <label><FieldLabel icon={Wallet} required={paid}>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} placeholder={paid ? undefined : t('Không giới hạn')} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} />{fieldMessage('budget', invalid, error)}</label>}
-      {provider === 'claude-code' && <p className="muted">{t('Claude Code dừng khi ước tính của nó cho một lượt chạm số này. Để trống để chạy theo gói, không giới hạn.')}</p>}
+      {provider === 'codepawl' && <p className="muted">{t('CodePawl router có hạn mức miễn phí mỗi ngày và gói riêng.')}</p>}
+      {provider === 'opencode-go' && <p className="muted">{t('Tính vào hạn mức gói Go. Bật Use balance thì phần vượt trừ vào số dư Zen.')}</p>}
     </>}
     {tab === 'skill' && <>
       <Select ariaLabel={t('Kỹ năng')} value={skillId} onChange={setSkill} options={workspace.skills.map(item => { const pending = !!item.package && item.package.reviewedHash !== item.package.hash; return { value: item.id, label: item.name, detail: pending ? t('v{0} · Cần review trong Thư viện', [item.revision]) : `v${item.revision}`, icon: <Sparkles size={16} />, disabled: pending }; })} />

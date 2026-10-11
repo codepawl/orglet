@@ -113,25 +113,11 @@ it('runs dependencies first regardless of plan order and passes their committed 
   expect(result.detail.task.status).toBe('completed');
 });
 
-it('waits for budget before a dependent request when the connection budget is exhausted', async () => {
+it('does not wait for budget before a dependent request, whatever amount the connection setting still holds', async () => {
   const result = await executeTeam({ dependencies: true, exhaustBudgetAfterFirst: true });
-  expect(result.calls).toEqual(['first']);
-  expect(result.detail.task.status).toBe('waiting_budget');
-  expect(result.detail.artifacts).toHaveLength(1);
-  expect(result.detail.artifacts[0].report.summary).toBe('committed-first');
-  expect(result.detail.runs.some(run => run.stage === 'member' && run.status === 'waiting_budget')).toBe(true);
-  expect(result.detail.runs.some(run => run.stage === 'synthesis' && run.status === 'completed')).toBe(false);
-  const retainedId = result.detail.artifacts[0].id;
-  store.setSetting('connectionLimitMicros', 10_000_000);
-  await result.core.command('resume', { id: result.taskId });
-  for (let attempt = 0; attempt < 300 && result.core.teams.isActive(result.taskId); attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-  expect(result.core.teams.isActive(result.taskId)).toBe(false);
   expect(result.calls).toEqual(['first', 'second', 'synthesis']);
-  const resumed = store.detail(result.taskId);
-  expect(resumed.task.status).toBe('completed');
-  expect(resumed.artifacts.filter(artifact => artifact.id === retainedId)).toHaveLength(1);
+  expect(result.detail.task.status).toBe('completed');
+  expect(result.detail.runs.some(run => run.status === 'waiting_budget')).toBe(false);
 });
 
 it('serializes overlapping write ownership while preserving parallel independent work', async () => {

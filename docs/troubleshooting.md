@@ -32,9 +32,9 @@ Cancelling a harness run waits for the CLI process tree to end. When it cannot c
 
 Type the model ID by hand; the orglet runs with it. The list comes from the provider's own API or CLI and needs a working key or sign-in. See [Connections → Model IDs](connections.md#model-ids).
 
-## The chat says it is waiting for budget
+## An old chat says it is waiting for budget
 
-A Claude Code run reached the chat's **Limit per task**. Raise it in the orglet's settings, or in the channel's settings under **Giới hạn mỗi task**, and send the next message; the new limit applies to it. For API orglets, check **Settings → Costs & limits** for the monthly limit per connection.
+Orglet no longer stops a chat for money, so a chat can only show this if an earlier version stopped it. It appears as paused: press **Resume**, or send a message. A provider that refuses a request because your account is out of credit says so in the chat; add credit with the provider.
 
 ## The chat is blocked by an earlier attempt
 

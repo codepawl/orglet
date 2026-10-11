@@ -79,7 +79,7 @@ The orglet cannot answer until it has a model. Its chat lists three ways to give
 
 Check the **Model** and **Model ID** fields and choose **Save orglet**. The chat header shows the new connection at once.
 
-The orglet's settings are also in the chat's **⋯** menu, as **Orglet settings** (**Channel settings** in a channel). **Chat settings** in the same menu renames the chat, changes who answers it and sets its cost limit.
+The orglet's settings are also in the chat's **⋯** menu, as **Orglet settings** (**Channel settings** in a channel). **Chat settings** in the same menu renames the chat, and changes who answers it.
 
 To start a new conversation later, open **⋯** next to **Details** and choose **Archive**. The next message on that worker starts a fresh chat. Search still finds the old one.
 

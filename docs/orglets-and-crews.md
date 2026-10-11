@@ -16,7 +16,7 @@ The dialog has four tabs:
 
 | Tab | What is there |
 |---|---|
-| **General** | Avatar, name, description, instructions, model, limit per task. The avatar Orglet picks is a face and colour your other orglets do not already show, when one fits, and it stays once saved. A face is a body and a pair of eyes: every body is the Orglet bubble with its small corner in another place or with other proportions (tall, wide, leaf, soft), and the eyes smile, wink, narrow or open wide. The sides of a body bow a little, and a large face is a round solid with no flat edge, so it stays one volume when it turns to look. Nothing is worn: the hats and accessories earlier versions had are gone, and an orglet that had one now has the body that took its place. **Customize** lists the faces by body. |
+| **General** | Avatar, name, description, instructions, model. The avatar Orglet picks is a face and colour your other orglets do not already show, when one fits, and it stays once saved. A face is a body and a pair of eyes: every body is the Orglet bubble with its small corner in another place or with other proportions (tall, wide, leaf, soft), and the eyes smile, wink, narrow or open wide. The sides of a body bow a little, and a large face is a round solid with no flat edge, so it stays one volume when it turns to look. Nothing is worn: the hats and accessories earlier versions had are gone, and an orglet that had one now has the body that took its place. **Customize** lists the faces by body. |
 | **Skill** | A reusable set of instructions the orglet works from. Skill packages imported from a folder must be reviewed in the Library before you can pick them. |
 | **Permissions** | What the orglet's own chat may do: attached sources, data checks, the web, a working folder, and proposing app changes. See [Permissions](permissions-and-learning.md#permissions). |
 | **Memory** | What the orglet remembered from its chats. Edit, pin or delete lines here. See [Memory](memory.md). |
@@ -74,7 +74,7 @@ With the lead splitting the work, **How it works** also has:
 - **Workflow**: **In parallel, then combine** (they work at the same time, two at once) or **In sequence, then combine** (each gets the previous one's result).
 - **Lead's instructions**: how the lead combines the parts.
 
-And a **Limits & shifts** tab: **Channel limit / month**, **Limit per task**, **Concurrent tasks** (1–8; above 4 a short note says more at once means more spend at once), and, if you want, **Limit working hours** with a time zone. Outside work hours nothing new starts; a running step finishes and the channel leaves an end-of-shift handoff.
+And a **Shifts & concurrency** tab: **Concurrent tasks** (1–8; above 4 a short note says more at once means more spend at once), and, if you want, **Limit working hours** with a time zone. Outside work hours nothing new starts; a running step finishes and the channel leaves an end-of-shift handoff.
 
 Switching a channel back to taking turns drops these settings. A schedule that still runs the channel the lead's way has to be turned off first.
 

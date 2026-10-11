@@ -4,7 +4,7 @@ import { FormatPreference, Id, LogoColor, MAX_CREW_MEMBERS, ProviderId } from '.
 import { CustomModelId } from './models';
 import { FontFamily } from './fonts';
 import { Language } from './i18n';
-import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency, TimeZone } from './schedule';
+import { ClockTime, EveryHours, ScheduleFrequency, TimeZone } from './schedule';
 import { ProposalImprovement, ProposeSelfImprovement } from './self-improvement';
 
 /**
@@ -18,7 +18,6 @@ import { ProposalImprovement, ProposeSelfImprovement } from './self-improvement'
 const Text = (max: number) => z.string().trim().min(1).max(max);
 /** A short handle a later proposal in the same reply uses to point at something proposed before it. */
 export const ProposalRef = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/i, 'Ref là chữ, số, gạch nối hoặc gạch dưới.');
-const Budget = z.number().int().min(1000).max(100_000_000);
 const Workflow = z.enum(['sequential', 'parallel']);
 const Weekday = z.number().int().min(0).max(6);
 const Theme = z.enum(['system', 'light', 'dark']);
@@ -35,7 +34,6 @@ export const ProposeOrglet = z.object({
   effort: z.union([Effort, z.literal('auto')]).nullable(),
   skillId: Id.nullable(),
   skillRef: ProposalRef.nullable(),
-  taskBudgetMicros: Budget.nullable(),
 }).strict();
 export const ProposeCrew = z.object({
   targetId: Id.nullable(),
@@ -47,8 +45,6 @@ export const ProposeCrew = z.object({
   leadId: Id.nullable(),
   leadRef: ProposalRef.nullable(),
   workflow: Workflow.nullable(),
-  monthlyBudgetMicros: z.number().int().min(1000).max(1_000_000_000).nullable(),
-  taskBudgetMicros: Budget.nullable(),
 }).strict();
 export const ProposeCrewTemplate = z.object({
   teamId: Id.nullable(),
@@ -67,7 +63,7 @@ export const ProposeSkill = z.object({
 export const ScheduleStart = z.enum(['clock', 'folder']);
 /**
  * A schedule proposal covers what the editor covers: the clock (daily, weekdays, weekly, or every few hours inside
- * an optional window), the daily cap and the folder trigger. The pieces come from `shared/schedule.ts`, the same
+ * an optional window) and the folder trigger. The pieces come from `shared/schedule.ts`, the same
  * ones the stored routine is checked with. `enabled` is only for an existing schedule (`targetId`): turning it on or
  * off is a card the person applies. A schedule is never deleted by a proposal, and there is no field for it.
  */
@@ -83,7 +79,6 @@ export const ProposeSchedule = z.object({
   windowFrom: ClockTime.nullable(),
   windowTo: ClockTime.nullable(),
   weekdaysOnly: z.boolean().nullable(),
-  dailyCapMicros: z.number().int().min(1000).max(MAX_DAILY_CAP_MICROS).nullable(),
   start: ScheduleStart.nullable(),
   watchFolderId: Id.nullable(),
   enabled: z.boolean().nullable(),
@@ -154,9 +149,10 @@ export const ProposalTarget = z.object({ kind: z.enum(['worker', 'team', 'skill'
 export type ProposalTarget = z.infer<typeof ProposalTarget>;
 /**
  * Why a proposal is never applied on its own, even for a worker whose auto-apply switch is on: the run read
- * content nobody vetted, the change raises a spending limit, applying needs a save location, or it changes how
+ * content nobody vetted, applying needs a save location, or it changes how
  * the proposing worker itself works (COD-162), or it turns a schedule on, which lets it run and spend.
  */
+// 'budget' is never produced now; kept only so proposals saved earlier still parse (owner, 2026-10-11).
 export const ProposalHold = z.enum(['untrusted', 'budget', 'template', 'self', 'enable']);
 export type ProposalHold = z.infer<typeof ProposalHold>;
 /** A failed apply stays pending with its error on the card, so the user can fix the cause and try again. */

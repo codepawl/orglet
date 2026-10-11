@@ -18,7 +18,7 @@ const icons: Record<ConnectWay['id'], ReactNode> = {
 
 function wayText(id: ConnectWay['id']): { title: string; detail: string } {
   if (id === 'plan') return { title: t('Dùng gói bạn đang trả'), detail: t('Claude Code, Codex, Cursor Agent hoặc Gemini CLI đã đăng nhập trên máy này. Không thêm hóa đơn API.') };
-  if (id === 'key') return { title: t('Nhập API key'), detail: t('OpenAI, Anthropic, Grok, OpenRouter hoặc một máy chủ tương thích OpenAI. Trả theo lượng dùng, có giới hạn bạn đặt.') };
+  if (id === 'key') return { title: t('Nhập API key'), detail: t('OpenAI, Anthropic, Grok, OpenRouter hoặc một máy chủ tương thích OpenAI. Trả theo lượng dùng.') };
   return { title: t('Chạy model trên máy này'), detail: t('Ollama đang chạy trên máy. Không gửi gì ra ngoài.') };
 }
 

@@ -175,7 +175,6 @@ export function formatSchedules(value: SchedulesValue): string {
     row.enabled ? 'on' : 'off',
     row.target,
     `${scheduleTiming(row)} (${row.timeZone})`,
-    row.dailyCapMicros ? t('{0} mỗi lần, {1} mỗi ngày', formatUsd(row.budgetMicros), formatUsd(row.dailyCapMicros)) : t('{0} mỗi lần', formatUsd(row.budgetMicros)),
   ])).join('\n');
 }
 
@@ -248,7 +247,7 @@ export function formatScheduleChange(kind: 'schedule-enable' | 'schedule-delete'
   const row = value.schedule;
   if (kind === 'schedule-delete') return t('Đã xóa lịch {0}. Các lần chạy cũ vẫn là chat.', row.name);
   if (kind === 'schedule-enable') return row.enabled ? t('Đã bật lịch {0}.', row.name) : t('Đã tắt lịch {0}.', row.name);
-  return t('Đã lưu lịch {0}: {1}, {2} chạy, {3} mỗi lần.', row.name, scheduleTiming(row), row.target, formatUsd(row.budgetMicros));
+  return t('Đã lưu lịch {0}: {1}, {2} chạy.', row.name, scheduleTiming(row), row.target);
 }
 
 /** Matching names, then one line per chat: its id, its name, who wrote the message and the words around the match. */
@@ -330,7 +329,7 @@ export function formatShow(value: ShowValue): string {
 }
 
 export function formatChatSettings(value: ChatSettingsValue): string {
-  return t('Đã lưu chat {0}: {1}, giới hạn {2} mỗi lần.', value.name, value.with.join(', '), formatUsd(value.budgetMicros));
+  return t('Đã lưu chat {0}: {1}.', value.name, value.with.join(', '));
 }
 
 export function formatScheduleNotice(value: ScheduleNoticeValue): string {

@@ -65,7 +65,8 @@ describe('the commands that grew', () => {
     expect(() => parseArguments(['show', 'spend', '--to', 'Writer'])).toThrow('does not take --to or --chat');
     expect(() => parseArguments(['show', 'secrets'])).toThrow('orglet show');
     expect(parseArguments(['update'])).toEqual({ kind: 'update-check', json: false });
-    expect(parseArguments(['assign', '--chat', 'abcd', '--with', 'Writer', '--budget', '0.25'])).toMatchObject({ kind: 'chat-settings', chat: 'abcd', names: ['Writer'], budgetMicros: 250_000 });
+    expect(parseArguments(['assign', '--chat', 'abcd', '--with', 'Writer', '--budget', '0.25'])).toMatchObject({ kind: 'chat-settings', chat: 'abcd', names: ['Writer'] });
+    expect(parseArguments(['assign', '--chat', 'abcd', '--with', 'Writer', '--budget', '0.25'])).not.toHaveProperty('budgetMicros');
     expect(() => parseArguments(['assign', '--chat', 'abcd'])).toThrow('--with');
     expect(parseArguments(['schedule', 'dismiss', 'Morning'])).toEqual({ kind: 'schedule-notice', schedule: 'Morning', action: 'dismiss', json: false });
     expect(parseArguments(['schedule', 'catch-up', 'Morning'])).toMatchObject({ action: 'catch-up' });
@@ -103,7 +104,6 @@ describe('preferences', () => {
     const changed = await operations.run({ op: 'preferences', token, autoTitles: !before.autoTitles, archiveRetentionDays: 30, copyFormat: 'markdown', accentColor: '#112233', interfaceFont: 'Fira Sans', backgroundNotifications: false }, signal);
     expect(changed).toMatchObject({ autoTitles: !before.autoTitles, archiveRetentionDays: 30, copyFormat: 'markdown', accentColor: '#112233', interfaceFont: 'Fira Sans', backgroundNotifications: false });
     const after = store.workspace();
-    expect(after.connectionLimitMicros).toBe(before.connectionLimitMicros);
     expect(after.providerConsent ?? []).toEqual(before.providerConsent ?? []);
     await operations.run({ op: 'preferences', token, interfaceFont: null }, signal);
     expect(store.workspace().interfaceFont).toBeUndefined();
@@ -112,18 +112,17 @@ describe('preferences', () => {
 });
 
 describe('a chat\'s assignee and limit', () => {
-  it('lowers the limit and changes who answers, but never raises what a chat may spend', async () => {
+  it('changes who answers and ignores the budget of an older script, because a chat has no limit', async () => {
     const [first] = store.all<Worker>('workers');
     const second = await core.command('saveWorker', { ...first, id: undefined, name: 'Second orglet' }) as Worker;
     const chat = await newChat(first);
     const operations = operationsWith();
-    await expect(operations.run({ op: 'chat-settings', token, chat: chat.id.slice(0, 8), budgetMicros: chat.budgetMicros + 1000 }, signal)).rejects.toThrow('hạ');
-    expect(store.get<Task>('tasks', chat.id).budgetMicros).toBe(chat.budgetMicros);
-    const lowered = await operations.run({ op: 'chat-settings', token, chat: chat.id.slice(0, 8), budgetMicros: 200_000 }, signal);
-    expect(lowered).toMatchObject({ taskId: chat.id, budgetMicros: 200_000, with: [first.name] });
+    const withOldBudget = await operations.run({ op: 'chat-settings', token, chat: chat.id.slice(0, 8), budgetMicros: 200_000 }, signal);
+    expect(withOldBudget).toMatchObject({ taskId: chat.id, with: [first.name] });
+    expect(withOldBudget).not.toHaveProperty('budgetMicros');
     const assigned = await operations.run({ op: 'chat-settings', token, to: first.name, names: ['Second orglet'] }, signal) as { with: string[] };
     expect(assigned.with).toEqual([second.name]);
-    expect(store.get<Task>('tasks', chat.id)).toMatchObject({ workerId: second.id, budgetMicros: 200_000 });
+    expect(store.get<Task>('tasks', chat.id)).toMatchObject({ workerId: second.id });
     expect(formatChatSettings(assigned as never)).toContain('Second orglet');
     expect(CliRequest.safeParse({ op: 'chat-settings', token, to: 'x', toolCapabilities: ['workspace_write'] }).success).toBe(false);
   });
@@ -257,7 +256,7 @@ describe('looking at the app', () => {
 
   it('shows spend, the release notes and the updater', async () => {
     const spend = await show('spend');
-    expect(spend.rows[0]).toMatchObject({ chargedMicros: expect.any(Number), reservedMicros: expect.any(Number), connectionLimitMicros: expect.any(Number) });
+    expect(spend.rows[0]).toMatchObject({ chargedMicros: expect.any(Number), reservedMicros: expect.any(Number) });
     expect((await show('changelog')).rows).toEqual([{ version: '0.13.0', name: 'Release 0.13.0', publishedAt: '2026-10-08T00:00:00.000Z', url: 'https://example.com/r' }]);
     expect((await show('update')).rows).toEqual([{ status: 'ready', version: '0.14.0' }]);
     expect(await operationsWith({}, app).run({ op: 'update-check', token }, signal)).toEqual({ status: 'checking', market: { available: [], records: [] } });

@@ -55,7 +55,7 @@ export const ENUM_SETTING_KEYS = [
   'autoTitles', 'confirmOpenTask', 'autoUpdate', 'backgroundNotifications', 'showWork',
 ] as const;
 export const SettingKey = z.enum([
-  ...ENUM_SETTING_KEYS, 'accentColor', 'interfaceFont', 'codeFont', 'connectionLimitMicros', 'providerConcurrency', 'providerConsent', 'analytics',
+  ...ENUM_SETTING_KEYS, 'accentColor', 'interfaceFont', 'codeFont', 'providerConcurrency', 'providerConsent', 'analytics',
 ]);
 export type SettingKey = z.infer<typeof SettingKey>;
 const SettingValue = z.union([z.string().regex(/^[A-Za-z0-9_-]{1,40}$/), z.number().int(), z.boolean()]);

@@ -12,7 +12,7 @@ import type { Routine, Worker } from '../../apps/desktop/src/shared/contracts';
 /** A schedule proposal as the model sends it: every field present, null for the ones it leaves alone. */
 const emptyScheduleProposal = {
   targetId: null, name: null, brief: null, frequency: null, time: null, weekday: null, timeZone: null, everyHours: null, windowFrom: null, windowTo: null,
-  weekdaysOnly: null, dailyCapMicros: null, start: null, watchFolderId: null, enabled: null, workerId: null, workerRef: null, teamId: null, teamRef: null,
+  weekdaysOnly: null, start: null, watchFolderId: null, enabled: null, workerId: null, workerRef: null, teamId: null, teamRef: null,
 };
 const scheduleProposal = (fields: Record<string, unknown>) => ({ ...emptyScheduleProposal, ...fields });
 
@@ -78,7 +78,7 @@ describe('schedule proposals', () => {
     expect(appChanges.schedules).toEqual([{
       id: expect.any(String), name: 'Morning review', enabled: false, start: { kind: 'schedule' },
       clock: { frequency: 'hours', time: '00:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh', everyHours: 4, window: { from: '08:00', to: '18:00' }, weekdaysOnly: true },
-      dailyCapMicros: 500_000, runsAs: { orgletId: helper.id }, perRunBudgetMicros: 100_000,
+      runsAs: { orgletId: helper.id },
     }]);
     expect(appChanges.watchFolders).toEqual([{ id: folder.folderId, name: 'Invoices' }]);
     expect(JSON.stringify(appChanges)).not.toContain(directory.replace(/\\/g, '\\\\'));
@@ -88,10 +88,10 @@ describe('schedule proposals', () => {
     expect(appChanges.instruction).toContain('Delete schedule');
   });
 
-  it('propose an hourly schedule with a window, weekdays only and a daily cap, and the card shows them', async () => {
+  it('propose an hourly schedule with a window, weekdays only, and the card shows them', async () => {
     const worker = await chatWorker();
     replies.push(
-      call('propose_schedule', scheduleProposal({ name: 'News sweep', brief: 'Read the news.', frequency: 'hours', everyHours: 3, windowFrom: '08:00', windowTo: '20:00', weekdaysOnly: true, dailyCapMicros: 2_000_000, timeZone: 'Asia/Ho_Chi_Minh' })),
+      call('propose_schedule', scheduleProposal({ name: 'News sweep', brief: 'Read the news.', frequency: 'hours', everyHours: 3, windowFrom: '08:00', windowTo: '20:00', weekdaysOnly: true, timeZone: 'Asia/Ho_Chi_Minh' })),
       answer('Proposed.'),
     );
     const taskId = await chat(worker.id);
@@ -99,23 +99,21 @@ describe('schedule proposals', () => {
     expect(proposal).toMatchObject({ kind: 'schedule', action: 'create', status: 'pending', hold: null });
     expect(proposal.changes).toEqual(expect.arrayContaining([
       { field: 'schedule', before: null, after: 'every 3h 08:00-20:00 weekdays · Asia/Ho_Chi_Minh' },
-      { field: 'dailyCapMicros', before: null, after: '2000000' },
       { field: 'enabled', before: null, after: 'false' },
     ]));
     const applied = await core.command('applyAppProposal', { id: proposal.id }) as AppProposal;
     expect(store.get<Routine>('routines', applied.target!.id)).toMatchObject({
-      enabled: false, schedule: { frequency: 'hours', everyHours: 3, window: { from: '08:00', to: '20:00' }, weekdaysOnly: true, dailyCapMicros: 2_000_000, timeZone: 'Asia/Ho_Chi_Minh' },
+      enabled: false, schedule: { frequency: 'hours', everyHours: 3, window: { from: '08:00', to: '20:00' }, weekdaysOnly: true, timeZone: 'Asia/Ho_Chi_Minh' },
     });
   });
 
-  it('refuse a clock that does not hold together, and a daily cap below one run', async () => {
+  it('refuse a clock that does not hold together', async () => {
     const worker = await chatWorker();
     replies.push(
       call('propose_schedule', scheduleProposal({ name: 'A', brief: 'x', frequency: 'hours', windowFrom: '08:00', windowTo: '20:00' })),
       call('propose_schedule', scheduleProposal({ name: 'B', brief: 'x', frequency: 'daily', time: '09:00', everyHours: 2 })),
       call('propose_schedule', scheduleProposal({ name: 'C', brief: 'x', frequency: 'hours', everyHours: 2, windowFrom: '08:00' })),
       call('propose_schedule', scheduleProposal({ name: 'D', brief: 'x', frequency: 'hours', everyHours: 2, windowFrom: '20:00', windowTo: '08:00' })),
-      call('propose_schedule', scheduleProposal({ name: 'E', brief: 'x', frequency: 'daily', time: '09:00', dailyCapMicros: 1000 })),
       answer('Could not.'),
     );
     const taskId = await chat(worker.id);
@@ -126,7 +124,6 @@ describe('schedule proposals', () => {
       'everyHours, windowFrom, windowTo và weekdaysOnly chỉ dùng khi frequency là "hours".',
       'Khung giờ cần cả windowFrom và windowTo.',
       expect.stringContaining('Giờ bắt đầu của khung giờ phải trước giờ kết thúc.'),
-      'Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.',
     ]);
   });
 
@@ -157,17 +154,16 @@ describe('schedule proposals', () => {
     const worker = await chatWorker();
     const helper = await demoWorker();
     const routine = await savedSchedule(helper.id, true);
-    replies.push(call('propose_schedule', scheduleProposal({ targetId: routine.id, frequency: 'hours', everyHours: 6, dailyCapMicros: 300_000 })), answer());
+    replies.push(call('propose_schedule', scheduleProposal({ targetId: routine.id, frequency: 'hours', everyHours: 6 })), answer());
     const taskId = await chat(worker.id);
     const [proposal] = proposalsOf(taskId);
     expect(proposal).toMatchObject({ action: 'edit', hold: null });
     expect(proposal.changes).toEqual([
       { field: 'schedule', before: 'daily 09:00 · Asia/Ho_Chi_Minh', after: 'every 6h · Asia/Ho_Chi_Minh' },
-      { field: 'dailyCapMicros', before: null, after: '300000' },
       { field: 'enabled', before: 'true', after: 'false' },
     ]);
     await core.command('applyAppProposal', { id: proposal.id });
-    expect(store.get<Routine>('routines', routine.id)).toMatchObject({ enabled: false, schedule: { frequency: 'hours', everyHours: 6, dailyCapMicros: 300_000 } });
+    expect(store.get<Routine>('routines', routine.id)).toMatchObject({ enabled: false, schedule: { frequency: 'hours', everyHours: 6 } });
   });
 
   it('propose turning a schedule on or off, wait for a click even with auto-apply, and never switch a new one on', async () => {

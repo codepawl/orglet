@@ -33,7 +33,6 @@ import type { ElevationGrant } from './cli-elevation';
  * Electron: main passes the core request, the app version, the window opener and the translator in.
  */
 
-const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 
 export class CliOperations {
   private readonly chatActions: CliChatActions;
@@ -205,12 +204,11 @@ export class CliOperations {
     try {
       let taskId: string;
       if (live) {
-        await this.dependencies.request('reviseTask', { taskId: live.id, brief: request.message, ...(replyTo ? { replyTo } : {}), sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros: live.budgetMicros });
+        await this.dependencies.request('reviseTask', { taskId: live.id, brief: request.message, ...(replyTo ? { replyTo } : {}), sourceIds, excludedSources: [], consent: true, providerScopes });
         taskId = live.id;
       } else {
-        const budgetMicros = (team ?? worker)?.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
         const owner = team ? { workerId: team.synthesizerId, teamId: team.id } : { workerId: chat.id };
-        const input: TaskInput = { ...owner, brief: request.message, sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros };
+        const input: TaskInput = { ...owner, brief: request.message, sourceIds, excludedSources: [], consent: true, providerScopes };
         taskId = String(await this.dependencies.request('createTask', input));
       }
       feed?.bind(taskId);

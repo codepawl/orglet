@@ -42,9 +42,7 @@ function leadOf(crew: Team): NonNullable<ChannelConfig['lead']> {
     synthesizerId: crew.synthesizerId,
     instructions: crew.instructions,
     workflow: crew.workflow,
-    monthlyBudgetMicros: crew.monthlyBudgetMicros,
     ...(crew.maxConcurrentTasks === undefined ? {} : { maxConcurrentTasks: crew.maxConcurrentTasks }),
-    ...(crew.taskBudgetMicros === undefined ? {} : { taskBudgetMicros: crew.taskBudgetMicros }),
   };
 }
 

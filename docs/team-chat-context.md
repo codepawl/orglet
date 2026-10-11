@@ -93,7 +93,7 @@ Thread-memory search can reuse FTS5 the same way as `knowledge_search` (`apps/de
 
 ## Cost and token limits the user sees
 
-Keep three hard money gates that already exist (`BudgetLedger` in `apps/desktop/src/core/budgets/ledger.ts`):
+Written when Orglet still had money gates (`BudgetLedger` in `apps/desktop/src/core/budgets/ledger.ts`). Since 2026-10-11 Orglet sets no spending limit; the ledger only records what was used, and the gates below no longer exist:
 
 - **Per-turn cap** — `task.budgetMicros` on the thread, read from the worker or team `taskBudgetMicros` on the first message and again on every follow-up, retry and resume. Cumulative across follow-ups of that thread. For Claude Code the remaining amount is the CLI's own `--max-budget-usd`; its stop reports the limit and where to raise it.
 - **Team monthly cap** — `monthlyBudgetMicros`.

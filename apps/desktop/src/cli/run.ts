@@ -124,7 +124,7 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
       ...(command.confirmCode ? { confirmCode: command.confirmCode } : {}),
     };
     case 'schedule-notice': return { op: 'schedule-notice', schedule: command.schedule, action: command.action };
-    case 'chat-settings': return { op: 'chat-settings', ...targetFields(command), ...(command.names ? { names: command.names } : {}), ...(command.budgetMicros === undefined ? {} : { budgetMicros: command.budgetMicros }) };
+    case 'chat-settings': return { op: 'chat-settings', ...targetFields(command), ...(command.names ? { names: command.names } : {}) };
     case 'show': return { op: 'show', what: command.what, refresh: command.refresh, ...(command.chat ? { chat: command.chat } : command.to ? { to: command.to } : {}) };
     case 'update-check': return { op: 'update-check' };
     case 'space': return {

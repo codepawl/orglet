@@ -35,8 +35,8 @@ export class WorkPolicy {
           artifactIds: detail.artifacts.map(artifact => artifact.id),
           blockers: complete ? [] : ['Đã hết khung giờ làm việc.', ...blockers],
           nextSteps: complete ? ['Đối chiếu báo cáo với nguồn trước khi sử dụng.'] : [
-            'Mở task trong ca tiếp theo, kiểm tra nguồn và ngân sách rồi tiếp tục từ checkpoint.',
-            'Nếu request chưa rõ kết quả, kiểm tra reservation trước khi tạo lần thử mới.',
+            'Mở task trong ca tiếp theo, kiểm tra nguồn rồi tiếp tục từ checkpoint.',
+            'Nếu request chưa rõ kết quả, kiểm tra kết quả đó trước khi tạo lần thử mới.',
           ],
           chargedMicros: detail.usage.chargedMicros,
           reservedMicros: detail.usage.reservedMicros,
