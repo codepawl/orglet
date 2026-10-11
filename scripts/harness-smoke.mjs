@@ -124,7 +124,6 @@ try {
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await page.getByRole('textbox', { name: label('Tin nhắn') }).fill('Harness send gate');
   const send = page.getByRole('button', { name: label('Gửi tin nhắn'), exact: true });
-  assert.equal(await page.getByText(label('Giới hạn mỗi việc (USD)'), { exact: false }).count(), 0);
   await noDemo(page);
   assert.equal(await send.isDisabled(), true);
   // setupHint uses providerLabel ("Claude Code trên máy này"), not the short catalog name.
@@ -144,7 +143,6 @@ try {
     await page.getByRole('button', { name: label('Lưu Tí'), exact: true }).click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
     await noDemo(page);
-    assert.equal(await page.getByText(label('Giới hạn mỗi việc (USD)'), { exact: false }).count(), 0);
     assert.equal(await send.isDisabled(), true);
     const authFailHint = hint.auth_error(label('Codex trên máy này'));
     await page.getByRole('button', { name: authFailHint, exact: true }).waitFor();

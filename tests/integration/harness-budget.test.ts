@@ -66,7 +66,7 @@ describe('orglet chat on Claude Code', () => {
   });
   afterEach(() => store.close());
 
-  it('runs an orglet that has no limit of its own without a cap, on the person plan', async () => {
+  it('runs an orglet that has no limit of its own without a cap, on the plan of the person', async () => {
     const { taskBudgetMicros: _unset, ...seeded } = store.all<Worker>('workers')[0];
     const worker = await core.command('saveWorker', { ...seeded, provider: 'claude-code' }) as Worker;
     expect(worker.taskBudgetMicros).toBeUndefined();

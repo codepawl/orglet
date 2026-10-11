@@ -183,9 +183,9 @@ describe('web research on the Claude Code tool bridge', () => {
     const detail = store.detail(taskId);
     expect(detail.task.status).toBe('completed');
     const events = detail.events.map(event => event.message);
-    expect(events).toContain('Claude Code đã trả lời; harness ước tính $0.2000 cho bước này, tổng $0.2000 trong lượt chạy này theo gói hoặc tài khoản của nó. Khoản này không trừ vào ngân sách tháng.');
+    expect(events).toContain('Claude Code đã trả lời; harness ước tính $0.2000 cho bước này, tổng $0.2000 trong lượt chạy này theo gói hoặc tài khoản của nó.');
     expect(events).toContain('Claude Code đã trả lời; không báo chi phí.');
-    expect(events).toContain('Claude Code đã trả lời; harness ước tính $0.3000 cho bước này, tổng ít nhất $0.5000 trong lượt chạy này, 1 lần gọi không báo chi phí theo gói hoặc tài khoản của nó. Khoản này không trừ vào ngân sách tháng.');
+    expect(events).toContain('Claude Code đã trả lời; harness ước tính $0.3000 cho bước này, tổng ít nhất $0.5000 trong lượt chạy này, 1 lần gọi không báo chi phí theo gói hoặc tài khoản của nó.');
     // No call is given an allowance: a task has no limit to subtract the running total from.
     expect(requests.map(request => request.maxBudgetUsd)).toEqual([undefined, undefined, undefined]);
     // The count survives with the checkpoint, so a resumed run carries the same floor.

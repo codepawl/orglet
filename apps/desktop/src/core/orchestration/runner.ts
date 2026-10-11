@@ -147,12 +147,12 @@ function harnessRunTotalPhrase(total: HarnessRunTotal) {
 function harnessCostLine(name: string, costUsd: number | null, stopped = false, total?: HarnessRunTotal) {
   if (stopped) {
     if (costUsd === null) return `${name} dừng ở giới hạn; không báo chi phí.`;
-    if (total) return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó. Khoản này không trừ vào ngân sách tháng.`;
-    return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này không trừ vào ngân sách tháng.`;
+    if (total) return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó.`;
+    return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó.`;
   }
   if (costUsd === null) return `${name} đã trả lời; không báo chi phí.`;
-  if (total) return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó. Khoản này không trừ vào ngân sách tháng.`;
-  return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này không trừ vào ngân sách tháng.`;
+  if (total) return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó.`;
+  return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó.`;
 }
 
 /** The line after a harness answered: its price when it named one, else the tokens it counted, else neither. */
