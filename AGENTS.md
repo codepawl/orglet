@@ -36,6 +36,7 @@ apps/desktop/src/
   profiler/       DuckDB checker (separate process)
 packages/orglet-ui/  the UI kit, published as @codepawlhq/orglet-ui; use its components before raw controls
 .agents/skills/orglet-ui/  the skill for UI work in the app: which component, house rules, adding one
+.agents/skills/ship-orglet-change/  the skill for a lane, the packaged-app screen check and landing a pull request
 tests/integration/   vitest
 scripts/             packaged / desktop smokes, doc images
 docs/                user guide + how-it-works (update with the feature)
