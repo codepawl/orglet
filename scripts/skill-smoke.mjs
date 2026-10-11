@@ -44,7 +44,8 @@ try {
   assert.equal(reviewed.package.reviewedHash, imported.hash);
   // Reviewed from the Library, the editor leads back there on its own instead of closing the panel.
   await page.getByRole('button', { name: label('Nhập từ thư mục'), exact: true }).waitFor();
-  await page.getByRole('button', { name: /review-kit/ }).click();
+  // The row's own button; its menu button is named after the skill too.
+  await page.getByRole('button', { name: /^review-kit/ }).click();
   await page.getByText(label('Đã review trên máy này.'), { exact: true }).waitFor();
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, exportPath);
   await page.getByRole('button', { name: label('Xuất gói skill'), exact: true }).click();
