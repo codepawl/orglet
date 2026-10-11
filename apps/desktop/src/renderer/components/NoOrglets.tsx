@@ -1,4 +1,5 @@
 import { useEffect, useState, type PointerEvent } from 'react';
+import { UserRoundPlus } from 'lucide-react';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
@@ -52,7 +53,7 @@ export function NoOrglets({ onCreate }: { onCreate: () => void }) {
       </div>
       <h1 className="welcome">{t('Chưa có Tí nào.')}</h1>
       <p className="no-orglets-hint">{t('Tạo một Tí để bắt đầu. Bạn nhắn, Tí làm.')}</p>
-      <Button className="no-orglets-create" variant="primary" onPointerEnter={eager} onFocus={eager} onClick={onCreate}>{t('Tạo Tí')}</Button>
+      <Button className="no-orglets-create" variant="primary" onPointerEnter={eager} onFocus={eager} onClick={onCreate}><UserRoundPlus size={16} />{t('Tạo Tí')}</Button>
     </div>
   </div>;
 }
