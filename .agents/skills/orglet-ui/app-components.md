@@ -34,6 +34,7 @@ Core logic lives in the named `renderer/*.ts` or `shared/*.ts` helpers, not in t
 | Views of one chat (Chat, Files, Changes, Schedules, Memory) | `ChatHeader` (`lead`, `views`, `actions`), `ChatViewTabs` (`views`, `current`, `onSelect`), `ChatViewPanel` | `components/ChatViews.tsx` |
 | Page opened from the navigation, inside the main panel | `PanelPage` (`pageKey`, `icon`, `title`, `description`, `actions`, `onClose`) | `components/PanelPage.tsx` |
 | Tabs inside a page | `PageTabs` (`tabs`, `current`, `onSelect`, `label`); quiet text tabs | `components/PageTabs.tsx` |
+| A main panel with nothing to list (owner, 2026-10-11: every empty panel looks like the no-orglet page) | `EmptyPanel` (`title`, `hint`, `action`, `fill`; the orglet, one line, an optional line and one button, in the middle of the panel; `fill={false}` when more of the page follows) | `components/EmptyPanel.tsx` |
 | Search across chats, orglets, crews | `SearchDialog` (`open`, `workspace`, `onOpenChat`, `onOpenOrglet`, `onOpenCrew`) | `components/SearchDialog.tsx` |
 | Details panel of a chat | `DetailsPanel` (run story, cost, permissions, browser) | `components/DetailsPanel.tsx` |
 

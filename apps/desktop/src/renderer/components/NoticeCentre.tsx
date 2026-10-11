@@ -4,6 +4,7 @@ import { Button } from './ui';
 import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoticesFirst, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, restartNoticeId, useNotices, type NoticeKind, type NoticeRow } from './notifications';
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
+import { EmptyPanel } from './EmptyPanel';
 
 const kindIcons: Record<NoticeKind, typeof Info> = { error: CircleAlert, done: CircleCheck, info: Info };
 
@@ -62,7 +63,7 @@ export function NoticeList({ open, onOpenChat, chatExists, updateReady, onRestar
       {notices.length > 0 && <Button variant="ghost" className="notice-clear" onClick={() => clearNotices()}><Trash size={15} />{t('Xóa hết')}</Button>}
     </div>
     {rows.length === 0
-      ? <p className="muted notice-empty">{notices.length === 0 ? t('Chưa có thông báo nào.') : t('Không có thông báo nào thuộc mục này.')}</p>
+      ? <EmptyPanel title={notices.length === 0 ? t('Chưa có thông báo nào.') : t('Không có thông báo nào thuộc mục này.')} />
       : <ol className="notice-list">
         {rows.map((row, index) => {
           const label = groupLabels[index];

@@ -1,7 +1,8 @@
-import { BookOpen, CalendarClock, Bookmark, BookmarkX, CircleCheck } from 'lucide-react';
+import { BookOpen, CalendarClock, BookmarkX } from 'lucide-react';
 import type { Task, Team } from '../../shared/contracts';
 import { waitsForPerson, type RunningItem } from '../../shared/running';
 import { t } from '../i18n';
+import { EmptyPanel } from './EmptyPanel';
 import type { ActivityTab } from '../areas';
 import { unsaveMessage, type SavedMessage } from '../saved';
 import { Button } from './ui';
@@ -54,7 +55,7 @@ export function ActivityPage({ tab, running, tasks, teams, saved, pendingSchedul
       {tab === 'needs' && <>
         {pendingSchedules > 0 && <ActivityLink icon={<CalendarClock size={16} />} text={t('{0} lịch cần bạn xem', [pendingSchedules])} action={t('Mở lịch chạy')} onClick={onOpenSchedules} />}
         {notesToReview > 0 && <ActivityLink icon={<BookOpen size={16} />} text={t('{0} ghi chú đang chờ duyệt', [notesToReview])} action={t('Mở thư viện')} onClick={onOpenLibrary} />}
-        <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyIcon={CircleCheck} emptyLine={pendingSchedules + notesToReview > 0 ? undefined : t('Không có gì đang chờ bạn.')} />
+        <RunningGroups items={waiting} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={pendingSchedules + notesToReview > 0 ? undefined : t('Không có gì đang chờ bạn.')} />
       </>}
       {tab === 'running' && <RunningGroups items={working} tasks={tasks} teams={teams} onOpenChat={onOpenChat} emptyLine={t('Không có gì đang chạy.')} />}
       {tab === 'done' && <NoticeList open onOpenChat={(taskId, messageId) => messageId ? onOpenMessage(taskId, messageId) : onOpenChat(taskId)} chatExists={chatExists} updateReady={updateReady} onRestartUpdate={onRestartUpdate} onOpenArchive={onOpenArchive} onOpenAccount={onOpenAccount} />}
@@ -67,7 +68,7 @@ function ActivityLink({ icon, text, action, onClick }: { icon: React.ReactNode; 
 }
 
 function SavedList({ saved, chatExists, onOpen }: { saved: readonly SavedMessage[]; chatExists: (taskId: string) => boolean; onOpen: (taskId: string, messageId: string) => void }) {
-  if (saved.length === 0) return <p className="muted saved-empty"><Bookmark size={16} aria-hidden="true" />{t('Chưa lưu tin nào. Dùng Lưu để xem sau dưới một tin nhắn.')}</p>;
+  if (saved.length === 0) return <EmptyPanel title={t('Chưa lưu tin nào.')} hint={t('Dùng Lưu để xem sau dưới một tin nhắn.')} />;
   return <ul className="saved-list">
     {saved.map(item => {
       const opens = chatExists(item.taskId);

@@ -681,9 +681,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .team-chat-fresh { justify-content:center; overflow:auto; }
 .fresh-chat { width:100%; max-width:768px; margin:0 auto; padding:24px var(--page-x); display:flex; flex-direction:column; }
 /* With no orglet left, the pane is the startup's orglet, the line, a hint and New orglet, centred (COD-356). */
-.no-orglets { align-items:center; text-align:center; }
-.no-orglets-hint { margin:8px 0 0; color:var(--muted); font-size:14px; }
-.no-orglets > .no-orglets-create { margin-top:20px; }
+/* An empty main panel: the orglet, what is missing, how it fills, and at most one button, in the middle of the panel. */
+.empty-panel { display:flex; flex-direction:column; align-items:center; text-align:center; padding:28px var(--page-x); }
+.empty-panel-fill { flex:1; justify-content:center; min-height:280px; }
+.empty-panel > .startup-face { margin-bottom:26px; }
+.empty-panel-title { margin:0; font-size:1.5rem; font-weight:400; letter-spacing:-.3px; line-height:1.25; color:var(--text); text-wrap:balance; }
+.empty-panel-hint { margin:10px 0 0; max-width:64ch; color:var(--muted); font-size:14px; line-height:1.45; text-wrap:balance; }
+.empty-panel > .empty-panel-action { margin-top:20px; }
+/* A page whose only content is the empty panel is as tall as its card, so the panel can sit in the middle of it. */
+.page-body:has(.empty-panel-fill) { min-height:100%; }
 /* Left edge shared with the prompt bar directly above, which is what the eye follows down the column. */
 .fresh-chat .suggestions { width:fit-content; max-width:100%; margin:6px auto 0 -10px; padding:0; text-align:left; }
 /* An orglet's or a channel's empty chat (user, 2026-10-04): the same shape as a chat with messages. The greeting and
@@ -1458,7 +1464,6 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .notice-filter:hover { color:var(--text); }
 .notice-filter.on { background:color-mix(in srgb, var(--accent) 18%, var(--bg)); color:var(--text); }
 .notice-list { list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:2px; }
-.notice-empty { margin:24px 0 0; padding:0 10px; font-size:13px; }
 .notice-day { margin:14px 0 6px; color:var(--muted); font-size:11.5px; font-weight:600; }
 .notice-list > li:first-child .notice-day { margin-top:0; }
 /* A row is a div, or a button when it folds repeats (COD-174); both read the same, and only the icon carries the kind's colour. */
@@ -1507,8 +1512,6 @@ button.notice-body { cursor:pointer; }
 /* Room for all three controls on every row, so the facts column ends at the same x whatever a row offers. */
 .running-actions { display:flex; align-items:center; justify-content:flex-end; gap:2px; width:88px; }
 .org-button.running-action { width:28px; height:28px; min-height:28px; padding:5px; }
-.running-empty { display:flex; align-items:center; gap:8px; margin:24px 0 0; padding:0 10px; font-size:13px; }
-.running-empty svg { flex-shrink:0; }
 /* The Running button's counts (COD-287): what is under way in the quiet badge, what waits for you in the accent with
    the pause bars, side by side at the button's end. */
 .running-counts { margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
@@ -1759,8 +1762,6 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* The schedule's own working folder (COD-294): level, folder name with its Change link, a note and review. */
 .routine-workspace { display:flex; flex-direction:column; gap:8px; min-width:0; }
 .routine-workspace .org-switch-field { margin-top:8px; }
-.routine-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:28px 16px; text-align:center; color:var(--muted); }
-.routine-empty p:first-of-type { color:var(--text); font-weight:500; }
 /* Requests to hand to an orglet: the chat starters' rows, left-aligned under the centred empty state. */
 /* The message box on the Schedules page (issue 555): the chat's own prompt bar, with the starters under it while the list is empty. */
 .routine-ask { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
@@ -3407,13 +3408,9 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .org-drawer:has(.add-orglet) { width:min(560px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
 .activity-link { display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:10px; background:var(--surface); }
 .activity-link > span { flex:1; min-width:0; }
-.saved-empty { display:flex; align-items:center; gap:8px; margin:0; padding:0 10px; }
-/* Every part of Activity starts on one line, 24px under the card's top: `.page-body` is declared after `.panel-page`,
-   so its 8px won there, the filter chips and the Saved line sat against the edge, and the other two empty lines added
-   24px of their own. An empty line is as tall as the chips, so its text sits where theirs does (owner, 2026-10-11). */
+/* A panel page starts 24px under the card's top: `.page-body` is declared after `.panel-page`, so its 8px won there
+   and Activity's filter chips sat against the edge (owner, 2026-10-11). */
 .page-body.panel-page { padding-top:24px; }
-.activity-page .running-empty { margin-top:0; }
-.activity-page .running-empty, .activity-page .saved-empty { min-height:28px; }
 .saved-row { display:flex; align-items:flex-start; gap:6px; }
 .saved-body { display:flex; flex-direction:column; flex:1; min-width:0; gap:4px; padding:8px 10px; border:0; border-radius:10px; background:transparent; color:inherit; font:inherit; text-align:left; }
 button.saved-body { cursor:pointer; }
@@ -3483,7 +3480,6 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-listing-meta > span { white-space: nowrap; }
 .market-listing-meta > .market-listing-author { white-space: normal; overflow-wrap: anywhere; }
 .market-listing-installed { margin: 0; font-size: 12px; color: var(--muted); }
-.marketplace-empty { padding: 12px 10px; }
 .marketplace-no-match { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 10px; }
 .market-section { display: grid; gap: 4px; }
 /* Centred, not on the baseline: the smaller count sat 1.5px low beside the heading (market-publishing smoke). */

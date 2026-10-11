@@ -15,6 +15,7 @@ import { RowMenu } from './RowMenu';
 import { EllipsisVertical, Trash } from './icons';
 import { Select } from './Select';
 import { t } from '../i18n';
+import { EmptyPanel } from './EmptyPanel';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
@@ -166,7 +167,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
     toast(t('Đã xóa lịch'), 'success', item.name);
   };
   return <>{editor}<div className="form">
-          {!routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
+          {!routines.length && <EmptyPanel fill={false} title={t('Chưa có lịch.')} hint={t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')} />}
           {onAsk && workspace.workers.length > 0 && <ScheduleAsk workers={workspace.workers} starters={!routines.length} onSend={onAsk} />}
     <div className="routine-list">
       {routines.map(item => {
