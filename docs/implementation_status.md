@@ -15,6 +15,7 @@ The original workspace contained only `plans/orglet_mvp_plan_vi.md` and its codi
 
 ## Decisions
 
+- 2026-10-11: Orglet sets no spending limit (per task, per connection per month, per crew per month, per schedule per day). It records what each run used and shows it; limits are set with the provider. The old fields are accepted and ignored so older data and callers parse, and a chat saved as `waiting_budget` by an earlier version shows as paused.
 - Electron Forge, React, TypeScript, Vite, Tailwind and editable shadcn-style primitives.
 - Node's bundled SQLite avoids a second native ABI. Check the actual engine at startup and refuse unsafe versions.
 - Business state lives in SQLite owned by the core, not React/localStorage.

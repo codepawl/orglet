@@ -47,12 +47,11 @@ MCP servers you add by hand, run on this computer or remote: each row shows whet
 
 The browser Orglet found (Chrome, or Edge when Chrome is not installed), the **Clean** profile every chat starts with, and the profiles you made. **Add profile** makes one; **Open to sign in** opens it in a normal window so you can sign in to sites yourself; its menu has **Close window**, **Clear data** and **Delete profile**. Profiles stay on this computer and never go into a backup. See [Orglet's browser](browser.md#profiles).
 
-## Costs & limits
+## Costs
 
-- **Limit per connection / month**: a cap on what Orglet may spend through each API key, by UTC month.
-- **Concurrent requests per provider** (1–8): how many model requests may be in flight at once across all chats. Above 4, a short note says that more at once means more spend at once.
+- **Concurrent requests per provider** (1–8): how many model requests may be in flight at once across all chats. Above 4, a short note says that more at once means more spend at once. Orglet sets no spending limit; set one with the provider.
 - **Allowed providers**.
-- **Charges to reconcile**: requests that failed or came back without usage keep their reservation. After checking the provider's usage page, enter the actual amount; enter zero only when the provider shows zero. See [Connections → Cost limits](connections.md#cost-limits).
+- **Charges to reconcile**: requests that failed or came back without usage keep their reservation. After checking the provider's usage page, enter the actual amount; enter zero only when the provider shows zero. See [Connections → Costs](connections.md#costs).
 
 These numbers cover requests Orglet makes through an API key. Harness runs use the CLI's own plan and are not counted here.
 

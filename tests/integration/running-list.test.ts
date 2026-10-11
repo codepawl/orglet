@@ -97,7 +97,8 @@ describe('status lines', () => {
     expect(waitLine({ kind: 'provider', provider: 'openai', ahead: 0 })).toBe('Waiting for OpenAI · next in line');
     expect(waitLine({ kind: 'crew_slot', ahead: 1 })).toBe('Waiting for a channel slot · 1 ahead');
     expect(waitLine({ kind: 'teammates', names: ['Lan', 'Huy'] })).toBe('Waiting for results from Lan, Huy');
-    expect(waitLine({ kind: 'budget' })).toBe('Waiting for budget · raise the limit, then resume');
+    // A chat an earlier version stopped for budget now reads as paused; nothing tells the person to raise a limit.
+    expect(waitLine({ kind: 'budget' })).toBe('Paused');
     // A custom connection is named by the person's name for it, and Gemini CLI like any other harness.
     const connectionId = '6f1c1c5e-8d4b-4a36-9f7e-2a8a4f7f2b11';
     rememberCustomConnections([{ id: connectionId, name: 'LM Studio', baseUrl: 'http://localhost:1234/v1' }]);

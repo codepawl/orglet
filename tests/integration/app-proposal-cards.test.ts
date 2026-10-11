@@ -44,7 +44,7 @@ it('puts the new orglets on one card of rows, draws a crew as its people, and ke
   // The crew is its members' faces and names with the lead marked, not a field list.
   expect(html).toContain('proposal-crew-member');
   expect(html).toContain('Sequential');
-  expect(html).toContain('$9.00/month');
+  expect(html).not.toContain('$9.00');
   expect(html).not.toContain('Lead</dt>');
   expect(html).not.toContain('ref:scout');
   expect(html).not.toContain('(new, from this reply)');
