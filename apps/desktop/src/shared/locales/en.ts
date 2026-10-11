@@ -3766,6 +3766,8 @@ export const en: Dictionary = {
   'Xóa khỏi kênh': 'Remove from channel',
   'Xóa {0} khỏi kênh này?': 'Remove {0} from this channel?',
   'đã rời kênh': 'left the channel',
+  '{0}, đã rời kênh': '{0}, left the channel',
+  '{0} ({1})': '{0} ({1})',
   '{0} đang là trưởng của kênh. Chọn Tí dẫn dắt tiếp theo.': '{0} leads this channel. Choose who leads next.',
   'Trưởng mới': 'New lead',
   'Đã xóa {0} khỏi kênh': 'Removed {0} from the channel',

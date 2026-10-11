@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react';
-import { ChevronDown, Eye, Gauge, Lightbulb, Undo2, X } from 'lucide-react';
+import { ChevronDown, Eye, Lightbulb, Undo2, X } from 'lucide-react';
+import { UsageGauge } from './UsageGauge';
 import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
 import { Input } from '@codepawlhq/orglet-ui';
@@ -173,7 +174,7 @@ export function AccountIsland({ harnessName, target, resetsAt, switchAccount, di
   return <div role="status" className={leaving ? 'live-island live-island-knowledge live-island-account leaving' : 'live-island live-island-knowledge live-island-account'}>
     <div className="live-island-body" style={{ width }}>
       <span className="live-island-content" ref={content}>
-        <Gauge size={16} aria-hidden="true" />
+        <UsageGauge level="out" />
         <span className="live-island-label">{label}</span>
         {target
           ? <Button type="button" className="live-island-action" onClick={switchAccount}

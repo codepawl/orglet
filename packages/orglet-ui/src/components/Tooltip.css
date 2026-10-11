@@ -2,14 +2,17 @@
 .org-tooltip {
   z-index: 40;
   max-width: min(260px, calc(100vw - 16px));
-  padding: 5px 9px;
-  border-radius: 7px;
-  background: var(--org-primary, #171717);
-  color: var(--org-primary-text, #fff);
+  /* The shape of a browser's own tooltip, a small plain box with a hairline, in the page's colours: it follows the
+     theme, where the system one would not. */
+  padding: 3px 7px;
+  border: 1px solid var(--org-border, #e5e5e5);
+  border-radius: 5px;
+  background: var(--org-bg, #fff);
+  color: var(--org-text, #1f1f1f);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.4;
-  box-shadow: var(--org-shadow-md, 0 2px 6px #0000000f, 0 10px 28px #0000001f);
+  box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d), 0 4px 12px color-mix(in srgb, var(--org-text, #1f1f1f) 10%, transparent);
   pointer-events: none;
   overflow-wrap: anywhere;
   animation: org-tooltip-in var(--org-motion-quick, 110ms) var(--org-ease-out, ease-out);
@@ -20,8 +23,13 @@
   font-size: 11px;
   opacity: .75;
 }
+/* It fades in while rising two pixels towards its trigger, or settling down onto it from above. */
 @keyframes org-tooltip-in {
-  from { opacity: 0; }
+  from { opacity: 0; translate: 0 2px; }
+}
+.org-tooltip[data-side=bottom] { animation-name: org-tooltip-in-below; }
+@keyframes org-tooltip-in-below {
+  from { opacity: 0; translate: 0 -2px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .org-tooltip { animation: none; }

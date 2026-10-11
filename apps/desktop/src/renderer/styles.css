@@ -2626,6 +2626,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .live-island-knowledge .live-island-dismiss { width:24px; padding:0; }
 /* A harness account that ran out (COD-225) wears the suggestions' tab: the gauge where the bulb sits, the switch as its
    one action, or when the account resets in the quiet colour of a second line. */
+/* The dial is the error colour once the plan ran out, the warning colour while a little is left; the island's own
+   icon colour is the bulb's and does not apply to it. */
+.live-island-knowledge .live-island-content > svg.usage-gauge[data-level=out], .usage-gauge[data-level=out] { color:var(--error); }
+.live-island-knowledge .live-island-content > svg.usage-gauge[data-level=near], .usage-gauge[data-level=near] { color:var(--warning); }
 .live-island-account .live-island-meta { margin-right:4px; color:var(--muted); font-size:13px; white-space:nowrap; }
 /* A question to answer (user, 2026-10-07, after Claude's question box): the same tab, grown to hold the question and its choices, which start under
    the question's text, past the face; an answer in the person's own words goes in the bar below. The first line's
