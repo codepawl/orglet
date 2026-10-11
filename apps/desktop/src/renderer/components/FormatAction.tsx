@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react';
 import { Download, FileCode, FileText, Copy, type LucideIcon } from 'lucide-react';
 import type { FormatPreference, TextFormat } from '../../shared/contracts';
 import { Button } from './ui';
-import { RowMenu } from './RowMenu';
+import { RowMenu, type RowMenuItem } from './RowMenu';
 import { t } from '../i18n';
 import { Tooltip } from '@codepawlhq/orglet-ui';
 
@@ -18,6 +18,16 @@ export const FormatPreferences = createContext<Record<'copy' | 'download', Forma
  * Copy or download in a chosen format. With a saved preference one click uses it; with 'ask' the button opens a small
  * menu of formats. Preferences live in Cài đặt → Cuộc trò chuyện.
  */
+/**
+ * The same choice as menu items, for a menu that already exists (a message's): one item for the saved format, or one per
+ * format when the preference is 'ask'.
+ */
+export function formatMenuItems(kind: 'copy' | 'download', preference: FormatPreference, onPick: (format: TextFormat) => void): RowMenuItem[] {
+  const icon = kind === 'copy' ? Copy : Download;
+  const formats: TextFormat[] = preference === 'ask' ? ['text', 'markdown'] : [preference];
+  return formats.map(format => ({ label: t(formatLabels[kind][format]), icon, onSelect: () => onPick(format) }));
+}
+
 export function FormatAction({ kind, onPick }: { kind: 'copy' | 'download'; onPick: (format: TextFormat) => void }) {
   const preference = useContext(FormatPreferences)[kind];
   const Icon = kind === 'copy' ? Copy : Download;

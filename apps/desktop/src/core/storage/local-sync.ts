@@ -56,6 +56,14 @@ function initialEpoch(root: SyncRoot): string {
   return stableUuid(syncScopeNamespace(root));
 }
 
+const KNOWN_SYNC_KINDS: ReadonlySet<string> = new Set(SyncData.options.map(option => option.shape.kind.value));
+
+/** Whether a record names a `data.kind` this build has no schema for. A malformed record of a known kind is not this: it still fails. */
+export function hasUnknownKind(raw: unknown): boolean {
+  const named = z.object({ data: z.object({ kind: z.string() }) }).safeParse(raw);
+  return named.success && !KNOWN_SYNC_KINDS.has(named.data.data.kind);
+}
+
 /** Local replication only. Account transport, token ownership and orchestration are intentionally outside this store. */
 export class LocalSync {
   readonly revisions: SyncRevisions;
@@ -1054,6 +1062,9 @@ export class LocalSync {
           continue;
         }
         if (header.schemaVersion === 1) {
+          // A kind this build does not know (a newer build adds one without a new schema version) is skipped, not staged:
+          // it must not fail the whole page, and every kind this build does know stays strictly checked below.
+          if (hasUnknownKind(input)) continue;
           const record = SyncRecord.parse(input);
           if (this.permanentlyBlocked(record.data, record.scopes)) continue;
         }

@@ -7,8 +7,9 @@ import { answersWithPlan, canFollowPlan } from '../../shared/approval-mode';
 import { setPlanFirst } from '../planFirst';
 import { taskDraftKey } from '../drafts';
 import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
-import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
+import type { Artifact, Run, TaskDetail, TaskStatus, TextFormat, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
+import type { RowMenuItem } from './RowMenu';
 import { Skeleton, SkeletonGroup, Tooltip } from '@codepawlhq/orglet-ui';
 import { formatMoney } from './money';
 import type { SourceTarget } from './SourcePanel';
@@ -120,7 +121,7 @@ function rememberDismissedLimitRun(taskId: string, runId: string) {
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đã tạm dừng', waiting_input: 'Chờ bổ sung bằng chứng' });
 
-type Turn = { missingInput: boolean; revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; forwarded?: ForwardedMessage; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
+type Turn = { missingInput: boolean; revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; forwarded?: ForwardedMessage; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[]; /** The person deleted an answer of this turn, so no answer is missing here: nothing explains its absence. */ answerGone: boolean };
 
 /**
  * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
@@ -157,18 +158,24 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
   const current = detail.task.inputRevision ?? 0;
   const unfinished = unfinishedWork(detail);
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === current && !request.answer && !request.interruptedAt);
+  const deletedIds = new Set(detail.deletedMessageIds);
   const turns: Turn[] = chatTurnRevisions(detail).map(revision => {
     const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
     const input = chatTurnInput(detail, revision);
     // In a channel with a principal, its answer comes from the check that follows members' work, or from the plan step when
-    // it answered by itself (owner, 2026-10-07).
-    const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis' || run.stage === 'plan')));
+    // it answered by itself (owner, 2026-10-07). An answer the person deleted is not drawn.
+    const found = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis' || run.stage === 'plan')));
+    const artifact = found && deletedIds.has(found.id) ? undefined : found;
     // Group chat: each worker's latest answered run for this message, in the order they answered.
-    const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
-    return { missingInput: input === undefined, revision, runs, sentAt: chatTurnCreatedAt(detail, revision), brief: input?.brief ?? '', replyTo: input?.replyTo, forwarded: input?.forwarded, sources: (input?.sourceIds ?? []).map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
+    const groupAnswers = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
+    const replies = groupAnswers.filter(reply => !deletedIds.has(reply.artifact.id));
+    const answerGone = replies.length < groupAnswers.length || Boolean(found && !artifact);
+    return { missingInput: input === undefined, revision, runs, sentAt: chatTurnCreatedAt(detail, revision), brief: input?.brief ?? '', replyTo: input?.replyTo, forwarded: input?.forwarded, sources: (input?.sourceIds ?? []).map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies, answerGone };
   });
   const replyLabel = (messageId?: string) => {
     if (!messageId) return undefined;
+    // A reply that quoted a message the person deleted keeps its own words and shows the quote as deleted.
+    if (deletedIds.has(messageId)) return t('Tin nhắn đã xóa');
     const userTurn = turns.find(turn => chatTurnMessageId(detail, turn.revision) === messageId);
     if (userTurn) return userTurn.missingInput ? t('Nội dung tin nhắn gốc không còn được lưu.') : t('Bạn: {0}', [userTurn.brief.slice(0, 140)]);
     const artifact = detail.artifacts.find(item => item.id === messageId);
@@ -408,14 +415,13 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
       proposals: proposalCards(proposals),
     });
-    // A chat answer copies and downloads from its toolbar; a report keeps those in its viewer's toolbar.
-    const toolbar = <MessageActions taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={reactions} action={action}
+    // A chat answer copies and downloads from its menu; a report keeps those in its viewer's toolbar.
+    const answerAbout = t('Câu trả lời của {0}', [authorName]);
+    const toolbar = <MessageActions taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={reactions} action={action} chatWorking={busy}
       text={chat ? replyText : tMessage(artifact.report.title)}
       onForward={forward ? () => forward({ taskId: detail.task.id, messageId: artifact.id, author: authorName, text: chat ? replyText : `${tMessage(artifact.report.title)}\n\n${tMessage(artifact.report.summary)}`, files: [] }) : undefined}
-      leading={<>
-        {chat && <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} />}
-        {detail.task.sideOf && <BringIntoMainChat artifactId={artifact.id} brought={broughtIn.has(artifact.id)} about={t('Câu trả lời của {0}', [authorName])} action={action} openChat={openChat} />}
-      </>} />;
+      artifact={chat ? artifactCommands(artifact.id, answerAbout, action) : undefined}
+      extraItems={detail.task.sideOf ? [bringIntoMainChatItem({ artifactId: artifact.id, brought: broughtIn.has(artifact.id), about: answerAbout, action, openChat })] : undefined} />;
     // The reactions sit under the answer, whichever shape it takes (COD-219, COD-365).
     const badges = badgesFor(artifact.id);
     return chat
@@ -570,9 +576,10 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
         const timeMarked = needsTimeMark(previousSentAt, turn.sentAt);
         if (timeMarked) grouping.breakHere();
         const personMessageId = chatTurnMessageId(detail, turn.revision);
-        const personContinued = grouping.place({ key: personAuthorKey, at: turn.sentAt });
+        const personDeleted = deletedIds.has(personMessageId);
+        const personContinued = personDeleted ? true : grouping.place({ key: personAuthorKey, at: turn.sentAt });
         const replyHeads = turn.replies.map(reply => grouping.place({ key: workerAuthorKey(reply.run.snapshot.worker.id), at: reply.artifact.createdAt }) ? undefined : workerHeader(reply.run));
-        const sectionShown = !turn.replies.length || (latest && (busy || detail.task.status !== 'completed'));
+        const sectionShown = (!turn.replies.length && !turn.answerGone) || (latest && (busy || detail.task.status !== 'completed'));
         // Who signs the turn's own message: the run thinking right now, or whoever answered or stopped. A crew turn that
         // already shows its replies, or a run not started yet, signs nothing and reads as part of the message above.
         const sectionAuthor = latest && busy ? thinkingRun : turn.replies.length ? undefined : waitingAuthor;
@@ -591,9 +598,10 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
         const quoteHeads = turnQuotes.map(quote => quote.schedule
           ? grouping.place({ key: `schedule:${quote.authorId}:${quote.schedule}`, at: quote.createdAt }) ? undefined : scheduleHeader(quote)
           : grouping.place({ key: personAuthorKey, at: quote.createdAt }) ? undefined : personHeader);
+        if (personDeleted && !sectionShown && !turn.replies.length && !turnQuotes.length) return null;
         return <div className="chat-turn" key={personMessageId}>
           {timeMarked && <TimeMark at={turn.sentAt} />}
-          <Message className="person-message" label={t('Tin của bạn')} header={personContinued ? undefined : personHeader} at={turn.sentAt}>
+          {!personDeleted && <Message className="person-message" label={t('Tin của bạn')} header={personContinued ? undefined : personHeader} at={turn.sentAt}>
             {turn.forwarded
               ? <ForwardedTurn forwarded={turn.forwarded} elementId={`message-${personMessageId}`} mentionPeople={mentionPeople} mentionAllNames={mentionAllNames}
                 openOrigin={openChat && workspace.tasks.some(task => task.id === turn.forwarded!.fromTaskId) ? () => openChat(turn.forwarded!.fromTaskId) : undefined} />
@@ -610,9 +618,9 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
             {/* The files follow the text in their own sideways row, the way Slack lists a message's attachments. */}
             {addedFiles.length > 0 && <MessageFiles files={addedFiles} onOpen={sourceId => showSources({ type: 'source', id: sourceId })} />}
             <MessageFoot badges={badgesFor(personMessageId)} />
-            {!turn.missingInput && <MessageActions taskId={detail.task.id} messageId={personMessageId} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={reactions} action={action}
+            {!turn.missingInput && <MessageActions taskId={detail.task.id} messageId={personMessageId} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={reactions} action={action} chatWorking={busy}
               onForward={forward ? () => forward({ taskId: detail.task.id, messageId: personMessageId, author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />}
-          </Message>
+          </Message>}
           {turn.replies.map((reply, replyIndex) => <Message key={reply.run.id} className={isGhost(reply.run) ? 'assistant-message ghost-message' : 'assistant-message'} label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])} header={replyHeads[replyIndex]} at={reply.artifact.createdAt}>
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest, false)}
           </Message>)}
@@ -662,7 +670,7 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
             {latest && detail.task.status === 'partial' && !turn.artifact?.report.limitations.length && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
             {/* A turn that ended without an answer keeps what became of it, also once newer messages follow (COD-290);
                 the latest turn's pause already says so in its own line. */}
-            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && !answeredByLaterTurn(turn, turns) && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
+            {!turn.artifact && !turn.replies.length && !turn.answerGone && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && !answeredByLaterTurn(turn, turns) && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
             {answered
               ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest, Boolean(retryButton) && turn.artifact!.report.format === 'chat' && turn.artifact!.report.limitations.length > 0, turn.artifact!.report.format === 'chat' ? receiptsFor(turn.revision) : undefined)
               : heldRun
@@ -961,13 +969,20 @@ function BroughtInQuote({ quote, threadName, onOpen }: { quote: ChatQuote; threa
 }
 
 /** "Bring into main chat" on a side thread's answer: copies it there as a quote and starts nothing (COD-247). */
-function BringIntoMainChat({ artifactId, brought, about, action, openChat }: { artifactId: string; brought: boolean; about: string; action: (fn: () => Promise<unknown>) => void; openChat?: (taskId: string) => void }) {
-  const label = brought ? t('Đã đưa vào chat chính') : t('Đưa vào chat chính');
+function bringIntoMainChatItem({ artifactId, brought, about, action, openChat }: { artifactId: string; brought: boolean; about: string; action: (fn: () => Promise<unknown>) => void; openChat?: (taskId: string) => void }): RowMenuItem {
   const bring = () => action(async () => {
     const mainTaskId = await orglet.call('bringIntoMainChat', { artifactId });
     toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { action: { label: t('Mở'), onSelect: () => openChat(mainTaskId) } } : {});
   });
-  return <Tooltip label={label}><span className="tooltip-anchor"><Button size="icon" aria-label={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button></span></Tooltip>;
+  return { label: brought ? t('Đã đưa vào chat chính') : t('Đưa vào chat chính'), icon: brought ? Check : MessageSquareQuote, disabled: brought, onSelect: bring };
+}
+
+/** Copy and download of a chat answer in the format the person picks or saved as default; `about` names it for the notice. */
+function artifactCommands(artifactId: string, about: string, action: (fn: () => Promise<unknown>) => void) {
+  return {
+    onCopy: (format: TextFormat) => action(async () => { await orglet.copyArtifact(artifactId, format); toast(format === 'text' ? t('Đã sao chép văn bản') : t('Đã sao chép Markdown'), 'success', about); }),
+    onDownload: (format: TextFormat) => action(() => orglet.exportArtifact(artifactId, format)),
+  };
 }
 
 /**
@@ -1023,9 +1038,10 @@ function ReadReceipts({ readers }: { readers: readonly Run[] }) {
 
 /** Copy and download for an answer or document, in the format the user picks or saved as default; `about` names it for the notice. */
 function ArtifactActions({ artifactId, about, action }: { artifactId: string; about: string; action: (fn: () => Promise<unknown>) => void }) {
+  const commands = artifactCommands(artifactId, about, action);
   return <>
-    <FormatAction kind="copy" onPick={format => action(async () => { await orglet.copyArtifact(artifactId, format); toast(format === 'text' ? t('Đã sao chép văn bản') : t('Đã sao chép Markdown'), 'success', about); })} />
-    <FormatAction kind="download" onPick={format => action(() => orglet.exportArtifact(artifactId, format))} />
+    <FormatAction kind="copy" onPick={commands.onCopy} />
+    <FormatAction kind="download" onPick={commands.onDownload} />
   </>;
 }
 

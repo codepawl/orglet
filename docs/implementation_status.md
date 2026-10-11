@@ -487,3 +487,7 @@ Measured 2026-09-27 on the Windows 11 development machine:
 - The signed Windows CI ZIP for merged commit `902b59283c2893d7669cb566eb5b7171e6566f6d` passed the existing i18n smoke with disposable data: English and Vietnamese switching, native dialog text, core validation text and restart persistence. The rendered English home screen was inspected at 1400 × 900.
 
 Still unverified here: installing and uninstalling the signed Setup on another clean Windows machine, a real public 0.7.0-to-0.7.1 update on that machine, other live API providers, and the harness paths named above. The local Squirrel update trial is recorded under [The updater end to end](#the-updater-end-to-end-cod-304).
+
+## 2026-10-12: deleting a message
+
+A message's right-click menu ends with **Delete message** for the person's own messages and orglets' answers. The deletion is local to the computer (`deleted_messages`, a sync fence on the message's record key); other computers keep their copy until a later release adds a deletion record. This build's pull skips records of an unknown kind. Checked with the real core in `tests/integration/delete-message.test.ts` and `tests/integration/delete-message-sync.test.ts`; not checked in the packaged app or against a live account.

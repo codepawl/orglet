@@ -40,7 +40,7 @@ try {
   await page.getByRole('button', { name: label('Gửi tin nhắn'), exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   // A chat answer has no accept step; it is kept like any message.
-  await page.getByRole('button', { name: label('Sao chép'), exact: true }).waitFor();
+  await page.locator('.assistant-message').getByRole('button', { name: label('Sao chép'), exact: true }).first().waitFor();
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   const taskId = state.tasks[0].id; assert.equal(state.tasks[0].accepted, false);
   const answer = page.locator('.chat-reply').first();
@@ -80,18 +80,27 @@ try {
   await viewer.waitFor({ state: 'hidden' });
   const exported = join(data, 'report.md');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, exported);
-  // The download is in this answer's own toolbar (COD-365): it shows while the answer is pointed at, and a button in it
+  // The download is a choice inside the Copy button of this answer's own toolbar (COD-365): the toolbar shows while the answer is pointed at, and a button in it
   // that takes focus from the keyboard shows it too.
   const toolbar = answer.locator('.message-actions');
   const toolbarShown = () => toolbar.evaluate(element => getComputedStyle(element).opacity);
   await page.mouse.move(0, 0);
-  await toolbar.getByRole('button', { name: label('Tải xuống'), exact: true }).focus();
+  await toolbar.getByRole('button', { name: label('Sao chép'), exact: true }).focus();
   assert.equal(await toolbarShown(), '1');
   await page.locator(':focus').evaluate(element => element.blur());
   await answer.hover();
   assert.equal(await toolbarShown(), '1');
-  await toolbar.getByRole('button', { name: label('Tải xuống'), exact: true }).click();
+  await toolbar.getByRole('button', { name: label('Sao chép'), exact: true }).click();
   await page.getByRole('menuitem', { name: label('Tải Markdown (.md)'), exact: true }).click();
+  // The same actions open from a right-click on the message: reply first, then the reactions, copy and download, forward and save.
+  await answer.locator('.chat-bubble').click({ button: 'right' });
+  const messageMenu = page.getByRole('menu', { name: label('Thêm thao tác') });
+  await messageMenu.waitFor();
+  const menuLabels = await messageMenu.getByRole('menuitem').allTextContents();
+  assert.equal(menuLabels[0], label('Trả lời tin này'));
+  assert.ok(menuLabels.includes(label('Tải Markdown (.md)')) && menuLabels.includes(label('Lưu để xem sau')));
+  assert.equal(await messageMenu.getByRole('menuitemcheckbox', { name: label('Mình thấy ổn, giữ hướng này.'), exact: true }).getAttribute('aria-checked'), 'true');
+  await page.keyboard.press('Escape');
   // The export is written asynchronously after the save dialog resolves.
   for (let attempt = 0; attempt < 50 && !(await readFile(exported, 'utf8').catch(() => '')); attempt++) await new Promise(resolve => setTimeout(resolve, 100));
   // A chat answer downloads as the message itself.
@@ -171,7 +180,7 @@ try {
   assert.equal(teamDetail.runs.filter(run => run.stage === 'synthesis').length, 1);
   // Transcript is the synthesis only. Member jobs stay in Chi tiết; the plan job has no artifact.
   assert.equal(await page.locator('.assistant-message .chat-reply, .assistant-message .report').count(), 1);
-  await page.getByRole('button', { name: label('Sao chép'), exact: true }).waitFor();
+  await page.locator('.assistant-message').getByRole('button', { name: label('Sao chép'), exact: true }).first().waitFor();
   await page.locator('.topbar-actions .thread-menu').click();
   await page.getByRole('menuitem', { name: label('Chi tiết'), exact: true }).click();
   // Each job is a line of the story, with its stage as a chip beside the worker's name.

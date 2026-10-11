@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './Button';
 import { cn } from '../cn';
-import { CloseIcon } from '../icons';
+import { CheckIcon, CloseIcon } from '../icons';
 import './RowMenu.css';
 import { Tooltip } from './Tooltip';
 
@@ -24,11 +24,26 @@ export type RowMenuItem = {
    */
   confirm?: { question: string; label: string; icon?: RowMenuIcon; safe?: boolean };
   shortcut?: string;
+  /**
+   * A choice that is on or off, such as the reaction already left: the item becomes a `menuitemcheckbox` and a tick
+   * shows at its end when `true`. Leave it out for a plain action.
+   */
+  checked?: boolean;
+  /** The item stays in the menu and in the arrow-key order but does nothing; `hint` says why, under the label. */
+  disabled?: boolean;
+  /** A quiet line under the label, read as the item's description. */
+  hint?: string;
+  /**
+   * Drawn as an icon alone, side by side with the inline items next to it in one row, such as a set of reactions. The
+   * label is its accessible name and its tooltip. It keeps its place in the arrow-key order.
+   */
+  inline?: boolean;
 };
 
 /** What the panel opens beside: the trigger's box, or a zero-size box at the pointer for a right-click. */
 type MenuAnchor = { rect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>; side: 'start' | 'end' };
 
+const ITEM_SELECTOR = '[role=menuitem], [role=menuitemcheckbox]';
 const GAP = 4;
 const EDGE = 8;
 const hiddenForMeasuring: CSSProperties = { position: 'fixed', left: 0, top: 0, visibility: 'hidden' };
@@ -80,6 +95,7 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
   const [anchor, setAnchor] = useState<MenuAnchor>();
   const [position, setPosition] = useState<CSSProperties>();
   const [asking, setAsking] = useState<RowMenuItem>();
+  const hintIdPrefix = useId();
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -97,7 +113,7 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
 
   // Focus moves in once the panel is placed and visible; a hidden element cannot take focus.
   useEffect(() => {
-    if (placed) panel.current?.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus();
+    if (placed) panel.current?.querySelector<HTMLButtonElement>(ITEM_SELECTOR)?.focus();
   }, [placed, asking]);
   useEffect(() => {
     if (!open) return;
@@ -158,7 +174,7 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
       // The panel is portaled, but React still bubbles its events to the root's handler; without this each arrow
       // press moved two items.
       event.stopPropagation();
-      const entries = [...(panel.current?.querySelectorAll<HTMLButtonElement>('[role=menuitem]') ?? [])];
+      const entries = [...(panel.current?.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR) ?? [])];
       const index = entries.indexOf(document.activeElement as HTMLButtonElement);
       const step = event.key === 'ArrowDown' ? 1 : entries.length - 1;
       entries[(index + step) % entries.length]?.focus();
@@ -168,6 +184,7 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
     if (open && !isInside(relatedTarget as Node | null)) close();
   };
   const choose = (item: RowMenuItem) => {
+    if (item.disabled) return;
     if (item.confirm) {
       setAsking(item);
       return;
@@ -191,12 +208,37 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
       <CloseIcon /><span>{cancelLabel}</span>
     </button>
   </>;
-  const entries = items.map(item => <button key={item.label} type="button" role="menuitem"
-    className={item.danger ? 'org-row-menu-danger' : undefined} onClick={() => choose(item)}>
-    <item.icon size={16} aria-hidden="true" />
-    <span>{item.label}</span>
-    {item.shortcut && <kbd className="org-row-menu-shortcut" aria-hidden="true">{item.shortcut}</kbd>}
-  </button>);
+  const inlineButton = (item: RowMenuItem) => <Tooltip key={item.label} label={item.label}>
+    <button type="button" role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'} aria-checked={item.checked}
+      aria-disabled={item.disabled || undefined} aria-label={item.label} className="org-row-menu-inline-item" onClick={() => choose(item)}>
+      <item.icon size={16} aria-hidden="true" />
+    </button>
+  </Tooltip>;
+  const itemButton = (item: RowMenuItem, index: number) => {
+    const hintId = item.hint ? `${hintIdPrefix}-${index}` : undefined;
+    return <button key={item.label} type="button" role={item.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+      aria-checked={item.checked} aria-disabled={item.disabled || undefined} aria-describedby={hintId}
+      className={item.danger ? 'org-row-menu-danger' : undefined} onClick={() => choose(item)}>
+      <item.icon size={16} aria-hidden="true" />
+      <span>{item.label}{item.hint && <small id={hintId} className="org-row-menu-hint">{item.hint}</small>}</span>
+      {item.checked && <CheckIcon className="org-row-menu-check" size={14} />}
+      {item.shortcut && <kbd className="org-row-menu-shortcut" aria-hidden="true">{item.shortcut}</kbd>}
+    </button>;
+  };
+  // Inline items that follow one another share one row; every other item is a row of its own.
+  const entries: ReactNode[] = [];
+  let inlineRow: RowMenuItem[] = [];
+  const endInlineRow = () => {
+    if (inlineRow.length === 0) return;
+    entries.push(<div key={`inline-${inlineRow[0].label}`} className="org-row-menu-inline" role="group">{inlineRow.map(inlineButton)}</div>);
+    inlineRow = [];
+  };
+  items.forEach((item, index) => {
+    if (item.inline) return void inlineRow.push(item);
+    endInlineRow();
+    entries.push(itemButton(item, index));
+  });
+  endInlineRow();
   const menu = open && createPortal(
     <div ref={panel} className="org-row-menu-panel" role="menu" aria-label={label} data-popup-open style={position ?? hiddenForMeasuring}
       onBlur={event => closeOnFocusLeaving(event.relatedTarget)} onKeyDown={onMenuKey}>

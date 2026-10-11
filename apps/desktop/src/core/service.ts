@@ -1,3 +1,4 @@
+import { DeletedMessages } from './storage/deleted-messages';
 import type { NativeEffortSetting } from '../shared/effort';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -542,6 +543,13 @@ export class CoreService {
         const mainTaskId = this.sideThreads.bringIn(commands.bringIntoMainChat.parse(args).artifactId);
         this.notify();
         return mainTaskId;
+      }
+      case 'deleteMessage': {
+        const { taskId, messageId } = commands.deleteMessage.parse(args);
+        // The core only knows the stored status; a run still starting up or a crew still working is caught here too.
+        if (this.runner.isActive(taskId) || this.teams.isActive(taskId)) throw new Error('Cuộc trò chuyện đang chạy. Chờ xong hoặc dừng lại rồi hãy xóa tin nhắn.');
+        new DeletedMessages(this.store).delete(taskId, messageId);
+        this.notify(); return;
       }
       case 'setMessageReaction': {
         new MessageInteractions(this.store).userReaction(commands.setMessageReaction.parse(args));

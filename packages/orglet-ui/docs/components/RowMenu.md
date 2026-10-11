@@ -60,6 +60,10 @@ const items: RowMenuItem[] = [
 | `danger` | `boolean` | | Draws the item in the danger colour. |
 | `confirm` | `{ question: string; label: string; icon?: Icon; safe?: boolean }` | | Asks inside the panel before running `onSelect`. `icon` replaces the item's icon on the answer; `safe` drops the danger colour when the answer is a way out (open the channel that blocks a delete) rather than the destructive act. |
 | `shortcut` | `string` | | The keys that do the same thing, shown quietly at the item's end and announced on the trigger. |
+| `checked` | `boolean` | | A choice that is on or off, such as the reaction already left. The item becomes a `menuitemcheckbox` with `aria-checked`, and a tick shows at its end when `true`. Leave it out for a plain action. |
+| `disabled` | `boolean` | | The item stays in the menu and in the arrow-key order (`aria-disabled`) but does nothing. |
+| `hint` | `string` | | A quiet line under the label, read as the item's description. Use it to say why an item is disabled. |
+| `inline` | `boolean` | | Draws the item as its icon alone. Inline items that follow one another share one row, such as a set of reactions. The label is the accessible name and the tooltip. |
 
 ### RowMenuIcon
 
@@ -67,7 +71,7 @@ A type: any icon component that takes `size` and `aria-hidden`, such as one from
 
 ## Accessibility
 
-- The trigger has `aria-haspopup="menu"` and `aria-expanded`. The panel has `role="menu"` and items have `role="menuitem"`.
+- The trigger has `aria-haspopup="menu"` and `aria-expanded`. The panel has `role="menu"` and items have `role="menuitem"` (`menuitemcheckbox` when `checked` is set).
 - Arrow keys move between items and wrap. Escape closes the panel and returns focus to the trigger, or backs out of a question first.
 - The panel also closes on a pointer outside, on resize and when focus leaves.
 - The panel is portaled into the open dialog, or the page, so a row's overflow cannot clip it.

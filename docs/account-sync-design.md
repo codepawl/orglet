@@ -308,3 +308,7 @@ Free entitlements start small enough that the account stays inside Workers Paid'
 - The WebSocket close in the spike used code 1006, which a server may not send (it threw once per disconnect). Use 1000 or 1001.
 - Self-hosting: whether the desktop app gets a "sync server" setting in phase 3, or later.
 - The attachment size cap (25 MB is a starting guess).
+
+## Deleted messages (2026-10-12)
+
+A message deleted on a computer stays on that computer only: `deleted_messages` is local, and the message's `turn:` or `artifact:` key is fenced in `sync_deletions` so it is neither sent nor taken back (see [Deleting a message](team-chat.md#deleting-a-message)). Syncing the deletion needs a new record kind; a released build parses the whole page strictly and would fail on it, so this build first skips unknown kinds on receive (`hasUnknownKind` in `core/storage/local-sync.ts`) and the tombstone record follows in a later release.

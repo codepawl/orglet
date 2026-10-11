@@ -97,6 +97,11 @@ export class ChatSearch {
     });
   }
 
+  /** Takes one deleted message out of search. */
+  removeMessage(messageId: string) {
+    this.store.db.prepare('DELETE FROM chat_messages WHERE message_id=?').run(messageId);
+  }
+
   /** Takes a chat out of search, for a chat being deleted. */
   removeChat(taskId: string) {
     this.store.db.prepare('DELETE FROM chat_messages WHERE task_id=?').run(taskId);
@@ -247,6 +252,8 @@ export class ChatSearch {
   }
 
   private write(message: IndexedMessage) {
+    // A message deleted on this computer stays out of search however the index is rebuilt.
+    if (this.store.db.prepare('SELECT 1 FROM deleted_messages WHERE id=?').get(message.messageId)) return;
     this.store.db.prepare(`INSERT INTO chat_messages (message_id,task_id,kind,author,at,text,body) VALUES (?,?,?,?,?,?,?)
       ON CONFLICT(message_id) DO UPDATE SET task_id=excluded.task_id, kind=excluded.kind, author=excluded.author,
       at=excluded.at, text=excluded.text, body=excluded.body`)

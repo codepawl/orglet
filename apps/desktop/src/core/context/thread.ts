@@ -151,6 +151,7 @@ function broughtIn(quote: ChatQuote, reader: Reader): ThreadTurn {
 
 /** The turns of `detail` before `revision`, oldest first: each message, its answer, and anything brought in after it. */
 function turnsBefore(detail: TaskDetail, revision: number, reader: Reader, inclusive = false): ThreadTurn[] {
+  const deleted = new Set(detail.deletedMessageIds);
   const past: ThreadTurn[] = [];
   const ordered = chatTurnRevisions(detail);
   const anchor = ordered.indexOf(revision);
@@ -158,12 +159,13 @@ function turnsBefore(detail: TaskDetail, revision: number, reader: Reader, inclu
   const pastAliases = anchor < 0 ? (inclusive ? [] : ordered) : ordered.slice(0, anchor + Number(inclusive));
   for (const earlier of pastAliases) {
     const runs = threadIndex(detail).runsByRevision.get(earlier) ?? [];
-    const message = chatTurnInput(detail, earlier)?.brief;
+    // A message the person deleted is not history any more: neither it nor an answer they deleted reaches the model.
+    const message = deleted.has(chatTurnMessageId(detail, earlier)) ? undefined : chatTurnInput(detail, earlier)?.brief;
     if (message) {
       const { text, truncated } = clip(message);
       past.push({ id: chatTurnMessageId(detail, earlier), from: 'user', text, revision: earlier, truncated });
     }
-    const replies = answers(detail, runs, reader);
+    const replies = answers(detail, runs, reader).filter(artifact => !deleted.has(artifact.id));
     for (const artifact of runs.some(item => item.stage === 'group') ? replies : replies.slice(-1)) past.push(said(detail, artifact, reader));
     for (const quote of detail.task.quotes ?? []) {
       if (quote.afterRevision === earlier) past.push(broughtIn(quote, reader));
