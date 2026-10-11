@@ -20,6 +20,7 @@ export { ColorPicker, normalizeHex } from './components/ColorPicker';
 export type { ColorPickerLabels, ColorPickerProps } from './components/ColorPicker';
 export { PanelHeading } from './components/PanelHeading';
 export { FieldLabel } from './components/FieldLabel';
+export { SearchField } from './components/SearchField';
 export type { FieldLabelIcon } from './components/FieldLabel';
 export { InfoTip } from './components/InfoTip';
 export type { InfoTipRow } from './components/InfoTip';

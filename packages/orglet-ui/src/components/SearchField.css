@@ -1,0 +1,53 @@
+/*
+ * The box is `Input`'s box: the same hairline, radius, page colour and faint shadow. The field inside has no border of
+ * its own, so focus is said once, on the box, around the magnifier and the text together.
+ */
+.org-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--org-control-height, 34px);
+  padding: 0 11px;
+  border: 1px solid var(--org-border, #e5e5e5);
+  border-radius: var(--org-radius, 9px);
+  background: var(--org-bg, #fff);
+  color: var(--org-muted, #666);
+  font-size: 13px;
+  box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d);
+  cursor: text;
+  transition: border-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease), box-shadow var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-search-field > svg { flex: none; }
+.org-search-field:hover:not(:focus-within):not(:has(:disabled)) { border-color: color-mix(in srgb, var(--org-text, #1f1f1f) 28%, var(--org-border, #e5e5e5)); }
+/* Focus keeps the hairline one pixel wide and only recolours it, with a soft halo: a search box sits at the top of a
+   page, where the two-pixel ring of a form field read as heavy. */
+.org-search-field:focus-within {
+  border-color: var(--org-focus, #576b99);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--org-focus, #576b99) 16%, transparent);
+}
+.org-search-field:has(:disabled) {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.org-search-field-input {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  /* Transparent, so forced colours still draw a focus outline on the field. */
+  outline: 2px solid transparent;
+  background: transparent;
+  color: var(--org-text, #1f1f1f);
+  font: inherit;
+  font-weight: 400;
+}
+/* Said again for the focused field: a host page's own `:focus-visible` outline would draw a second ring inside the box. */
+.org-search-field-input:focus-visible { outline: 2px solid transparent; }
+.org-search-field-input::placeholder { color: var(--org-muted, #666); }
+.org-search-field-input:disabled { cursor: not-allowed; }
+/* The browser's own clear cross and magnifier would double the kit's. */
+.org-search-field-input::-webkit-search-cancel-button,
+.org-search-field-input::-webkit-search-decoration { appearance: none; }

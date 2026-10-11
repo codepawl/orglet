@@ -1098,9 +1098,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .send-to-heading { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .send-to-title { margin:0; font-size:17px; font-weight:600; line-height:24px; color:var(--text); }
 .send-to-files { margin:0; font-size:13px; line-height:18px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.send-to-search { display:flex; align-items:center; gap:10px; margin:14px 14px 4px; padding:0 12px; height:40px; border-radius:10px; background:var(--surface); color:var(--muted); }
-.send-to-search input { flex:1; min-width:0; border:0; outline:none; background:transparent; font-size:15px; color:var(--text); }
-.send-to-search input::placeholder { color:var(--muted); }
+/* The kit's search box, a little taller and larger at the top of a picker. Its width leaves the dialog's side gap. */
+.send-to-search.org-search-field { flex:none; width:auto; gap:10px; margin:14px 14px 4px; padding:0 12px; min-height:40px; font-size:15px; }
 .send-to-options { list-style:none; margin:0; padding:4px 10px 6px; overflow:auto; overscroll-behavior:contain; }
 .send-to-group { display:block; padding:6px 16px 4px; font-size:12px; font-weight:500; line-height:16px; color:var(--muted); }
 .send-to-group-start:not(:first-child) { margin-top:8px; }
@@ -1127,10 +1126,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Forward picker (COD-257): the Send to palette with a tick on every row, so several places can be picked, and a foot
    on a faint tint for the files, the note and Send, so the list scrolls above it without a rule between them. The row
    keeps Send to's height and edge; the tick sits where the row starts, then the faces in their two-face slot. */
-.forward-dialog .send-to-search .org-input { flex:1; min-width:0; min-height:0; height:100%; padding:0; border:0; border-radius:0; outline:none; background:transparent; box-shadow:none; font-size:15px; }
-/* The ring belongs to the whole search box, magnifier included, not to the bare field inside it. */
-.forward-dialog .send-to-search .org-input:focus-visible { border:0; outline:none; box-shadow:none; }
-.forward-dialog .send-to-search:has(:focus-visible) { box-shadow:0 0 0 1px var(--focus), 0 0 0 4px color-mix(in srgb, var(--focus) 22%, transparent); }
 .forward-options { flex:1 1 auto; min-height:120px; }
 .forward-option.org-checkbox { align-items:center; gap:14px; min-height:44px; margin:0; padding:6px 14px 6px 16px; border-radius:10px; color:var(--text); }
 .forward-option.org-checkbox:hover:not(.org-checkbox-disabled) { background:var(--row-hover); }
@@ -3487,7 +3482,6 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .market-listing-meta > .market-listing-author { white-space: normal; overflow-wrap: anywhere; }
 .market-listing-installed { margin: 0; font-size: 12px; color: var(--muted); }
 .marketplace-empty { padding: 12px 10px; }
-.marketplace-search { margin: 0; }
 .marketplace-no-match { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 10px; }
 .market-section { display: grid; gap: 4px; }
 /* Centred, not on the baseline: the smaller count sat 1.5px low beside the heading (market-publishing smoke). */
