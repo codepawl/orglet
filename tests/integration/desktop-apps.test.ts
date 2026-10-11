@@ -555,7 +555,7 @@ describe('borrowing through the core', () => {
     // Exactly one borrow reached the helper, with the approved steps, the time limit and the notice in the app's language.
     const borrows = notes.requests.filter((request): request is BorrowRequest => request.kind === 'borrow');
     expect(borrows).toHaveLength(1);
-    expect(borrows[0]).toMatchObject({ handle: NOTES, ref: 'e8', allow: ['notes.exe'], expect: { name: 'Canvas', controlType: 'pane' }, limitMs: 10_000, indicator: 'Orglet is using your mouse and keyboard · press Esc to stop' });
+    expect(borrows[0]).toMatchObject({ handle: NOTES, ref: 'e8', allow: ['notes.exe'], expect: { name: 'Canvas', controlType: 'pane' }, limitMs: 10_000, indicator: 'Orglet is using your mouse and keyboard. Press Esc to stop.' });
     expect(borrows[0].steps).toEqual(first.borrow!.steps);
 
     expect(steps(taskId)).toEqual([
