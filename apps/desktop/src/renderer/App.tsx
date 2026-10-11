@@ -2093,7 +2093,7 @@ export function App() {
   // The channel on screen, written in or still empty (COD-361): its header is `#name`, its topic and its members' faces.
   const openChannelRow = openRow && isChannelChat(openRow) ? openRow : undefined;
   const headerChannel = openChannelRow?.channel ? { id: openChannelRow.channel.id, name: openChannelRow.channel.name, topic: openChannelRow.channel.topic, members: openChannelRow.channel.members, crewId: openChannelRow.channel.crewId, category: openChannelRow.channel.category, spaceId: openChannelRow.channel.spaceId, categoryId: openChannelRow.channel.categoryId, access: openChannelRow.channel.access, workers: taskWorkers(openChannelRow, workspace), taskId: openChannelRow.id }
-    : !selected && emptyChannel ? { id: emptyChannel.channelId, name: emptyChannel.name, topic: emptyChannel.topic, members: emptyChannel.members, crewId: undefined, category: undefined, workers: channelWorkers, taskId: undefined }
+    : !selected && emptyChannel ? { id: emptyChannel.channelId, name: emptyChannel.name, topic: emptyChannel.topic, members: emptyChannel.members, crewId: undefined, category: undefined, spaceId: emptyChannel.spaceId, categoryId: emptyChannel.categoryId, access: emptyChannel.access, workers: channelWorkers, taskId: undefined }
     : !selected && crewChannel ? { id: crewChannel.id, name: crewChannel.name, topic: crewChannel.topic, members: crewChannel.members, crewId: crewChannel.crewId, category: crewChannel.category, spaceId: crewChannel.spaceId, categoryId: crewChannel.categoryId, access: crewChannel.access, workers: executionWorkers, taskId: undefined }
     : undefined;
   const editChannel = (initialTab?: 'members' | 'how', suggestLead?: boolean) => {
@@ -2467,6 +2467,17 @@ export function App() {
   const goToActivity = () => {
     if (!leavingPage(goToActivity)) setArea('activity');
   };
+  const openAddOrglet = () => {
+    if (friendsOpen) {
+      const first = orderedWorkers[0];
+      if (first) openWorker(first.id);
+      else {
+        clearSelection();
+        setFriendsOpen(false);
+      }
+    }
+    setAddOrgletOpen(true);
+  };
   const areaEntries: (AreaRailEntry & { key: SidebarList })[] = [
     { key: 'home', icon: <MessagesSquare size={20} />, activeIcon: ChatFilled, label: t('Trò chuyện'), active: (area === 'home' || (area === 'channels' && !openSpace)) && !pagePanelOpen, onSelect: function goHome() {
       if (leavingPage(goHome)) return;
@@ -2686,8 +2697,9 @@ export function App() {
       <nav className="sidebar-nav" aria-label={t('Thêm Tí')}>
         {(['add', 'market'] as const).map(view => {
           const open = friendsOpen && homePage === view;
-          // Add orglet is a dialog over whatever is open; the marketplace is a page of Home.
-          if (view === 'add') return <Button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={() => setAddOrgletOpen(true)}>
+          // Add orglet is a dialog over a chat. Over the marketplace it read as part of that page, so the first orglet's
+          // chat opens behind it, or the no-orglet page when there is none (owner, 2026-10-11).
+          if (view === 'add') return <Button key={view} type="button" className="sidebar-nav-item" aria-haspopup="dialog" onClick={openAddOrglet}>
             <UserRoundPlus size={18} aria-hidden="true" /><span className="sidebar-nav-name">{t('Thêm Tí')}</span>
           </Button>;
           return <button key={view} type="button" className={`sidebar-nav-item${open ? ' active' : ''}`} aria-current={open ? 'page' : undefined} onClick={() => { clearSelection(); setHomePage(view); setFriendsOpen(true); setArea('home'); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }}>

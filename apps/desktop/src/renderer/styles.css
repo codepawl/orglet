@@ -3405,7 +3405,13 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .org-drawer:has(.add-orglet) { width:min(560px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
 .activity-link { display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:10px; background:var(--surface); }
 .activity-link > span { flex:1; min-width:0; }
-.saved-empty { display:flex; align-items:center; gap:8px; }
+.saved-empty { display:flex; align-items:center; gap:8px; margin:0; padding:0 10px; }
+/* Every part of Activity starts on one line, 24px under the card's top: `.page-body` is declared after `.panel-page`,
+   so its 8px won there, the filter chips and the Saved line sat against the edge, and the other two empty lines added
+   24px of their own. An empty line is as tall as the chips, so its text sits where theirs does (owner, 2026-10-11). */
+.page-body.panel-page { padding-top:24px; }
+.activity-page .running-empty { margin-top:0; }
+.activity-page .running-empty, .activity-page .saved-empty { min-height:28px; }
 .saved-row { display:flex; align-items:flex-start; gap:6px; }
 .saved-body { display:flex; flex-direction:column; flex:1; min-width:0; gap:4px; padding:8px 10px; border:0; border-radius:10px; background:transparent; color:inherit; font:inherit; text-align:left; }
 button.saved-body { cursor:pointer; }

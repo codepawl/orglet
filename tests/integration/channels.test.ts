@@ -70,6 +70,9 @@ describe('an empty channel in the window', () => {
 
   it('is gone once it is not listed', () => {
     expect(openEmptyChannel('other', [empty], roster)).toBeUndefined();
+    // A channel in a space keeps its place: the member column needs it to save a removal as the channel's own list.
+    const placed = openEmptyChannel('ch', [{ ...empty, spaceId: 'space-1', categoryId: 'category-1', access: 'inherit' }], roster)!;
+    expect([placed.spaceId, placed.categoryId, placed.access]).toEqual(['space-1', 'category-1', 'inherit']);
     expect(openEmptyChannel(undefined, [empty], roster)).toBeUndefined();
   });
 

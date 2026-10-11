@@ -41,7 +41,8 @@ function placeNear(anchor: HTMLElement, popover: HTMLElement): Placement {
   const above = roomBelow < naturalHeight && roomAbove > roomBelow;
   const room = Math.max(0, Math.floor(above ? roomAbove : roomBelow));
   const height = Math.min(naturalHeight, room);
-  const preferredLeft = anchorBox.left + anchorBox.width / 2 > innerWidth / 2 ? anchorBox.right - width : anchorBox.left;
+  // The left edges line up and the popover grows to the right; it only moves left to stay in the window.
+  const preferredLeft = anchorBox.left;
   const left = Math.min(Math.max(preferredLeft, EDGE), innerWidth - width - EDGE);
   const top = above ? anchorBox.top - GAP - height : anchorBox.bottom + GAP;
   const host = hostOf(anchor);
