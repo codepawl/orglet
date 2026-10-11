@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@codepawlhq/orglet-ui';
+import { Button, Tooltip } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 import { loadPdf } from './PdfPreview';
 import type { Size } from '../markup';
@@ -82,9 +82,9 @@ export function usePdfPage(document: PdfDocument | undefined, pageNumber: number
  */
 export function PdfPageNavigator({ page, pageCount, onPage }: { page: number; pageCount: number; onPage: (page: number) => void }) {
   return <span className="markup-pages" role="group" aria-label={t('Các trang')}>
-    <Button type="button" size="icon" aria-label={t('Trang trước')} title={t('Trang trước (Page Up)')} aria-keyshortcuts="PageUp" disabled={page <= 1} onClick={() => onPage(page - 1)}><ChevronLeft size={16} /></Button>
+    <Tooltip label={t('Trang trước (Page Up)')}><span className="tooltip-anchor"><Button type="button" size="icon" aria-label={t('Trang trước')} aria-keyshortcuts="PageUp" disabled={page <= 1} onClick={() => onPage(page - 1)}><ChevronLeft size={16} /></Button></span></Tooltip>
     <span className="markup-page-count" aria-live="polite">{t('Trang {0}/{1}', [page, pageCount])}</span>
-    <Button type="button" size="icon" aria-label={t('Trang sau')} title={t('Trang sau (Page Down)')} aria-keyshortcuts="PageDown" disabled={page >= pageCount} onClick={() => onPage(page + 1)}><ChevronRight size={16} /></Button>
+    <Tooltip label={t('Trang sau (Page Down)')}><span className="tooltip-anchor"><Button type="button" size="icon" aria-label={t('Trang sau')} aria-keyshortcuts="PageDown" disabled={page >= pageCount} onClick={() => onPage(page + 1)}><ChevronRight size={16} /></Button></span></Tooltip>
   </span>;
 }
 

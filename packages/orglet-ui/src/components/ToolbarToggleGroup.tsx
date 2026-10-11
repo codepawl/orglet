@@ -2,6 +2,7 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { useRef } from 'react';
 import { cn } from '../cn';
 import './ToolbarToggleGroup.css';
+import { Tooltip } from './Tooltip';
 
 export type ToolbarToggleItem = {
   value: string;
@@ -44,11 +45,11 @@ export function ToolbarToggleGroup({ label, items, value, onValueChange, classNa
     {items.map((item, index) => {
       const picked = item.value === value;
       const tooltip = item.shortcut ? `${item.label} (${item.shortcut})` : item.label;
-      return <button key={item.value} type="button" role="radio" aria-checked={picked} aria-label={item.label} title={tooltip}
+      return <Tooltip label={tooltip} key={item.value}><button type="button" role="radio" aria-checked={picked} aria-label={item.label}
         aria-keyshortcuts={item.shortcut} tabIndex={index === focusableIndex ? 0 : -1}
         className="org-toolbar-toggle" onClick={() => onValueChange(item.value)} onKeyDown={event => move(event, index)}>
         {item.icon}
-      </button>;
+      </button></Tooltip>;
     })}
   </div>;
 }

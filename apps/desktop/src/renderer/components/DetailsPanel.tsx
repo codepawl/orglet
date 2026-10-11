@@ -31,6 +31,7 @@ import { BrowserChatSettings, BrowserSteps, browserProfileName, useBrowserState 
 import { DesktopChatSettings, DesktopSteps, desktopAppsAvailable } from './DesktopApps';
 import { defaultBrowserChoice, routineBrowserLevels } from '../../shared/browser';
 import { commandTally, workOutcomes, type CommandOutcome, type CommandTally } from '../../shared/work-outcomes';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -168,7 +169,7 @@ function Section({ icon: Icon, title, children }: { icon: typeof Users; title: s
 
 /** One fact about this chat: an icon and a value, short enough that several fit on a line. */
 function Fact({ icon: Icon, children, title }: { icon: typeof Users; children: React.ReactNode; title: string }) {
-  return <span className="details-fact" title={title}><Icon size={13} aria-hidden="true" />{children}</span>;
+  return <Tooltip label={title}><span className="details-fact"><Icon size={13} aria-hidden="true" />{children}</span></Tooltip>;
 }
 
 /**
@@ -201,10 +202,10 @@ function ChatSubject({ team, worker, group, groupName, members }: { team?: Team;
     <p className="details-subject-name">
       <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
       <strong>{worker.name}</strong>
-      <span className="details-fact" title={t('Chạy bằng')}>
+      <Tooltip label={t('Chạy bằng')}><span className="details-fact">
         {worker.provider !== 'demo' && <ProviderMark provider={worker.provider} size="small" decorative />}
         {providerName(worker.provider)}
-      </span>
+      </span></Tooltip>
     </p>
     {worker.description && <p className="details-subject-note">{worker.description}</p>}
   </div>;
@@ -242,7 +243,7 @@ function RunEntry({ run, events }: { run: Run; events: { id: string; message: st
       <p className="details-run-who">
         <strong>{person.name}</strong>
         {stage && <small>{stage}</small>}
-        {took && <time className="details-run-took" title={t('Bước này mất bao lâu')}>{took}</time>}
+        {took && <Tooltip label={t('Bước này mất bao lâu')}><time className="details-run-took">{took}</time></Tooltip>}
       </p>
       {storyEvents(events).map(event => <p key={event.id} className="muted">
         <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</time>
@@ -271,16 +272,16 @@ function TechnicalRun({ run, detail, workspace, onExport }: { run: Run; detail: 
     {run.snapshot.reassignment && <p className="muted">{t('Nhận lại phần việc của {0}', [originalAssignmentOwner(detail, run)])}</p>}
     <p className="technical-run-id">
       <code>{run.id}</code>
-      <Button size="icon" aria-label={t('Sao chép mã lần chạy')} title={t('Sao chép mã lần chạy')} onClick={() => void copyRunId(run.id)}><Copy size={13} /></Button>
+      <Tooltip label={t('Sao chép mã lần chạy')}><Button size="icon" aria-label={t('Sao chép mã lần chạy')} onClick={() => void copyRunId(run.id)}><Copy size={13} /></Button></Tooltip>
     </p>
     {run.snapshot.plan && <ul className="technical-run-plan">{run.snapshot.plan.assignments.map(assignment => <li key={assignment.workerId}>
       <strong>{detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}</strong>
       {assignment.brief}
     </li>)}</ul>}
     <ContextManifestView run={run} workspace={workspace} />
-    {artifacts.map(artifact => <Button key={artifact.id} variant="outline" title={tMessage(artifact.report.title)} onClick={() => onExport(artifact.id)}>
+    {artifacts.map(artifact => <Tooltip label={tMessage(artifact.report.title)} key={artifact.id}><Button variant="outline" onClick={() => onExport(artifact.id)}>
       <FileText size={16} />{artifact.report.format === 'chat' ? t('Xuất câu trả lời') : t('Xuất báo cáo')}
-    </Button>)}
+    </Button></Tooltip>)}
   </li>;
 }
 
@@ -446,9 +447,9 @@ export function DetailsPanel({ workspace, team, worker, group, groupName, detail
           {model && <Fact icon={Sparkles} title={t('Model đã trả lời')}>{model}</Fact>}
           <Fact icon={MessageSquare} title={t('Số lượt trả lời')}>{replyCountLabel(detail.artifacts.length)}</Fact>
           {/* The files themselves are the chat's Files view (COD-355); the count here leads there. */}
-          {detail.sources.length > 0 && <button type="button" className="details-fact details-fact-link" title={t('Mở phần Tệp của chat')} onClick={onOpenSources}>
+          {detail.sources.length > 0 && <Tooltip label={t('Mở phần Tệp của chat')}><button type="button" className="details-fact details-fact-link" onClick={onOpenSources}>
             <FileText size={13} aria-hidden="true" />{fileCountLabel(detail.sources.length)}
-          </button>}
+          </button></Tooltip>}
         </div>
       </section>}
 

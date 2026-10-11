@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { DialogOverlay, keepOpenForPopup, useReturnFocus } from './Dialog';
 import { cn } from '../cn';
 import './Viewer.css';
+import { Tooltip } from './Tooltip';
 
 /**
  * A large dialog for looking at one thing, a document, a file or a diff, modelled on macOS Quick Look: a slim toolbar
@@ -34,7 +35,7 @@ export function Viewer({ open, onClose, title, icon, meta, actions, toolbar, clo
       <DialogOverlay />
       <RadixDialog.Content id={id} className={cn('org-viewer', className)} aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} {...returnFocus}>
         <div className="org-viewer-toolbar">
-          <RadixDialog.Close asChild><Button size="icon" aria-label={closeLabel} title={closeLabel}>{closeIcon}</Button></RadixDialog.Close>
+          <RadixDialog.Close asChild><Tooltip label={closeLabel}><Button size="icon" aria-label={closeLabel}>{closeIcon}</Button></Tooltip></RadixDialog.Close>
           {meta === undefined ? heading : <div className="org-viewer-heading">{heading}<span className="org-viewer-meta">{meta}</span></div>}
           <div className="org-viewer-actions">{actions}</div>
         </div>

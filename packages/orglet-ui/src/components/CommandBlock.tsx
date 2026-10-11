@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '../cn';
 import { CopyIcon } from '../icons';
 import './CommandBlock.css';
+import { Tooltip } from './Tooltip';
 
 /**
  * A command for someone to paste into a terminal: an optional label, then the command on a quiet card with a copy
@@ -22,13 +23,12 @@ export function CommandBlock({ command, label, toolbar, copyLabel, copyIcon, onC
   onCopy: (command: string) => void;
   className?: string;
 }) {
-  const copyButton = <button
+  const copyButton = <Tooltip label={copyLabel}><button
     type="button"
     className="org-command-block-copy"
     aria-label={copyLabel}
-    title={copyLabel}
     onClick={() => onCopy(command)}
-  >{copyIcon ?? <CopyIcon size={14} />}</button>;
+  >{copyIcon ?? <CopyIcon size={14} />}</button></Tooltip>;
   return <div className={cn('org-command-block', className)}>
     {label && <span className="org-command-block-label">{label}</span>}
     <div className={cn('org-command-block-card', toolbar ? 'org-command-block-with-toolbar' : undefined)}>

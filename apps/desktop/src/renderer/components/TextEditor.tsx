@@ -6,7 +6,7 @@ import { Decoration, EditorView, ViewPlugin, runScopeHandlers, drawSelection, hi
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { SearchQuery, closeSearchPanel, findNext, findPrevious, getSearchQuery, highlightSelectionMatches, replaceAll, replaceNext, search, searchKeymap, searchPanelOpen, setSearchQuery } from '@codemirror/search';
 import { CaseSensitive, ChevronDown, ChevronUp, Regex, WholeWord, X } from 'lucide-react';
-import { Button, Input } from '@codepawlhq/orglet-ui';
+import { Button, Input, Tooltip } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 import { tokenizeLines, type Language } from './highlight';
 
@@ -156,13 +156,13 @@ function FindReplaceBar({ view, query }: { view: EditorView; query: SearchQuery 
       <Input main-field="true" className="find-bar-field" aria-label={t('Tìm trong tệp')} placeholder={t('Tìm trong tệp')} value={query.search} aria-invalid={query.search && !query.valid ? true : undefined}
         onChange={event => change({ search: event.target.value })} onKeyDown={onFindKey} />
       <span className="find-bar-toggles">
-        {toggles.map(toggle => <Button key={toggle.key} type="button" size="icon" className="find-bar-toggle" aria-label={toggle.label} title={toggle.label}
-          aria-pressed={query[toggle.key]} onClick={() => change({ [toggle.key]: !query[toggle.key] })}><toggle.icon size={16} /></Button>)}
+        {toggles.map(toggle => <Tooltip label={toggle.label} key={toggle.key}><Button type="button" size="icon" className="find-bar-toggle" aria-label={toggle.label}
+          aria-pressed={query[toggle.key]} onClick={() => change({ [toggle.key]: !query[toggle.key] })}><toggle.icon size={16} /></Button></Tooltip>)}
       </span>
       <span className="find-bar-count" aria-live="polite">{countLabel}</span>
-      <Button type="button" size="icon" aria-label={t('Kết quả trước')} title={t('Kết quả trước (Shift+Enter)')} onClick={() => findPrevious(view)}><ChevronUp size={16} /></Button>
-      <Button type="button" size="icon" aria-label={t('Kết quả tiếp')} title={t('Kết quả tiếp (Enter)')} onClick={() => findNext(view)}><ChevronDown size={16} /></Button>
-      <Button type="button" size="icon" className="find-bar-close" aria-label={t('Đóng tìm kiếm')} title={t('Đóng tìm kiếm (Esc)')} onClick={() => { closeSearchPanel(view); view.focus(); }}><X size={16} /></Button>
+      <Tooltip label={t('Kết quả trước (Shift+Enter)')}><Button type="button" size="icon" aria-label={t('Kết quả trước')} onClick={() => findPrevious(view)}><ChevronUp size={16} /></Button></Tooltip>
+      <Tooltip label={t('Kết quả tiếp (Enter)')}><Button type="button" size="icon" aria-label={t('Kết quả tiếp')} onClick={() => findNext(view)}><ChevronDown size={16} /></Button></Tooltip>
+      <Tooltip label={t('Đóng tìm kiếm (Esc)')}><Button type="button" size="icon" className="find-bar-close" aria-label={t('Đóng tìm kiếm')} onClick={() => { closeSearchPanel(view); view.focus(); }}><X size={16} /></Button></Tooltip>
     </div>
     <div className="find-bar-row">
       <Input className="find-bar-field" aria-label={t('Thay bằng')} placeholder={t('Thay bằng')} value={query.replace}

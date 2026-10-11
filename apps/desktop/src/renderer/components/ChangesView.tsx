@@ -8,6 +8,7 @@ import { confirmAction } from './confirm';
 import { toast } from './toast';
 import { orglet } from '../api';
 import { t } from '../i18n';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /**
  * The diff viewer of one chat and the Apply and Discard it offers while a run's changes wait for review (COD-279). The
@@ -96,7 +97,7 @@ export function ChangesView({ detail, recovery, action }: { detail: TaskDetail; 
   const named = detail.runs.some(run => run.stage);
   return <div className="chat-view-list">
     {changedTurns(detail, recovery).map(turn => <section key={turn.revision} className="changes-turn" aria-label={turnHeadline(detail, turn.revision)}>
-      <p className="changes-turn-brief" title={turnHeadline(detail, turn.revision)}>{turnHeadline(detail, turn.revision)}</p>
+      <Tooltip label={turnHeadline(detail, turn.revision)}><p className="changes-turn-brief">{turnHeadline(detail, turn.revision)}</p></Tooltip>
       {turn.lines.map(({ run, summary, review, restored }) => <ChangedFilesCard key={run.id} summary={summary} review={review} restored={restored}
         workerName={named ? run.snapshot.worker.name : undefined} onOpen={path => diff.open(run, path)} />)}
     </section>)}

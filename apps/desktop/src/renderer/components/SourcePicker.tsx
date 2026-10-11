@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { FileText, FolderOpen, Plus } from 'lucide-react';
 import { Button } from './ui';
 import { t } from '../i18n';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /**
  * What takes focus once a choice closes the menu: the message box of the bar the picker sits in. `Composer` provides
@@ -44,7 +45,7 @@ export function SourcePicker({ onFiles, onFolder, disabled }: { onFiles: () => v
       items[(index + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
     }
   }}>
-    <Button ref={trigger} type="button" size="icon" className="composer-add" aria-label={t('Thêm nguồn')} title={t('Thêm nguồn')} aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={toggle}><Plus size={18} /></Button>
+    <Tooltip label={t('Thêm nguồn')}><span className="tooltip-anchor"><Button ref={trigger} type="button" size="icon" className="composer-add" aria-label={t('Thêm nguồn')} aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={toggle}><Plus size={18} /></Button></span></Tooltip>
     {open && <div className={openBelow ? 'source-menu below' : 'source-menu'} role="menu" aria-label={t('Thêm nguồn')}>
       <button type="button" role="menuitem" onClick={() => choose(onFiles)}><FileText size={16} /><span><strong>{t('Tệp')}</strong><small>{t('Chọn từng file cụ thể')}</small></span></button>
       <button type="button" role="menuitem" onClick={() => choose(onFolder)}><FolderOpen size={16} /><span><strong>{t('Thư mục')}</strong><small>{t('Tự lấy tối đa 20 file hỗ trợ')}</small></span></button>

@@ -3640,3 +3640,5 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .lead-leaves-dialog p { margin:0; }
 .lead-leaves-actions { display:flex; justify-content:flex-end; gap:8px; }
 .org-drawer:has(.lead-leaves-dialog) { width:min(480px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
+/* Wraps a disabled control so its tooltip still hears the pointer; it adds no box of its own. */
+.tooltip-anchor { display:inline-flex; }

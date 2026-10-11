@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Camera, Check, ChevronsUpDown, Image, Keyboard, List, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldAlert, TextCursorInput, ToggleRight, X, type LucideIcon } from 'lucide-react';
-import { FieldError, Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
+import { FieldError, Skeleton, SkeletonGroup, Tooltip } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { defaultDesktopChoice, type DesktopAction, type DesktopActionKind, type DesktopActKind, type DesktopApprovalView, type DesktopBorrowStep, type DesktopChoice, type DesktopWindowView } from '../../shared/desktop';
 import { Button, Drawer } from './ui';
@@ -55,7 +55,7 @@ function DesktopAppPicker({ granted, onAdd, onClose }: { granted: DesktopChoice;
         return <li key={program} className="desktop-picker-row">
           <MonitorSmartphone size={16} aria-hidden="true" />
           <span className="desktop-picker-text">
-            <span className="desktop-picker-title" title={name}>{name}</span>
+            <Tooltip label={name}><span className="desktop-picker-title">{name}</span></Tooltip>
             <span className="desktop-picker-meta">{elevated ? t('{0} · chạy quyền quản trị, Tí không dùng được', [program])
               : programWindows.length > 1 ? t('{0} · {1} cửa sổ', [program, programWindows.length]) : program}</span>
           </span>
@@ -91,9 +91,9 @@ export function DesktopChatSettings({ detail }: { detail: TaskDetail }) {
       {choice.apps.length > 0 && <ul className="browser-site-list" aria-label={t('Ứng dụng được cấp')}>
         {choice.apps.map(app => <li key={app.program} className="browser-site">
           <MonitorSmartphone size={14} aria-hidden="true" />
-          <span className="browser-site-name desktop-app-name" title={programLine(app.name, app.program)}>{programLine(app.name, app.program)}</span>
-          <Button type="button" size="icon" disabled={busy || side} aria-label={t('Bỏ {0} khỏi danh sách', [app.program])} title={t('Bỏ {0} khỏi danh sách', [app.program])}
-            onClick={() => save({ apps: choice.apps.filter(item => item.program !== app.program) })}><X size={14} /></Button>
+          <Tooltip label={programLine(app.name, app.program)}><span className="browser-site-name desktop-app-name">{programLine(app.name, app.program)}</span></Tooltip>
+          <Tooltip label={t('Bỏ {0} khỏi danh sách', [app.program])}><span className="tooltip-anchor"><Button type="button" size="icon" disabled={busy || side} aria-label={t('Bỏ {0} khỏi danh sách', [app.program])}
+            onClick={() => save({ apps: choice.apps.filter(item => item.program !== app.program) })}><X size={14} /></Button></span></Tooltip>
         </li>)}
       </ul>}
       {!side && <div className="actions desktop-chat-actions">
@@ -202,7 +202,7 @@ export function DesktopSteps({ detail }: { detail: TaskDetail }) {
           <Icon size={14} aria-hidden="true" />
           <span className="browser-step-text">{stepLabel(action)}{meta.length > 0 && <span className="muted browser-step-meta">{meta.join(' · ')}</span>}</span>
           <time dateTime={action.at}>{new Date(action.at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</time>
-          {action.screenshotId && <Button size="icon" aria-label={t('Xem ảnh cửa sổ')} title={t('Xem ảnh cửa sổ')} onClick={() => openShot(action)}><Image size={14} /></Button>}
+          {action.screenshotId && <Tooltip label={t('Xem ảnh cửa sổ')}><Button size="icon" aria-label={t('Xem ảnh cửa sổ')} onClick={() => openShot(action)}><Image size={14} /></Button></Tooltip>}
         </li>;
       })}
     </ol>

@@ -15,6 +15,8 @@
   box-shadow: var(--org-shadow-xs, 0 1px 2px #0000000d), 0 4px 12px color-mix(in srgb, var(--org-text, #1f1f1f) 10%, transparent);
   pointer-events: none;
   overflow-wrap: anywhere;
+  /* A label may hold several lines, such as a name above its description. */
+  white-space: pre-line;
   animation: org-tooltip-in var(--org-motion-quick, 110ms) var(--org-ease-out, ease-out);
 }
 .org-tooltip-shortcut {

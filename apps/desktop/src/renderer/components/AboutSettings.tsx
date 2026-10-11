@@ -14,7 +14,7 @@ import { Orglet3D } from './Orglet3D';
 import { clockLabel } from './TimeMark';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { CommandBlock, Skeleton, SkeletonText } from '@codepawlhq/orglet-ui';
+import { CommandBlock, Skeleton, SkeletonText, Tooltip } from '@codepawlhq/orglet-ui';
 import { aboutInfo, APP_KEY, changelogs, updateStates } from '../caches';
 import { useCached } from '../prefetch';
 import { restartIntoUpdate } from '../updateRestart';
@@ -50,9 +50,9 @@ const ABOUT_FACE_SIZE = 60;
 function AboutFace() {
   const [cheer, setCheer] = useState(0);
   const smile = () => setCheer(count => count + 1);
-  return <button type="button" className="about-face" aria-label={t('Chào Orglet')} title={t('Chào Orglet')} onClick={smile}>
+  return <Tooltip label={t('Chào Orglet')}><button type="button" className="about-face" aria-label={t('Chào Orglet')} onClick={smile}>
     <Orglet3D id="classic" seed={ABOUT_FACE_SEED} size={ABOUT_FACE_SIZE} color="brand" motion={{ lead: true, greet: true, cheer }} />
-  </button>;
+  </button></Tooltip>;
 }
 
 /** The places the About tab links to, each with its own mark. `releases` is not here: it belongs to the update row. */
@@ -295,7 +295,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, onMarketAutoUpdat
         </Button>}
       </div>
       <div className="setting-control">
-        <Button size="icon" aria-label={t('Tải lại danh sách phát hành')} title={t('Tải lại danh sách phát hành')} disabled={changelogBusy} onClick={() => void reloadChangelog()}><RefreshCw size={14} /></Button>
+        <Tooltip label={t('Tải lại danh sách phát hành')}><span className="tooltip-anchor"><Button size="icon" aria-label={t('Tải lại danh sách phát hành')} disabled={changelogBusy} onClick={() => void reloadChangelog()}><RefreshCw size={14} /></Button></span></Tooltip>
       </div>
     </div>
   </>;

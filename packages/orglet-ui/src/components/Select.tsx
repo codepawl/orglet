@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '../cn';
 import { CheckIcon, ChevronDownIcon } from '../icons';
 import './Select.css';
+import { Tooltip } from './Tooltip';
 
 /**
  * One choice. `detail` is a second, muted line (or the same line with `inlineDetail`); `note` is a small muted word
@@ -267,7 +268,7 @@ export function Select({
         {option.icon && <span className="org-select-icon">{option.icon}</span>}
         <span className="org-select-option-text">
           <span><span style={option.labelStyle}>{option.label}</span>{option.note && <span className="org-select-note"> ({option.note})</span>}</span>
-          {option.detail && <span className="org-select-detail" title={option.detail}>{option.detail}</span>}
+          {option.detail && <Tooltip label={option.detail}><span className="org-select-detail">{option.detail}</span></Tooltip>}
         </span>
         {option.badge && <span className="org-select-option-badge">{option.badge}</span>}
         <CheckIcon className="org-select-check" />

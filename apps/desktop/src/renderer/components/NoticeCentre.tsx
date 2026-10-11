@@ -5,6 +5,7 @@ import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoti
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
 import { EmptyPanel } from './EmptyPanel';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 const kindIcons: Record<NoticeKind, typeof Info> = { error: CircleAlert, done: CircleCheck, info: Info };
 
@@ -108,7 +109,7 @@ function NoticeItem({ row, isNew, onOpenChat, onRestart, onOpenArchive, onOpenAc
   </>;
   // The restart and the archive link are their own buttons, so the row around them stays plain.
   if (onRestart || onOpenArchive || onOpenAccount) return <div className="notice-body">{content}</div>;
-  if (onOpenChat && taskId) return <button type="button" className="notice-body" title={t('Mở chat')} onClick={() => onOpenChat(taskId, row.notice.messageId)}>{content}</button>;
+  if (onOpenChat && taskId) return <Tooltip label={t('Mở chat')}><button type="button" className="notice-body" onClick={() => onOpenChat(taskId, row.notice.messageId)}>{content}</button></Tooltip>;
   if (!repeated) return <div className="notice-body">{content}</div>;
   return <>
     <button type="button" className="notice-body" aria-expanded={expanded} onClick={() => setExpanded(current => !current)}>{content}</button>

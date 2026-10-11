@@ -8,6 +8,7 @@ import { StatusMark, type StatusMarkState } from './StatusMark';
 import { selectionPickMode, type SelectionPickMode } from '../sidebarSelection';
 import { dwellHandlers } from '../prefetch';
 import { hidesActive } from '../sidebarChats';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 export function statusMarkLabel(status: StatusMarkState): string {
   if (status.variant === 'asking') return t('Đang chờ bạn');
@@ -137,10 +138,10 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
         ? <Checkbox className="row-check" checked={selected} onClick={onCheckboxClick} onChange={() => { /* the click handler picks, so Shift is read */ }}><span className="visually-hidden">{name}</span></Checkbox>
         : status && <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />}
       <span className="row-disclosure" aria-hidden="true">{mark}{avatar}</span>
-      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} aria-pressed={selection?.picking ? selected : undefined} title={description ? `${description}\n${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+      <Tooltip label={description ? `${description}\n${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')}><button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} aria-pressed={selection?.picking ? selected : undefined} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
         onClick={onNameClick} onKeyDown={onMoveKey}>
         <span>{name}</span>
-      </button>
+      </button></Tooltip>
       <span data-no-drag>{menu}</span>
     </div>
     {children && <div className="tree-children" role="group" aria-label={childrenLabel ?? t('Chat phụ của {0}', [name])} data-no-drag>{children}</div>}
@@ -175,9 +176,9 @@ export function ChannelRow({ name, locked = false, dragId, active, status, onOpe
     <div className="worker-row">
       <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />
       <span className="row-disclosure channel-hash" aria-hidden="true">{locked ? <Lock size={16} /> : <Hash size={16} />}</span>
-      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} aria-label={label} title={label} onClick={onOpen}>
+      <Tooltip label={label}><button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} aria-label={label} onClick={onOpen}>
         <span>{name}</span>
-      </button>
+      </button></Tooltip>
       {/* Wrapped like an orglet row's menu, so it floats over the row's end instead of taking the name's room. */}
       <span data-no-drag><RowMenu label={t('Tùy chọn kênh {0}', [label])} icon={EllipsisVertical} contextMenuOf=".channel-row" items={[
         { label: t('Thiết lập kênh'), icon: Settings2, onSelect: onEdit },
@@ -204,10 +205,10 @@ export function SideThreadRow({ name, active, status, onOpen, onDwell, onRename,
   const label = statusMarkLabel(status);
   // The row is narrow under its orglet, so two threads can share their first words: the tooltip carries the whole name.
   return <div ref={row} className={`task-row side-thread-row${active ? ' active' : ''}`} {...dwell}>
-    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} title={`${name}\n${label}`} onClick={onOpen}>
+    <Tooltip label={`${name}\n${label}`}><button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} onClick={onOpen}>
       <StatusMark variant={status.variant} tone={status.tone} label={label} decorative />
       <span className="row-name">{name}</span>
-    </button>
+    </button></Tooltip>
     <RowMenu label={t('Tùy chọn chat phụ {0}', [name])} contextMenuOf=".side-thread-row" items={[
       { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) },
       { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },
@@ -228,11 +229,11 @@ export function ScheduleRunRow({ name, active, status, onOpen, onDwell, onOpenSc
   const row = useScrolledIntoViewWhenActive<HTMLDivElement>(active);
   const label = statusMarkLabel(status);
   return <div ref={row} className={`task-row side-thread-row schedule-run-row${active ? ' active' : ''}`} {...dwell}>
-    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} aria-label={t('Lần chạy của lịch {0}', [name])} title={`${name}\n${label}`} onClick={onOpen}>
+    <Tooltip label={`${name}\n${label}`}><button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} aria-label={t('Lần chạy của lịch {0}', [name])} onClick={onOpen}>
       <StatusMark variant={status.variant} tone={status.tone} label={label} decorative />
       <span className="row-name">{name}</span>
       <CalendarClock size={13} className="schedule-run-mark" aria-hidden="true" />
-    </button>
+    </button></Tooltip>
     <RowMenu label={t('Tùy chọn lịch {0}', [name])} contextMenuOf=".schedule-run-row" items={[
       { label: t('Mở lịch'), icon: CalendarClock, onSelect: onOpenSchedule },
       { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },

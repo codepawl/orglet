@@ -8,6 +8,7 @@ import { t } from '../i18n';
 import { focusMessage } from './messageMarks';
 import { ThreadSkeleton } from './TaskThread';
 import { Button } from './ui';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /**
  * A side thread open in the right panel beside its main chat (COD-365, after Slack's threads): the main chat stays in
@@ -36,7 +37,7 @@ export function SideThreadPanel({ taskId, title, orgletName, focusMessageId, onS
         <h2>{title}</h2>
         <p>{t('Chat phụ với {0}', [orgletName])}</p>
       </div>
-      <Button size="icon" aria-label={t('Thiết lập chat')} title={t('Thiết lập chat')} onClick={onSettings}><Settings2 size={18} /></Button>
+      <Tooltip label={t('Thiết lập chat')}><Button size="icon" aria-label={t('Thiết lập chat')} onClick={onSettings}><Settings2 size={18} /></Button></Tooltip>
     </div>
     <div className="thread-pane-body">
       {detail ? children(detail, recovery) : <ThreadSkeleton />}

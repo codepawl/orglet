@@ -1,5 +1,6 @@
 import { cn } from '../cn';
 import './StatusMark.css';
+import { Tooltip } from './Tooltip';
 
 export type StatusMarkVariant = 'empty' | 'dashed' | 'paused' | 'filled' | 'busy' | 'asking';
 export type StatusMarkTone = 'muted' | 'success' | 'error' | 'working' | 'accent';
@@ -52,7 +53,7 @@ export function StatusMark({ variant, tone = 'muted', label, decorative, classNa
   className?: string;
 }) {
   const naming = decorative ? { 'aria-hidden': true as const } : { role: 'status' as const, 'aria-label': label };
-  return <span className={cn('org-status-mark', `org-status-mark-${variant}`, `org-status-mark-${tone}`, className)} title={label} {...naming}>
+  return <Tooltip label={label}><span className={cn('org-status-mark', `org-status-mark-${variant}`, `org-status-mark-${tone}`, className)} {...naming}>
     <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">{glyphFor(variant, tone)}</svg>
-  </span>;
+  </span></Tooltip>;
 }

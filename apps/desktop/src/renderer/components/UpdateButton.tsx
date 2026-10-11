@@ -2,6 +2,7 @@ import type { UpdateIndicator } from '../../shared/updates';
 import { t } from '../i18n';
 import { Download } from './icons';
 import { Button } from './ui';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /** The words the ready button's tooltip, its notice and the About row use for the version waiting for a restart. */
 export function readyUpdateLabel(version: string | null): string {
@@ -24,17 +25,17 @@ export function UpdateButton({ indicator, onRestart, onOpenAbout, compact = fals
 }) {
   if (indicator.kind === 'downloading') {
     const label = t('Đang tải bản Orglet mới');
-    return <Button size="icon" className="update-button" aria-label={label} title={label} onClick={onOpenAbout}>
+    return <Tooltip label={label}><Button size="icon" className="update-button" aria-label={label} onClick={onOpenAbout}>
       <Download size={18} />
-    </Button>;
+    </Button></Tooltip>;
   }
   const label = readyUpdateLabel(indicator.version);
   if (compact) {
-    return <Button size="icon" className="update-button ready compact" aria-label={label} title={label} onClick={onRestart}>
+    return <Tooltip label={label}><Button size="icon" className="update-button ready compact" aria-label={label} onClick={onRestart}>
       <Download size={18} />
-    </Button>;
+    </Button></Tooltip>;
   }
-  return <Button className="update-button ready" title={label} onClick={onRestart}>
+  return <Tooltip label={label}><Button className="update-button ready" onClick={onRestart}>
     <Download size={16} />{t('Cập nhật')}
-  </Button>;
+  </Button></Tooltip>;
 }

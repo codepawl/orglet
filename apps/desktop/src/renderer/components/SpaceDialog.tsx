@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Boxes, Database, FileText, Folder, FolderTree, Globe, Lock, Plus, ShieldCheck, SlidersHorizontal, Trash, UserRound, UsersRound } from 'lucide-react';
-import { Input } from '@codepawlhq/orglet-ui';
+import { Input, Tooltip } from '@codepawlhq/orglet-ui';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { CHANNEL_CATEGORY_LIMIT, MAX_CHANNEL_MEMBERS } from '../../shared/channels';
 import { MAX_SPACE_CATEGORIES, SPACE_FOLDER_LIMIT, SPACE_NAME_LIMIT, type Space, type SpaceDefaultCapability } from '../../shared/spaces';
@@ -141,7 +141,7 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
         <div className="space-category-head">
           <Input aria-label={t('Tên nhóm')} data-field={invalid === 'category' && !category.name.trim() ? 'category' : undefined} value={category.name} maxLength={CHANNEL_CATEGORY_LIMIT} placeholder={t('Tên nhóm')}
             onChange={event => changeCategory(category.key, { name: event.target.value })} invalid={invalid === 'category' && !category.name.trim()} flash={flash} />
-          <Button type="button" size="icon" aria-label={t('Xóa nhóm {0}', [category.name.trim() || t('chưa đặt tên')])} title={t('Xóa nhóm')} onClick={() => { setCategories(current => current.filter(item => item.key !== category.key)); clearError(); }}><Trash size={16} /></Button>
+          <Tooltip label={t('Xóa nhóm')}><Button type="button" size="icon" aria-label={t('Xóa nhóm {0}', [category.name.trim() || t('chưa đặt tên')])} onClick={() => { setCategories(current => current.filter(item => item.key !== category.key)); clearError(); }}><Trash size={16} /></Button></Tooltip>
         </div>
         {!category.name.trim() && fieldMessage('category', invalid, error)}
         <Select ariaLabel={t('Ai ở trong nhóm {0}', [category.name.trim() || t('chưa đặt tên')])} value={category.listed ? 'listed' : 'inherit'} onChange={value => changeCategory(category.key, { listed: value === 'listed' })}

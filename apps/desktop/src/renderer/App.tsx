@@ -98,7 +98,7 @@ import { CHANNEL_NAME_LIMIT, channelLabel, isChannelChat } from '../shared/chann
 import { ChannelDialog, type ChannelDraft } from './components/ChannelDialog';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
-import { EditableText } from '@codepawlhq/orglet-ui';
+import { EditableText, Tooltip } from '@codepawlhq/orglet-ui';
 import { APP_KEY, dwellAbout, dwellChat, dwellModels, followWorkspace, showEarlierTurns, taskDetails, updateStates } from './caches';
 import { useCached } from './prefetch';
 import { becameReady, updateIndicator } from '../shared/updates';
@@ -2202,8 +2202,8 @@ export function App() {
   const sectionActions = (section: SidebarSelectionSection, selectLabel: string, createLabel: string, create: () => void) => {
     const done = selecting === section;
     return <>
-      <Button size="icon" className="row-action" aria-pressed={done} aria-label={done ? t('Xong') : selectLabel} title={done ? t('Xong') : selectLabel} onClick={() => toggleSelecting(section)}>{done ? <Check size={16} /> : <Pencil size={16} />}</Button>
-      <Button size="icon" className="row-action" aria-label={createLabel} title={createLabel} onClick={create}><Plus size={16} /></Button>
+      <Tooltip label={done ? t('Xong') : selectLabel}><Button size="icon" className="row-action" aria-pressed={done} aria-label={done ? t('Xong') : selectLabel} onClick={() => toggleSelecting(section)}>{done ? <Check size={16} /> : <Pencil size={16} />}</Button></Tooltip>
+      <Tooltip label={createLabel}><Button size="icon" className="row-action" aria-label={createLabel} onClick={create}><Plus size={16} /></Button></Tooltip>
     </>;
   };
   /** Whether the chat on screen is this orglet's own DM (its main chat or a side thread), which unfriending closes. */
@@ -2255,9 +2255,9 @@ export function App() {
   const deleteSelectionQuestion = t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
   const selectionBar = selection.section && <div className="selection-bar" role="toolbar" aria-label={t('Mục đã chọn')}>
     <span className="selection-count">{t('{0} đã chọn', [selectionCount])}</span>
-    <Button size="icon" className="row-action" aria-label={t('Lưu trữ')} title={t('Lưu trữ')} onClick={() => void applyToSelection('archive')}><Archive size={16} /></Button>
+    <Tooltip label={t('Lưu trữ')}><Button size="icon" className="row-action" aria-label={t('Lưu trữ')} onClick={() => void applyToSelection('archive')}><Archive size={16} /></Button></Tooltip>
     <RowMenu className="row-action danger" label={t('Xóa')} icon={Trash} asksOnOpen items={[{ label: t('Xóa'), icon: Trash, danger: true, onSelect: () => void applyToSelection('delete'), confirm: { question: deleteSelectionQuestion, label: t('Xóa') } }]} />
-    <Button size="icon" className="row-action" aria-label={t('Bỏ chọn')} title={t('Bỏ chọn')} onClick={clearSelection}><SidebarX size={16} /></Button>
+    <Tooltip label={t('Bỏ chọn')}><Button size="icon" className="row-action" aria-label={t('Bỏ chọn')} onClick={clearSelection}><SidebarX size={16} /></Button></Tooltip>
   </div>;
   const emptyChatDemoWorker = demoWorkerToConnect(executionWorkers, team);
   /**
@@ -2742,7 +2742,7 @@ export function App() {
         {/* The channels directly in the space. With categories it is also where a dragged channel leaves its category. */}
         {(sidebarSpaceEntries.some(entry => !categoryOfEntry(entry)) || sidebarSpace.categories.length > 0) && <div className={`channel-uncategorized channel-drop${channelDropAt === 'root' ? ' over' : ''}`} {...dropTarget('root', (_kind, id) => placeChannel(id, { categoryId: null }))}>{sidebarSpaceEntries.filter(entry => !categoryOfEntry(entry)).map(entry => channelSlot(entry, null))}</div>}
         {sidebarSpace.categories.map(category => <div key={category.id} className={`channel-drop${channelDropAt === category.id ? ' over' : ''}`} draggable onDragStart={startCategoryDrag(category.id)} {...dropTarget(category.id, (kind, id) => kind === 'channel' ? placeChannel(id, { categoryId: category.id }) : placeCategory(id, category.id), true)}><SidebarSection id={`space-category-${category.id}`} title={category.name}
-          action={<Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [category.name])} title={t('Tạo kênh trong {0}', [category.name])} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id, categoryId: category.id })}><Plus size={16} /></Button>}>
+          action={<Tooltip label={t('Tạo kênh trong {0}', [category.name])}><Button size="icon" className="row-action" aria-label={t('Tạo kênh trong {0}', [category.name])} onClick={() => setChannelDraft({ spaceId: sidebarSpace.id, categoryId: category.id })}><Plus size={16} /></Button></Tooltip>}>
           {sidebarSpaceEntries.filter(entry => categoryOfEntry(entry)?.id === category.id).map(entry => channelSlot(entry, category.id))}
         </SidebarSection></div>)}
       </>}
@@ -2820,27 +2820,27 @@ export function App() {
         lead={<>
           <span className="topbar-title">
           {headerChannel && <span className="topbar-hash" aria-hidden="true">#</span>}
-          {openSchedule && <span className="topbar-schedule-mark" title={t('Lịch chạy')}><CalendarClock size={15} aria-hidden="true" /></span>}
+          {openSchedule && <Tooltip label={t('Lịch chạy')}><span className="topbar-schedule-mark" role="img" aria-label={t('Lịch chạy')}><CalendarClock size={15} aria-hidden="true" /></span></Tooltip>}
           {headerRename
             ? <EditableText key={headerRename.kind === 'team' ? headerRename.team.id : headerRename.kind === 'worker' ? headerRename.worker.id : headerRename.kind === 'emptyChannel' ? headerRename.channelId : headerRename.taskId} className="topbar-name" value={headerName} maxLength={headerChannel ? CHANNEL_NAME_LIMIT : headerRename.kind === 'thread' ? 120 : 80}
               label={t('Đổi tên {0}', [headerName])} onCommit={renameFromHeader} />
             : <span className="topbar-name">{headerName}</span>}
-          {headerChannel?.topic && <span className="topbar-topic" title={headerChannel.topic}>{headerChannel.topic}</span>}
+          {headerChannel?.topic && <Tooltip label={headerChannel.topic}><span className="topbar-topic">{headerChannel.topic}</span></Tooltip>}
           {/* Which model is answering, not only whether it is Demo (user, 2026-09-19). A team running on several
               providers says nothing here; the details panel lists them one by one. */}
-          {headerProvider && <span className="topbar-provider" title={headerProvider !== 'demo' ? providerLabel(headerProvider) : demoReplies() ? t('Demo · không gọi API') : t('Tí này chưa kết nối model.')}>
+          {headerProvider && <Tooltip label={headerProvider !== 'demo' ? providerLabel(headerProvider) : demoReplies() ? t('Demo · không gọi API') : t('Tí này chưa kết nối model.')}><span className="topbar-provider">
             {headerProvider !== 'demo' && <ProviderMark provider={headerProvider} size="small" decorative />}
             {headerProvider === 'demo' && !demoReplies() ? t('chưa kết nối model') : providerName(headerProvider)}
-          </span>}
+          </span></Tooltip>}
           </span>
         </>}
         actions={<>
           {/* The member column's toggle. Changing who is in the channel is a setting, so it lives in the chat's menu. */}
-          {headerChannel && !sidePaneOpen && windowWidth > 1100 && <Button size="icon" className="topbar-members-toggle" aria-label={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')} title={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')} aria-pressed={membersOpen} onClick={toggleMembers}><Users size={18} /></Button>}
+          {headerChannel && !sidePaneOpen && windowWidth > 1100 && <Tooltip label={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')}><Button size="icon" className="topbar-members-toggle" aria-label={membersOpen ? t('Ẩn danh sách thành viên') : t('Hiện danh sách thành viên')} aria-pressed={membersOpen} onClick={toggleMembers}><Users size={18} /></Button></Tooltip>}
           {selected && detail && openTaskPaid && <span className="task-cost" role="status"><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0}', [formatMoney(openTaskUsed)])}</span>}
 
           {/* The chat is the screen; its files, changes, schedules and memory open from the menu, and a way back sits here (user, 2026-10-07). */}
-          {(selected || team || worker || emptyChannel) && chatView === 'chat' && (windowWidth > 1000 || (windowWidth > 860 && !sidebar)) && <Button size="icon" className="topbar-details-toggle" aria-label={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')} title={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')} aria-pressed={detailsOpen} onClick={() => setPanel(detailsOpen ? null : 'activity')}><PanelRight size={18} /></Button>}
+          {(selected || team || worker || emptyChannel) && chatView === 'chat' && (windowWidth > 1000 || (windowWidth > 860 && !sidebar)) && <Tooltip label={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')}><Button size="icon" className="topbar-details-toggle" aria-label={detailsOpen ? t('Ẩn chi tiết') : t('Hiện chi tiết')} aria-pressed={detailsOpen} onClick={() => setPanel(detailsOpen ? null : 'activity')}><PanelRight size={18} /></Button></Tooltip>}
           {chatView !== 'chat' && <Button className="topbar-back-to-chat" onClick={() => showChatView('chat')}><ArrowLeft size={16} aria-hidden="true" />{t('Trò chuyện')}</Button>}
           {(selected || team || worker || emptyChannel) && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[...chatViewMenuItems, ...(headerChannel ? [{ label: t('Thiết lập kênh'), icon: Settings2, onSelect: () => editChannel() }, { label: t('Thành viên'), icon: Users, onSelect: () => editChannel('members') }] : []), ...headerSettingsItems, ...(selected && openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => setPrivacyTaskId(selected) }] : []), ...(selected && !openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => { setEditingTask(selected); setPanel('task'); } }] : []), { label: t('Chi tiết'), icon: SlidersHorizontal, onSelect: () => setPanel('activity') }, ...(!selected && headerChannel && !headerChannel.taskId ? [{ label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEmptyChannel(headerChannel.id, headerChannel.name), confirm: { question: t('Xóa kênh này? Kênh chưa có tin nhắn nào.'), label: t('Xóa') } }] : []), ...(selected ? [detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: LucideArchive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: headerChannel ? t('Xóa kênh này cùng lịch sử của nó? Không thể hoàn tác.') : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }] : [])]} />}
         </>} />

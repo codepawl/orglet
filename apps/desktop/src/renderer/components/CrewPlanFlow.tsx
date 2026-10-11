@@ -6,6 +6,7 @@ import { Avatar } from './Avatar';
 import { StatusMark, type StatusMarkState } from './StatusMark';
 import { overflowAttributes, useStripOverflow } from '../stripOverflow';
 import { t, tMessage } from '../i18n';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 const stepMarks: Record<CrewStepState, StatusMarkState> = {
   waiting: { variant: 'dashed', tone: 'muted' },
@@ -95,7 +96,7 @@ function FlowStep({ step, summary, label, cell = false }: { step: CrewStep; summ
   const content = <>
     <span className="crew-node-head">
       <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />
-      <span className="crew-node-name" title={worker.name}>{worker.name}</span>
+      <Tooltip label={worker.name}><span className="crew-node-name">{worker.name}</span></Tooltip>
       <StatusMark variant={stepMarks[step.state].variant} tone={stepMarks[step.state].tone} label={label} decorative />
       <span className="visually-hidden">{label}</span>
     </span>

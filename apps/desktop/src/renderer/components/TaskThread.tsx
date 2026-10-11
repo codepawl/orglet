@@ -752,7 +752,7 @@ function TeamJob({ run, waitingFor, hideWho }: { run: Run; waitingFor: string[];
 
 /** What became of a turn without an answer, one muted line; a long error is cut and kept whole in the tooltip. */
 function TurnOutcomeLine({ outcome }: { outcome: ReturnType<typeof unansweredTurnLine> }) {
-  return <p className="muted turn-outcome" title={outcome.detail ? outcome.text : undefined}>{outcome.text}</p>;
+  return <Tooltip label={outcome.detail ? outcome.text : ''}><p className="muted turn-outcome">{outcome.text}</p></Tooltip>;
 }
 
 /**
@@ -812,7 +812,7 @@ function Message({ className, label, header, at, children }: { className: string
 /** When a message was sent: the time of day, and the whole date and time in the tooltip. */
 function MessageTime({ at, className }: { at: string; className: string }) {
   const full = new Date(at).toLocaleString(currentLocale(), { dateStyle: 'medium', timeStyle: 'short' });
-  return <time className={className} dateTime={at} title={full}>{clockLabel(at)}</time>;
+  return <Tooltip label={full}><time className={className} dateTime={at}>{clockLabel(at)}</time></Tooltip>;
 }
 
 /** The person's face: there is no picture to show, so a quiet figure in the size of an orglet's face. */
@@ -917,9 +917,9 @@ export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (work
   if (!names.length) return null;
   const why = t('Tin nhắn không gắn thẻ ai, nên model quyết định chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)])
     + (route.answeredBy ? ` ${t('Trả lời bởi {0} · {1}.', [decisionBackendName(route.answeredBy.connection), route.answeredBy.model])}` : '');
-  return <p className="message-reply-context message-routed" title={why}>
+  return <Tooltip label={why}><p className="message-reply-context message-routed">
     <Route size={13} aria-hidden="true" />{t('Model quyết định chọn {0} trả lời', [names.join(', ')])}
-  </p>;
+  </p></Tooltip>;
 }
 
 export function ForwardedTurn({ forwarded, elementId, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
@@ -966,7 +966,7 @@ function BringIntoMainChat({ artifactId, brought, about, action, openChat }: { a
     const mainTaskId = await orglet.call('bringIntoMainChat', { artifactId });
     toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { action: { label: t('Mở'), onSelect: () => openChat(mainTaskId) } } : {});
   });
-  return <Button size="icon" aria-label={label} title={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button>;
+  return <Tooltip label={label}><span className="tooltip-anchor"><Button size="icon" aria-label={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button></span></Tooltip>;
 }
 
 /**
@@ -1013,9 +1013,9 @@ function MessageFiles({ files, onOpen }: { files: TaskDetail['sources']; onOpen:
 function ReadReceipts({ readers }: { readers: readonly Run[] }) {
   if (!readers.length) return null;
   return <p className="read-receipts" aria-label={t('Đã đọc tới đây: {0}', [readers.map(run => run.snapshot.worker.name).join(', ')])}>
-    {readers.map(run => <span key={run.id} title={t('{0} đã đọc tới đây', [run.snapshot.worker.name])}>
+    {readers.map(run => <Tooltip label={t('{0} đã đọc tới đây', [run.snapshot.worker.name])} key={run.id}><span>
       <Avatar name={run.snapshot.worker.name} seed={run.snapshot.worker.id} mascot={run.snapshot.worker.avatar?.mascot} defaultMascot hint={run.snapshot.worker.description} color={run.snapshot.worker.avatar?.color} size="xxs" />
-    </span>)}
+    </span></Tooltip>)}
   </p>;
 }
 

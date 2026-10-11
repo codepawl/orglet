@@ -7,7 +7,7 @@ import {
 } from '../../shared/custom-connections';
 import { connectionTestOutcome, pricingLabel } from '../customConnections';
 import { toAmount, toMicros } from './money';
-import { FieldError, Input } from '@codepawlhq/orglet-ui';
+import { FieldError, Input, Tooltip } from '@codepawlhq/orglet-ui';
 import { AnchoredPopover } from './AnchoredPopover';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { ProviderMark } from './ProviderMark';
@@ -125,7 +125,7 @@ function CustomConnectionRow({ connection, hasKey, busy, act, onConnections }: {
     <div className="setting-text">
       <span id={titleId} className="setting-title">{connection.name}</span>
       {/* One line: the short form, cut with an ellipsis if it still does not fit; the full wording is in its tooltip. */}
-      <span className="setting-description custom-connection-meta" title={metaLine(connection, hasKey, true)}>{metaLine(connection, hasKey, false)}</span>
+      <Tooltip label={metaLine(connection, hasKey, true)}><span className="setting-description custom-connection-meta">{metaLine(connection, hasKey, false)}</span></Tooltip>
     </div>
     <div className="setting-control">
       <RowMenu label={t('Kết nối {0}', [connection.name])} items={[

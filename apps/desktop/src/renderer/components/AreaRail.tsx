@@ -144,8 +144,8 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onCreateSpace, onHo
         onPointerEnter={() => onHover?.(false)} onPointerLeave={() => onHover?.(true)}><PanelLeft size={18} /></Button>
     </Tooltip>}
     <div className="area-trail">
-      <button type="button" className="area-trail-step" aria-label={t('Quay lại')} title={t('Quay lại')} disabled={!trail.back} onClick={() => trail.onTravel(-1)}><ArrowLeft size={16} /></button>
-      <button type="button" className="area-trail-step" aria-label={t('Tiến tới')} title={t('Tiến tới')} disabled={!trail.forward} onClick={() => trail.onTravel(1)}><ArrowRight size={16} /></button>
+      <Tooltip label={t('Quay lại')}><span className="tooltip-anchor"><button type="button" className="area-trail-step" aria-label={t('Quay lại')} disabled={!trail.back} onClick={() => trail.onTravel(-1)}><ArrowLeft size={16} /></button></span></Tooltip>
+      <Tooltip label={t('Tiến tới')}><span className="tooltip-anchor"><button type="button" className="area-trail-step" aria-label={t('Tiến tới')} disabled={!trail.forward} onClick={() => trail.onTravel(1)}><ArrowRight size={16} /></button></span></Tooltip>
     </div>
     <ul className="area-rail-list">
       {entries.map(entry => <li key={entry.key}><Tile entry={entry} /></li>)}

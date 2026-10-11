@@ -1,4 +1,4 @@
-import { Viewer } from '@codepawlhq/orglet-ui';
+import { Viewer, Tooltip } from '@codepawlhq/orglet-ui';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Download, ExternalLink, FolderOpen, MessageSquarePlus, Pencil, PenLine, ShieldOff, X } from 'lucide-react';
 import { useSync } from '../account';
@@ -226,15 +226,15 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
   const marksUp = editKind === 'image' || editKind === 'pdf';
   const editTitle = editKind === 'image' ? t('Đánh dấu ảnh (E)') : editKind === 'pdf' ? t('Đánh dấu PDF (E)') : t('Chỉnh sửa (E)');
   const externally = source.media && !source.revoked
-    ? <Button variant="outline" className="doc-action source-open-external" aria-label={t('Mở bằng ứng dụng mặc định')} title={t('Mở bằng ứng dụng mặc định')} onClick={() => void openExternally()}><ExternalLink size={15} /><span className="source-action-label">{t('Mở bằng ứng dụng mặc định')}</span></Button>
+    ? <Tooltip label={t('Mở bằng ứng dụng mặc định')}><Button variant="outline" className="doc-action source-open-external" aria-label={t('Mở bằng ứng dụng mặc định')} onClick={() => void openExternally()}><ExternalLink size={15} /><span className="source-action-label">{t('Mở bằng ứng dụng mặc định')}</span></Button></Tooltip>
     : undefined;
   const actions = <>
-    {!source.revoked && <Button variant="ghost" className="doc-action source-ask" aria-label={t('Hỏi về tệp này')} title={t('Đính kèm tệp này vào tin nhắn tiếp theo')} onClick={() => onAsk(source)}>
+    {!source.revoked && <Tooltip label={t('Đính kèm tệp này vào tin nhắn tiếp theo')}><Button variant="ghost" className="doc-action source-ask" aria-label={t('Hỏi về tệp này')} onClick={() => onAsk(source)}>
       <MessageSquarePlus size={15} /><span className="source-action-label">{t('Hỏi về tệp này')}</span>
-    </Button>}
-    {editKind && <Button variant="outline" className="doc-action source-edit" aria-label={marksUp ? t('Đánh dấu') : t('Chỉnh sửa')} disabled={!ready} aria-keyshortcuts="E" title={editTitle} onClick={() => setEditing(true)}>
+    </Button></Tooltip>}
+    {editKind && <Tooltip label={editTitle}><span className="tooltip-anchor"><Button variant="outline" className="doc-action source-edit" aria-label={marksUp ? t('Đánh dấu') : t('Chỉnh sửa')} disabled={!ready} aria-keyshortcuts="E" onClick={() => setEditing(true)}>
       {marksUp ? <PenLine size={15} /> : <Pencil size={15} />}<span className="source-action-label">{marksUp ? t('Đánh dấu') : t('Chỉnh sửa')}</span>
-    </Button>}
+    </Button></span></Tooltip>}
     {externally}
   </>;
   function body(source: Source) {

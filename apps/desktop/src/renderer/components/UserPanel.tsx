@@ -3,6 +3,7 @@ import { t } from '../i18n';
 import { Avatar } from './Avatar';
 import { RowMenu, type RowMenuItem } from './RowMenu';
 import { dwellHandlers } from '../prefetch';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /**
  * The person, at the bottom of the area rail (COD-366; into the rail on the user's call, 2026-10-04): their face, the
@@ -20,10 +21,10 @@ export function UserPanel({ name, status, connected, items, onDwell, trailing }:
   onDwell?: (resting: boolean) => void;
   trailing?: ReactNode;
 }) {
-  return <div className="user-panel" title={`${name} · ${status}`} {...dwellHandlers(onDwell)}>
+  return <Tooltip label={`${name} · ${status}`}><div className="user-panel" {...dwellHandlers(onDwell)}>
     {trailing}
     <RowMenu label={t('Tài khoản và cài đặt')} className="user-panel-who" align="start" items={items}>
       <span className="user-panel-face"><Avatar name={name} seed={name} size="sm" /><span className={`connection-dot ${connected ? 'connected' : ''}`} aria-hidden="true" /></span>
     </RowMenu>
-  </div>;
+  </div></Tooltip>;
 }

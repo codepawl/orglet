@@ -4,6 +4,7 @@ import type { FormatPreference, TextFormat } from '../../shared/contracts';
 import { Button } from './ui';
 import { RowMenu } from './RowMenu';
 import { t } from '../i18n';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 const formatLabels: Record<'copy' | 'download', Record<TextFormat, string>> = {
   copy: { text: 'Sao chép văn bản thuần', markdown: 'Sao chép Markdown' },
@@ -21,6 +22,6 @@ export function FormatAction({ kind, onPick }: { kind: 'copy' | 'download'; onPi
   const preference = useContext(FormatPreferences)[kind];
   const Icon = kind === 'copy' ? Copy : Download;
   const label = kind === 'copy' ? t('Sao chép') : t('Tải xuống');
-  if (preference !== 'ask') return <Button size="icon" aria-label={t(formatLabels[kind][preference])} title={t(formatLabels[kind][preference])} onClick={() => onPick(preference)}><Icon size={15} /></Button>;
+  if (preference !== 'ask') return <Tooltip label={t(formatLabels[kind][preference])}><Button size="icon" aria-label={t(formatLabels[kind][preference])} onClick={() => onPick(preference)}><Icon size={15} /></Button></Tooltip>;
   return <RowMenu label={label} icon={Icon} className="format-action" align="start" items={(['text', 'markdown'] as const).map(format => ({ label: t(formatLabels[kind][format]), icon: formatIcons[format], onSelect: () => onPick(format) }))} />;
 }
