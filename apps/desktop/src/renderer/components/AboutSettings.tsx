@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK } from '../../shared/orglet-look';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Copy, ExternalLink, Globe, Plus, RefreshCw, RotateCw, X } from 'lucide-react';
 import type { Workspace } from '../../shared/contracts';
@@ -51,7 +52,7 @@ function AboutFace() {
   const [cheer, setCheer] = useState(0);
   const smile = () => setCheer(count => count + 1);
   return <Tooltip label={t('Chào Orglet')}><button type="button" className="about-face" aria-label={t('Chào Orglet')} onClick={smile}>
-    <Orglet3D id="classic" seed={ABOUT_FACE_SEED} size={ABOUT_FACE_SIZE} color="brand" motion={{ lead: true, greet: true, cheer }} />
+    <Orglet3D look={DEFAULT_LOOK} seed={ABOUT_FACE_SEED} size={ABOUT_FACE_SIZE} color="brand" motion={{ lead: true, greet: true, cheer }} />
   </button></Tooltip>;
 }
 

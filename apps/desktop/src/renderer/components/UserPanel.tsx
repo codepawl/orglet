@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { t } from '../i18n';
-import { Avatar } from './Avatar';
+import { PersonAvatar } from './Avatar';
 import { RowMenu, type RowMenuItem } from './RowMenu';
 import { dwellHandlers } from '../prefetch';
 import { Tooltip } from '@codepawlhq/orglet-ui';
@@ -24,7 +24,7 @@ export function UserPanel({ name, status, connected, items, onDwell, trailing }:
   return <Tooltip label={`${name} · ${status}`}><div className="user-panel" {...dwellHandlers(onDwell)}>
     {trailing}
     <RowMenu label={t('Tài khoản và cài đặt')} className="user-panel-who" align="start" items={items}>
-      <span className="user-panel-face"><Avatar name={name} seed={name} size="sm" /><span className={`connection-dot ${connected ? 'connected' : ''}`} aria-hidden="true" /></span>
+      <span className="user-panel-face"><PersonAvatar name={name} /><span className={`connection-dot ${connected ? 'connected' : ''}`} aria-hidden="true" /></span>
     </RowMenu>
   </div></Tooltip>;
 }

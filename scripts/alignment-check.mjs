@@ -188,7 +188,7 @@ async function seedWorkspace(page) {
   const initial = await callCore(page, 'workspace', {});
   const researcher = initial.workers[0];
   const extraOrglets = [
-    { name: 'Writer', description: 'Drafts posts and replies in a friendly voice', avatar: { mascot: 'pen', color: '#d9480f' } },
+    { name: 'Writer', description: 'Drafts posts and replies in a friendly voice', avatar: { mascot: 'tall-plain', color: '#d9480f' } },
     { name: 'Data analyst', description: 'Checks spreadsheets and explains the numbers', avatar: { color: '#1971c2' } },
   ];
   for (const orglet of extraOrglets) {

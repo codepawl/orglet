@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import { mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
-import { bodyShapeIds, mascotShapes } from '../../apps/desktop/src/renderer/components/orgletShapes';
+import { ALL_LOOKS, DEFAULT_LOOK, formatLook, parseLook } from '../../apps/desktop/src/shared/orglet-look';
+import { bodyShapeIds } from '../../apps/desktop/src/renderer/components/orgletShapes';
 import { avatarRenderer, mascotGlyph, solidSizes } from '../../apps/desktop/src/renderer/components/Avatar';
 import {
-  BODY_HALF, FACE_SHRINK, FRONT, addAct, bodyGeometries, bodyOutline, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, looks, oklchLightness, projectPoint, updateOrglet,
+  BODY_HALF, FACE_SHRINK, FRONT, addAct, bodyGeometries, bodyOutline, buildRotation, buildTones, convexHull, createOrglet, crouch, isStill, lookOf, oklchLightness, projectPoint, updateOrglet,
   type Attention, type Palette,
 } from '../../apps/desktop/src/renderer/components/orgletSolid';
 import { parseCssColour } from '../../apps/desktop/src/renderer/components/orgletStage';
@@ -56,19 +56,25 @@ it('takes the silhouette as the convex hull of the cross-sections', () => {
   expect(hull).toEqual(expect.arrayContaining([[0, 0], [4, 0], [4, 4], [0, 4]]));
 });
 
-it('gives every mascot a 3D look with a body and eyes of its own, and nothing worn', () => {
-  expect(Object.keys(looks).sort()).toEqual([...mascotIds].sort());
+it('gives every body and pair of eyes a 3D look of its own, and nothing worn', () => {
+  expect(ALL_LOOKS).toHaveLength(56);
   // Owner, 2026-10-05: no hat and nothing worn. What tells two orglets apart is the body and the eyes.
-  for (const id of mascotIds) expect(looks[id].shapes, id).toEqual([]);
-  const pairs = mascotIds.map(id => `${looks[id].body}/${looks[id].face}`);
-  expect(new Set(pairs).size).toBe(mascotIds.length);
-  for (const id of mascotIds) expect(looks[id].body, id).toBe(mascotShapes[id].body);
+  for (const look of ALL_LOOKS) expect(lookOf(look).shapes, formatLook(look)).toEqual([]);
+  const pairs = ALL_LOOKS.map(look => `${lookOf(look).body}/${lookOf(look).face}`);
+  expect(new Set(pairs).size).toBe(ALL_LOOKS.length);
+  for (const look of ALL_LOOKS) expect(lookOf(look).body, formatLook(look)).toBe(look.body);
   // The expressions of mascots.tsx live in the eyes here too.
-  expect(looks.classic).toMatchObject({ body: 'base', face: 'plain', eyeDy: 0 });
-  expect(looks.happy.face).toBe('happy');
-  expect(looks.wink.face).toBe('wink');
-  expect(looks.sleepy.face).toBe('sleepy');
-  expect(looks.focused.face).toBe('narrow');
+  expect(lookOf(DEFAULT_LOOK)).toMatchObject({ body: 'base', face: 'plain', eyeDy: 0 });
+  expect(lookOf({ body: 'round', eyes: 'happy' }).face).toBe('happy');
+  expect(lookOf({ body: 'tailRight', eyes: 'wink' }).face).toBe('wink');
+  expect(lookOf({ body: 'wide', eyes: 'sleepy' }).face).toBe('sleepy');
+  expect(lookOf({ body: 'soft', eyes: 'narrow' }).face).toBe('narrow');
+});
+
+it('draws a saved orglet the same in 3D as it always did, by its old name or its new one', () => {
+  // A stored `finance` was always the tall body with smiling eyes: reading it must not change that.
+  expect(lookOf(parseLook('finance')!)).toEqual(lookOf(parseLook('tall-happy')!));
+  expect(lookOf(parseLook('tall-happy')!)).toMatchObject({ body: 'tall', face: 'happy' });
 });
 
 it('builds every body as a closed convex outline that stands on the same line', () => {
@@ -115,7 +121,7 @@ it('renders the large avatar sizes as the 3D solid and keeps the list sizes on t
 });
 
 it('turns the head after the pointer on a spring, the eyes leading, and comes to rest when nothing moves', () => {
-  const model = createOrglet('classic', 7, 0);
+  const model = createOrglet(DEFAULT_LOOK, 7, 0);
   // Blinks would keep the face awake; push the first one out of this test's window.
   model.nextBlink = 1000;
   let now = advance(model, pointerRight, 0.08);
@@ -133,7 +139,7 @@ it('turns the head after the pointer on a spring, the eyes leading, and comes to
 });
 
 it('never tracks the pointer or plays a gesture under reduced motion, and shows its state as a cut', () => {
-  const model = createOrglet('classic', 7, 0);
+  const model = createOrglet(DEFAULT_LOOK, 7, 0);
   addAct(model, 'hop', 0.01, 0.05);
   const now = advance(model, pointerRight, 1, true);
   expect(model.yaw.value).toBe(0);
@@ -152,7 +158,7 @@ it('never tracks the pointer or plays a gesture under reduced motion, and shows 
 });
 
 it('greets by hopping in from a crouch and settles, and a thinking face keeps moving until it is idle again', () => {
-  const model = createOrglet('happy', 3, 0);
+  const model = createOrglet({ body: 'round', eyes: 'happy' }, 3, 0);
   model.nextBlink = 1000;
   crouch(model);
   expect(model.lift.value).toBe(12);
@@ -204,14 +210,14 @@ it('keeps the 3D canvas out of layout and out of the way of the pointer', () => 
 });
 
 it('rests each orglet at a small lean of its own, to the left or to the right', () => {
-  const leans = [1, 2, 3, 4, 5, 6, 7, 8].map(seed => createOrglet('classic', seed, 0).personality.lean);
+  const leans = [1, 2, 3, 4, 5, 6, 7, 8].map(seed => createOrglet(DEFAULT_LOOK, seed, 0).personality.lean);
   for (const lean of leans) {
     expect(Math.abs(lean)).toBeGreaterThanOrEqual(0.05);
     expect(Math.abs(lean)).toBeLessThanOrEqual(0.15);
   }
   expect(leans.some(lean => lean < 0) && leans.some(lean => lean > 0)).toBe(true);
   // A face starts at its lean and stays there with nothing to look at.
-  const model = createOrglet('classic', 3, 0);
+  const model = createOrglet(DEFAULT_LOOK, 3, 0);
   expect(model.roll.value).toBe(model.personality.lean);
   updateOrglet(model, { x: 0, y: 0, present: false, near: false, noticed: false }, 1, 0.016, false);
   expect(model.roll.target).toBe(model.personality.lean);

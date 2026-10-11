@@ -64,7 +64,7 @@ export function TaskDialog({ open, task, workspace, onClose }: { open: boolean; 
       ]} />
       {mode === 'workers' && <fieldset className="assignee-list"><legend className="visually-hidden">{t('Chọn Tí')}</legend>
         {workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} checked={chosen.includes(worker.id)} onChange={event => { setChosen(current => event.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'assignees') clearError(); }} {...fieldInvalid(invalid === 'assignees', flash)}>
-          <span className="inline-mark"><Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />{worker.name}</span>
+          <span className="inline-mark"><Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="xs" />{worker.name}</span>
         </Checkbox>)}
       </fieldset>}
       {fieldMessage('assignees', invalid, error)}

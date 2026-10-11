@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { MascotId } from './mascots';
+import type { OrgletLook } from '../../shared/orglet-look';
 import type { Mood } from './orgletSolid';
 import { CANVAS_SCALE, mountFace, type FaceHandle, type Follow, type Moment } from './orgletStage';
 
@@ -25,11 +25,11 @@ export type FaceMotion = {
  * the flat `Mascot` fills; the canvas is bigger and centred on it, so a hop or a note never touches layout. The
  * colours are read from the stylesheet: `color` is the body, `--mascot-ink` the rims. Decorative, like `Mascot`.
  */
-export function Orglet3D({ id, seed, size, color, motion = {} }: { id: MascotId; seed: number; size: number; color: string; motion?: FaceMotion }) {
+export function Orglet3D({ look, seed, size, color, motion = {} }: { look: OrgletLook; seed: number; size: number; color: string; motion?: FaceMotion }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const handle = useRef<FaceHandle>(null);
   const options = {
-    id, seed, size, follow: motion.follow ?? 'pointer', lead: motion.lead ?? false, group: motion.group,
+    look, seed, size, follow: motion.follow ?? 'pointer', lead: motion.lead ?? false, group: motion.group,
     greet: motion.greet ?? false, mood: motion.mood ?? 'idle', colorKey: color,
   };
   const first = useRef(true);

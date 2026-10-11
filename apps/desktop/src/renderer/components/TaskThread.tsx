@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK, formatLook } from '../../shared/orglet-look';
 import { chatTurnRevisions, chatTurnInput, chatTurnMessageId, chatTurnCreatedAt } from '../../shared/chat-turns';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight, ListTodo, Play, UserRound, TriangleAlert } from 'lucide-react';
@@ -334,9 +335,9 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
     return isGhost(author) ? t('{0}, đã rời kênh', [said]) : said;
   };
   const workerHeader = (author?: Run, working = false): MessageHeader => ({
-    face: !author ? <span className={bylineClass(author, working)}><span className="orglet-mark small">o</span></span> : <Tooltip label={whoWrote(author)} side="bottom"><span className={bylineClass(author, working)}>{author
-      ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} />
-      : <span className="orglet-mark small">o</span>}</span></Tooltip>,
+    face: !author ? <span className={bylineClass(author, working)}><Avatar name="Orglet" mascot={formatLook(DEFAULT_LOOK)} size="md" /></span> : <Tooltip label={whoWrote(author)} side="bottom"><span className={bylineClass(author, working)}>{author
+      ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} />
+      : <Avatar name="Orglet" mascot={formatLook(DEFAULT_LOOK)} size="md" />}</span></Tooltip>,
     name: <>{author ? <Tooltip label={whoWrote(author)} side="bottom"><strong>{author.snapshot.worker.name}</strong></Tooltip> : <strong>Orglet</strong>}{author && bylineRole(author)}
       {author && channelOrglets === undefined && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}
       {isGhost(author) && <span className="visually-hidden">{t('đã rời kênh')}</span>}</>,
@@ -347,8 +348,8 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
     const worker = workspace.workers.find(item => item.id === quote.authorId);
     return {
       face: <span className="byline">{worker
-        ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="md" />
-        : <span className="orglet-mark small">o</span>}</span>,
+        ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="md" />
+        : <Avatar name="Orglet" mascot={formatLook(DEFAULT_LOOK)} size="md" />}</span>,
       name: <><strong>{quote.author}</strong><span className="byline-role">{t('Lịch · {0}', [quote.schedule ?? ''])}</span></>,
     };
   };
@@ -1014,7 +1015,7 @@ function ReadReceipts({ readers }: { readers: readonly Run[] }) {
   if (!readers.length) return null;
   return <p className="read-receipts" aria-label={t('Đã đọc tới đây: {0}', [readers.map(run => run.snapshot.worker.name).join(', ')])}>
     {readers.map(run => <Tooltip label={t('{0} đã đọc tới đây', [run.snapshot.worker.name])} key={run.id}><span>
-      <Avatar name={run.snapshot.worker.name} seed={run.snapshot.worker.id} mascot={run.snapshot.worker.avatar?.mascot} defaultMascot hint={run.snapshot.worker.description} color={run.snapshot.worker.avatar?.color} size="xxs" />
+      <Avatar name={run.snapshot.worker.name} seed={run.snapshot.worker.id} mascot={run.snapshot.worker.avatar?.mascot} hint={run.snapshot.worker.description} color={run.snapshot.worker.avatar?.color} size="xxs" />
     </span></Tooltip>)}
   </p>;
 }

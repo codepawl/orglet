@@ -14,9 +14,8 @@ import { runCli } from '../../apps/desktop/src/cli/run';
 import { completeSlash, parseSlash } from '../../apps/desktop/src/cli/slash';
 import { DARK_EYE_COLOR, detectColorMode, displayWidth, eyeColorFor, LIGHT_EYE_COLOR, NEUTRAL_COLOR, paint, stripAnsi, truncate, wrapSegments } from '../../apps/desktop/src/cli/terminal';
 import { chatsOf, CliOperations } from '../../apps/desktop/src/main/cli-operations';
-import { mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
 import type { Workspace } from '../../apps/desktop/src/shared/contracts';
-import { defaultAvatarColor, MASCOT_IDS } from '../../apps/desktop/src/shared/mascot-suggest';
+import { defaultAvatarColor } from '../../apps/desktop/src/shared/mascot-suggest';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
 
 const BLUE = '#4f7fe0';
@@ -429,9 +428,9 @@ describe('orglet colours from the app', () => {
   });
 
   it('uses the same default face colour as the app avatar', () => {
-    expect(mascotIds).toEqual([...MASCOT_IDS]);
     expect(defaultAvatarColor({ id: 'a', name: 'Researcher', avatar: { color: '#123456' } })).toBe('#123456');
     expect(defaultAvatarColor({ id: 'a', name: 'Researcher', avatar: { mascot: 'finance' } })).toBe(GREEN);
+    expect(defaultAvatarColor({ id: 'a', name: 'Researcher', avatar: { mascot: 'tall-happy' } })).toBe(GREEN);
     expect(defaultAvatarColor({ id: 'a', name: 'Researcher' })).toBe(BLUE);
     expect(defaultAvatarColor({ id: 'a', name: 'Minh', description: 'Kế toán trưởng' })).toBe(GREEN);
   });

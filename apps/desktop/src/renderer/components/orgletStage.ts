@@ -1,4 +1,4 @@
-import type { MascotId } from './mascots';
+import { formatLook, sameLook, type OrgletLook } from '../../shared/orglet-look';
 import {
   addAct, blink, buildTones, changeLook, createOrglet, crouch, drawOrglet, isStill, restingAttention, settle, updateOrglet,
   type Attention, type Mood, type OrgletModel, type Palette, type Rgb, type Tones,
@@ -18,7 +18,7 @@ import {
 export type Follow = 'pointer' | 'hover' | 'none';
 
 export type FaceOptions = {
-  id: MascotId;
+  look: OrgletLook;
   /** Seeds the face's personality (blink rhythm, which side it glances to). */
   seed: number;
   /** The size of the 64-unit drawing in CSS pixels; the canvas is twice that so a hop or a note has room. */
@@ -473,7 +473,7 @@ export function mountFace(canvas: HTMLCanvasElement, options: FaceOptions): Face
   const context = canvas.getContext('2d');
   if (!context) throw new Error('The orglet canvas has no 2D context.');
   const now = seconds();
-  const model = createOrglet(options.id, options.seed, now);
+  const model = createOrglet(options.look, options.seed, now);
   model.mood = options.mood;
   const face: Face = {
     canvas, context, model, options, tones: buildTones(readPalette(canvas)),
@@ -491,8 +491,8 @@ export function mountFace(canvas: HTMLCanvasElement, options: FaceOptions): Face
     update(next) {
       const previous = face.options;
       face.options = next;
-      if (next.id !== previous.id) {
-        changeLook(model, next.id);
+      if (!sameLook(next.look, previous.look)) {
+        changeLook(model, next.look);
         // A new face arrives with a hop, unless a cheer is already playing it in.
         if (!reducedMotion() && !model.acts.some(act => act.kind === 'cheese')) addAct(model, 'hop', seconds(), 0.05, { strength: 120 });
         face.dirty = true;
@@ -540,7 +540,7 @@ export const stageState = {
     const now = seconds();
     const springNames = ['yaw', 'pitch', 'roll', 'spin', 'lift', 'scaleX', 'scaleY', 'eyeX', 'eyeY', 'eyeOpen', 'happy', 'blush'] as const;
     return [...faces].map(face => ({
-      id: face.options.id, follow: face.options.follow, visible: face.visible, still: isStill(face.model, now, reducedMotion()),
+      id: formatLook(face.options.look), follow: face.options.follow, visible: face.visible, still: isStill(face.model, now, reducedMotion()),
       mood: face.model.mood, acts: face.model.acts.map(act => act.kind), particles: face.model.particles.length,
       propellerSpeed: face.model.propellerSpeed, blinkIn: face.model.nextBlink - now, sinceBlink: now - face.model.blinkStart, noticed: face.noticed, inDialog: face.inDialog,
       unsettled: springNames.filter(name => Math.abs(face.model[name].value - face.model[name].target) > 0.0015 || Math.abs(face.model[name].velocity) > 0.004).map(name => `${name} ${face.model[name].value.toFixed(4)}→${face.model[name].target.toFixed(4)} v${face.model[name].velocity.toFixed(4)}`),

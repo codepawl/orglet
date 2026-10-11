@@ -93,6 +93,7 @@ export function isPaidApi(provider: string): boolean {
 export function isPlanApi(provider: string): provider is 'opencode-zen' | 'opencode-go' | 'codepawl' {
   return provider === 'opencode-zen' || provider === 'opencode-go' || provider === 'codepawl';
 }
+// `mascot` holds the look as `<body>-<eyes>` (shared/orglet-look.ts). `letter` and `emoji` are accepted and ignored: released apps and old rows carry them, and nothing writes them any more.
 export const WorkerAvatar = z.object({ mascot: z.string().regex(/^[a-z-]{1,32}$/).optional(), letter: z.literal(true).optional(), emoji: z.string().min(1).max(16).optional(), color: z.string().regex(/^#[0-9a-f]{6}$/i).optional() }).strict();
 export const WorkerInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),

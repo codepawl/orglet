@@ -26,7 +26,7 @@ import { discoverSections, listingMatches, shownKind } from '../marketplaceDisco
  */
 function ListingFace({ listingId, kind, name, summary }: { listingId: string; kind: 'orglet' | 'crew' | 'space'; name: string; summary: string }) {
   if (shownKind(kind) === 'space') return <span className="market-listing-face"><SpaceMark seed={listingId} /></span>;
-  return <span className="market-listing-face"><Avatar name={name} seed={listingId} defaultMascot hint={summary} size="md" /></span>;
+  return <span className="market-listing-face"><Avatar name={name} seed={listingId} hint={summary} size="md" /></span>;
 }
 
 export function addedNotice(result: MarketAdded) {

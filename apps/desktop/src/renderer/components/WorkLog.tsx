@@ -95,7 +95,7 @@ function RowContent({ entry, status }: { entry: TraceEntry; status: TraceStatus 
         <span className="work-verb">{traceVerb(entry.kind)}</span>
         {entry.target && (face
           ? <span className="work-target work-person">
-            <Avatar name={face.name} seed={face.seed} mascot={face.mascot} defaultMascot hint={face.hint} color={face.color} size="xxs" />
+            <Avatar name={face.name} seed={face.seed} mascot={face.mascot} hint={face.hint} color={face.color} size="xxs" />
             {entry.target}
           </span>
           : <Tooltip label={entry.target}><span className="work-target">{entry.target}</span></Tooltip>)}

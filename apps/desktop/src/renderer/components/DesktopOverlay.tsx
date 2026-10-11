@@ -89,7 +89,7 @@ export function DesktopOverlay() {
       {/* The pill is the anchor: the orglet's own face at its start, then who is using what, then Stop. */}
       <div ref={pill} className="desktop-overlay-pill" role="status">
         <span className="desktop-overlay-face" data-state="working">
-          <Avatar name={view.worker.name} seed={view.worker.id} mascot={view.worker.avatar?.mascot} defaultMascot hint={view.worker.description} color={view.worker.avatar?.color} size="md" />
+          <Avatar name={view.worker.name} seed={view.worker.id} mascot={view.worker.avatar?.mascot} hint={view.worker.description} color={view.worker.avatar?.color} size="md" />
         </span>
         <span className="desktop-overlay-label">{label}</span>
         <Button variant="primary" className="desktop-overlay-stop" disabled={stopping} onClick={() => {

@@ -65,7 +65,7 @@ export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefrien
         <h2 id="friends-unfriended-title">{t('Không còn là bạn')}</h2>
         <ul className="friends-sources">
           {unfriended.map(({ worker, stillIn }) => <li key={worker.id} className="friend-source">
-            <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="md" />
+            <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="md" />
             <span className="friend-source-text"><span className="friend-name">{worker.name}</span><span className="friend-status">{t('Vẫn ở {0}', [stillIn])}</span></span>
             <Button variant="outline" onClick={() => onBefriend(worker)}><UserPlus size={16} />{t('Kết bạn lại')}</Button>
           </li>)}
@@ -75,7 +75,7 @@ export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefrien
         <h2 id="friends-archived-title">{t('Đã lưu trữ')}</h2>
         <ul className="friends-sources">
           {archived.map(worker => <li key={worker.id} className="friend-source">
-            <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="md" />
+            <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="md" />
             <span className="friend-source-text"><span className="friend-name">{worker.name}</span>{worker.description && <span className="friend-status">{worker.description}</span>}</span>
             <Button variant="outline" onClick={() => onRestore(worker)}><ArchiveRestore size={16} />{t('Khôi phục')}</Button>
           </li>)}

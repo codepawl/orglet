@@ -1,4 +1,6 @@
-import type { MascotId } from '../../shared/mascot-suggest';
+import { BODY_SHAPE_IDS, type BodyShapeId, type FaceId } from '../../shared/orglet-look';
+
+export type { BodyShapeId, FaceId };
 
 /*
  * What tells one orglet from another (owner, 2026-10-05): the shape of its body and its eyes, and nothing worn. The
@@ -29,48 +31,8 @@ export const bodyShapes = {
   wide: { left: 5, top: 17, width: 54, height: 38, corners: [14.5, 14.5, 14.5, 6] },
   leaf: { left: 10, top: 11, width: 44, height: 44, corners: [20, 6.5, 20, 6.5] },
   soft: { left: 10, top: 11, width: 44, height: 44, corners: [21, 21, 21, 9] },
-} as const satisfies Record<string, BodyShape>;
-export type BodyShapeId = keyof typeof bodyShapes;
-export const bodyShapeIds = Object.keys(bodyShapes) as BodyShapeId[];
-
-/** The eyes' expressions, all of them in the eyes alone: nothing is worn on the face either. */
-export type FaceId = 'plain' | 'happy' | 'curious' | 'wink' | 'sleepy' | 'narrow' | 'delighted';
-
-/**
- * Every mascot as a body and a face. The ids are the ones orglets already carry (`MASCOT_IDS`), so nothing saved
- * has to change; an id that used to name a hat now names a shape. No two share both a body and a face.
- */
-export const mascotShapes: Record<MascotId, { body: BodyShapeId; face: FaceId }> = {
-  classic: { body: 'base', face: 'plain' },
-  happy: { body: 'round', face: 'happy' },
-  curious: { body: 'tall', face: 'curious' },
-  wink: { body: 'tailRight', face: 'wink' },
-  sleepy: { body: 'wide', face: 'sleepy' },
-  focused: { body: 'soft', face: 'narrow' },
-  antenna: { body: 'tailTop', face: 'plain' },
-  sprout: { body: 'leaf', face: 'plain' },
-  idea: { body: 'round', face: 'plain' },
-  headset: { body: 'wide', face: 'plain' },
-  delighted: { body: 'leaf', face: 'delighted' },
-  cool: { body: 'tailTop', face: 'narrow' },
-  tie: { body: 'tall', face: 'plain' },
-  bowtie: { body: 'soft', face: 'plain' },
-  briefcase: { body: 'tailRight', face: 'plain' },
-  calendar: { body: 'base', face: 'happy' },
-  mail: { body: 'tailRight', face: 'happy' },
-  finance: { body: 'tall', face: 'happy' },
-  search: { body: 'base', face: 'curious' },
-  chart: { body: 'wide', face: 'curious' },
-  target: { body: 'round', face: 'curious' },
-  writer: { body: 'soft', face: 'happy' },
-  notes: { body: 'leaf', face: 'happy' },
-  megaphone: { body: 'tailTop', face: 'delighted' },
-  checker: { body: 'round', face: 'delighted' },
-  guard: { body: 'base', face: 'narrow' },
-  coder: { body: 'tailRight', face: 'curious' },
-  automation: { body: 'tall', face: 'wink' },
-  care: { body: 'wide', face: 'happy' },
-};
+} as const satisfies Record<BodyShapeId, BodyShape>;
+export const bodyShapeIds: readonly BodyShapeId[] = BODY_SHAPE_IDS;
 
 /*
  * How round a body is (owner, 2026-10-05: the bodies read as boxes; make them blobs, with the top, the bottom and

@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import { arrivedWithChat } from '../chatSwitch';
 import { AnchoredPopover } from './AnchoredPopover';
 import { LeadLeavesDialog } from './LeadLeavesDialog';
-import { Avatar, workerInk } from './Avatar';
+import { Avatar, PersonAvatar, workerInk } from './Avatar';
 import { ProviderMark } from './ProviderMark';
 import { RowMenu } from './RowMenu';
 import { Button } from './ui';
@@ -49,7 +49,7 @@ export function MemberColumn({ you, onYou, members, working, leadId, onMessage, 
       <li>
         {/* The person's own row opens their account, the way an orglet's row opens its profile (user, 2026-10-05). */}
         <Button type="button" className="member-row member-you" aria-label={t('Tài khoản và cài đặt')} onClick={onYou}>
-          <Avatar name={you} seed={you} size="sm" />
+          <PersonAvatar name={you} />
           <span className="member-text">
             <span className="member-name">{you}{you !== youWord && <span className="member-lead">{youWord}</span>}</span>
           </span>
@@ -78,7 +78,7 @@ function MemberRow({ worker, working, lead, onMessage, onEdit, choosesSuccessor,
   const row = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
-  const face = (size: 'sm' | 'xl') => <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />;
+  const face = (size: 'sm' | 'xl') => <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size={size} />;
   const leadTag = lead && <span className="member-lead">{t('Trưởng')}</span>;
   return <div className="member-item">
     <button ref={row} type="button" className="member-row" aria-haspopup="dialog" aria-expanded={open} aria-label={t('Hồ sơ của {0}', [worker.name])} onClick={() => setOpen(current => !current)}>

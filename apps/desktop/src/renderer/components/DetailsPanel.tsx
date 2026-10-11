@@ -200,7 +200,7 @@ function ChatSubject({ team, worker, group, groupName, members }: { team?: Team;
   if (!worker) return null;
   return <div className="details-subject">
     <p className="details-subject-name">
-      <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
+      <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="sm" />
       <strong>{worker.name}</strong>
       <Tooltip label={t('Chạy bằng')}><span className="details-fact">
         {worker.provider !== 'demo' && <ProviderMark provider={worker.provider} size="small" decorative />}
@@ -238,7 +238,7 @@ function RunEntry({ run, events }: { run: Run; events: { id: string; message: st
   const endedAt = runWorkEndedAt(events);
   const took = endedAt && elapsedLabel(run.startedAt, endedAt);
   return <li className="details-run">
-    <Avatar name={person.name} seed={person.id} mascot={person.avatar?.mascot} defaultMascot hint={person.description} color={person.avatar?.color} size="xs" />
+    <Avatar name={person.name} seed={person.id} mascot={person.avatar?.mascot} hint={person.description} color={person.avatar?.color} size="xs" />
     <div>
       <p className="details-run-who">
         <strong>{person.name}</strong>
@@ -426,7 +426,7 @@ export function DetailsPanel({ workspace, team, worker, group, groupName, detail
           const mark = workerStatus(member.id);
           return <div key={member.id} className="details-member">
             <StatusMark variant={mark.variant} tone={mark.tone} label={statusMarkLabel(mark)} decorative />
-            <Avatar name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs"
+            <Avatar name={member.name} seed={member.id} mascot={member.avatar?.mascot} hint={member.description} color={member.avatar?.color} size="xs"
               badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} />
             <div>
               <p className="details-member-name">{member.name}{member.id === team?.synthesizerId && <small>{t('tí trưởng')}</small>}</p>

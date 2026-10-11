@@ -4,8 +4,8 @@ import type { AppProposal, AppProposalKind, ProposalChange, ProposalHold, Propos
 import type { ImprovementSignalKind } from '../../shared/self-improvement';
 import type { Skill, Task, Worker } from '../../shared/contracts';
 import { Avatar } from './Avatar';
-import { isMascot, mascotIds, type MascotId } from './mascots';
-import { autoMascot, distinctMascot } from './mascotSuggest';
+import { formatLook, type OrgletLook } from '../../shared/orglet-look';
+import { distinctLook, shownLook } from './mascotSuggest';
 import { Button, Drawer } from './ui';
 import { crewMembers, orgletDetailChanges, withoutSpendingLimits, proposalCards, proposalModelLabel, showChangeValue, workflowName, workerOfProposal, type ProposalContext } from './proposalValues';
 import { t, tMessage, translated } from '../i18n';
@@ -130,9 +130,9 @@ function ProposalButtons({ proposal, actions }: { proposal: AppProposal; actions
   </>;
 }
 
-/** The face an existing orglet shows: the one it was given, or the automatic one for its name and description. */
-function shownMascot(worker: Worker): MascotId {
-  return isMascot(worker.avatar?.mascot) ? worker.avatar.mascot : autoMascot(mascotIds, worker.id, { name: worker.name, description: worker.description });
+/** The look an existing orglet shows: the one it was given, or the automatic one for its name and description. */
+function shownLookOf(worker: Worker): OrgletLook {
+  return shownLook(worker.avatar?.mascot, worker.id, { name: worker.name, description: worker.description });
 }
 
 /**
@@ -141,14 +141,14 @@ function shownMascot(worker: Worker): MascotId {
  * match exists, so orglets proposed together for similar roles do not come out identical. An orglet a proposal
  * already created is not counted against itself, so its face stays what it was before Apply.
  */
-function proposedMascots(context: Pick<ProposalContext, 'workers' | 'siblings'>): Map<string, MascotId> {
+function proposedLooks(context: Pick<ProposalContext, 'workers' | 'siblings'>): Map<string, OrgletLook> {
   const created = new Set(context.siblings.flatMap(item => item.target?.kind === 'worker' ? [item.target.id] : []));
-  const taken = context.workers.filter(worker => !created.has(worker.id)).map(shownMascot);
-  const faces = new Map<string, MascotId>();
+  const taken = context.workers.filter(worker => !created.has(worker.id)).map(shownLookOf);
+  const faces = new Map<string, OrgletLook>();
   for (const sibling of context.siblings) {
     if (sibling.kind !== 'orglet' || sibling.action !== 'create') continue;
     const description = sibling.changes.find(change => change.field === 'description')?.after;
-    const face = distinctMascot({ name: sibling.title, description }, sibling.id, taken);
+    const face = distinctLook({ name: sibling.title, description }, sibling.id, taken);
     faces.set(sibling.id, face);
     taken.push(face);
   }
@@ -156,22 +156,22 @@ function proposedMascots(context: Pick<ProposalContext, 'workers' | 'siblings'>)
 }
 
 /**
- * The mascot a proposed new orglet shows before it exists. Applying the card saves this same mascot on the new
+ * The look a proposed new orglet shows before it exists, in its stored form. Applying the card saves this same look on the new
  * orglet, so its face does not change once it is created.
  */
-export function proposedMascot(proposal: AppProposal, context: Pick<ProposalContext, 'workers' | 'siblings'>) {
+export function proposedMascot(proposal: AppProposal, context: Pick<ProposalContext, 'workers' | 'siblings'>): string {
   const sameReply = context.siblings.filter(sibling => sibling.runId === proposal.runId);
-  const face = proposedMascots({ workers: context.workers, siblings: sameReply }).get(proposal.id);
-  if (face) return face;
+  const face = proposedLooks({ workers: context.workers, siblings: sameReply }).get(proposal.id);
+  if (face) return formatLook(face);
   const description = proposal.changes.find(change => change.field === 'description')?.after;
-  return autoMascot(mascotIds, proposal.id, { name: proposal.title, description });
+  return formatLook(shownLook(undefined, proposal.id, { name: proposal.title, description }));
 }
 
 /** The face of a proposed orglet: the real worker once it exists, else the mascot it will be created with. */
 function ProposedFace({ proposal, context, size, motion }: { proposal: AppProposal; context: ProposalContext; size: 'md' | 'xl'; motion?: { follow: 'hover' } }) {
   const worker = workerOfProposal(proposal, context);
-  if (worker) return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} motion={motion} />;
-  return <Avatar name={proposal.title} seed={proposal.id} mascot={proposedMascot(proposal, context)} defaultMascot size={size} motion={motion} />;
+  if (worker) return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size={size} motion={motion} />;
+  return <Avatar name={proposal.title} seed={proposal.id} mascot={proposedMascot(proposal, context)} size={size} motion={motion} />;
 }
 
 /** One line of state on an orglet row; the reason a held row waits sits in its tooltip and in the dialog. */
@@ -246,8 +246,8 @@ function CrewBody({ proposal, context }: { proposal: AppProposal; context: Propo
     <ul className="proposal-crew-members" aria-label={t('Thành viên')}>
       {members.map(member => <li key={member.key} className="proposal-crew-member">
         {member.worker
-          ? <Avatar name={member.worker.name} seed={member.worker.id} mascot={member.worker.avatar?.mascot} defaultMascot hint={member.worker.description} color={member.worker.avatar?.color} size="sm" badge={member.lead ? <span className="proposal-crew-lead"><Crown size={9} aria-hidden="true" /></span> : undefined} />
-          : <Avatar name={member.name} seed={member.proposal?.id ?? member.key} mascot={member.proposal ? proposedMascot(member.proposal, context) : undefined} defaultMascot hint={member.description} size="sm" badge={member.lead ? <span className="proposal-crew-lead"><Crown size={9} aria-hidden="true" /></span> : undefined} />}
+          ? <Avatar name={member.worker.name} seed={member.worker.id} mascot={member.worker.avatar?.mascot} hint={member.worker.description} color={member.worker.avatar?.color} size="sm" badge={member.lead ? <span className="proposal-crew-lead"><Crown size={9} aria-hidden="true" /></span> : undefined} />
+          : <Avatar name={member.name} seed={member.proposal?.id ?? member.key} mascot={member.proposal ? proposedMascot(member.proposal, context) : undefined} hint={member.description} size="sm" badge={member.lead ? <span className="proposal-crew-lead"><Crown size={9} aria-hidden="true" /></span> : undefined} />}
         <span>{member.name}</span>
         {member.lead && <span className="visually-hidden">{t('Tí trưởng')}</span>}
       </li>)}

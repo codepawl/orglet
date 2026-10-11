@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK } from '../../shared/orglet-look';
 import { useState } from 'react';
 import { ArrowLeft, Laptop, LogIn, ShieldCheck } from 'lucide-react';
 import type { AccountChoice, AccountState } from '../../shared/account';
@@ -80,7 +81,7 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
       <div className="account-choice-body">
         {/* No greeting hop of its own: this is the startup screen's face, which hops over here in the screen transition. */}
         <div className="startup-face" aria-hidden="true">
-          <Orglet3D id="classic" seed={FACE_SEED} size={FACE_SIZE} color="mono" motion={{ lead: true, mood: waiting ? 'thinking' : 'idle', cheer, moment: cue }} />
+          <Orglet3D look={DEFAULT_LOOK} seed={FACE_SEED} size={FACE_SIZE} color="mono" motion={{ lead: true, mood: waiting ? 'thinking' : 'idle', cheer, moment: cue }} />
         </div>
         <h1 id="account-choice-title" className="welcome">{waiting ? t('Tiếp tục trong trình duyệt') : t('Chào mừng đến với Orglet')}</h1>
         {waiting ? <div className="account-choice-waiting">

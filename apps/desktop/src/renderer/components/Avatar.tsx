@@ -1,12 +1,12 @@
 import { useId, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Check, ChevronDown, Plus, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { t } from '../i18n';
-import { Mascot, isMascot, mascotIds, mascotName, type MascotGlyph, type MascotId } from './mascots';
-import { bodyPath, bodyShapeIds, bodyShapes } from './orgletShapes';
-import { autoMascot, avatarPalette, mascotCategoryIds, mascotCategoryLabels, mascotColors, seedHash, suggestedColors, suggestedMascots, type MascotCategory, type MascotHints } from './mascotSuggest';
+import { Mascot, bodyNames, eyesNames, type MascotGlyph } from './mascots';
+import { bodyShapeIds } from './orgletShapes';
+import { avatarPalette, defaultAvatarColor, lookColor, seedHash, shownLook, suggestedColors, suggestedLooks, type MascotHints } from './mascotSuggest';
+import { EYE_IDS, formatLook, sameLook, type OrgletLook } from '../../shared/orglet-look';
 import { Orglet3D, type FaceMotion } from './Orglet3D';
 import { ColorPicker } from './ColorPicker';
-import { Select } from './Select';
 import { Button } from './ui';
 import type { Worker } from '../../shared/contracts';
 import { Tooltip } from '@codepawlhq/orglet-ui';
@@ -20,44 +20,41 @@ export const avatarColor = (seed: string, color?: string) => color ?? avatarPale
 const colorPresets = [...avatarPalette, '#2f4b7c', '#3d4451', '#2e7d5b', '#9b3d5a', '#b8862b', '#3b9ad9', '#8a7bd8', '#8d6e63'];
 
 /**
- * Orglet avatar for a worker, team or other named entity: a mascot, an emoji or the first letter in the entity's
- * colour, with an optional small badge (for example the provider mark) in the corner. With `defaultMascot`, an entity
- * that picked nothing gets the mascot suggested by its name and `hint` (its description), in that mascot's colour, so
- * every worker has a fitting face without choosing anything.
+ * Orglet avatar for a worker, channel or other named entity: always an orglet, a body and a pair of eyes in the
+ * entity's colour (owner, 2026-10-12: nothing but an orglet stands for an orglet), with an optional small badge (for
+ * example the provider mark) in the corner. The look is the one stored in `mascot`; an entity that picked nothing
+ * gets the look suggested by its name and `hint` (its description), in that look's colour, so every worker has a
+ * fitting face without choosing anything.
  * Decorative: the name is always shown next to it, so it is hidden from assistive technology.
  * `seed` should be a stable id so renaming does not change an automatic choice among equals.
  */
-export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, badge, size = 'md', shape = 'rounded', alive, motion }: {
-  name: string; seed?: string; emoji?: string; mascot?: string; letter?: boolean; defaultMascot?: boolean; hint?: string; color?: string; badge?: ReactNode; size?: AvatarSize; shape?: 'rounded' | 'circle';
+export function Avatar({ name, seed, mascot, hint, color, badge, size = 'md', shape = 'rounded', alive, motion }: {
+  name: string; seed?: string; mascot?: string; hint?: string; color?: string; badge?: ReactNode; size?: AvatarSize; shape?: 'rounded' | 'circle';
   /** Blinks now and then. Only for the handful of faces in the chat you are reading, never a whole list at once. */
   alive?: boolean;
   /** How a large (`lg` and up) face behaves; see `Orglet3D`. The small sizes ignore it: their motion is the stylesheet's. */
   motion?: FaceMotion;
 }) {
-  const letter = [...name.trim()][0]?.toLocaleUpperCase() ?? '?';
-  // Workers only use mascots (user decision 2026-09-17), so emoji or letter values saved earlier are ignored there.
-  const face = defaultMascot ? (isMascot(mascot) ? mascot : autoMascot(mascotIds, seed ?? name, { name, description: hint })) : emoji ? 'emoji' : isMascot(mascot) ? mascot : undefined;
-  const ink = color ?? (defaultMascot && face && face !== 'emoji' ? mascotColors[face] : avatarColor(seed ?? name));
+  const look = shownLook(mascot, seed ?? name, { name, description: hint });
+  const ink = color ?? lookColor(look);
   // Each face waits its own share of the idle cycle before blinking, so two of them never blink together, and
   // looks up towards its own side, so two faces on one screen never mirror each other.
   const hash = seedHash(seed ?? name);
   const idleDelay = `-${hash % IDLE_SECONDS}s`;
   const idleSide = hash % 2 === 0 ? 1 : -1;
-  return <span className={`avatar ${size} ${shape} ${face === 'emoji' ? 'emoji' : face ? 'has-mascot' : ''}${alive ? ' alive' : ''}`}
+  return <span className={`avatar ${size} ${shape} has-mascot${alive ? ' alive' : ''}`}
     style={{ '--avatar-color': ink, '--idle-delay': idleDelay, '--idle-side': idleSide } as CSSProperties} aria-hidden="true">
-    <span className="avatar-face">{face === 'emoji' ? emoji : face ? avatarRenderer(size) === 'solid' ? <Orglet3D id={face} seed={hash} size={solidSizes[size]} color={ink} motion={motion} /> : <Mascot id={face} glyph={mascotGlyph(size)} /> : letter}</span>
+    <span className="avatar-face">{avatarRenderer(size) === 'solid' ? <Orglet3D look={look} seed={hash} size={solidSizes[size]} color={ink} motion={motion} /> : <Mascot look={look} glyph={mascotGlyph(size)} />}</span>
     {badge && <span className="avatar-badge">{badge}</span>}
   </span>;
 }
 
 /**
- * The colour a worker's face is drawn in, exactly as `Avatar` with `defaultMascot` picks it: the colour the person set,
- * or the colour of its mascot. The orglet's cursor and the desktop glow's peek use it, so they match its avatar.
+ * The colour a worker's face is drawn in, exactly as `Avatar` picks it: the colour the person set, or the colour of
+ * its look. The orglet's cursor and the desktop glow's peek use it, so they match its avatar.
  */
 export function workerInk(worker: { id: string; name: string; description?: string; avatar?: { mascot?: string; color?: string } }): string {
-  if (worker.avatar?.color) return worker.avatar.color;
-  const face = isMascot(worker.avatar?.mascot) ? worker.avatar.mascot : autoMascot(mascotIds, worker.id, { name: worker.name, description: worker.description });
-  return mascotColors[face];
+  return defaultAvatarColor(worker);
 }
 
 /** One idle cycle (`--motion-idle` in styles.css: a blink, and on a prominent face a look-up); the delay is spread across it. */
@@ -95,12 +92,13 @@ export function RosterAvatars({ workers, size = 'xs', max = 4, alive, countRest 
   const shown = workers.slice(0, max);
   const rest = workers.length - shown.length;
   return <span className="composer-to-avatars">
-    {shown.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} alive={alive} />)}
+    {shown.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size={size} alive={alive} />)}
     {countRest && rest > 0 && <span className="roster-more" aria-hidden="true">+{rest}</span>}
   </span>;
 }
 
-type AvatarValue = { mascot?: string; letter?: true; emoji?: string; color?: string };
+/** What the picker edits: the stored look and colour. An old emoji or letter is accepted by the schema and ignored here. */
+type AvatarValue = { mascot?: string; color?: string };
 
 /** Arrow keys move and select within a radio group of buttons, like native radios. */
 const radioKeys = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -114,40 +112,54 @@ const radioKeys = (event: KeyboardEvent<HTMLDivElement>) => {
   next.focus(); next.click();
 };
 
-const categoryOf = (id: MascotId) => (Object.keys(mascotCategoryIds) as MascotCategory[]).find(category => mascotCategoryIds[category].includes(id));
-/** A group's mark is its body itself, small and flat: the groups are the bodies (owner, 2026-10-05). */
-const categoryIcons = Object.assign({}, ...bodyShapeIds.map(body => ({
-  [body]: <svg width="16" height="16" viewBox="0 0 64 66" aria-hidden="true" focusable="false"><path d={bodyPath(bodyShapes[body])} fill="currentColor" /></svg>,
-}))) as Record<MascotCategory, ReactNode>;
+/** One swatch of the body or the eyes group: the look it would give, drawn in the current colour. */
+function LookChoice({ label, look, seed, ink, checked, onChoose }: { label: string; look: OrgletLook; seed: number; ink: string; checked: boolean; onChoose: (look: OrgletLook) => void }) {
+  return <Tooltip label={label}><button type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} className="avatar-choice mascot-choice" aria-label={label} style={{ color: ink }} onClick={() => onChoose(look)}><Orglet3D look={look} seed={seed} size={32} color={ink} motion={{ follow: 'hover' }} /></button></Tooltip>;
+}
+
+/**
+ * The person's own face: the first letter of their name in a ring. A person is not an orglet, so no orglet look stands
+ * for them (owner, 2026-10-12: only an orglet is drawn as one).
+ */
+export function PersonAvatar({ name, size = 'sm' }: { name: string; size?: AvatarSize }) {
+  const letter = [...name.trim()][0]?.toLocaleUpperCase() ?? '?';
+  return <span className={`avatar ${size} rounded person`} style={{ '--avatar-color': 'var(--text)' } as CSSProperties} aria-hidden="true">
+    <span className="avatar-face">{letter}</span>
+  </span>;
+}
 
 /**
  * Picks an avatar with as little effort as the user wants (user decision 2026-09-17: people are lazy to choose).
- * By default nothing is needed: the preview already shows the mascot and colour that fit the name, `hint`
- * (description) and `hints` (skill name, instructions). "Gợi ý khác" steps through other fitting mascots (pushing back
- * those in `taken`, used by other workers); "Ngẫu nhiên" picks anything. "Tùy chỉnh"
- * opens the full choice: mascots by category, three suggested colours (the first is automatic), the user's saved
- * colours and a "+" colour panel that saves new ones through `onSavedColorsChange`.
+ * By default nothing is needed: the preview already shows the look and colour that fit the name, `hint`
+ * (description) and `hints` (skill name, instructions). "Gợi ý khác" steps through other fitting looks (pushing back
+ * those in `taken`, used by other workers). "Tùy chỉnh" opens the full choice, three groups in this order: the body,
+ * the eyes, and the colour (three suggested colours, the first is automatic, the user's saved colours and a "+"
+ * colour panel that saves new ones through `onSavedColorsChange`). Choosing one changes only that part.
  */
 export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, badge, savedColors = [], onSavedColorsChange }: {
-  name: string; seed: string; hint?: string; hints?: Omit<MascotHints, 'name' | 'description'>; taken?: readonly string[]; value: AvatarValue; onChange: (value: AvatarValue) => void; badge?: ReactNode;
+  name: string; seed: string; hint?: string; hints?: Omit<MascotHints, 'name' | 'description'>; taken?: readonly OrgletLook[]; value: AvatarValue; onChange: (value: AvatarValue) => void; badge?: ReactNode;
   savedColors?: readonly string[]; onSavedColorsChange?: (colors: string[]) => void;
 }) {
   const ids = useId();
-  const set = (patch: AvatarValue) => onChange(Object.fromEntries(Object.entries({ ...value, ...patch }).filter(([, item]) => item !== undefined)));
+  // Only the look and the colour are written: a value that still carries an old emoji or letter drops them here.
+  const set = (patch: AvatarValue) => {
+    const next = { mascot: value.mascot, color: value.color, ...patch };
+    onChange(Object.fromEntries(Object.entries(next).filter(([, item]) => item !== undefined)));
+  };
   const suggestionHints = { ...hints, name, description: hint };
-  const face = isMascot(value.mascot) ? value.mascot : autoMascot(mascotIds, seed, { name, description: hint });
+  const look = shownLook(value.mascot, seed, { name, description: hint });
   const [open, setOpen] = useState(false);
   const [colorPanel, setColorPanel] = useState(false);
-  const [category, setCategory] = useState<MascotCategory>(() => categoryOf(face) ?? 'base');
   // Every choice makes the preview smile (the "say cheese" of the standalone page, COD-156).
   const [cheer, setCheer] = useState(0);
-  const choose = (mascot: MascotId, patch: AvatarValue = {}) => { set({ mascot, emoji: undefined, letter: undefined, ...patch }); setCategory(categoryOf(mascot) ?? 'base'); setCheer(count => count + 1); };
+  const choose = (next: OrgletLook, patch: AvatarValue = {}) => { set({ mascot: formatLook(next), ...patch }); setCheer(count => count + 1); };
   const suggest = () => {
-    const options = suggestedMascots(suggestionHints, { taken });
-    const next = options[(options.indexOf(face) + 1) % options.length];
-    choose(next, { color: undefined });
+    const options = suggestedLooks(suggestionHints, { taken });
+    const current = options.findIndex(option => sameLook(option, look));
+    choose(options[(current + 1) % options.length], { color: undefined });
   };
-  const colors = suggestedColors(face, seed, suggestionHints);
+  const colors = suggestedColors(look, seed, suggestionHints);
+  const ink = value.color ?? colors[0];
   const own = savedColors.filter(color => !colors.includes(color));
   const other = value.color && !colors.includes(value.color) && !own.includes(value.color) ? [value.color] : [];
   const saveColor = (hex: string) => { onSavedColorsChange?.([hex, ...savedColors.filter(color => color !== hex)].slice(0, 16)); set({ color: hex }); };
@@ -160,23 +172,29 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
   // is a 3D face (COD-156): it hops in when the dialog opens, turns after the pointer, and smiles at every choice.
   return <div className="avatar-picker">
     <div className="avatar-picker-head">
-      <Avatar name={name || '?'} seed={seed} mascot={value.mascot} defaultMascot hint={hint} color={value.color} badge={badge} size="xl" motion={{ lead: true, greet: true, cheer }} />
+      <Avatar name={name || '?'} seed={seed} mascot={value.mascot} hint={hint} color={value.color} badge={badge} size="xl" motion={{ lead: true, greet: true, cheer }} />
       <div className="avatar-picker-toolbar">
-        <Tooltip label={t('Chọn linh vật khác hợp với tên, mô tả và kỹ năng')}><Button type="button" variant="outline" className="avatar-action" onClick={suggest}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button></Tooltip>
-        <Button type="button" variant="outline" className="avatar-action avatar-customize" aria-expanded={open} aria-controls={`${ids}-custom`} onClick={() => { if (!open) setCategory(categoryOf(face) ?? 'base'); setOpen(!open); }}><SlidersHorizontal size={15} aria-hidden="true" />{t('Tùy chỉnh')}<ChevronDown size={15} aria-hidden="true" /></Button>
+        <Tooltip label={t('Chọn dáng và mắt khác hợp với tên, mô tả và kỹ năng')}><Button type="button" variant="outline" className="avatar-action" onClick={suggest}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button></Tooltip>
+        <Button type="button" variant="outline" className="avatar-action avatar-customize" aria-expanded={open} aria-controls={`${ids}-custom`} onClick={() => setOpen(!open)}><SlidersHorizontal size={15} aria-hidden="true" />{t('Tùy chỉnh')}<ChevronDown size={15} aria-hidden="true" /></Button>
       </div>
     </div>
     <div id={`${ids}-custom`} className="avatar-custom" hidden={!open}>
       <div className="avatar-custom-section">
-        <div className="avatar-custom-heading"><span className="avatar-custom-title">{t('Linh vật')}</span>
-          <Select size="sm" ariaLabel={t('Nhóm linh vật')} className="avatar-category" menuMinWidth={260} value={category} onChange={next => setCategory(next as MascotCategory)} options={(Object.keys(mascotCategoryLabels) as MascotCategory[]).map(id => ({ value: id, label: t(mascotCategoryLabels[id]), icon: categoryIcons[id] }))} />
+        <span className="avatar-custom-title">{t('Dáng')}</span>
+        <div className="avatar-choice-row looks body-choices" role="radiogroup" aria-label={t('Dáng')} onKeyDown={radioKeys}>
+          {bodyShapeIds.map((body, index) => {
+            const checked = look.body === body;
+            // Each tile is the body with the current eyes and colour, a 3D face that turns and hops only while the pointer or the keyboard is on it.
+            return <LookChoice key={body} label={bodyNames[body]()} look={{ body, eyes: look.eyes }} seed={index} ink={ink} checked={checked} onChoose={choose} />;
+          })}
         </div>
-        <div className="avatar-choice-row mascots" role="radiogroup" aria-label={t(mascotCategoryLabels[category])} onKeyDown={radioKeys}>
-          {mascotCategoryIds[category].map((id, index) => {
-            const checked = face === id;
-            const focusable = checked || (index === 0 && !mascotCategoryIds[category].includes(face));
-            // Each tile is a 3D face that turns and hops only while the pointer or the keyboard is on it.
-            return <Tooltip label={mascotName(id)} key={id}><button type="button" role="radio" aria-checked={checked} tabIndex={focusable ? 0 : -1} className="avatar-choice mascot-choice" aria-label={mascotName(id)} onClick={() => choose(id)}><Orglet3D id={id} seed={index} size={32} color="grid" motion={{ follow: 'hover' }} /></button></Tooltip>;
+      </div>
+      <div className="avatar-custom-section">
+        <span className="avatar-custom-title">{t('Mắt')}</span>
+        <div className="avatar-choice-row looks eyes-choices" role="radiogroup" aria-label={t('Mắt')} onKeyDown={radioKeys}>
+          {EYE_IDS.map((eyes, index) => {
+            const checked = look.eyes === eyes;
+            return <LookChoice key={eyes} label={eyesNames[eyes]()} look={{ body: look.body, eyes }} seed={index} ink={ink} checked={checked} onChoose={choose} />;
           })}
         </div>
       </div>

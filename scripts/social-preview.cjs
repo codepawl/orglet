@@ -16,12 +16,12 @@ const cardSize = { width: 1280, height: 640 };
 // The orglets that lead the card, each a body shape and a colour of its own: faces people recognise before they
 // read anything. The outer ones turn towards the middle.
 const cast = [
-  { mascot: 'classic', colour: '#4f7fe0', yaw: 0.36, pitch: 0.06 },
-  { mascot: 'happy', colour: '#3f9a68', yaw: 0.2, pitch: 0.08 },
-  { mascot: 'curious', colour: '#d97757', yaw: 0.06, pitch: 0.06 },
-  { mascot: 'delighted', colour: '#a764c9', yaw: -0.08, pitch: 0.08 },
-  { mascot: 'wink', colour: '#c9922e', yaw: -0.22, pitch: 0.06 },
-  { mascot: 'sleepy', colour: '#d65c73', yaw: -0.36, pitch: 0.08 },
+  { look: { body: 'base', eyes: 'plain' }, colour: '#4f7fe0', yaw: 0.36, pitch: 0.06 },
+  { look: { body: 'round', eyes: 'happy' }, colour: '#3f9a68', yaw: 0.2, pitch: 0.08 },
+  { look: { body: 'tall', eyes: 'curious' }, colour: '#d97757', yaw: 0.06, pitch: 0.06 },
+  { look: { body: 'leaf', eyes: 'delighted' }, colour: '#a764c9', yaw: -0.08, pitch: 0.08 },
+  { look: { body: 'tailRight', eyes: 'wink' }, colour: '#c9922e', yaw: -0.22, pitch: 0.06 },
+  { look: { body: 'wide', eyes: 'sleepy' }, colour: '#d65c73', yaw: -0.36, pitch: 0.08 },
 ];
 // Each orglet is drawn on a canvas this many css pixels square; the frame is 68 grid units, as on the docs pages.
 const orgletSize = 108;
@@ -45,7 +45,7 @@ function stage(orglets, size, units) {
     canvas.style.width = `${size}px`;
     canvas.style.height = `${size}px`;
     const context = canvas.getContext('2d');
-    const model = OrgletSolid.createOrglet(orglet.mascot, index + 1, 0);
+    const model = OrgletSolid.createOrglet(orglet.look, index + 1, 0);
     model.yaw.value = orglet.yaw;
     model.pitch.value = orglet.pitch;
     const body = OrgletSolid.hexToRgb(orglet.colour);

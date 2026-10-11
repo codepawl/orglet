@@ -289,7 +289,7 @@ export function AccountSettings({ account, busy, act }: { account: AccountState 
   // The wait shows as the orglet thinking (the same face and state as a reply being thought about), never a spinner.
   // Only this passing state has a face before its text, so its text starts later than the tab's other rows on purpose.
   if (account.status === 'signing_in') return <div className="setting-row account-waiting" data-align-ignore="family-lead">
-    <Avatar name="Orglet" mascot="classic" color="var(--text)" size="sm" />
+    <Avatar name="Orglet" mascot="base-plain" color="var(--text)" size="sm" />
     <div className="setting-text">
       <span className="setting-title">{t('Đang đăng nhập')}</span>
       <span className="setting-description" role="status">{t('Đăng nhập trong trình duyệt, rồi quay lại.')}</span>
