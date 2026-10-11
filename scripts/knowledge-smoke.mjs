@@ -44,7 +44,7 @@ try {
   const imported = await page.evaluate(() => window.orglet.importTemplate());
   await page.getByRole('button', { name: new RegExp(`^${label('Thư viện, {0} cần duyệt', ['\\d+'])}$`) }).waitFor();
   await page.getByRole('button', { name: label('Thư viện') }).click();
-  await page.getByRole('region', { name: label('Chờ duyệt') }).getByRole('button', { name: /Evidence limits/ }).click();
+  await page.getByRole('region', { name: label('Chờ duyệt') }).getByRole('button', { name: /^Evidence limits/ }).click();
   // The header names where the note came from and still waits for review (COD-203).
   await page.locator('.knowledge-author').filter({ hasText: label('Template kênh') }).filter({ hasText: `${label('nhập từ template')} · v1` }).filter({ hasText: label('Chờ duyệt') }).waitFor();
   await page.getByRole('button', { name: label('Duyệt'), exact: true }).click();

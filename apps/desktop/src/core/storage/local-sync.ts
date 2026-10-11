@@ -1005,6 +1005,7 @@ export class LocalSync {
       if (data.entity === 'knowledge') {
         for (const table of ['knowledge_search', 'knowledge_revisions', 'knowledge']) this.store.db.prepare(`DELETE FROM ${table} WHERE id=?`).run(data.id);
       }
+      if (data.entity === 'skill') this.dropUnusedSkill(data.id);
       if (data.entity === 'routine') this.store.db.prepare('DELETE FROM routines WHERE id=?').run(data.id);
       if (data.entity === 'source') this.deletedSourcePlaceholder(data.id);
       this.purgePermanentPayloads();
@@ -1027,6 +1028,13 @@ export class LocalSync {
       if (data.deleted) this.purgePermanentPayloads();
       this.purgeBlockedOutbox();
     }
+  }
+  /** A skill deleted on another computer goes here too, unless an orglet here still uses it: then it stays, fenced from sync. */
+  private dropUnusedSkill(skillId: string) {
+    const stillUsed = this.store.all<Worker>('workers').some(worker => worker.skillId === skillId);
+    if (stillUsed || this.store.all<Skill>('skills').length <= 1) return;
+    this.store.db.prepare('DELETE FROM skills WHERE id=?').run(skillId);
+    this.store.db.prepare('DELETE FROM revisions WHERE entity_id=?').run(skillId);
   }
   private deletedSourcePlaceholder(id: string) {
     this.store.put('sources', { id, name: 'Nguồn đã xóa', bytes: 0, hash: '0'.repeat(64), revoked: true, availability: 'other-device' },

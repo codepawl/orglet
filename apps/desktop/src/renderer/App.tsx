@@ -2828,7 +2828,7 @@ export function App() {
       </Drawer>}
       {/* Skills or Knowledge is chosen in the sidebar, so the page has no tabs of its own. */}
       {panel !== 'routines' && <div className="form">
-        <div id="library-panel">{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
+        <div id="library-panel">{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} workers={[...workspace.workers, ...workspace.archivedWorkers]} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
       </div>}
       {panel === 'knowledge' && <Drawer open onClose={fromLibrary ? backToLibrary : close} title={editingKnowledge ? 'Knowledge' : t('Knowledge mới')}>
         <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />

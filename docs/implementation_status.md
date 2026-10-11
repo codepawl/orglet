@@ -489,6 +489,10 @@ Measured 2026-09-27 on the Windows 11 development machine:
 
 Still unverified here: installing and uninstalling the signed Setup on another clean Windows machine, a real public 0.7.0-to-0.7.1 update on that machine, other live API providers, and the harness paths named above. The local Squirrel update trial is recorded under [The updater end to end](#the-updater-end-to-end-cod-304).
 
+## 2026-10-12: deleting a skill or a knowledge note
+
+Library rows have a **⋮** menu (and a right-click). `deleteKnowledge` removes a note, its revisions and its search entry like `deleteMemory`; `deleteSkill` removes a skill row and its revisions, and refuses while a live or archived orglet uses it or when it is the last skill (the store seeds a starter skill whenever none exists). Both travel as the existing `delete` sync record (kinds `knowledge` and `skill`, already in released apps' schema), and the local `sync_deletions` fence stops a later pull from bringing the item back. A receiving computer drops a deleted skill unless one of its orglets uses it. Tests: `tests/integration/delete-skill-knowledge.test.ts`.
+
 ## 2026-10-12: deleting a message
 
 A message's right-click menu ends with **Delete message** for the person's own messages and orglets' answers. The deletion is local to the computer (`deleted_messages`, a sync fence on the message's record key); other computers keep their copy until a later release adds a deletion record. This build's pull skips records of an unknown kind. Checked with the real core in `tests/integration/delete-message.test.ts` and `tests/integration/delete-message-sync.test.ts`; not checked in the packaged app or against a live account.

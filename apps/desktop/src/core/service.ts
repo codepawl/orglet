@@ -943,6 +943,8 @@ export class CoreService {
         const item = this.knowledge.updateMemory(input.id, { text: input.text, pinned: input.pinned }); this.notify(); return item;
       }
       case 'deleteMemory': { this.knowledge.deleteMemory(commands.deleteMemory.parse(args).id); this.notify(); return; }
+      case 'deleteKnowledge': { this.knowledge.deleteNote(commands.deleteKnowledge.parse(args).id); this.notify(); return; }
+      case 'deleteSkill': { this.deleteSkill(commands.deleteSkill.parse(args).id); this.notify(); return; }
       case 'harnesses': return this.withSignIns(this.harnesses(commands.harnesses.parse(args).refresh));
       case 'harnessUsage': return this.harnessUsage(commands.harnessUsage.parse(args).refresh);
       case 'claimHarnessReset': return this.claimHarnessReset(commands.claimHarnessReset.parse(args).accountId);
@@ -1202,6 +1204,22 @@ export class CoreService {
     const skill: Skill = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
     this.store.version('skills', skill);
     return skill;
+  }
+  /**
+   * Removes a skill for good. An orglet, live or archived, that still uses it keeps it, and the last skill stays
+   * because a new orglet needs one and the first start would otherwise seed another.
+   */
+  private deleteSkill(skillId: string) {
+    const skill = this.store.get<Skill>('skills', skillId);
+    const state = this.store.entityState();
+    const users = this.store.all<Worker>('workers').filter(worker => worker.skillId === skillId && !state.workers[worker.id]?.deletedAt);
+    if (users.length) throw new Error(`Skill "${skill.name}" vẫn đang được dùng bởi: ${users.map(worker => worker.name).join(', ')}. Đổi skill của họ rồi xóa lại.`);
+    if (this.store.all<Skill>('skills').length <= 1) throw new Error('Đây là skill cuối cùng. Cần ít nhất một skill để tạo orglet.');
+    this.store.transaction(() => {
+      this.store.sync.deleteEntity('skill', skillId);
+      this.store.db.prepare('DELETE FROM skills WHERE id=?').run(skillId);
+      this.store.db.prepare('DELETE FROM revisions WHERE entity_id=?').run(skillId);
+    });
   }
   private saveTeam(input: Args<'saveTeam'>): Team {
     this.assertEntityRevision('team', input.id, input.expectedRevision);

@@ -131,6 +131,8 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   searchChats: reached('orglet search'),
   updateMemory: reached('orglet memory edit'),
   deleteMemory: reached('orglet memory delete'),
+  deleteKnowledge: held(A_DELETION),
+  deleteSkill: held(A_DELETION),
   harnesses: reached('orglet show connections'),
   harnessUsage: reached('orglet usage'),
   claimHarnessReset: windowOnly('a notice about a plan reset'),
