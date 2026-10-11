@@ -24,7 +24,10 @@ export type ClaudeCodeReading = {
 
 // Starting Claude Code and reading its first line took 8 to 10 seconds on 2026-09-29 (2.1.283, four at once) and 9 to
 // 13 seconds on 2026-09-30 (2.1.284, five at once); 20 seconds was not enough on a busy computer (COD-338).
-const START_TIMEOUT_MS = 45_000;
+// The starts run in the background now (the first read answers the bare aliases after 12 seconds), so a long limit
+// costs nobody a wait. Under a full test run on the same computer a start passed 45 seconds on 2026-10-11 and left the
+// aliases unnamed beside the models they stand for.
+const START_TIMEOUT_MS = 90_000;
 const DATED_SUFFIX = /^-\d{8}$/;
 
 /**

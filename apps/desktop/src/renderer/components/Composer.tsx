@@ -27,11 +27,10 @@ import { ComposerPermissionHint, readSentMessage, type PermissionHintControls } 
 import type { HarnessInfo } from '../../shared/harness';
 import { useComposerUsage } from '../planUsage';
 import { PlanUsageNote, UsageRing, harnessAccountLabel } from './PlanUsage';
-import { chatContextFor, usageRingFor, type ContextWorker } from '../../shared/composer-usage';
+import { chatContextFor, usageRingFor, type ComposerUsage, type ContextWorker } from '../../shared/composer-usage';
 import { isHarness } from '../../shared/harness';
 import { modelLists } from '../caches';
 import { useCachedEach } from '../prefetch';
-import { Skeleton } from '@codepawlhq/orglet-ui';
 
 const SINGLE_LINE = 40;
 
@@ -381,7 +380,7 @@ function useReportedWindowRefresh(runs: readonly Run[]) {
 }
 
 /** What a message box's foot shows for plan usage and context (COD-326); see `usePlanUsageBar`. */
-export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean; /** The plan that ran out, as the island on the bar while the thread docks nothing else. */ island?: DockedIsland };
+export type UsageFoot = { ring?: ReactNode; /** The plan allowances of the chat's harnesses, which the model menu shows at its top (owner, 2026-10-11). */ plans?: ComposerUsage; note?: ReactNode; out: boolean; /** The plan that ran out, as the island on the bar while the thread docks nothing else. */ island?: DockedIsland };
 
 /**
  * Plan usage and context under a message box (COD-326): the ring at the far right of the toolbar row under the bar
@@ -391,7 +390,7 @@ export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean; /** 
  * Switching selects the other account, as Settings would; the next message runs on it. `workers` answer in the chat, and `runs` are the chat's (none in an empty chat),
  * for the context window of the model each orglet will use next.
  */
-export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, openSettings, dock }: {
+export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, dock }: {
   /** The bar whose island is read: the main chat's, or a side thread's in the right panel (COD-365). */
   dock?: string;
   workers: readonly ContextWorker[];
@@ -399,19 +398,16 @@ export function usePlanUsageBar({ workers, harnesses, running, runs = [], action
   running: boolean;
   runs?: readonly Run[];
   action: (fn: () => Promise<unknown>) => void;
-  openSettings: () => void;
 }): UsageFoot {
   const providers = workers.map(worker => worker.provider);
-  const { view: usage, loading } = useComposerUsage(providers, harnesses, running);
+  const { view: usage } = useComposerUsage(providers, harnesses, running);
   const [dismissedOutKey, setDismissedOutKey] = useState<string>();
   const island = useDockedIsland(dock);
   const listed = [...new Set(providers.filter(provider => provider !== 'demo'))];
   const lists = useCachedEach(modelLists, listed);
   const context = chatContextFor(workers, Object.fromEntries(listed.map(provider => [provider, lists[provider]?.models])), runs);
   useReportedWindowRefresh(runs);
-  const ring = usageRingFor(usage, context)
-    ? <UsageRing plans={usage} context={context} onOpenSettings={openSettings} />
-    : loading ? <span className="usage-ring-waiting" aria-hidden="true"><Skeleton shape="circle" width={16} height={16} /></span> : undefined;
+  const ring = usageRingFor(context) ? <UsageRing context={context} /> : undefined;
   if (!usage) return { ring, out: false };
   const switchAccount = (harness: HarnessInfo, accountId: string) => action(() => orglet.call('selectHarnessAccount', { harness: harness.id, id: accountId }));
   const { shown, offer } = usage;
@@ -427,7 +423,7 @@ export function usePlanUsageBar({ workers, harnesses, running, runs = [], action
     switchAccount: () => { if (target) switchAccount(shown.harness, target.accountId); },
     dismiss: () => setDismissedOutKey(outKey),
   } : undefined;
-  return { ring, note: noteShown ? <PlanUsageNote usage={usage} onSwitch={switchAccount} /> : undefined, out, ...(outIsland ? { island: outIsland } : {}) };
+  return { ring, plans: usage, note: noteShown ? <PlanUsageNote usage={usage} onSwitch={switchAccount} /> : undefined, out, ...(outIsland ? { island: outIsland } : {}) };
 }
 
 /**
@@ -478,7 +474,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0 || Boolean(readOnly);
-  const planUsage = usePlanUsageBar({ workers, harnesses, running: busy, runs: detail.runs, action, openSettings: () => openSettings('harness'), dock: islandDock });
+  const planUsage = usePlanUsageBar({ workers, harnesses, running: busy, runs: detail.runs, action, dock: islandDock });
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
   /**

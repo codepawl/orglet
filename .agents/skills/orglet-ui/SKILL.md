@@ -40,6 +40,11 @@ Orglet's renderer uses the generic kit in `packages/orglet-ui` (`@codepawlhq/org
     `pnpm test:alignment`, and fix every finding. A new screen is added to `scripts/alignment-check.mjs` in the same
     change.
 13. **Docs and tests in the same change** (README plus the matching `docs/` page; `tests/integration/*.test.ts`).
+14. **A two-line menu row puts its icon, check and number on the first line.** When a row stacks a name over a note
+    or detail, the leading icon, the trailing check and the number key sit level with the name, not centred across both
+    lines. Give them the name's line box (`--option-line`, `--org-select-option-line`) and derive the offset from it
+    instead of hand-tuning pixels, so it holds when the font changes (owner, 2026-10-11). A badge such as Default
+    stays beside the name.
 
 ## Where to read next
 

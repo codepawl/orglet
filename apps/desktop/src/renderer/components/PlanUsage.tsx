@@ -3,6 +3,7 @@ import { CircleX, RotateCcw, TriangleAlert } from 'lucide-react';
 import { composerUsageTone, contextPercent, usageRingFor, type ChatContext, type ComposerUsage, type ContextLine, type HarnessPlan } from '../../shared/composer-usage';
 import { SYSTEM_ACCOUNT_ID, type HarnessBankedResets, type HarnessInfo, type HarnessUsageWindow } from '../../shared/harness';
 import { currentLocale, t } from '../i18n';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 import { Button } from './ui';
 import { AnchoredPopover } from './AnchoredPopover';
 import { maskEmail } from '../../shared/pii';
@@ -177,7 +178,7 @@ function ContextSection({ context }: { context: ChatContext }) {
   </section>;
 }
 
-function PlanSection({ plan, now }: { plan: HarnessPlan; now?: Date }) {
+export function PlanSection({ plan, now }: { plan: HarnessPlan; now?: Date }) {
   const title = plan.usage.plan ? t('Hạn mức gói · {0}', [plan.usage.plan]) : t('Hạn mức gói');
   const account = [plan.harness.name, planAccountLine(plan)].filter(Boolean).join(' · ');
   return <section className="usage-section" aria-label={`${title} · ${plan.harness.name}`}>
@@ -191,36 +192,26 @@ function PlanSection({ plan, now }: { plan: HarnessPlan; now?: Date }) {
 }
 
 /**
- * The ring under the message box (COD-326): how close the chat is to a limit, the tightest plan allowance or the
- * fullest context window, muted until 80%, then the warning colour, then the error colour at 100%. A click opens what
- * it is made of: first the context window of the model each orglet will use next, then each harness's plan allowances,
- * and a way to Settings → Harness.
+ * The ring under the message box (COD-326): how full the context window is, the fullest among the chat's orglets,
+ * muted until 80%, then the warning colour, then the error colour at 100%. A click opens the context window of the
+ * model each orglet will use next. Plan allowances are not here: they sit at the top of the model menu
+ * (`ModelMenu`; owner, 2026-10-11).
  */
-export function UsageRing({ plans, context, onOpenSettings, now }: {
-  plans?: ComposerUsage;
-  context?: ChatContext;
-  onOpenSettings: () => void;
-  now?: Date;
-}) {
+export function UsageRing({ context }: { context?: ChatContext }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  const ring = usageRingFor(plans, context);
-  if (!ring) return null;
-  const percent = Math.round(ring.percent);
-  const planList = plans ? [plans.shown, ...plans.others] : [];
-  const openSettings = () => {
-    setOpen(false);
-    onOpenSettings();
-  };
+  const ring = usageRingFor(context);
+  if (!ring || !context) return null;
+  const label = t('Ngữ cảnh: {0}%', [Math.round(ring.percent)]);
   return <>
-    <button ref={trigger} type="button" className="usage-ring" data-tone={ring.tone} aria-haspopup="dialog" aria-expanded={open}
-      aria-label={t('Mức dùng: {0}%', [percent])} title={t('Mức dùng: {0}%', [percent])} onClick={() => setOpen(current => !current)}>
-      <UsageRingGlyph percent={ring.percent} />
-    </button>
-    <AnchoredPopover anchor={trigger} open={open} onClose={() => setOpen(false)} label={t('Mức dùng')} className="usage-details">
-      {context && <ContextSection context={context} />}
-      {planList.map(plan => <PlanSection key={plan.harness.id} plan={plan} now={now} />)}
-      {planList.length > 0 && <Button type="button" variant="outline" className="usage-settings" onClick={openSettings}>{t('Xem chi tiết')}</Button>}
+    <Tooltip label={label}>
+      <button ref={trigger} type="button" className="usage-ring" data-tone={ring.tone} aria-haspopup="dialog" aria-expanded={open}
+        aria-label={label} onClick={() => setOpen(current => !current)}>
+        <UsageRingGlyph percent={ring.percent} />
+      </button>
+    </Tooltip>
+    <AnchoredPopover anchor={trigger} open={open} onClose={() => setOpen(false)} label={t('Cửa sổ ngữ cảnh')} className="usage-details">
+      <ContextSection context={context} />
     </AnchoredPopover>
   </>;
 }

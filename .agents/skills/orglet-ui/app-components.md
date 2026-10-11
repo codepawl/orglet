@@ -55,6 +55,7 @@ Sidebar facts:
 | Side thread beside its main chat | `SideThreadPanel` (right panel, own `FollowUpComposer`) | `components/SideThreadPanel.tsx` |
 | Prompt bar | `Composer` (`attachments`, `onRemoveAttachment`, `leading`, `mode`, `usage`, `context`, `sendDisabled`) | `components/Composer.tsx` |
 | Approval mode beside the plus | `ApprovalModePicker` (`mode`, `rows`, `onSelect`), `ChatModePicker`; `shared/approval-mode.ts`, `planFirst.ts` | `components/ApprovalModePicker.tsx` |
+| Model chip and menu on the prompt bar (plan allowance on top, numbered models, More models in a side panel) | `ModelMenu` (`mainRows`, `sideRows`, `plan`, `onSelect`), `ComposerModel`; `shared/model-menu.ts` | `components/ModelMenu.tsx` |
 | Chat still on Demo | `DemoNote` (`someOnDemo`, `preflight`, `onConnect`); `chatSettings.ts` | `components/Composer.tsx` |
 | Forward a message | `ForwardPicker` (`request`, `options`, `sending`, `onSend`, `onClose`); `forward.ts` | `components/ForwardPicker.tsx` |
 | Reactions | `ReactionBar` (`options`, `picked`, `onPick`, `label`), `ReactionBadges` (`badges`, `align`, `onPick`); `MessageBadges` binds them to a message | `components/ReactionBar.tsx`, `components/MessageActions.tsx` |
