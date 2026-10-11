@@ -154,7 +154,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   });
   if (provider === 'opencode-zen' || provider === 'opencode-go') return new OpenCodeAdapter(provider, key, model);
   if (provider === 'codepawl') {
-    const routerUrl = routerApiUrl(process.env.ORGLET_ROUTER_URL);
+    const routerUrl = routerApiUrl(process.env.ORGLET_ROUTER_URL, process.env.ORGLET_ACCOUNTS_URL);
     if (!routerUrl) throw new Error('Bản này không có CodePawl router.');
     return new CodepawlAdapter(key, routerUrl, model);
   }

@@ -21,7 +21,7 @@ export async function manageCli(request: ManagementRequest, dependencies: CliDep
   const core = dependencies.request;
   const workspace = await core('workspace', {}) as Workspace;
   if (request.op === 'config') {
-    const providers = BuiltInProviderId.options.filter(provider => provider !== 'demo' && (provider !== 'codepawl' || routerBaseUrl(process.env.ORGLET_ROUTER_URL))).map(provider => ({
+    const providers = BuiltInProviderId.options.filter(provider => provider !== 'demo' && (provider !== 'codepawl' || routerBaseUrl(process.env.ORGLET_ROUTER_URL, process.env.ORGLET_ACCOUNTS_URL))).map(provider => ({
       id: provider,
       name: isHarness(provider) ? harnessNames[provider] : API_PROVIDER_NAMES[provider as keyof typeof API_PROVIDER_NAMES],
     }));

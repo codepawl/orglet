@@ -27,12 +27,12 @@ function stateLine(state: CodepawlState): { mark: StatusMarkState; text: string 
   return { mark: NOT_CONNECTED_MARK, text: t('Kết nối bằng tài khoản CodePawl đang đăng nhập, không cần dán key.') };
 }
 
-/** Free tokens left today and included usage left this period; a number the router did not give is not shown. */
+/** Free tokens left today and, while the router sells plans, what a plan has left; a number the router did not give is not shown. */
 function usageLine(usage: CodepawlUsage): string {
   const parts: string[] = [];
   if (usage.freeTokensLeft !== undefined) parts.push(t('Còn {0} token miễn phí hôm nay', [usage.freeTokensLeft.toLocaleString()]));
-  if (usage.includedLeftMicros !== undefined) parts.push(t('Còn {0} dùng trong kỳ này', [formatMoney(usage.includedLeftMicros)]));
-  if (usage.payByUseActive) parts.push(t('Trả theo mức dùng: {0} tháng này', [formatMoney(usage.payByUseCostMicros ?? 0)]));
+  if (usage.plansOpen && usage.includedLeftMicros !== undefined) parts.push(t('Còn {0} dùng trong kỳ này', [formatMoney(usage.includedLeftMicros)]));
+  if (usage.plansOpen && usage.payByUseActive) parts.push(t('Trả theo mức dùng: {0} tháng này', [formatMoney(usage.payByUseCostMicros ?? 0)]));
   return parts.join(' · ');
 }
 
@@ -40,10 +40,11 @@ type PlanAction = { id: string; label: string; icon: ReactNode; request: Codepaw
 
 /**
  * What the person can do about a plan, from the usage the router reported: buy what they do not have, and manage what
- * they do. Nothing is offered while the usage is unknown, because then it is not known which plan they have.
+ * they do. Nothing is offered while the usage is unknown, because then it is not known which plan they have, or while
+ * the router sells no plan.
  */
 function planActions(usage: CodepawlUsage | undefined): PlanAction[] {
-  if (!usage?.known) return [];
+  if (!usage?.known || !usage.plansOpen) return [];
   const hasStarter = usage.includedLeftMicros !== undefined;
   const hasPayByUse = usage.payByUseActive === true;
   const actions: PlanAction[] = [];

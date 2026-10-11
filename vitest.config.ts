@@ -26,7 +26,8 @@ export default defineConfig({
     testTimeout: process.env.CI ? 90_000 : 30_000,
     hookTimeout: process.env.CI ? 90_000 : 30_000,
     // Sample replies stand in for a model here, as in the packaged smokes (apps/desktop/src/shared/demo-replies.ts).
-    env: { ORGLET_DEMO_REPLIES: '1' },
+    // No test reaches CodePawl's router: a test that needs one names a stand-in on this computer.
+    env: { ORGLET_DEMO_REPLIES: '1', ORGLET_ROUTER_URL: 'off' },
     projects: [
       {
         extends: true,

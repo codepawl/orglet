@@ -104,7 +104,7 @@ let mcpSecrets: McpSecretStore;
 let mcpSignIns: McpSignIns;
 /** The optional CodePawl account (COD-337): its tokens stay here, the window hears only `AccountState`. */
 let account: AccountService;
-/** The CodePawl router connection (issue 532): its key stays here; with no `ORGLET_ROUTER_URL` it does nothing at all. */
+/** The CodePawl router connection (issue 532): its key stays here; with `ORGLET_ROUTER_URL=off` it does nothing at all. */
 let routerConnection: RouterConnection;
 /** Account sync (COD-329 phase 3); it stays off in a build with no `ORGLET_SYNC_URL`. */
 let syncTransport: SyncTransport | undefined;
@@ -706,7 +706,7 @@ async function start() {
     store: new AccountFile(directory, safeStorage),
     openExternal: address => shell.openExternal(address),
     loopback: listenOnLoopback,
-    routerConfigured: routerBaseUrl(process.env.ORGLET_ROUTER_URL) !== undefined,
+    routerConfigured: routerBaseUrl(process.env.ORGLET_ROUTER_URL, process.env.ORGLET_ACCOUNTS_URL) !== undefined,
     onChange: state => {
       if (window && !window.isDestroyed()) window.webContents.send('orglet:account', accountPayload(state));
       void analytics?.accountChanged(state);
@@ -715,7 +715,7 @@ async function start() {
   });
   await account.load();
   routerConnection = new RouterConnection({
-    baseUrl: routerBaseUrl(process.env.ORGLET_ROUTER_URL),
+    baseUrl: routerBaseUrl(process.env.ORGLET_ROUTER_URL, process.env.ORGLET_ACCOUNTS_URL),
     account,
     keys: { read: () => credentials.read('codepawl'), save: key => credentials.save('codepawl', key), remove: () => credentials.remove('codepawl') },
     keyIds: new RouterKeyIdFile(directory),

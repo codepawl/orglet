@@ -607,7 +607,7 @@ async function fetchOpenCode(plan: OpenCodePlan, options: ModelListFetchOptions)
 
 /** Reads only the router's own key, from the address this build names; a build with none has no list to fetch. */
 async function fetchCodepawl(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
-  const base = options.endpoints?.codepawl ?? routerApiUrl(process.env.ORGLET_ROUTER_URL);
+  const base = options.endpoints?.codepawl ?? routerApiUrl(process.env.ORGLET_ROUTER_URL, process.env.ORGLET_ACCOUNTS_URL);
   if (!base) return withCatalogHint('codepawl', [], 'native', 'Bản này không có CodePawl router.');
   const key = await options.readKey('codepawl');
   if (!key) return withCatalogHint('codepawl', [], 'native', missingKey(apiName('codepawl')));

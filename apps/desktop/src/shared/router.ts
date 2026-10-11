@@ -14,13 +14,18 @@ export const ACCOUNT_ROUTER_SCOPE = 'router:manage';
 /** The router's chat and model routes live under this path of its address. */
 const ROUTER_API_PATH = '/v1';
 
+/** The router CodePawl runs. It trusts tokens of the default accounts service only. */
+export const DEFAULT_ROUTER_URL = 'https://router.codepawl.com';
+
 /**
- * The router's address. `ORGLET_ROUTER_URL` names it, or `off` for none. There is no default: the router is not
- * deployed, so a build that names no address has no router connection anywhere. Only https is accepted, except a
- * router on this computer during development.
+ * The router's address. `ORGLET_ROUTER_URL` names it, or `off` for none; only https is accepted, except a router on
+ * this computer during development. With no address named, it is CodePawl's own router, but only beside the default
+ * accounts service: that router accepts no other service's tokens, so a build pointed at another accounts service
+ * (`ORGLET_ACCOUNTS_URL`) has no router unless it names one.
  */
-export function routerBaseUrl(override: string | undefined): string | undefined {
-  if (!override || override === 'off') return undefined;
+export function routerBaseUrl(override: string | undefined, accountsOverride?: string): string | undefined {
+  if (override === 'off') return undefined;
+  if (!override) return accountsOverride ? undefined : DEFAULT_ROUTER_URL;
   try {
     const url = new URL(override);
     const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
@@ -32,8 +37,8 @@ export function routerBaseUrl(override: string | undefined): string | undefined 
 }
 
 /** The address the chat adapter and the model list talk to, or nothing while the router is not configured. */
-export function routerApiUrl(override: string | undefined): string | undefined {
-  const base = routerBaseUrl(override);
+export function routerApiUrl(override: string | undefined, accountsOverride?: string): string | undefined {
+  const base = routerBaseUrl(override, accountsOverride);
   return base ? `${base}${ROUTER_API_PATH}` : undefined;
 }
 
@@ -64,6 +69,8 @@ export const RouterUsageAnswer = z.object({
   free: z.object({ tokensLeft: Count, tokensLimit: Count, resetsAt: z.string().max(40) }),
   starter: z.object({ leftMicros: Count, periodEnd: z.string().max(40) }).nullable().optional(),
   payByUse: z.object({ active: z.boolean(), costThisMonthMicros: Count }).optional(),
+  /** Whether the router sells plans at all: `off` while it does not, `test` in a sandbox, `live` for real. */
+  billing: z.enum(['off', 'test', 'live']).optional(),
 });
 
 /**
@@ -80,6 +87,8 @@ export const CodepawlUsage = z.object({
   includedPeriodEnd: z.string().max(40).optional(),
   payByUseActive: z.boolean().optional(),
   payByUseCostMicros: Count.optional(),
+  /** The router sells plans. Absent or false, the window offers none: a router that did not say is taken as not selling. */
+  plansOpen: z.boolean().optional(),
 }).strict();
 export type CodepawlUsage = z.infer<typeof CodepawlUsage>;
 
