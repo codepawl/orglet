@@ -1,5 +1,5 @@
 import { useId, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
-import { Check, ChevronDown, Plus, Shuffle, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Plus, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { t } from '../i18n';
 import { Mascot, isMascot, mascotIds, mascotName, type MascotGlyph, type MascotId } from './mascots';
 import { bodyPath, bodyShapeIds, bodyShapes } from './orgletShapes';
@@ -146,10 +146,6 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
     const next = options[(options.indexOf(face) + 1) % options.length];
     choose(next, { color: undefined });
   };
-  const randomize = () => {
-    const pick = <T,>(items: readonly T[], skip?: T) => { const pool = items.filter(item => item !== skip); return pool[Math.floor(Math.random() * pool.length)]; };
-    choose(pick(mascotIds, face), { color: pick(avatarPalette, value.color) });
-  };
   const colors = suggestedColors(face, seed, suggestionHints);
   const own = savedColors.filter(color => !colors.includes(color));
   const other = value.color && !colors.includes(value.color) && !own.includes(value.color) ? [value.color] : [];
@@ -166,7 +162,6 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
       <Avatar name={name || '?'} seed={seed} mascot={value.mascot} defaultMascot hint={hint} color={value.color} badge={badge} size="xl" motion={{ lead: true, greet: true, cheer }} />
       <div className="avatar-picker-toolbar">
         <Button type="button" variant="outline" className="avatar-action" onClick={suggest} title={t('Chọn linh vật khác hợp với tên, mô tả và kỹ năng')}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button>
-        <Button type="button" variant="outline" className="avatar-action" onClick={randomize}><Shuffle size={15} aria-hidden="true" />{t('Ngẫu nhiên')}</Button>
         <Button type="button" variant="outline" className="avatar-action avatar-customize" aria-expanded={open} aria-controls={`${ids}-custom`} onClick={() => { if (!open) setCategory(categoryOf(face) ?? 'base'); setOpen(!open); }}><SlidersHorizontal size={15} aria-hidden="true" />{t('Tùy chỉnh')}<ChevronDown size={15} aria-hidden="true" /></Button>
       </div>
     </div>
