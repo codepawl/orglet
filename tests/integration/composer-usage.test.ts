@@ -123,7 +123,7 @@ describe('the context window of the model the chat will use next (COD-326)', () 
   it('before the chat has run, shows the capacity the model list gives for the CLI default, with nothing used', () => {
     const context = chatContextFor([writer], { 'claude-code': [{ ...opus, contextTokens: 1_000_000 }, sonnet] }, []);
     expect(context?.lines).toEqual([{ workerId: 'writer', workerName: 'Writer', modelLabel: 'Opus 5.5', usedTokens: 0, measured: false, windowTokens: 1_000_000 }]);
-    expect(usageRingFor(undefined, context)).toEqual({ percent: 0, tone: 'normal' });
+    expect(usageRingFor(context)).toEqual({ percent: 0, tone: 'normal' });
   });
 
   it('reads the capacity of the model the orglet chose, from an API list too', () => {
@@ -142,7 +142,7 @@ describe('the context window of the model the chat will use next (COD-326)', () 
     const context = chatContextFor([writer], { 'claude-code': [{ ...opus, contextTokens: 500_000 }] }, runs);
     expect(context?.lines[0]).toMatchObject({ usedTokens: 304_300, measured: true, windowTokens: 1_000_000 });
     expect(context).toMatchObject({ summarizedTurns: 2, verbatimTurns: 10 });
-    expect(usageRingFor(undefined, context)?.percent).toBeCloseTo(30.43);
+    expect(usageRingFor(context)?.percent).toBeCloseTo(30.43);
   });
 
   it('counts a run on the default under any of its names, and not a run on another model', () => {
@@ -153,13 +153,13 @@ describe('the context window of the model the chat will use next (COD-326)', () 
     expect(line).toMatchObject({ modelLabel: 'Sonnet 5', usedTokens: 10_000, windowTokens: 200_000 });
   });
 
-  it('says the capacity is unknown when neither a run nor the list gave one, and the ring leaves it out', () => {
+  it('says the capacity is unknown when neither a run nor the list gave one, and the ring leaves it out, even beside a plan', () => {
     const codex: ContextWorker = { id: 'coder', name: 'Coder', provider: 'codex' };
     const context = chatContextFor([codex], { codex: [{ provider: 'codex', id: 'gpt-6', displayName: 'GPT-6', isDefault: true, source: 'native' }] }, [run('a', codex, { usedTokens: 1_200 })]);
     expect(context?.lines[0]).toEqual({ workerId: 'coder', workerName: 'Coder', modelLabel: 'GPT-6', usedTokens: 1_200, measured: true });
-    expect(usageRingFor(undefined, context)).toBeUndefined();
-    const withPlan = composerUsageFor(['codex'], [harness('codex')], { codex: [row(SYSTEM_ACCOUNT_ID, 12, 30)] });
-    expect(usageRingFor(withPlan, context)).toEqual({ percent: 30, tone: 'normal' });
+    expect(usageRingFor(context)).toBeUndefined();
+    // A plan with room does not stand in for the window nobody reported.
+    expect(composerUsageFor(['codex'], [harness('codex')], { codex: [row(SYSTEM_ACCOUNT_ID, 12, 30)] })).toBeDefined();
     expect(chatContextFor([codex], {}, [])?.lines[0]).toEqual({ workerId: 'coder', workerName: 'Coder', usedTokens: 0, measured: false });
   });
 
@@ -175,7 +175,7 @@ describe('the context window of the model the chat will use next (COD-326)', () 
       ['Writer', 'Opus 5.5', 50_000, 1_000_000],
       ['Coder', undefined, 0, undefined],
     ]);
-    expect(usageRingFor(undefined, context)).toEqual({ percent: 85, tone: 'warning' });
+    expect(usageRingFor(context)).toEqual({ percent: 85, tone: 'warning' });
   });
 
   it('gives nothing for a chat with only Demo', () => {
@@ -187,14 +187,15 @@ describe('the ring under the message box (COD-326)', () => {
   const plans = (session: number) => composerUsageFor(['codex'], [harness('codex')], { codex: [row(SYSTEM_ACCOUNT_ID, session, 10)] });
   const context = (usedTokens: number) => chatContextFor([writer], { 'claude-code': [{ ...opus, contextTokens: 1_000_000 }] }, [run('a', writer, { usedTokens })]);
 
-  it('shows nothing when neither a plan nor a context window is known', () => {
-    expect(usageRingFor(undefined, undefined)).toBeUndefined();
+  it('shows nothing when no context window is known', () => {
+    expect(usageRingFor(undefined)).toBeUndefined();
   });
 
-  it('follows whichever is closer to its limit', () => {
-    expect(usageRingFor(plans(30), context(850_000))).toEqual({ percent: 85, tone: 'warning' });
-    expect(usageRingFor(plans(100), context(100_000))).toEqual({ percent: 100, tone: 'out' });
-    expect(usageRingFor(undefined, context(304_300))).toEqual({ percent: 30.43, tone: 'normal' });
+  it('follows the context window alone, whatever the plan says', () => {
+    expect(plans(100)?.shown.tone).toBe('out');
+    expect(usageRingFor(context(850_000))).toEqual({ percent: 85, tone: 'warning' });
+    expect(usageRingFor(context(100_000))).toEqual({ percent: 10, tone: 'normal' });
+    expect(usageRingFor(context(304_300))).toEqual({ percent: 30.43, tone: 'normal' });
     expect(contextPercent({ usedTokens: 1_200_000, windowTokens: 1_000_000 })).toBe(100);
   });
 });

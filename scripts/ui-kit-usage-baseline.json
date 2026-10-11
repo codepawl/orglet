@@ -241,7 +241,7 @@
     "rawButton": 1,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/ProviderMark.tsx": {

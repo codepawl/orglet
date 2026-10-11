@@ -80,7 +80,7 @@ models.dev also publishes per-model packages for both plans, but it disagrees wi
 
 ## Versions and the default (COD-332)
 
-A picker row reads like the model's name, not its slug: the maker's mark, then a versioned name, a **Default** badge on the model that runs when none is set, and older models under **More models**. Every word of it comes from the CLI or the provider's own list. Nothing is scraped, and no table of versions is kept in Orglet. When a version cannot be learned, the row keeps the short alias name ("Opus"), never a guess.
+A picker row reads like the model's name, not its slug: the maker's mark, then a versioned name, a **Default** badge on the model that runs when none is set, and older models under **More models**, which opens a panel beside the menu on the prompt bar (`ModelMenu`) and, in the orglet dialog, expands in the list. Every word of it comes from the CLI or the provider's own list. Nothing is scraped, and no table of versions is kept in Orglet. When a version cannot be learned, the row keeps the short alias name ("Opus"), never a guess.
 
 | Connection | Names and versions | Default |
 |---|---|---|

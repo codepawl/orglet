@@ -162,12 +162,12 @@ export function contextShares(context: ChatContext | undefined): number[] {
 }
 
 /**
- * The ring under the message box: the share of whichever is closest to its limit, the tightest plan allowance or the
- * fullest context window among the chat's orglets, and the tone that share takes. Nothing when none is known (Demo,
- * a model nobody gave a window for and no plan).
+ * The ring under the message box: the fullest context window among the chat's orglets and the tone that share takes
+ * (owner, 2026-10-11: plan usage lives in the model menu, not here). Nothing when no window is known (Demo, a model
+ * nobody gave a window for).
  */
-export function usageRingFor(plans: ComposerUsage | undefined, context: ChatContext | undefined): { percent: number; tone: ComposerUsageTone } | undefined {
-  const shares = [...(plans ? [plans.shown.tightest.usedPercent] : []), ...contextShares(context)];
+export function usageRingFor(context: ChatContext | undefined): { percent: number; tone: ComposerUsageTone } | undefined {
+  const shares = contextShares(context);
   if (!shares.length) return undefined;
   const percent = Math.max(...shares);
   return { percent, tone: composerUsageTone(percent) };

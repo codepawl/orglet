@@ -496,25 +496,46 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-mode-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .composer-mode-chevron { color:var(--muted); }
 /* Its menu: a title, then one row per mode (icon, name over a one-line description, the check on the current one and
-   its number key), rows apart by spacing only. */
+   its number key), rows apart by spacing only. A row with a note under its name keeps the icon, the check and the
+   number on the name's line, not centred across both lines (owner, 2026-10-11): they take the name's line box
+   (--option-line), so their centres sit on the name's centre whatever the font. The model menu's rows (.model-option)
+   are built the same way. */
 .mode-menu { width:max-content; min-width:280px; max-width:calc(100vw - 24px); padding:6px; }
 .mode-menu-title { margin:0; padding:6px 10px 4px; font-size:12px; font-weight:500; color:var(--muted); }
 .mode-menu [role=menu] { display:flex; flex-direction:column; gap:2px; }
-.mode-option { display:flex; align-items:center; gap:10px; width:100%; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--text); text-align:left; }
-.mode-option:hover,.mode-option:focus-visible { background:var(--surface); }
-.mode-option[aria-disabled=true] { cursor:default; }
-.mode-option[aria-disabled=true] .mode-option-name,.mode-option[aria-disabled=true] .mode-option-icon { color:var(--muted); }
+.mode-option,.model-option { --option-line:20px; display:flex; align-items:flex-start; gap:10px; width:100%; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--text); text-align:left; }
+.mode-option:hover,.mode-option:focus-visible,.model-option:hover,.model-option:focus-visible { background:var(--surface); }
+.mode-option[aria-disabled=true],.model-option[aria-disabled=true] { cursor:default; }
+.mode-option[aria-disabled=true] .mode-option-name,.mode-option[aria-disabled=true] .mode-option-icon,.model-option[aria-disabled=true] .model-option-name { color:var(--muted); }
 .mode-option-icon { flex-shrink:0; color:var(--muted); }
-.mode-option-text { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
-.mode-option-name { font-size:14px; font-weight:500; }
+.mode-option-icon,.model-option .model-mark,.model-option-chevron { margin-top:calc((var(--option-line) - 16px) / 2); }
+.mode-option-text,.model-option-text { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
+.mode-option-name,.model-option-name { font-size:14px; font-weight:500; line-height:var(--option-line); }
 /* One line each: the menu grows to its longest note instead of wrapping one (owner, 2026-10-11). */
-.mode-option-name,.mode-option-note { white-space:nowrap; }
+.mode-option-name,.mode-option-note,.model-option-name { white-space:nowrap; }
 .mode-option-note { font-size:12px; color:var(--muted); }
-.mode-option-check { flex-shrink:0; color:var(--accent); visibility:hidden; }
-.mode-option[aria-checked=true] .mode-option-check { visibility:visible; }
-.mode-option-key { flex-shrink:0; min-width:18px; font:inherit; font-size:12px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
-.mode-option-name { display:flex; align-items:center; gap:6px; }
-.mode-option-badge { padding:1px 6px; border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:500; }
+.mode-option-check,.model-option-check { flex-shrink:0; margin-top:calc((var(--option-line) - 15px) / 2); color:var(--accent); visibility:hidden; }
+.mode-option[aria-checked=true] .mode-option-check,.model-option[aria-checked=true] .model-option-check { visibility:visible; }
+.mode-option-key,.model-option-key { flex-shrink:0; min-width:18px; font:inherit; font-size:12px; line-height:var(--option-line); color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
+.mode-option-name,.model-option-name { display:flex; align-items:center; gap:6px; }
+.mode-option-badge,.model-option-badge { padding:1px 6px; border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:500; line-height:normal; }
+/* The model menu on the prompt bar (ModelMenu): the harness's plan allowance on top, the current models numbered, then
+   More models, whose older models open in a panel beside the menu (to the right, else to the left). */
+.composer-trailing .composer-model-trigger { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; height:28px; min-height:28px; padding:3px 10px; border:0; border-radius:999px; background:transparent; color:var(--muted); font-size:12px; font-weight:500; }
+.composer-trailing .composer-model-trigger:hover:not(:disabled),.composer-trailing .composer-model-trigger[aria-expanded=true] { background:var(--surface); color:var(--text); }
+.composer-model-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.composer-model-chevron { flex-shrink:0; color:var(--muted); }
+.model-menu { width:max-content; min-width:300px; max-width:calc(100vw - 24px); padding:6px; }
+.model-menu-list,.model-menu-side { display:flex; flex-direction:column; gap:2px; }
+.model-menu-plan { display:flex; flex-direction:column; gap:8px; padding:8px 10px 10px; margin-bottom:4px; border-radius:8px; background:var(--surface); }
+.model-menu-plan .usage-settings { align-self:flex-start; min-height:28px; padding:0 10px; font-size:12px; }
+/* The rows are the kit's Button, so the kit's size, border and centring give way to the menu row's. */
+.model-menu .model-option { justify-content:flex-start; gap:10px; min-height:0; padding:8px 10px; border:0; border-radius:8px; font-size:inherit; font-weight:inherit; }
+.model-option-chevron { flex-shrink:0; color:var(--muted); }
+.model-option-icon-gap { flex-shrink:0; width:16px; }
+.model-menu-side { position:absolute; padding:6px; max-height:calc(100vh - 24px); overflow-y:auto; z-index:1; background:var(--org-bg, var(--bg)); border:1px solid var(--org-border, var(--border)); border-radius:var(--org-radius-menu, 12px); box-shadow:var(--org-shadow-md); }
+.model-menu-side[data-side=right] { left:calc(100% + 4px); }
+.model-menu-side[data-side=left] { right:calc(100% + 4px); }
 .composer-toolbar .composer-mode-bypass,.composer-toolbar .composer-mode-bypass svg:first-child { color:var(--warning); }
 .composer-toolbar-end { margin-left:auto; padding-left:4px; display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
 .composer-trailing { display:flex; align-items:center; min-width:0; max-width:min(220px,42vw); }
@@ -702,9 +723,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .source-menu.below { top:calc(100% + 6px); bottom:auto; }
 .source-menu button { display:flex; align-items:flex-start; gap:10px; width:100%; padding:9px 10px; border:0; border-radius:8px; background:transparent; text-align:left; }
 .source-menu button:hover,.source-menu button:focus-visible { background:var(--surface); }
-.source-menu button svg { margin-top:2px; color:var(--muted); }
+.source-menu button svg { flex-shrink:0; margin-top:calc((20px - 16px) / 2); color:var(--muted); }
 .source-menu span { display:flex; flex-direction:column; }
-.source-menu strong { font-size:14px; font-weight:500; }
+.source-menu strong { font-size:14px; font-weight:500; line-height:20px; }
 .source-menu small { font-size:12px; color:var(--muted); }
 .mention-menu { position:absolute; left:8px; right:8px; bottom:calc(100% + 6px); z-index:5; max-height:240px; overflow:auto; margin:0; padding:6px; list-style:none; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; animation:mention-in var(--motion-quick) var(--ease-out); }
 @keyframes mention-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
@@ -733,7 +754,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* A hint that decided to show nothing leaves the row empty; it then takes no room. */
 .composer-foot:empty { display:none; }
 /* The ring's place while the first usage read is on its way, so the bar does not move when it lands. */
-.usage-ring-waiting { display:grid; place-items:center; width:28px; height:28px; }
 /* The usage ring (UsageRing): a 16px ring filled as far as the closest limit, muted until 80%, then the warning
    colour, then the error colour. It is a button that opens the details; hover darkens it, nothing else. */
 .usage-ring { display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--muted); cursor:pointer; }

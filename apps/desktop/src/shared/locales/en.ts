@@ -2928,7 +2928,7 @@ export const en: Dictionary = {
   'Đang đọc hạn mức gói…': 'Reading plan usage…',
   'Hạn mức gói {0}': '{0} plan usage',
   'Mức dùng': 'Usage',
-  'Mức dùng: {0}%': 'Usage: {0}%',
+  'Ngữ cảnh: {0}%': 'Context: {0}%',
   'Cửa sổ ngữ cảnh': 'Context window',
   'Chưa rõ sức chứa': 'Window size unknown',
   '{0} · chưa rõ sức chứa': '{0} · window size unknown',
