@@ -146,9 +146,16 @@ function namedAliases(row: Pick<ModelListRow, 'models'>): number {
   return row.models.filter(model => model.source === 'alias' && model.resolvedId).length;
 }
 
+const PARTIAL_MODEL_LIST_RETRY_MS = 10 * 60_000;
+
 /** A cached list is fetched again after a day, or at its `retryAfter` when a fetch learned nothing (COD-338). */
-function modelListStale(row: ModelListRow, now: Date): boolean {
+export function modelListStale(row: ModelListRow, now: Date): boolean {
   if (row.retryAfter) return now.getTime() >= new Date(row.retryAfter).getTime();
+  // A list saved before partial readings got a retry time: an alias left unnamed beside the named models it stands
+  // for is asked about again after ten minutes, not kept for the day.
+  const aliases = row.models.filter(model => model.provider === 'claude-code' && model.source === 'alias');
+  const leftUnnamed = aliases.some(model => !model.resolvedId) && row.models.some(model => model.source === 'native');
+  if (leftUnnamed) return now.getTime() - new Date(row.fetchedAt).getTime() > PARTIAL_MODEL_LIST_RETRY_MS;
   return now.getTime() - new Date(row.fetchedAt).getTime() > MODEL_LIST_TTL_MS;
 }
 

@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
-import { CoreService } from '../../apps/desktop/src/core/service';
+import { CoreService, modelListStale } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { CATALOG_HINT_IDS, acceptCustomModelId, hiddenOpenAIModel, MODEL_LIST_CACHE_VERSION, MODEL_LISTS_SETTING } from '../../apps/desktop/src/shared/models';
 import { EFFORT_METADATA_REFRESH_AT, canStoreModelListRow, readModelListCache } from '../../apps/desktop/src/core/models/cache';
@@ -320,6 +320,20 @@ describe('model list fetch adapters', () => {
       expect(refreshed.models.find(model => model.id === 'sonnet')?.resolvedId).toBe('claude-sonnet-5-5');
       expect(refreshed.models.filter(model => model.source === 'native').map(model => model.id)).not.toContain('claude-sonnet-5-5');
     } finally { server.close(); }
+  });
+
+  it('treats a list saved with an alias left unnamed beside the named models as stale after ten minutes', () => {
+    const fetchedAt = '2026-10-11T08:00:00.000Z';
+    const alias = (id: string, resolvedId?: string) => ({ provider: 'claude-code' as const, id, source: 'alias' as const, ...(resolvedId ? { resolvedId } : {}) });
+    const native = { provider: 'claude-code' as const, id: 'claude-opus-5-5', source: 'native' as const };
+    const partial = { fetchedAt, source: 'alias' as const, models: [alias('opus'), alias('sonnet', 'claude-sonnet-5-5'), native] };
+    expect(modelListStale(partial, new Date('2026-10-11T08:09:00Z'))).toBe(false);
+    expect(modelListStale(partial, new Date('2026-10-11T08:11:00Z'))).toBe(true);
+    // Signed out, the CLI names nothing and no model is listed beside the aliases: that list keeps its day.
+    const bare = { fetchedAt, source: 'alias' as const, models: [alias('opus'), alias('sonnet')] };
+    expect(modelListStale(bare, new Date('2026-10-11T20:00:00Z'))).toBe(false);
+    const whole = { fetchedAt, source: 'alias' as const, models: [alias('opus', 'claude-opus-5-5'), native] };
+    expect(modelListStale(whole, new Date('2026-10-11T20:00:00Z'))).toBe(false);
   });
 
   it('never replaces a Claude Code list that named its models with one that learned nothing (COD-338)', async () => {
