@@ -78,7 +78,7 @@ function MemberRow({ worker, working, lead, onMessage, onEdit, choosesSuccessor,
   const row = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
-  const face = (size: 'sm' | 'xl') => <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />;
+  const face = (size: 'sm' | 'xl') => <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size={size} />;
   const leadTag = lead && <span className="member-lead">{t('Trưởng')}</span>;
   return <div className="member-item">
     <button ref={row} type="button" className="member-row" aria-haspopup="dialog" aria-expanded={open} aria-label={t('Hồ sơ của {0}', [worker.name])} onClick={() => setOpen(current => !current)}>

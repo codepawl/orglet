@@ -1863,7 +1863,7 @@ export function App() {
         label: item.name,
         detail: workerModelLabel(item),
         group: t('Tí'),
-        icon: <Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />,
+        icon: <Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} hint={item.description} color={item.avatar?.color} size="xs" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />,
         ...(available ? {} : { dimmed: true, badge: unavailable }),
       };
     }),
@@ -1987,7 +1987,7 @@ export function App() {
     }
     const owner = [...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === task.workerId);
     if (!owner) return { ownerName: t('Tí đã xóa'), mark: <Avatar name={chatName} seed={task.id} size="xs" /> };
-    return { ownerName: owner.name, mark: <Avatar name={owner.name} seed={owner.id} mascot={owner.avatar?.mascot} defaultMascot hint={owner.description} color={owner.avatar?.color} size="xs" /> };
+    return { ownerName: owner.name, mark: <Avatar name={owner.name} seed={owner.id} mascot={owner.avatar?.mascot} hint={owner.description} color={owner.avatar?.color} size="xs" /> };
   };
   const archiveSections: ArchiveSection[] = archiveGroups({ workers: workspace.archivedWorkers, teams: workspace.archivedTeams, tasks: workspace.tasks }).map(group => ({
     id: group.id,
@@ -1997,7 +1997,7 @@ export function App() {
         const block = deleteBlockedByChannels(workspace.teams, worker.id, worker.name);
         return { key: `worker:${worker.id}`, name: worker.name, archive: archiveState(worker)!,
           ...(block ? { deleteBlock: { question: block.question, actionLabel: block.actionLabel, onAction: () => editCrewChannel(block.crewId) } } : {}),
-          mark: <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />,
+          mark: <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="xs" />,
           onRestore: () => archiveEntity('worker', worker.id, false), onDelete: () => deleteEntity('worker', worker.id) };
       }
       if (entry.type === 'team') {
@@ -2116,7 +2116,7 @@ export function App() {
     name: headerChannel ? headerChannel.name : headerName,
     channel: Boolean(headerChannel),
     about: (headerChannel ? headerChannel.topic : headerSettings?.kind === 'worker' ? headerSettings.worker.description : undefined)?.trim() || undefined,
-    faces: openTaskWorkers.slice(0, 5).map(item => <Avatar key={item.id} name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot color={item.avatar?.color} size="xl" />),
+    faces: openTaskWorkers.slice(0, 5).map(item => <Avatar key={item.id} name={item.name} seed={item.id} mascot={item.avatar?.mascot} color={item.avatar?.color} size="xl" />),
   };
   /** The line at the top of a schedule's run: which schedule, who ran it, and the way to the schedule. */
   const scheduleRunOrigin = openScheduleRun && openScheduleName ? {
@@ -2315,7 +2315,7 @@ export function App() {
       : emptyChatUsage.out ? emptyChatUsage.note
       : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} fallback={emptyChatUsage.note} /> : emptyChatUsage.note ?? leadNudge;
   /** An orglet's face at a given size, the same drawing the sidebar row uses. */
-  const workerFace = (item: Worker, size: 'xs' | 'sm') => <Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size={size} />;
+  const workerFace = (item: Worker, size: 'xs' | 'sm') => <Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} hint={item.description} color={item.avatar?.color} size={size} />;
   const orderedWorkers = workerOrder.order.map(id => workspace.workers.find(item => item.id === id)).filter((item): item is Worker => item !== undefined && !item.unfriendedAt);
   /** An empty channel is the one on screen: its own empty chat, or, when the lead splits the work, its crew's (COD-369). */
   const emptyChannelActive = (channel: { id: string; crewId?: string }) => !selected && (channel.crewId ? teamId === channel.crewId : emptyChannel?.channelId === channel.id);
@@ -2731,7 +2731,7 @@ export function App() {
       </SidebarSection>}
       <SidebarSection id="workers" title={t('Tin riêng')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
         {selection.section === 'workers' && selectionBar}
-        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => item !== undefined && !item.unfriendedAt).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
+        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => item !== undefined && !item.unfriendedAt).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !emptyChannel && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Xuất bản lên marketplace'), icon: Upload, onSelect: () => setPublishingSource({ kind: 'orglet', entityId: item.id, name: item.name }) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, workerUnfriendItem(item)]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!orderedWorkers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
       </SidebarSection>
@@ -2860,10 +2860,10 @@ export function App() {
               first. Keyed by the chat so switching to another worker greets again. */}
           <div className="fresh-faces" key={team ? `team-${team.id}` : emptyChannel ? emptyChannelKey(emptyChannel) : worker?.id}>
             {team
-              ? roster.map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size={freshFaceSize(roster.length)} motion={{ lead: true, greet: true, group: `team-${team.id}` }} />)
+              ? roster.map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} hint={member.description} color={member.avatar?.color} size={freshFaceSize(roster.length)} motion={{ lead: true, greet: true, group: `team-${team.id}` }} />)
               : emptyChannel
-                ? channelWorkers.slice(0, MAX_CREW_MEMBERS).map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size={freshFaceSize(channelWorkers.length)} motion={{ lead: true, greet: true, group: emptyChannelKey(emptyChannel) }} />)
-                : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xxl" motion={{ lead: true, greet: true }} /> : null}
+                ? channelWorkers.slice(0, MAX_CREW_MEMBERS).map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} hint={member.description} color={member.avatar?.color} size={freshFaceSize(channelWorkers.length)} motion={{ lead: true, greet: true, group: emptyChannelKey(emptyChannel) }} />)
+                : worker ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="xxl" motion={{ lead: true, greet: true }} /> : null}
           </div>
           {/* The start of a chat, the way a messenger opens one: who it is in large type, what they do, then one line
               saying this is where the chat begins. Assistive technology still hears "Chatting with …". */}

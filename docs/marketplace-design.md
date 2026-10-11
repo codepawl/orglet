@@ -91,7 +91,7 @@ From an orglet's or crew's menu: **Publish to the marketplace**. Core builds the
 Before upload, on the computer and again on the server:
 
 - A credential scan over authored text and decoded package files. It shares key and JWT recognizers with error reports, but does not use telemetry's broader masking of prose, paths and digests. A hit blocks publishing and points at a logical field or file index and line; diagnostics never repeat the matching value or filename. This detects recognizable credentials, not arbitrary confidential prose.
-- Size caps: 2 MB per listing like templates. Listings are text only; avatar data uses the existing emoji, mascot and color fields. There are no image uploads or screenshot fields.
+- Size caps: 2 MB per listing like templates. Listings are text only; avatar data uses the existing mascot (the look as `<body>-<eyes>`) and color fields; an `emoji` or `letter` in a listing from an older version is accepted and ignored. There are no image uploads or screenshot fields.
 - The schema check above, so nothing outside the allowed fields leaves.
 
 Unpublishing hides the listing from the catalog. People who already added it keep their copy.

@@ -17,7 +17,7 @@ const GROUP_TITLES: Record<SendToOption['group'], () => string> = {
 function OptionFaces({ option }: { option: SendToOption }) {
   if (option.faces.length === 1 && option.group === 'orglets') {
     const worker = option.faces[0];
-    return <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />;
+    return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="sm" />;
   }
   // Two faces and no "+N": the row's detail already names every member, and the slot stays two faces wide.
   return <RosterAvatars workers={option.faces.slice(0, 2)} size="sm" max={2} />;

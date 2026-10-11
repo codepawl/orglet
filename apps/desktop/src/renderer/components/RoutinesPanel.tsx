@@ -95,7 +95,7 @@ async function copyCommand(command: string) {
 }
 /** An orglet's face at list size, the way the chat's recipient list shows it, instead of a generic person icon. */
 function WorkerFace({ worker, size }: { worker: Worker; size: 'xxs' | 'xs' }) {
-  return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />;
+  return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size={size} />;
 }
 /** What a schedule's card says about its newest run: its mark and a few words, the words in the mark's colour. */
 export type LastRunOutcome = { label: string; mark: StatusMarkState };

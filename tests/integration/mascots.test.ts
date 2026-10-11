@@ -1,64 +1,80 @@
 import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
-import { Mascot, bubbleOutline, eyeColor, mascots, mascotIds, smallBodyBox, smallGlyphs } from '../../apps/desktop/src/renderer/components/mascots';
-import { bodyPath, bodyShapeIds, bodyShapes, mascotShapes } from '../../apps/desktop/src/renderer/components/orgletShapes';
+import { Mascot, artOf, bubbleOutline, eyeColor, smallBodyBox, smallGlyphs } from '../../apps/desktop/src/renderer/components/mascots';
+import { bodyPath, bodyShapeIds, bodyShapes } from '../../apps/desktop/src/renderer/components/orgletShapes';
 import { mascotGlyph } from '../../apps/desktop/src/renderer/components/Avatar';
-import { autoMascot, avatarPalette, defaultAvatarColor, distinctAvatar, distinctMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
+import { autoLook, avatarPalette, defaultAvatarColor, distinctAvatar, distinctLook, lookColor, rankLooks, suggestLooks, suggestedColors, suggestedLooks } from '../../apps/desktop/src/renderer/components/mascotSuggest';
+import { ALL_LOOKS, formatLook, parseLook, sameLook, type OrgletLook } from '../../apps/desktop/src/shared/orglet-look';
 
-const all = Object.values(mascotCategoryIds).flat();
-const top = (name: string, description?: string) => suggestMascots({ name, description })[0];
+/** A look as an old stored name read it: these tests name the old ids only to show the saved ones keep their look. */
+const old = (id: string): OrgletLook => parseLook(id)!;
+const is = (look: OrgletLook | undefined, id: string) => look !== undefined && sameLook(look, old(id));
+const top = (name: string, description?: string) => suggestLooks({ name, description })[0];
 
-it('suggests mascots from Vietnamese and English roles', () => {
-  expect(top('Researcher')).toBe('search');
-  expect(top('Kế toán trưởng')).toBe('finance');
-  expect(top('Tí chăm sóc khách hàng')).toBe('headset');
-  expect(top('Lập trình viên backend')).toBe('coder');
-  expect(top('Trợ lý', 'Sắp xếp lịch họp cho sếp')).toBe('calendar');
-  expect(top('Data analyst')).toBe('chart');
-  expect(top('Chuyên viên tuyển dụng')).toBe('care');
+it('suggests looks from Vietnamese and English roles', () => {
+  expect(is(top('Researcher'), 'search')).toBe(true);
+  expect(is(top('Kế toán trưởng'), 'finance')).toBe(true);
+  expect(is(top('Tí chăm sóc khách hàng'), 'headset')).toBe(true);
+  expect(is(top('Lập trình viên backend'), 'coder')).toBe(true);
+  expect(is(top('Trợ lý', 'Sắp xếp lịch họp cho sếp'), 'calendar')).toBe(true);
+  expect(is(top('Data analyst'), 'chart')).toBe(true);
+  expect(is(top('Chuyên viên tuyển dụng'), 'care')).toBe(true);
 });
 
 it('matches whole words, with prefixes only for longer stems', () => {
-  expect(suggestMascots({ name: 'Latest news' })).not.toContain('checker');
-  expect(top('Chất lượng')).toBe('checker');
-  expect(suggestMascots({ name: 'Lịch sử công ty' })).not.toContain('calendar');
-  expect(suggestMascots({ name: 'Hợp đồng' })[0]).toBe('briefcase');
+  expect(suggestLooks({ name: 'Latest news' }).some(look => is(look, 'checker'))).toBe(false);
+  expect(is(top('Chất lượng'), 'checker')).toBe(true);
+  expect(suggestLooks({ name: 'Lịch sử công ty' }).some(look => is(look, 'calendar'))).toBe(false);
+  expect(is(suggestLooks({ name: 'Hợp đồng' })[0], 'briefcase')).toBe(true);
 });
 
 it('weights the name above the description and instructions, and one field cannot stack a keyword', () => {
-  expect(top('Writer', 'reviews drafts')).toBe('writer');
-  expect(suggestMascots({ name: 'Minh', instructions: 'Review the evidence carefully.' })[0]).toBe('checker');
-  const repeated = rankMascots({ name: 'audit audit audit' }).find(item => item.id === 'checker')!.score;
-  expect(repeated).toBe(rankMascots({ name: 'audit' }).find(item => item.id === 'checker')!.score);
-  expect(suggestMascots({ name: 'Minh', skill: 'Payroll' })[0]).toBe('finance');
+  expect(is(top('Writer', 'reviews drafts'), 'writer')).toBe(true);
+  expect(is(suggestLooks({ name: 'Minh', instructions: 'Review the evidence carefully.' })[0], 'checker')).toBe(true);
+  const scoreOf = (name: string) => rankLooks({ name }).find(item => is(item.look, 'checker'))!.score;
+  expect(scoreOf('audit audit audit')).toBe(scoreOf('audit'));
+  expect(is(suggestLooks({ name: 'Minh', skill: 'Payroll' })[0], 'finance')).toBe(true);
 });
 
-it('always offers suggestions, pushes back mascots other workers use, and keeps the automatic face stable', () => {
-  expect(suggestMascots({ name: 'Zed' })).toEqual([]);
-  expect(suggestedMascots({ name: 'Zed' })).toHaveLength(7);
-  expect(suggestedMascots({ name: 'Researcher' })[0]).toBe('search');
-  expect(suggestedMascots({ name: 'Researcher' }, { taken: ['search'] })[0]).toBe('focused');
-  expect(suggestedMascots({ name: 'Zed' }, { taken: ['tie'] })[0]).toBe('briefcase');
-  expect(autoMascot(all, 'w1', { name: 'Zed' })).toBe(autoMascot(all, 'w1', { name: 'Zed' }));
-  expect(autoMascot(all, 'w1', { name: 'Researcher' })).toBe('search');
+it('always offers suggestions, pushes back looks other workers use, and keeps the automatic look stable', () => {
+  expect(suggestLooks({ name: 'Zed' })).toEqual([]);
+  expect(suggestedLooks({ name: 'Zed' })).toHaveLength(7);
+  expect(is(suggestedLooks({ name: 'Researcher' })[0], 'search')).toBe(true);
+  expect(is(suggestedLooks({ name: 'Researcher' }, { taken: [old('search')] })[0], 'focused')).toBe(true);
+  expect(is(suggestedLooks({ name: 'Zed' }, { taken: [old('tie')] })[0], 'briefcase')).toBe(true);
+  expect(autoLook('w1', { name: 'Zed' })).toEqual(autoLook('w1', { name: 'Zed' }));
+  expect(is(autoLook('w1', { name: 'Researcher' }), 'search')).toBe(true);
 });
 
-it('lists every mascot in exactly one category', () => {
-  expect(new Set(all).size).toBe(all.length);
-  expect(all.length).toBe(29);
-});
-
-it('suggests three colours led by the colour of the face shown', () => {
-  const colors = suggestedColors('finance', 'w1', { name: 'Kế toán trưởng' });
+it('suggests three colours led by the colour of the look shown', () => {
+  const colors = suggestedColors(old('finance'), 'w1', { name: 'Kế toán trưởng' });
   expect(colors).toHaveLength(3);
-  expect(colors[0]).toBe(mascotColors.finance);
+  expect(colors[0]).toBe(lookColor(old('finance')));
   expect(new Set(colors).size).toBe(3);
-  expect(suggestedColors('classic', 'w1', { name: 'Zed' })[0]).toBe(mascotColors.classic);
-  expect(Object.keys(mascotColors).sort()).toEqual([...all].sort());
+  expect(suggestedColors(old('classic'), 'w1', { name: 'Zed' })[0]).toBe(lookColor(old('classic')));
 });
 
-/** Every element a mascot draws, flattened out of the fragment tree, with the colours it paints with. */
+it('keeps the colour every old name gave, and gives any other look a palette colour', () => {
+  // The colours the 29 old names carried before 2026-10-12, written out so a saved orglet that never chose one keeps its colour.
+  const [coral, blue, green, purple, amber, rose, teal, slate] = avatarPalette;
+  const expected: Record<string, string> = {
+    classic: blue, happy: amber, curious: teal, wink: purple, delighted: rose, cool: slate, sleepy: purple,
+    tie: blue, bowtie: rose, briefcase: amber, calendar: coral, mail: blue, finance: green,
+    search: blue, chart: teal, focused: blue, target: coral, idea: amber,
+    writer: purple, notes: amber, megaphone: coral,
+    checker: green, guard: slate,
+    coder: purple, automation: amber, antenna: teal,
+    headset: teal, care: rose, sprout: green,
+  };
+  expect(Object.keys(expected)).toHaveLength(29);
+  for (const [id, color] of Object.entries(expected)) expect(lookColor(old(id)), id).toBe(color);
+  for (const look of ALL_LOOKS) expect(avatarPalette, formatLook(look)).toContain(lookColor(look));
+  expect(defaultAvatarColor({ id: 'a', name: 'Researcher', avatar: { mascot: 'finance' } })).toBe(green);
+  expect(defaultAvatarColor({ id: 'a', name: 'Researcher', avatar: { mascot: 'tall-happy' } })).toBe(green);
+});
+
+/** Every element a look draws, flattened out of the fragment tree, with the colours it paints with. */
 function painted(art: ReactNode): { name: string; fill?: string; stroke?: string; d?: string }[] {
   const out: { name: string; fill?: string; stroke?: string; d?: string }[] = [];
   const walk = (node: ReactNode) => {
@@ -80,18 +96,19 @@ it('draws a body, its eyes and nothing worn', () => {
   // read over the bubble (COD-106), and that rim read as a mistake. So a mascot paints exactly one shape in the body
   // paint, which is its body from `orgletShapes.ts`, and everything else is an eye or a blush.
   const bodyColoured = (fill: string | undefined) => fill === 'currentColor' || Boolean(fill?.startsWith('var(--mascot-fill'));
-  for (const id of mascotIds) {
-    const shapes = painted(mascots[id].art);
+  for (const look of ALL_LOOKS) {
+    const id = formatLook(look);
+    const shapes = painted(artOf(look));
     const bodies = shapes.filter(shape => bodyColoured(shape.fill));
-    expect(bodies.map(shape => shape.d), id).toEqual([bodyPath(bodyShapes[mascotShapes[id].body])]);
+    expect(bodies.map(shape => shape.d), id).toEqual([bodyPath(bodyShapes[look.body])]);
     for (const shape of shapes) {
       expect(shape.stroke ?? '', `${id}: nothing is rimmed in the page colour`).not.toContain('--mascot-ink');
       if (bodyColoured(shape.fill) || shape.name === 'g') continue;
       expect([shape.fill, shape.stroke].some(paint => paint === eyeColor || paint === '#ff8fa3'), `${id}: a ${shape.name} is neither an eye nor a blush`).toBe(true);
     }
   }
-  // No two mascots share both a body and a face, so each reads as its own.
-  expect(new Set(mascotIds.map(id => `${mascots[id].body}/${mascots[id].face}`)).size).toBe(mascotIds.length);
+  // All 8 x 7 = 56 pairs of a body and eyes draw, and no two are the same.
+  expect(new Set(ALL_LOOKS.map(formatLook)).size).toBe(56);
   // The cursor draws the logo's own outline: the app icon's bowed bubble on the 64 grid.
   expect(bubbleOutline.startsWith('M32 13C45.24 13 52 19.76 52 33')).toBe(true);
 });
@@ -99,11 +116,11 @@ it('draws a body, its eyes and nothing worn', () => {
 it('lights every mascot from its own gradient, never a shared one', () => {
   // Many faces sit on one page. A gradient id shared between them would resolve to the first face in the document,
   // painting every mascot in that one's colour, so each rendered face must define and reference its own.
-  const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, key: id }))));
+  const markup = renderToStaticMarkup(createElement('div', null, ALL_LOOKS.map(look => createElement(Mascot, { look, key: formatLook(look) }))));
   const definedIds = [...markup.matchAll(/<linearGradient id="([^"]+)-body"/g)].map(match => match[1]);
   const referencedIds = [...markup.matchAll(/--mascot-fill:url\(#([^)]+)-body\)/g)].map(match => match[1]);
-  expect(definedIds).toHaveLength(mascotIds.length);
-  expect(new Set(definedIds).size).toBe(mascotIds.length);
+  expect(definedIds).toHaveLength(ALL_LOOKS.length);
+  expect(new Set(definedIds).size).toBe(ALL_LOOKS.length);
   expect(referencedIds).toEqual(definedIds);
   for (const id of definedIds) expect(id).toMatch(/^[\w-]+$/);
   // The tones are mixed from the avatar colour at render time, never baked in, so any user colour shades. The
@@ -126,10 +143,10 @@ it('draws the small orglets on whole pixels', () => {
     expect(Number.isInteger(glyph.top), name).toBe(true);
     for (const value of Object.values(glyph.eye)) expect(Number.isInteger(value), name).toBe(true);
     expect(glyph.eye.right - (glyph.eye.left + glyph.eye.width), name).toBeGreaterThanOrEqual(1);
-    const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, glyph: name as keyof typeof smallGlyphs, key: id }))));
+    const markup = renderToStaticMarkup(createElement('div', null, ALL_LOOKS.map(look => createElement(Mascot, { look, glyph: name as keyof typeof smallGlyphs, key: formatLook(look) }))));
     // Every plain face draws its two capsules at whole-pixel rectangles, moved with its body's box by whole pixels.
     const eyeRects = markup.match(/<rect x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)" rx="[\d.]+" fill="oklch/g) ?? [];
-    expect(eyeRects.length, name).toBe(2 * mascotIds.filter(id => mascots[id].face === 'plain').length);
+    expect(eyeRects.length, name).toBe(2 * ALL_LOOKS.filter(look => look.eyes === 'plain').length);
     // Every body's box is whole pixels, centred on the canvas, inside it, and stands on the logo body's bottom line.
     for (const id of bodyShapeIds) {
       const box = smallBodyBox(glyph, bodyShapes[id]);
@@ -159,42 +176,44 @@ it('draws white eyes on every body and dark ones only on a very light body', () 
   // the hat rims use; a near-white worker colour is the one case that needs a dark eye. That is one step on the
   // body's lightness, written once in `eyeColor` and used by every eye and eye stroke.
   expect(eyeColor).toMatch(/^oklch\(from currentColor calc\(0\.25 \+ 0\.73 \* clamp\(0, \(0\.78 - l\) \* 1000, 1\)\) 0 0\)$/);
-  const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, key: id }))));
+  const markup = renderToStaticMarkup(createElement('div', null, ALL_LOOKS.map(look => createElement(Mascot, { look, key: formatLook(look) }))));
   const eyeFills = markup.match(/<rect [^>]*rx="2\.2"[^>]*fill="([^"]+)"/g) ?? [];
   expect(eyeFills.length).toBeGreaterThanOrEqual(30);
   for (const eye of eyeFills) expect(eye).toContain(`fill="${eyeColor}"`);
   expect(markup).not.toMatch(/<rect [^>]*rx="2\.2"[^>]*fill="var\(--mascot-ink/);
 });
 
-it('gives orglets made together for similar roles different faces and colours (COD-265)', () => {
+it('gives orglets made together for similar roles different looks and colours (COD-265)', () => {
   const writerHints = { name: 'Writer', description: 'Drafts weekly X posts about what you shipped.' };
   const editorHints = { name: 'Editor', description: 'Edits X drafts for accuracy, clarity and a natural voice.' };
-  const writer = distinctMascot(writerHints, 'writer-seed', []);
-  expect(writer).toBe(autoMascot(mascotIds, 'writer-seed', writerHints));
-  const editor = distinctMascot(editorHints, 'editor-seed', [writer]);
-  expect(editor).not.toBe(writer);
-  expect(mascotColors[editor]).not.toBe(mascotColors[writer]);
-  // With every colour already taken it still picks a face nobody shows.
-  const crowd = mascotIds.filter(id => id !== 'notes');
-  expect(distinctMascot(editorHints, 'editor-seed', crowd)).toBe('notes');
+  const writer = distinctLook(writerHints, 'writer-seed', []);
+  expect(writer).toEqual(autoLook('writer-seed', writerHints));
+  const editor = distinctLook(editorHints, 'editor-seed', [writer]);
+  expect(sameLook(editor, writer)).toBe(false);
+  expect(lookColor(editor)).not.toBe(lookColor(writer));
+  // With every colour already taken it still picks a look nobody shows.
+  const crowd = ALL_LOOKS.filter(look => !is(look, 'notes'));
+  expect(is(distinctLook(editorHints, 'editor-seed', crowd), 'notes')).toBe(true);
 });
 
 it('starts a new orglet in a colour the other orglets do not show (dogfood, 2026-09-26)', () => {
   // Dev came out purple, and a Writer made next came out purple too.
   const dev = { id: 'dev-id', name: 'Dev' };
-  expect(defaultAvatarColor(dev)).toBe(mascotColors.coder);
+  expect(defaultAvatarColor(dev)).toBe(lookColor(old('coder')));
   const writerHints = { name: 'Writer' };
-  expect(mascotColors[autoMascot(mascotIds, 'writer-seed', writerHints)]).toBe(defaultAvatarColor(dev));
-  const writer = distinctAvatar(writerHints, 'writer-seed', ['coder'], [defaultAvatarColor(dev)]);
-  const writerColor = writer.color ?? mascotColors[writer.mascot];
-  expect(writerColor).not.toBe(defaultAvatarColor(dev));
-  // A colour the person picked for another orglet counts as shown, whatever its face.
-  const picked = distinctAvatar(writerHints, 'writer-seed', ['classic'], [mascotColors.notes, mascotColors.writer]);
-  expect([mascotColors.notes, mascotColors.writer]).not.toContain(picked.color ?? mascotColors[picked.mascot]);
-  // When no fitting face has a free colour, the face stays and only the colour moves.
-  const allButTeal = avatarPalette.filter(color => color !== mascotColors.chart);
-  const crowded = distinctAvatar(writerHints, 'writer-seed', ['coder'], allButTeal);
-  expect(crowded).toEqual({ mascot: 'writer', color: mascotColors.chart });
-  // Nobody else yet: the plain automatic face in its own colour.
-  expect(distinctAvatar(writerHints, 'writer-seed', [], [])).toEqual({ mascot: autoMascot(mascotIds, 'writer-seed', writerHints) });
+  expect(lookColor(autoLook('writer-seed', writerHints))).toBe(defaultAvatarColor(dev));
+  const colorOf = (avatar: { mascot: string; color?: string }) => avatar.color ?? lookColor(parseLook(avatar.mascot)!);
+  const writer = distinctAvatar(writerHints, 'writer-seed', [old('coder')], [defaultAvatarColor(dev)]);
+  expect(colorOf(writer)).not.toBe(defaultAvatarColor(dev));
+  // A colour the person picked for another orglet counts as shown, whatever its look.
+  const shown = [lookColor(old('notes')), lookColor(old('writer'))];
+  const picked = distinctAvatar(writerHints, 'writer-seed', [old('classic')], shown);
+  expect(shown).not.toContain(colorOf(picked));
+  // When no fitting look has a free colour, the look stays and only the colour moves.
+  const chartColor = lookColor(old('chart'));
+  const allButTeal = avatarPalette.filter(color => color !== chartColor);
+  const crowded = distinctAvatar(writerHints, 'writer-seed', [old('coder')], allButTeal);
+  expect(crowded).toEqual({ mascot: formatLook(old('writer')), color: chartColor });
+  // Nobody else yet: the plain automatic look in its own colour, stored in the new form.
+  expect(distinctAvatar(writerHints, 'writer-seed', [], [])).toEqual({ mascot: formatLook(autoLook('writer-seed', writerHints)) });
 });

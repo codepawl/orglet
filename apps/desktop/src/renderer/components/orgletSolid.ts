@@ -1,5 +1,5 @@
-import type { MascotId } from './mascots';
-import { BODY_BOX, bodyOutlinePoints, bodyShapes, eyeShift, mascotShapes, type BodyShape, type BodyShapeId, type FaceId } from './orgletShapes';
+import type { OrgletLook } from '../../shared/orglet-look';
+import { BODY_BOX, bodyOutlinePoints, bodyShapes, eyeShift, type BodyShape, type BodyShapeId, type FaceId } from './orgletShapes';
 
 /*
  * An orglet in 3D (COD-156, from the owner's standalone "ORGLETS" page, 2026-09-21: "this orglet form is so good,
@@ -231,14 +231,12 @@ export type Look = { body: BodyShapeId; face: FaceStyle; eyeDy: number; shapes: 
 const faceStyles: Record<FaceId, FaceStyle> = { plain: 'plain', happy: 'happy', curious: 'curious', wink: 'wink', sleepy: 'sleepy', narrow: 'narrow', delighted: 'delighted' };
 
 /**
- * Every mascot of mascots.tsx, from the one table both drawings read (`orgletShapes.ts`). A look carried accessories
+ * Any body and pair of eyes, from the one table both drawings read (`orgletShapes.ts`). A look carried accessories
  * until 2026-10-05 (owner: no hat and nothing worn); `shapes` stays for a thing a face may hold one day, and is empty.
  */
-function lookOf(id: MascotId): Look {
-  const { body, face } = mascotShapes[id];
-  return { body, face: faceStyles[face], eyeDy: eyeShift(bodyShapes[body]).dy, shapes: [] };
+export function lookOf({ body, eyes }: OrgletLook): Look {
+  return { body, face: faceStyles[eyes], eyeDy: eyeShift(bodyShapes[body]).dy, shapes: [] };
 }
-export const looks: Record<MascotId, Look> = Object.assign({}, ...(Object.keys(mascotShapes) as MascotId[]).map(id => ({ [id]: lookOf(id) })));
 
 /* ---------- Springs. Every animated value is a spring pulled at a target; gestures either move the target or kick
    the velocity, and the spring makes the overshoot and the settle. */
@@ -340,8 +338,8 @@ function personalityFrom(seed: number): Personality {
   };
 }
 
-export function createOrglet(id: MascotId, seed: number, now: number): OrgletModel {
-  const look = looks[id];
+export function createOrglet(orgletLook: OrgletLook, seed: number, now: number): OrgletModel {
+  const look = lookOf(orgletLook);
   const personality = personalityFrom(seed);
   const random = createRandom(seed + 1);
   return {
@@ -372,8 +370,8 @@ export function createOrglet(id: MascotId, seed: number, now: number): OrgletMod
 }
 
 /** Swaps the drawing (a new mascot chosen) and keeps the pose, so the head does not snap. */
-export function changeLook(model: OrgletModel, id: MascotId) {
-  model.look = looks[id];
+export function changeLook(model: OrgletModel, look: OrgletLook) {
+  model.look = lookOf(look);
   model.sideFront = {};
 }
 

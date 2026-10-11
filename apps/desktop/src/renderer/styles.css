@@ -282,34 +282,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
    matte shade, and the two pseudo-elements are the eyes: upright capsules in the page colour, 2/14 of the side
    wide and 4/14 tall, set high and a touch to the right, on the same 14-unit grid the icon is drawn on so the
    sizes agree. Percentages mean a new size only sets width and height. */
-/* The mark is the app icon's drawing (assets/icon.svg, redrawn 2026-10-05): the bubble with bowed sides, lit as a
-   matte ball from the top left, and two eyes that lean to the right. The pair leans about its middle, so the left
-   eye rises a little and the right one drops. */
-.orglet-mark { --mark-ink:var(--text); position:relative; display:inline-block; width:29px; height:29px; border-radius:46% 46% 46% 17%; background:radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--mark-ink) 72%, white), var(--mark-ink) 48%, color-mix(in srgb, var(--mark-ink) 78%, black)); font-size:0; line-height:0; flex-shrink:0; }
-.orglet-mark::before,.orglet-mark::after { content:''; position:absolute; top:21.4%; width:14.3%; height:28.6%; border-radius:999px; background:var(--bg); }
-.orglet-mark::before { left:35.7%; --eye-lean:-9%; }
-.orglet-mark::after { left:57.1%; --eye-lean:9%; }
-/* The mark is an orglet at rest, so it does what a face at rest does: one blink every idle cycle and nothing else.
-   Each eye keeps its lean through the blink, which is why the lean is a variable the keyframes read. */
-.orglet-mark::before,.orglet-mark::after { transform:translateY(var(--eye-lean)) rotate(14deg); animation:mark-blink var(--motion-idle) infinite; }
-@keyframes mark-blink { 0%,95%,100% { transform:translateY(var(--eye-lean)) rotate(14deg) scaleY(1); } 97.5% { transform:translateY(var(--eye-lean)) rotate(14deg) scaleY(.12); } }
-@media (prefers-reduced-motion: reduce) { .orglet-mark::before,.orglet-mark::after { animation:none; } }
-/* At the sizes the app draws the mark, the eyes are placed in whole pixels so they stay crisp at device scale 1
-   (COD-154): the percentages above put a 2.7px eye at 6.8px. The brand mark is 20px (even, like the row it sits
-   in, so it centres on a whole pixel), a byline mark 25px, `.large` 42px. */
-.orglet-mark.small::before,.orglet-mark.small::after { top:6px; width:3px; height:5px; }
-.orglet-mark.small::before { left:10px; }
-.orglet-mark.small::after { left:14px; }
-.orglet-mark.large::before,.orglet-mark.large::after { top:11px; width:4px; height:9px; }
-.orglet-mark.large::before { left:17px; }
-.orglet-mark.large::after { left:24px; }
-/* Settings → Màu logo (COD-154): with "Theo màu nhấn" the mark's body takes the accent, with the same matte shade,
-   and its eyes take the accent's ink so a pale accent still shows them. The startup screen has no workspace yet and
-   so its face (`.startup-face`, the 3D orglet) stays monochrome. */
-:root[data-logo-color=accent] .orglet-mark { --mark-ink:var(--accent); }
-:root[data-logo-color=accent] .orglet-mark::before,:root[data-logo-color=accent] .orglet-mark::after { background:var(--accent-ink); }
-.orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
-.orglet-mark.small { width:25px; height:25px; }
 .section-heading { font-size:13px; font-weight:500; color:var(--muted); min-height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 0 0 12px; }
 .section-heading .org-button:hover:not(:disabled),.section-heading .org-button:focus-visible { background:transparent; color:var(--text); }
 /* Section add buttons and row settings buttons share one class, so their icons always sit in one column. */
@@ -1871,10 +1843,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .history-item.editing .row-rename { margin:0; font-size:13px; }
 /* Brand mark sized to the wordmark's cap height. */
 .brand { gap:8px; }
-.brand .orglet-mark { width:20px; height:20px; }
-.brand .orglet-mark::before,.brand .orglet-mark::after { top:5px; width:2px; height:4px; }
-.brand .orglet-mark::before { left:8px; }
-.brand .orglet-mark::after { left:11px; }
 /* Required fields: a small red asterisk after the label. */
 /* Breadcrumb in a dialog title: back arrow, parent link, current page. */
 .breadcrumb { display:inline-flex; align-items:center; gap:6px; min-width:0; margin-left:-10px; }
@@ -1938,11 +1906,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .tree-item.dragging .disclosure-chevron { transform:none; }
 .avatar.xl { width:56px; height:56px; border-radius:16px; font-size:22px; }
 .avatar.xxl { width:96px; height:96px; border-radius:26px; font-size:36px; }
-.avatar.emoji { font-size:15px; }
-.avatar.xs.emoji { font-size:11px; }
-.avatar.sm.emoji { font-size:13px; }
-.avatar.lg.emoji { font-size:19px; }
-.avatar.xl.emoji { font-size:30px; }
 .avatar-face { font-family: var(--font); }
 
 /* ==========================================================================================================
@@ -2159,16 +2122,14 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .avatar.xs .mascot,.avatar.sm .mascot { width:100%; height:100%; margin-top:5%; }
 .mascot-choice { width:40px; height:40px; background:color-mix(in srgb, var(--row-hover) 70%, transparent); }
 .mascot-choice .mascot { width:34px; height:34px; margin-top:4px; }
-.mascot-auto { font-size:16px; color:var(--muted); }
 /* Logo-style mascots: the body is shaded in the avatar colour (`Mascot` sets --mascot-fill to a gradient mixed from
    currentColor, COD-131), the face is drawn in the page ground. */
 .avatar.has-mascot { color:color-mix(in srgb, var(--avatar-color) 78%, var(--text)); --mascot-ink:var(--bg); }
 .avatar.has-mascot .mascot { --mascot-lift:0%; width:100%; height:100%; margin-top:0; }
 .mascot-choice { color:color-mix(in srgb, var(--text) 80%, transparent); --mascot-ink:var(--bg); }
 .mascot-choice .mascot { width:32px; height:32px; margin-top:0; }
-/* No avatar tile (user decision 2026-09-17): mascots and emoji stand on their own; letters keep a thin ring in their colour. */
+/* No avatar tile (user decision 2026-09-17): mascots stand on their own. */
 .avatar { background:transparent; }
-.avatar:not(.has-mascot):not(.emoji) { box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--avatar-color) 55%, transparent); }
 /* Each drawing's canvas is a whole number of pixels and sits in its avatar box at a whole-pixel offset (COD-154:
    at device scale 1 a 112% canvas and a -3% lift put every edge between pixels). The small drawings (24 and 30
    pixel canvases, see `smallGlyphs` in mascots.tsx) already place the body low in the canvas, so they need no
@@ -2200,7 +2161,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .avatar-custom-section { display:flex; flex-direction:column; gap:10px; }
 .avatar-custom-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .avatar-custom-title { font-size:13px; font-weight:500; color:var(--text); }
-.avatar-custom .avatar-category { width:230px; max-width:100%; }
 .avatar-custom .mascot-choice { background:var(--bg); }
 .avatar-custom .mascot-choice:hover { background:color-mix(in srgb, var(--bg) 70%, var(--row-hover)); }
 .avatar-custom .mascot-choice[aria-checked=true] { background:var(--bg); border-color:var(--text); }

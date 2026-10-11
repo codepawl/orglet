@@ -61,11 +61,10 @@ Sidebar facts:
 | Forward a message | `ForwardPicker` (`request`, `options`, `sending`, `onSend`, `onClose`); `forward.ts` | `components/ForwardPicker.tsx` |
 | Reactions | `ReactionBar` (`options`, `picked`, `onPick`, `label`), `ReactionBadges` (`badges`, `align`, `onPick`); `MessageBadges` binds them to a message | `components/ReactionBar.tsx`, `components/MessageActions.tsx` |
 | Empty-chat openers | `Starters` + `suggestStarters` (`shared/starters.ts`) | `components/Starters.tsx` |
-| Orglet, crew or entity face | `Avatar` (`name`, `seed`, `mascot`, `defaultMascot`, `hint`, `color`, `badge`, `size`, `motion`); `RosterAvatars` for a group | `components/Avatar.tsx` |
-| Choose an avatar | `AvatarPicker` (`hint`, `hints`, `taken`, `savedColors`, `onSavedColorsChange`) | `components/Avatar.tsx` |
-| Mascot art | `Mascot` (`id`, `glyph`), `mascotIds`; `mascotSuggest.ts` (`rankMascots`, `suggestedMascots`, `autoMascot`) | `components/mascots.tsx` |
-| 3D face for large sizes | `Orglet3D` (`id`, `seed`, `size`, `color`, `motion`); engine `orgletSolid.ts`, stage `orgletStage.ts` | `components/Orglet3D.tsx` |
-| Brand mark (sidebar, unattributed byline) | `<span className="orglet-mark">o</span>` with `.small`, `.large`, `.brand`; Settings, Logo colour | `styles.css` (`.orglet-mark`) |
+| Orglet, crew or entity face | `Avatar` (`name`, `seed`, `mascot`, `hint`, `color`, `badge`, `size`, `motion`): always an orglet, never an emoji or a letter; `RosterAvatars` for a group | `components/Avatar.tsx` |
+| Choose an avatar | `AvatarPicker` (`hint`, `hints`, `taken`, `savedColors`, `onSavedColorsChange`): Customize shows body, eyes, colour | `components/Avatar.tsx` |
+| Look art (a body and eyes) | `Mascot` (`look`, `glyph`); the stored form and its parser are `shared/orglet-look.ts` (`parseLook`, `formatLook`); `mascotSuggest.ts` (`rankLooks`, `suggestedLooks`, `autoLook`) | `components/mascots.tsx` |
+| 3D face for large sizes | `Orglet3D` (`look`, `seed`, `size`, `color`, `motion`); engine `orgletSolid.ts`, stage `orgletStage.ts` | `components/Orglet3D.tsx` |
 | Orglet's own cursor over a page | `OrgletCursor` (`x`, `y`, `color`, `name`, `action`, `presses`, `glide`); colour from `workerInk` | `components/OrgletCursor.tsx` |
 
 Chat facts:

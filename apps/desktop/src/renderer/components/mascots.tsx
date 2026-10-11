@@ -1,7 +1,7 @@
 import { useId, type CSSProperties, type ReactNode } from 'react';
-import type { MascotId as SharedMascotId } from '../../shared/mascot-suggest';
+import { formatLook, type OrgletLook } from '../../shared/orglet-look';
 import { t } from '../i18n';
-import { BODY_BOX, bodyPath, bodyShapes, eyeShift, mascotShapes, type BodyShape, type BodyShapeId, type FaceId } from './orgletShapes';
+import { BODY_BOX, bodyPath, bodyShapes, eyeShift, type BodyShape, type BodyShapeId, type FaceId } from './orgletShapes';
 
 /*
  * Orglet mascots, the Grok reading (owner's reference, 2026-09-21): the Orglet logo bubble in the worker's colour,
@@ -64,45 +64,37 @@ function faceOn(face: FaceId, shape: BodyShape): ReactNode {
   return dx || dy ? <g transform={`translate(${dx} ${dy})`}>{faces[face]}</g> : faces[face];
 }
 
-/* What a body and a face are called, for the picker's tooltip and its accessible name. */
-const bodyNames: Record<BodyShapeId, () => string> = {
-  base: () => t('Dáng gốc'),
-  tailRight: () => t('Góc nhỏ bên phải'),
-  tailTop: () => t('Góc nhỏ phía trên'),
-  round: () => t('Tròn đều'),
+/* What a body and a pair of eyes are called, for the picker's tooltips and accessible names. */
+export const bodyNames: Record<BodyShapeId, () => string> = {
+  base: () => t('Gốc'),
+  round: () => t('Tròn'),
   tall: () => t('Dáng cao'),
-  wide: () => t('Dáng rộng'),
-  leaf: () => t('Dáng lá'),
-  soft: () => t('Dáng mềm'),
+  tailRight: () => t('Đuôi phải'),
+  wide: () => t('Rộng'),
+  soft: () => t('Mềm'),
+  tailTop: () => t('Đuôi trên'),
+  leaf: () => t('Lá'),
 };
-const faceNames: Record<FaceId, (() => string) | undefined> = {
-  plain: undefined,
-  happy: () => t('mắt cười'),
-  curious: () => t('mắt tò mò'),
-  wink: () => t('nháy mắt'),
-  sleepy: () => t('mắt nhắm'),
-  narrow: () => t('mắt chăm chú'),
-  delighted: () => t('mắt mở to'),
+export const eyesNames: Record<FaceId, () => string> = {
+  plain: () => t('Mắt thường'),
+  happy: () => t('Mắt cười'),
+  curious: () => t('Mắt tò mò'),
+  wink: () => t('Nháy mắt'),
+  sleepy: () => t('Mắt buồn ngủ'),
+  narrow: () => t('Mắt chăm chú'),
+  delighted: () => t('Mắt mở to'),
 };
 
-type MascotEntry = { body: BodyShapeId; face: FaceId; art: ReactNode };
-function define(id: SharedMascotId): MascotEntry {
-  const { body: bodyId, face } = mascotShapes[id];
-  const shape = bodyShapes[bodyId];
-  return { body: bodyId, face, art: <><path d={bodyPath(shape)} fill={body} />{faceOn(face, shape)}</> };
-}
-
-export const mascots = Object.fromEntries((Object.keys(mascotShapes) as SharedMascotId[]).map(id => [id, define(id)])) as Record<SharedMascotId, MascotEntry>;
-
-export type MascotId = keyof typeof mascots;
-export const mascotIds = Object.keys(mascots) as MascotId[];
-export const isMascot = (value: string | undefined): value is MascotId => !!value && Object.hasOwn(mascots, value);
-
-/** A mascot's name in the app's language: its body, then its eyes when they are not the plain pair. */
-export function mascotName(id: MascotId): string {
-  const entry = mascots[id];
-  const face = faceNames[entry.face];
-  return face ? `${bodyNames[entry.body]()}, ${face()}` : bodyNames[entry.body]();
+/** A look's body and eyes on the 64 grid. Drawn once per look, then kept. */
+const artByLook = new Map<string, ReactNode>();
+export function artOf(look: OrgletLook): ReactNode {
+  const key = formatLook(look);
+  const known = artByLook.get(key);
+  if (known) return known;
+  const shape = bodyShapes[look.body];
+  const art = <><path d={bodyPath(shape)} fill={body} />{faceOn(look.eyes, shape)}</>;
+  artByLook.set(key, art);
+  return art;
 }
 
 /*
@@ -183,8 +175,8 @@ function smallBodyPath(glyph: SmallGlyph, shape: BodyShape) {
   ].join('');
 }
 
-function smallArt(entry: MascotEntry, glyph: SmallGlyph) {
-  const shape = bodyShapes[entry.body];
+function smallArt(look: OrgletLook, glyph: SmallGlyph) {
+  const shape = bodyShapes[look.body];
   const scale = glyph.body / BODY_BOX.size;
   const left = (glyph.canvas - glyph.body) / 2;
   // The large drawing's body box spans x 10..54 and y 11..55; this maps that box onto the small one.
@@ -198,29 +190,29 @@ function smallArt(entry: MascotEntry, glyph: SmallGlyph) {
   </g>;
   return <>
     <path d={smallBodyPath(glyph, shape)} fill="currentColor" />
-    {entry.face === 'plain' ? plainEyes : placed(faceOn(entry.face, shape))}
+    {look.eyes === 'plain' ? plainEyes : placed(faceOn(look.eyes, shape))}
   </>;
 }
 
 /**
- * One mascot as an inline SVG. `glyph` picks the drawing: `large` is the 64-unit art with the matte light (the
+ * One look as an inline SVG. `glyph` picks the drawing: `large` is the 64-unit art with the matte light (the
  * picker, a chat heading, the avatar editor), `small` and `medium` are the pixel-snapped drawings for the list
  * sizes. The gradient ids come from `useId`, because many mascots sit on one page and a `url(#…)` shared between
  * them would paint every face in the colour of the first one rendered.
  */
-export function Mascot({ id, glyph = 'large' }: { id: MascotId; glyph?: MascotGlyph }) {
+export function Mascot({ look, glyph = 'large' }: { look: OrgletLook; glyph?: MascotGlyph }) {
   // The id is reduced to word characters: React's ids carry punctuation that a url() fragment may not survive.
   const lightId = `mascot-${useId().replace(/\W/g, '')}`;
   if (glyph !== 'large') {
     const small = smallGlyphs[glyph];
     return <svg className={`mascot mascot-${glyph}`} overflow="visible" viewBox={`0 0 ${small.canvas} ${small.canvas}`} aria-hidden="true" focusable="false">
-      {smallArt(mascots[id], small)}
+      {smallArt(look, small)}
     </svg>;
   }
   const style = { '--mascot-fill': `url(#${lightId}-body)` } as CSSProperties;
   return <svg className="mascot mascot-large" overflow="visible" viewBox="0 -1 64 66" style={style} aria-hidden="true" focusable="false">
     <Light id={lightId} />
     <ellipse className="mascot-ground" cx="32" cy="57.5" rx="17" ry="3" fill={`url(#${lightId}-ground)`} />
-    {mascots[id].art}
+    {artOf(look)}
   </svg>;
 }

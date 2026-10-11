@@ -95,7 +95,7 @@ function FlowStep({ step, summary, label, cell = false }: { step: CrewStep; summ
   const worker = step.worker;
   const content = <>
     <span className="crew-node-head">
-      <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />
+      <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="xs" />
       <Tooltip label={worker.name}><span className="crew-node-name">{worker.name}</span></Tooltip>
       <StatusMark variant={stepMarks[step.state].variant} tone={stepMarks[step.state].tone} label={label} decorative />
       <span className="visually-hidden">{label}</span>

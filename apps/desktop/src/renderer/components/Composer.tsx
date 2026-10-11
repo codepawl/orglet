@@ -264,7 +264,7 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
           <button type="button" id={optionId} role="option" aria-selected={option === selected} className={index === activeIndex ? 'active' : undefined}
             onMouseDown={event => event.preventDefault()} onClick={() => pick(option)}>
             {worker
-              ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />
+              ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="xs" />
               : <span className="mention-all" aria-hidden="true">@</span>}
             <span><strong>@{option.name}</strong>{(option.kind === 'all' || worker?.description) && <small>{option.kind === 'all' ? t('Tất cả trong cuộc trò chuyện này') : worker?.description}</small>}</span>
           </button>

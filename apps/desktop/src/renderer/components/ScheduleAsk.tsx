@@ -56,7 +56,7 @@ export function ScheduleAsk({ workers, starters, onSend }: { workers: readonly W
   const options = workers.map(worker => ({
     value: worker.id,
     label: worker.name,
-    icon: <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />,
+    icon: <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="xs" />,
   }));
   return <div className="routine-ask">
     <Composer value={text} onChange={setText} onSubmit={() => void send()} label={t('Nhờ Tí lên lịch')} placeholder={t('Nhờ {0} lên lịch: việc gì, vào lúc nào…', [asked.name])}

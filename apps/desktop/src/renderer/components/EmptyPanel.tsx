@@ -1,5 +1,5 @@
 import { useEffect, useState, type PointerEvent, type ReactNode } from 'react';
-import { mascotIds } from './mascots';
+import { BODY_SHAPE_IDS, EYE_IDS, type OrgletLook } from '../../shared/orglet-look';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
 import { Button } from './ui';
@@ -17,8 +17,10 @@ import { Button } from './ui';
 const FACE_SIZE = 80;
 
 /** Which orglet stands in the panel: any shape, with a seed for how it moves. Drawn once for each time the panel appears. */
-function randomFace() {
-  return { id: mascotIds[Math.floor(Math.random() * mascotIds.length)], seed: Math.floor(Math.random() * 1000) };
+function randomFace(): { look: OrgletLook; seed: number } {
+  const body = BODY_SHAPE_IDS[Math.floor(Math.random() * BODY_SHAPE_IDS.length)];
+  const eyes = EYE_IDS[Math.floor(Math.random() * EYE_IDS.length)];
+  return { look: { body, eyes }, seed: Math.floor(Math.random() * 1000) };
 }
 // Left alone this long, the orglet dozes.
 const DOZE_AFTER_SECONDS = 25;
@@ -63,7 +65,7 @@ export function EmptyPanel({ title, hint, action, fill = true, className }: {
 
   return <div className={`empty-panel${fill ? ' empty-panel-fill' : ''}${className ? ` ${className}` : ''}`} role="status" onPointerDown={tap}>
     <div className="startup-face">
-      <Orglet3D id={face.id} seed={face.seed} size={FACE_SIZE} color="mono" motion={{ lead: true, greet: true, cheer, moment: cue }} />
+      <Orglet3D look={face.look} seed={face.seed} size={FACE_SIZE} color="mono" motion={{ lead: true, greet: true, cheer, moment: cue }} />
     </div>
     <p className="empty-panel-title">{title}</p>
     {hint && <p className="empty-panel-hint">{hint}</p>}

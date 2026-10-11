@@ -22,8 +22,8 @@ import { modelIdRequired } from './workerModel';
 import { ProviderMark } from './ProviderMark';
 import { StatusMark } from './StatusMark';
 import { AvatarPicker } from './Avatar';
-import { isMascot, mascotIds } from './mascots';
-import { autoMascot, defaultAvatarColor, distinctAvatar } from './mascotSuggest';
+import { parseLook, normalizeStoredLook } from '../../shared/orglet-look';
+import { defaultAvatarColor, distinctAvatar, shownLook } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
 import { fieldMessage } from '../fieldErrors';
 import { readiness, readyFirst, type ProviderChoice, type Readiness } from './providers';
@@ -114,7 +114,7 @@ export function defaultWorkerProvider(options: readonly SelectOption[]): Worker[
 export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, initialField, connectModel, onClose, onOpenChat, onCreated, initialName }: { open: boolean; worker?: Worker; /** A new orglet starts with this name, typed on the Add friend page (COD-366). */ initialName?: string; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; /** The field to land on; the Demo chat's "Kết nối model" opens on the Model menu (COD-255). */ initialField?: 'provider'; /** Opened from "Kết nối model" (COD-293): an orglet still on Demo starts on the first connection that can run, as a new one does, and Save switches it. */ connectModel?: boolean; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void; /** A new worker was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (workerId: string) => void }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'general');
   // Faces other workers already show, so suggestions lean towards a different one.
-  const takenMascots = workspace.workers.filter(item => item.id !== worker?.id).map(item => isMascot(item.avatar?.mascot) ? item.avatar.mascot : autoMascot(mascotIds, item.id, { name: item.name, description: item.description }));
+  const takenLooks = workspace.workers.filter(item => item.id !== worker?.id).map(item => shownLook(item.avatar?.mascot, item.id, { name: item.name, description: item.description }));
   const [name, setName] = useState(worker?.name ?? initialName ?? '');
   const [instructions, setInstructions] = useState(worker?.instructions ?? defaultInstructions);
   const ready = readiness(connections, harnesses, workspace.customConnections);
@@ -157,10 +157,13 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   // A new worker nobody picked a face for starts on one the other workers do not show, face or colour, and keeps it
   // once saved; picking anything in the avatar picker takes over from there.
   const otherWorkers = workspace.workers.filter(item => item.id !== worker?.id);
-  const automaticAvatar = !worker && !isMascot(avatar.mascot)
-    ? distinctAvatar({ name, description, skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }, seed, takenMascots, otherWorkers.map(defaultAvatarColor))
+  const automaticAvatar = !worker && !parseLook(avatar.mascot)
+    ? distinctAvatar({ name, description, skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }, seed, takenLooks, otherWorkers.map(defaultAvatarColor))
     : undefined;
-  const shownAvatar = automaticAvatar ? { ...automaticAvatar, ...avatar } : avatar;
+  // Only the look (in its `<body>-<eyes>` form) and the colour are saved; an old emoji or letter is dropped.
+  const mascot = normalizeStoredLook(avatar.mascot);
+  const chosenAvatar = { ...(mascot ? { mascot } : {}), ...(avatar.color ? { color: avatar.color } : {}) };
+  const shownAvatar = automaticAvatar ? { ...automaticAvatar, ...chosenAvatar } : chosenAvatar;
   const clearError = () => { setError(''); setInvalid(undefined); };
   const fail = (at: Tab, message: string, field?: InvalidField) => {
     setTab(at); setError(message); setInvalid(field); setFlash(n => n + 1);
@@ -204,7 +207,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; một kênh có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={invalid ? '' : error} focusField={initialField}>
     {tab === 'general' && <>
       {worker && <MarketProfileUpdate entityId={worker.id} onUpdated={onClose} />}
-      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={shownAvatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
+      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenLooks} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={shownAvatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} />{fieldMessage('name', invalid, error)}</label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} />{fieldMessage('instructions', invalid, error)}</label>

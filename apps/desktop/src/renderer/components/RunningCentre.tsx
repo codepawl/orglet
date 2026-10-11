@@ -74,7 +74,7 @@ function RunningRow({ item, status, now, chatName, onOpenChat }: { item: Running
     }
   };
   return <li className={`running-row running-${item.state}`}>
-    <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm"
+    <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="sm"
       badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />
     <div className="running-text">
       <p className="running-title"><Tooltip label={worker.name}><span className="running-name">{worker.name}</span></Tooltip>{chatName && <span className="running-chat">{chatName}</span>}</p>

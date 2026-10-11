@@ -92,7 +92,7 @@ function Faces({ workers, several, fallbackName, fallbackSeed }: { workers: read
   if (several && workers.length) return <RosterAvatars workers={workers.slice(0, 2)} size="sm" max={2} countRest={false} />;
   const worker = workers[0];
   if (!worker) return <Avatar name={fallbackName} seed={fallbackSeed} size="sm" />;
-  return <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />;
+  return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="sm" />;
 }
 
 /**

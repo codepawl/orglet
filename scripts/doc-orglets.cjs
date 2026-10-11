@@ -12,7 +12,7 @@ const { buildSync } = require('esbuild');
 const outputFolder = resolve('docs/images/orglets');
 
 // One orglet per docs page. The name is the page's file name without `.md`, so a page and its image are found
-// together. `face` picks the eyes; the body is taken in turn from the mascots that have that face, so a run of
+// together. `face` picks the eyes; the body is taken in turn from the eight bodies, so a run of
 // pages is not a row of one shape. `yaw` turns the head (positive looks right), `pitch` tips it (positive looks
 // down); every page gets a three-quarter view, alternating sides.
 const pageOrglets = [
@@ -63,25 +63,16 @@ const crew = [
   { colour: '#d65c73', face: 'curious', yaw: -0.4, pitch: 0.08 },
 ];
 
-// The mascots that carry each face, by body: `mascotShapes` in renderer/components/orgletShapes.ts.
-const mascotsByFace = {
-  plain: ['classic', 'antenna', 'sprout', 'idea', 'headset', 'tie', 'bowtie', 'briefcase'],
-  happy: ['happy', 'calendar', 'mail', 'finance', 'writer', 'notes', 'care'],
-  curious: ['curious', 'search', 'chart', 'target', 'coder'],
-  wink: ['wink', 'automation'],
-  sleepy: ['sleepy'],
-  delighted: ['delighted', 'megaphone', 'checker'],
-  narrow: ['focused', 'cool', 'guard'],
-};
+// The bodies, as `bodyShapes` in renderer/components/orgletShapes.ts names them.
+const bodies = ['base', 'round', 'tall', 'tailRight', 'wide', 'soft', 'tailTop', 'leaf'];
 
-/** Gives each orglet a mascot of its face, taking the bodies of that face in turn. */
+/** Gives each orglet a look: its face as the eyes, and the bodies of the pages taken in turn. */
 function withMascots(orglets) {
   const taken = {};
   return orglets.map((orglet, index) => {
-    const choices = mascotsByFace[orglet.face];
     const turn = taken[orglet.face] ?? 0;
     taken[orglet.face] = turn + 1;
-    return { ...orglet, mascot: choices[turn % choices.length], seed: index + 1 };
+    return { ...orglet, look: { body: bodies[turn % bodies.length], eyes: orglet.face }, seed: index + 1 };
   });
 }
 
@@ -116,7 +107,7 @@ function stage() {
     const context = canvas.getContext('2d');
     const first = (width - spacing * unit * (orglets.length - 1)) / 2;
     orglets.forEach((orglet, index) => {
-      const model = OrgletSolid.createOrglet(orglet.mascot, orglet.seed, 0);
+      const model = OrgletSolid.createOrglet(orglet.look, orglet.seed, 0);
       model.yaw.value = orglet.yaw;
       model.pitch.value = orglet.pitch;
       const body = OrgletSolid.hexToRgb(orglet.colour === 'ink' ? theme.inkBody : orglet.colour);

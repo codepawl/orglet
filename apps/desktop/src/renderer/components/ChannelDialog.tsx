@@ -276,6 +276,6 @@ function startingOrglets(members: readonly ChannelMember[], workspace: Pick<Work
 }
 
 function orgletFace(worker: Worker) {
-  return <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs"
+  return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} hint={worker.description} color={worker.avatar?.color} size="xs"
     badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />;
 }

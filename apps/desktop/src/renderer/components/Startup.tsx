@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK } from '../../shared/orglet-look';
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
 import { Bell, BookOpen, CalendarClock, Plus } from './icons';
@@ -93,7 +94,7 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
         <div className="fresh-chat team-chat-empty">
           <div className="fresh-faces">
             <div className="startup-face">
-              <Orglet3D id="classic" seed={FACE_SEED} size={FACE_SIZE} color="mono" motion={{ lead: true, greet: true, cheer, moment: cue }} />
+              <Orglet3D look={DEFAULT_LOOK} seed={FACE_SEED} size={FACE_SIZE} color="mono" motion={{ lead: true, greet: true, cheer, moment: cue }} />
             </div>
           </div>
           <div className="startup-copy">

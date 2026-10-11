@@ -41,7 +41,7 @@ function KnowledgeAuthor({ item, workspace }: { item: Knowledge; workspace: Work
   const origin = kind === 'run' ? t('đề xuất') : kind === 'template' ? t('nhập từ template') : t('tạo');
   return <div className="knowledge-author">
     {author
-      ? <Avatar name={author.name} seed={author.id} mascot={author.avatar?.mascot} defaultMascot hint={author.description} color={author.avatar?.color} size="lg" alive motion={{ follow: 'hover' }} />
+      ? <Avatar name={author.name} seed={author.id} mascot={author.avatar?.mascot} hint={author.description} color={author.avatar?.color} size="lg" alive motion={{ follow: 'hover' }} />
       : <span className="knowledge-author-mark" aria-hidden="true">{kind === 'template' ? <Users size={18} /> : <UserRound size={18} />}</span>}
     <div className="knowledge-author-text"><strong>{name}</strong><span className="muted">{origin} · v{item.revision}</span></div>
     <span className={item.status === 'proposed' ? 'badge pending' : 'badge'}>{item.status === 'proposed' ? t('Chờ duyệt') : t('Đã duyệt')}</span>
