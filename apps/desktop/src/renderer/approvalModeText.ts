@@ -15,23 +15,23 @@ export const modeNames: Record<ApprovalMode, string> = translated({
 });
 
 const modeNotes: Record<ApprovalMode, string> = translated({
-  auto: 'Model nhẹ quyết định việc cần duyệt',
-  manual: 'Luôn hỏi trước khi thay đổi',
-  acceptEdits: 'Tự nhận mọi thay đổi tệp',
-  plan: 'Lên kế hoạch trước khi thay đổi',
-  bypass: 'Chấp nhận mọi quyền',
+  auto: 'Model nhẹ tự duyệt',
+  manual: 'Hỏi trước khi thay đổi',
+  acceptEdits: 'Tự nhận thay đổi tệp',
+  plan: 'Chỉ đọc và lên kế hoạch',
+  bypass: 'Không hỏi gì',
 });
 
 const folderNeedNotes: Record<Exclude<FolderNeed, undefined>, string> = translated({
-  pick: 'Cần thư mục làm việc',
-  edit: 'Cần quyền sửa thư mục',
+  pick: 'Cần thư mục',
+  edit: 'Cần quyền sửa',
 });
 
 /** The one short line under a mode's name: why it is locked, what it needs first, or what it does. */
 export function modeRowNote(mode: ApprovalMode, state: ModeRowState): string {
   if (state.locked !== undefined) return state.locked;
   if (state.folderNeed) return folderNeedNotes[state.folderNeed];
-  if (mode === 'auto' && state.decisionModelMissing) return t('Chưa có model quyết định, nên vẫn hỏi bạn');
+  if (mode === 'auto' && state.decisionModelMissing) return t('Chưa có model quyết định');
   return modeNotes[mode];
 }
 

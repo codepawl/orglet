@@ -234,7 +234,7 @@ Decided 2026-10-01 (COD-367) and reworked after the owner's reference of Claude 
 
 **The record.** The browser journal (`browser_actions`) and the desktop journal (`desktop_actions`) have an `approved_by` column, shown as `approvedBy`: `person` when the person allowed the step on its card, `auto` or `bypass` when the mode did, and null for a step that never asked. An MCP call approved by a mode adds a line to the run's trace, "Auto mode allowed the MCP tool" or "Bypass mode allowed the MCP tool", where a person's answer adds the usual lines.
 
-**Folder.** Manual and Accept edits need a folder the orglets may edit: without one the rows say **Cần thư mục làm việc / Needs a working folder** and choosing one opens the folder picker at **Read and edit files**; with a read-only folder choosing raises it to that level (`folderNeedFor`). Plan, Auto and Bypass need none, because Auto and Bypass also govern MCP, browser and desktop approvals.
+**Folder.** Manual and Accept edits need a folder the orglets may edit: without one the rows say **Cần thư mục / Needs a folder** and choosing one opens the folder picker at **Read and edit files**; with a read-only folder choosing raises it to that level (`folderNeedFor`). Plan, Auto and Bypass need none, because Auto and Bypass also govern MCP, browser and desktop approvals.
 
 **Crews, channels and side threads.** A crew or a channel hands each orglet's changes in as it finishes, so its picker reads Accept edits unless the chat has Auto or Bypass, and offers no Manual. A side thread's permissions belong to its main chat, so its picker only switches Plan. It starts with a copy of the main chat's mode and loses a mode the moment the main chat does.
 

@@ -244,7 +244,7 @@ Turning **Review before applying** on in Details puts an Auto or Bypass chat bac
 
 Some things are refused or asked in every mode, Bypass included. Orglet will not type passwords or card numbers into a page and will not solve a CAPTCHA. A change to the app that an orglet proposes, and a change an orglet proposes to its own instructions, always wait for your click.
 
-Manual and Accept edits need a working folder the orglet may edit. Without one, the rows say **Needs a working folder**, and picking one opens the folder picker. With a read-only folder they ask for edit access instead. Auto, Plan and Bypass work without a folder.
+Manual and Accept edits need a working folder the orglet may edit. Without one, the rows say **Needs a folder**, and picking one opens the folder picker. With a read-only folder they ask for edit access instead. Auto, Plan and Bypass work without a folder.
 
 In a crew or a channel, each orglet's changes are applied as it finishes, so the mode reads **Accept edits** and the other rows cannot be picked; Plan applies to every orglet in the turn. A side thread uses its main chat's permissions, so only Plan can be switched there.
 

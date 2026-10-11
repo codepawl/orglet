@@ -16,19 +16,19 @@ describe('the Mode menu text', () => {
   });
 
   it('gives each row one short note, a folder need or a lock in its place', () => {
-    expect(modeRowNote('manual', {})).toBe('Always ask before making changes');
-    expect(modeRowNote('acceptEdits', {})).toBe('Automatically accept all file edits');
-    expect(modeRowNote('plan', {})).toBe('Create a plan before making changes');
-    expect(modeRowNote('bypass', {})).toBe('Accepts all permissions');
-    expect(modeRowNote('manual', { folderNeed: 'pick' })).toBe('Needs a working folder');
-    expect(modeRowNote('acceptEdits', { folderNeed: 'edit' })).toBe('Needs edit access to the folder');
+    expect(modeRowNote('manual', {})).toBe('Asks before changes');
+    expect(modeRowNote('acceptEdits', {})).toBe('Accepts file edits');
+    expect(modeRowNote('plan', {})).toBe('Reads and plans only');
+    expect(modeRowNote('bypass', {})).toBe('Asks nothing');
+    expect(modeRowNote('manual', { folderNeed: 'pick' })).toBe('Needs a folder');
+    expect(modeRowNote('acceptEdits', { folderNeed: 'edit' })).toBe('Needs edit access');
     expect(modeRowNote('manual', { locked: 'Locked here.', folderNeed: 'pick' })).toBe('Locked here.');
   });
 
   it('says Auto still asks when no decision model is connected', () => {
-    expect(modeRowNote('auto', {})).toBe('A light model handles approvals');
-    expect(modeRowNote('auto', { decisionModelMissing: true })).toBe('No decision model yet, so it still asks you');
-    expect(modeRowNote('manual', { decisionModelMissing: true })).toBe('Always ask before making changes');
+    expect(modeRowNote('auto', {})).toBe('A light model approves');
+    expect(modeRowNote('auto', { decisionModelMissing: true })).toBe('No decision model yet');
+    expect(modeRowNote('manual', { decisionModelMissing: true })).toBe('Asks before changes');
     expect(decisionModelMissing(undefined)).toBe(false);
     expect(decisionModelMissing({ entries: [], chosen: false })).toBe(true);
     expect(decisionModelMissing({ entries: [{ connection: 'openai', model: 'gpt-6-luna' }], chosen: false })).toBe(false);

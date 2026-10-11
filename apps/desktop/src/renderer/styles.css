@@ -500,7 +500,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
    number on the name's line, not centred across both lines (owner, 2026-10-11): they take the name's line box
    (--option-line), so their centres sit on the name's centre whatever the font. The model menu's rows (.model-option)
    are built the same way. */
-.mode-menu { width:max-content; min-width:280px; max-width:calc(100vw - 24px); padding:6px; }
+/* A small menu (owner, 2026-10-12): five short rows, so it is only as wide as its longest line. */
+.mode-menu { width:max-content; min-width:200px; max-width:calc(100vw - 24px); padding:4px; }
+.mode-menu .mode-option { --option-line:18px; gap:8px; padding:5px 8px; }
+.mode-menu .mode-option-name { font-size:13px; }
+.mode-menu .mode-option-note { font-size:11.5px; line-height:15px; }
+.mode-menu .mode-menu-title { padding:4px 8px 2px; font-size:11.5px; }
 .mode-menu-title { margin:0; padding:6px 10px 4px; font-size:12px; font-weight:500; color:var(--muted); }
 .mode-menu [role=menu] { display:flex; flex-direction:column; gap:2px; }
 .mode-option,.model-option { --option-line:20px; display:flex; align-items:flex-start; gap:10px; width:100%; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--text); text-align:left; }
