@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppWindow, Ban, Camera, Check, Hourglass, Image, Keyboard, ListChecks, LogIn, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldCheck, TextCursorInput, Trash2, UserRound, X, type LucideIcon } from 'lucide-react';
-import { FieldError, Input } from '@codepawlhq/orglet-ui';
+import { FieldError, Input, Tooltip } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { CLEAN_BROWSER_PROFILE, defaultBrowserChoice, normalizeBrowserSite, type BrowserAction, type BrowserActionKind, type BrowserChoice, type BrowserSite, type BrowserSiteDecision, type BrowserState } from '../../shared/browser';
 import { Button, Drawer, FieldLabel } from './ui';
@@ -66,10 +66,10 @@ export function BrowserSitesEditor({ sites, disabled, onChange }: { sites: reado
     {sites.length > 0 && <ul className="browser-site-list" aria-label={t('Danh sách trang')}>
       {sites.map(entry => <li key={entry.site} className="browser-site">
         {entry.decision === 'allowed' ? <Check size={14} aria-hidden="true" /> : <Ban size={14} aria-hidden="true" />}
-        <span className="browser-site-name" title={entry.site}>{entry.site}</span>
+        <Tooltip label={entry.site}><span className="browser-site-name">{entry.site}</span></Tooltip>
         <span className={`browser-site-decision ${entry.decision}`}>{decisionNames[entry.decision]}</span>
-        <Button type="button" size="icon" disabled={disabled} aria-label={t('Bỏ {0} khỏi danh sách', [entry.site])} title={t('Bỏ {0} khỏi danh sách', [entry.site])}
-          onClick={() => onChange(sites.filter(item => item.site !== entry.site))}><X size={14} /></Button>
+        <Tooltip label={t('Bỏ {0} khỏi danh sách', [entry.site])}><span className="tooltip-anchor"><Button type="button" size="icon" disabled={disabled} aria-label={t('Bỏ {0} khỏi danh sách', [entry.site])}
+          onClick={() => onChange(sites.filter(item => item.site !== entry.site))}><X size={14} /></Button></span></Tooltip>
       </li>)}
     </ul>}
     <div className="browser-site-add">
@@ -228,7 +228,7 @@ export function BrowserSteps({ detail }: { detail: TaskDetail }) {
           <Icon size={14} aria-hidden="true" />
           <span className="browser-step-text">{stepLabel(action)}{meta.length > 0 && <span className="muted browser-step-meta">{meta.join(' · ')}</span>}</span>
           <time dateTime={action.at}>{new Date(action.at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</time>
-          {action.screenshotId && <Button size="icon" aria-label={t('Xem ảnh màn hình')} title={t('Xem ảnh màn hình')} onClick={() => openShot(action)}><Image size={14} /></Button>}
+          {action.screenshotId && <Tooltip label={t('Xem ảnh màn hình')}><Button size="icon" aria-label={t('Xem ảnh màn hình')} onClick={() => openShot(action)}><Image size={14} /></Button></Tooltip>}
         </li>;
       })}
     </ol>

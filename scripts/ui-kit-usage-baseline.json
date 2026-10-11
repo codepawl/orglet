@@ -3,14 +3,14 @@
     "rawButton": 10,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 3,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/AboutSettings.tsx": {
     "rawButton": 1,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/AccountSettings.tsx": {
@@ -24,14 +24,14 @@
     "rawButton": 1,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/AppProposals.tsx": {
     "rawButton": 2,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/ApprovalModePicker.tsx": {
@@ -41,25 +41,18 @@
     "titleAttribute": 0,
     "hexColour": 0
   },
-  "components/ArchiveSettings.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
-    "hexColour": 0
-  },
   "components/AreaRail.tsx": {
     "rawButton": 5,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 2,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/Avatar.tsx": {
     "rawButton": 3,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 3,
+    "titleAttribute": 0,
     "hexColour": 8
   },
   "components/BlockedHandIn.tsx": {
@@ -74,20 +67,6 @@
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 0,
-    "hexColour": 0
-  },
-  "components/BrowserSettings.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
-    "hexColour": 0
-  },
-  "components/ChangesView.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
     "hexColour": 0
   },
   "components/Composer.tsx": {
@@ -108,7 +87,7 @@
     "rawButton": 1,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/CurrencyFlag.tsx": {
@@ -118,32 +97,25 @@
     "titleAttribute": 0,
     "hexColour": 45
   },
-  "components/CustomConnections.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
-    "hexColour": 0
-  },
   "components/DesktopApps.tsx": {
     "rawButton": 1,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 2,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/DetailsPanel.tsx": {
     "rawButton": 2,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 4,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/DiffViewer.tsx": {
     "rawButton": 3,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 2,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/DocumentViewer.tsx": {
@@ -167,26 +139,12 @@
     "titleAttribute": 0,
     "hexColour": 0
   },
-  "components/LiveIsland.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 2,
-    "hexColour": 0
-  },
   "components/mascots.tsx": {
     "rawButton": 0,
     "rawSelect": 0,
     "rawCheckbox": 0,
     "titleAttribute": 0,
     "hexColour": 2
-  },
-  "components/McpSettings.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
-    "hexColour": 0
   },
   "components/MemberColumn.tsx": {
     "rawButton": 1,
@@ -206,14 +164,14 @@
     "rawButton": 3,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/OpenChats.tsx": {
     "rawButton": 1,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/PageTabs.tsx": {
@@ -234,7 +192,7 @@
     "rawButton": 2,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/PlanUsage.tsx": {
@@ -251,25 +209,11 @@
     "titleAttribute": 0,
     "hexColour": 1
   },
-  "components/RoutinesPanel.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 4,
-    "hexColour": 0
-  },
-  "components/RunningCentre.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
-    "hexColour": 0
-  },
   "components/SettingsDialog.tsx": {
     "rawButton": 3,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 3,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/SidebarSection.tsx": {
@@ -283,7 +227,7 @@
     "rawButton": 5,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 4,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/SourcePanel.tsx": {
@@ -304,7 +248,7 @@
     "rawButton": 2,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/Startup.tsx": {
@@ -318,14 +262,7 @@
     "rawButton": 5,
     "rawSelect": 0,
     "rawCheckbox": 0,
-    "titleAttribute": 4,
-    "hexColour": 0
-  },
-  "components/UserPanel.tsx": {
-    "rawButton": 0,
-    "rawSelect": 0,
-    "rawCheckbox": 0,
-    "titleAttribute": 1,
+    "titleAttribute": 0,
     "hexColour": 0
   },
   "components/WebSearchSettings.tsx": {

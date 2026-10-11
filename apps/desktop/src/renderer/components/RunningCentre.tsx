@@ -11,6 +11,7 @@ import { t } from '../i18n';
 import { EmptyPanel } from './EmptyPanel';
 import { useAllRunProgress } from '../runProgress';
 import { runningChatName, runningControls, runningGroups, runningMeta, runningStatusLine, type RunningGroupId } from '../runningList';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 const groupTitles: Record<RunningGroupId, () => string> = {
   running: () => t('Đang chạy'),
@@ -76,7 +77,7 @@ function RunningRow({ item, status, now, chatName, onOpenChat }: { item: Running
     <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm"
       badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />
     <div className="running-text">
-      <p className="running-title"><span className="running-name" title={worker.name}>{worker.name}</span>{chatName && <span className="running-chat">{chatName}</span>}</p>
+      <p className="running-title"><Tooltip label={worker.name}><span className="running-name">{worker.name}</span></Tooltip>{chatName && <span className="running-chat">{chatName}</span>}</p>
       <p className="running-status">{status}</p>
     </div>
     <div className="running-meta">
@@ -84,10 +85,10 @@ function RunningRow({ item, status, now, chatName, onOpenChat }: { item: Running
       <span className="running-facts">{[meta.provider, meta.cost].filter(Boolean).join(' · ')}</span>
     </div>
     <div className="running-actions">
-      {controls.pause && <Button size="icon" className="running-action" disabled={busy} aria-label={t('Tạm dừng {0} sau bước này', [chatName || worker.name])} title={t('Tạm dừng sau bước này')} onClick={() => void act(() => orglet.call('pause', { id: item.taskId }))}><Pause size={15} /></Button>}
-      {controls.resume && <Button size="icon" className="running-action" disabled={busy} aria-label={t('Tiếp tục {0}', [chatName || worker.name])} title={t('Tiếp tục từ checkpoint')} onClick={() => void act(() => orglet.call('resume', { id: item.taskId }))}><Play size={15} /></Button>}
-      {controls.stop && <Button size="icon" className="running-action" disabled={busy} aria-label={item.state === 'queued' ? t('Hủy {0} trước khi chạy', [chatName || worker.name]) : t('Dừng {0}', [chatName || worker.name])} title={item.state === 'queued' ? t('Hủy trước khi chạy') : t('Dừng')} onClick={() => void act(() => orglet.call('cancel', { id: item.taskId }))}><Square size={14} /></Button>}
-      <Button size="icon" className="running-action" aria-label={t('Mở chat {0}', [chatName || worker.name])} title={t('Mở chat')} onClick={() => onOpenChat(item.taskId)}><ArrowUpRight size={16} /></Button>
+      {controls.pause && <Tooltip label={t('Tạm dừng sau bước này')}><span className="tooltip-anchor"><Button size="icon" className="running-action" disabled={busy} aria-label={t('Tạm dừng {0} sau bước này', [chatName || worker.name])} onClick={() => void act(() => orglet.call('pause', { id: item.taskId }))}><Pause size={15} /></Button></span></Tooltip>}
+      {controls.resume && <Tooltip label={t('Tiếp tục từ checkpoint')}><span className="tooltip-anchor"><Button size="icon" className="running-action" disabled={busy} aria-label={t('Tiếp tục {0}', [chatName || worker.name])} onClick={() => void act(() => orglet.call('resume', { id: item.taskId }))}><Play size={15} /></Button></span></Tooltip>}
+      {controls.stop && <Tooltip label={item.state === 'queued' ? t('Hủy trước khi chạy') : t('Dừng')}><span className="tooltip-anchor"><Button size="icon" className="running-action" disabled={busy} aria-label={item.state === 'queued' ? t('Hủy {0} trước khi chạy', [chatName || worker.name]) : t('Dừng {0}', [chatName || worker.name])} onClick={() => void act(() => orglet.call('cancel', { id: item.taskId }))}><Square size={14} /></Button></span></Tooltip>}
+      <Tooltip label={t('Mở chat')}><Button size="icon" className="running-action" aria-label={t('Mở chat {0}', [chatName || worker.name])} onClick={() => onOpenChat(item.taskId)}><ArrowUpRight size={16} /></Button></Tooltip>
     </div>
   </li>;
 }

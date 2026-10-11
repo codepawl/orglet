@@ -1,4 +1,4 @@
-import { TabbedDialog } from '@codepawlhq/orglet-ui';
+import { TabbedDialog, Tooltip } from '@codepawlhq/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Archive, Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut, CircleUserRound } from 'lucide-react';
 import { avatarPalette } from './Avatar';
@@ -664,17 +664,17 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 <div className="setting-swatches" role="radiogroup" aria-label={t('Màu nhấn')}>
                   {accentSwatches.map(color => {
                     const checked = accent.toLowerCase() === color.toLowerCase();
-                    return <button key={color} type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} disabled={busy}
-                      className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={color} title={color}
-                      onClick={() => void save({ accentColor: color })}>{checked && <Check size={12} strokeWidth={3} aria-hidden="true" />}</button>;
+                    return <Tooltip label={color} key={color}><span className="tooltip-anchor"><button type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} disabled={busy}
+                      className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={color}
+                      onClick={() => void save({ accentColor: color })}>{checked && <Check size={12} strokeWidth={3} aria-hidden="true" />}</button></span></Tooltip>;
                   })}
                   {/* A swatch like its neighbours: a colour wheel with a pencil, or the custom accent itself once one is chosen. */}
-                  <button ref={customColorButton} type="button" className="avatar-swatch accent-swatch-custom" data-custom={customAccent || undefined}
+                  <Tooltip label={customAccent ? accent : t('Chọn màu khác')}><span className="tooltip-anchor"><button ref={customColorButton} type="button" className="avatar-swatch accent-swatch-custom" data-custom={customAccent || undefined}
                     style={customAccent ? { '--avatar-color': accent } as CSSProperties : undefined}
-                    aria-label={customAccent ? t('Màu tùy chỉnh {0}, chỉnh sửa', [accent]) : t('Chọn màu khác')} title={customAccent ? accent : t('Chọn màu khác')}
+                    aria-label={customAccent ? t('Màu tùy chỉnh {0}, chỉnh sửa', [accent]) : t('Chọn màu khác')}
                     aria-haspopup="dialog" aria-expanded={colorPanel} aria-pressed={customAccent} disabled={busy} onClick={() => setColorPanel(open => !open)}>
                     <Pencil size={11} strokeWidth={2.75} aria-hidden="true" />
-                  </button>
+                  </button></span></Tooltip>
                 </div>
               </Row>
               <AnchoredPopover anchor={customColorButton} open={colorPanel} onClose={closeColorPanel} label={t('Tạo màu')}>
@@ -854,7 +854,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         onClaim={accountUsage.unavailable ? undefined : () => void claimReset(item, accountUsage, bankedResets)} />}
                       {usageGap && <span className="setting-description">{usageGap}</span>}
                       {/* A harness that cannot hold accounts still shows where it lives; the others keep it behind the "i". */}
-                      {item.executable && !item.runnable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
+                      {item.executable && !item.runnable ? <Tooltip label={item.executable}><span className="setting-path">{item.executable}</span></Tooltip> : null}
                       {item.runnable && <HarnessAccountPicker item={item} usage={usage?.[item.id]} busy={busy}
                         onSelect={id => void act(async () => {
                           await changeAccount(() => orglet.call('selectHarnessAccount', { harness: item.id, id }));

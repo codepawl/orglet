@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { cn } from '../cn';
 import { CloseIcon } from '../icons';
 import './RowMenu.css';
+import { Tooltip } from './Tooltip';
 
 /** Any icon component that takes a size, such as one from lucide-react. */
 export type RowMenuIcon = ComponentType<{ size?: number; 'aria-hidden'?: boolean | 'true' | 'false' }>;
@@ -206,8 +207,8 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
   const shortcut = items.find(item => item.shortcut)?.shortcut?.replaceAll('Ctrl', 'Control');
   return <div ref={root} className="org-row-menu" onBlur={event => closeOnFocusLeaving(event.relatedTarget)}
     onKeyDown={event => { if (open) onMenuKey(event); }}>
-    <Button ref={trigger} type="button" size={children ? undefined : 'icon'} className={cn(className)} aria-label={label} title={label} aria-haspopup="menu"
-      aria-expanded={open} aria-keyshortcuts={shortcut} disabled={disabled} onClick={toggle}>{children ?? <Icon size={16} />}</Button>
+    <Tooltip label={label}><Button ref={trigger} type="button" size={children ? undefined : 'icon'} className={cn(className)} aria-label={label} aria-haspopup="menu"
+      aria-expanded={open} aria-keyshortcuts={shortcut} disabled={disabled} onClick={toggle}>{children ?? <Icon size={16} />}</Button></Tooltip>
     {menu}
   </div>;
 }

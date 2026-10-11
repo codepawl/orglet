@@ -9,7 +9,7 @@ import { Select } from './Select';
 import { Switch } from './Switch';
 import { RowMenu } from './RowMenu';
 import { StatusMark, type StatusMarkState } from './StatusMark';
-import { FieldError, Input, Textarea } from '@codepawlhq/orglet-ui';
+import { FieldError, Input, Textarea, Tooltip } from '@codepawlhq/orglet-ui';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { toast } from './toast';
@@ -182,7 +182,7 @@ function McpServerRow({ server, busy, act, onEdit }: { server: McpServerView; bu
         <span id={titleId} className="setting-title">{server.name}</span>
         <span className={`status-pill ${state.className}`}><StatusMark variant={state.mark.variant} tone={state.mark.tone} label={state.label} decorative />{state.label}</span>
       </span>
-      <span className="setting-path" title={transportLine(server)}>{transportLine(server)}</span>
+      <Tooltip label={transportLine(server)}><span className="setting-path">{transportLine(server)}</span></Tooltip>
       {server.status === 'error' && server.error && <span className="setting-description error">{tMessage(server.error)}</span>}
       {tools.length > 0 && <details className="mcp-tools">
         <summary className="activity-summary"><ChevronRight size={13} aria-hidden="true" className="activity-chevron" />{tools.length === 1 ? t('1 công cụ') : t('{0} công cụ', [tools.length])}{server.omittedTools ? ` · ${t('bỏ qua {0}', [server.omittedTools])}` : ''}</summary>
@@ -299,7 +299,7 @@ function McpServerEditor({ server, app, onClose }: { server?: McpServerView; app
         {!browserSignIn && <label><FieldLabel icon={KeyRound}>{t('Bearer token')}</FieldLabel>
           <span className="mcp-secret">
             <Input type="password" autoComplete="off" spellCheck={false} value={bearer} onChange={event => { setBearer(event.target.value); setBearerRemoved(false); }} placeholder={savedBearer && !bearerRemoved ? `${SAVED_MASK} ${t('nhập để thay')}` : t('Không bắt buộc')} />
-            {savedBearer && !bearerRemoved && !bearer && <Button type="button" size="icon" variant="ghost" aria-label={t('Bỏ token')} title={t('Bỏ token')} onClick={() => setBearerRemoved(true)}><X size={15} /></Button>}
+            {savedBearer && !bearerRemoved && !bearer && <Tooltip label={t('Bỏ token')}><Button type="button" size="icon" variant="ghost" aria-label={t('Bỏ token')} onClick={() => setBearerRemoved(true)}><X size={15} /></Button></Tooltip>}
           </span>
         </label>}
         {app?.tokenPage && !browserSignIn && <p className="muted">{t('Tạo token tại {0}', [app.tokenPage])}</p>}

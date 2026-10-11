@@ -4,7 +4,7 @@ import {
 } from 'react';
 import { AppWindow, Hand, Info, Maximize2, Undo2, X } from 'lucide-react';
 import { BrandMark } from './brandMarks';
-import { Skeleton, Viewer } from '@codepawlhq/orglet-ui';
+import { Skeleton, Viewer, Tooltip } from '@codepawlhq/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import {
   BROWSER_WATCH_RENEW_MS, pageToView, viewToPage, type BrowserCursor, type BrowserInputEvent, type BrowserLiveEvent, type BrowserSuggestion, type BrowserWatchState,
@@ -355,7 +355,7 @@ export function BrowserLiveSurface({ runId, workerName, workerColor, site, contr
       <Info size={15} aria-hidden="true" />
       <span>{suggestionText[live.suggestion]}</span>
       <Button variant="outline" onClick={onOpenInChrome}><BrandMark brand="chrome" size={14} />{t('Mở trong Chrome')}</Button>
-      <Button size="icon" variant="ghost" aria-label={t('Bỏ qua gợi ý')} title={t('Bỏ qua gợi ý')} onClick={live.dismissSuggestion}><X size={14} /></Button>
+      <Tooltip label={t('Bỏ qua gợi ý')}><Button size="icon" variant="ghost" aria-label={t('Bỏ qua gợi ý')} onClick={live.dismissSuggestion}><X size={14} /></Button></Tooltip>
     </div>}
   </div>;
 }
@@ -401,7 +401,7 @@ function showsLivePanel(detail: TaskDetail) {
 export function BrowserLiveExpand({ detail }: { detail: TaskDetail }) {
   const viewerOpen = useBrowserViewer() === detail.task.id;
   if (!showsLivePanel(detail) || viewerOpen) return null;
-  return <Button size="icon" variant="ghost" aria-label={t('Xem lớn')} title={t('Xem lớn')} onClick={() => openBrowserViewer(detail.task.id)}><Maximize2 size={15} /></Button>;
+  return <Tooltip label={t('Xem lớn')}><Button size="icon" variant="ghost" aria-label={t('Xem lớn')} onClick={() => openBrowserViewer(detail.task.id)}><Maximize2 size={15} /></Button></Tooltip>;
 }
 
 /** The live view as Details shows it: the picture, then the controls. Only while a run uses the browser. */

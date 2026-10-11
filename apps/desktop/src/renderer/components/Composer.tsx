@@ -31,6 +31,7 @@ import { chatContextFor, usageRingFor, type ComposerUsage, type ContextWorker } 
 import { isHarness } from '../../shared/harness';
 import { modelLists } from '../caches';
 import { useCachedEach } from '../prefetch';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 const SINGLE_LINE = 40;
 
@@ -283,13 +284,13 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
         a glance (owner, 2026-09-30: smaller). While a run works, stop takes the slot; words typed meanwhile bring send
         back beside it, so stopping stays one click away. */}
     <div className="composer-send">
-      {onStop && <Button type="button" variant="ghost" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
+      {onStop && <Tooltip label={t('Dừng')}><Button type="button" variant="ghost" size="icon" className="send stop" aria-label={t('Dừng')} onClick={onStop}>
         <span className="send-spin" aria-hidden="true" />
         <Square size={9} fill="currentColor" />
-      </Button>}
-      {(!onStop || canSend) && <Button type="submit" variant={canSend ? 'primary' : 'ghost'} size="icon" className="send" aria-label={sendLabel} title={sendLabel} disabled={!canSend}>
+      </Button></Tooltip>}
+      {(!onStop || canSend) && <Tooltip label={sendLabel}><span className="tooltip-anchor"><Button type="submit" variant={canSend ? 'primary' : 'ghost'} size="icon" className="send" aria-label={sendLabel} disabled={!canSend}>
         <ArrowUp size={16} strokeWidth={2.25} />
-      </Button>}
+      </Button></span></Tooltip>}
     </div>
   </form>
   {/* Directly under the box, one line: add at the left, the model or recipient and then the usage ring at the right.
@@ -590,7 +591,7 @@ ${extra}` : extra;
       context={reply && !pendingDecision ? <div className="composer-reply">
         <Reply size={14} aria-hidden="true" />
         <p><strong>{reply.author}</strong><span>{reply.text}</span></p>
-        <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
+        <Tooltip label={t('Bỏ trả lời')}><Button type="button" size="icon" aria-label={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button></Tooltip>
       </div> : undefined}
       attachments={added.sources} onRemoveAttachment={removeFile}
       leading={<SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} mode={modePicker} />

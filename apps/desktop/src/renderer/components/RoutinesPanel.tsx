@@ -180,14 +180,14 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
           <span className="routine-icon" aria-hidden="true"><TriggerIcon size={18} /></span>
           <div className="routine-title"><h3>{item.name}</h3>
             {/* One line under the name: on or off, then what starts it. It never wraps; a long folder name ends in … */}
-            <p className="routine-subline"><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span><span className="routine-trigger" title={summary}>{summary}</span></p>
+            <p className="routine-subline"><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span><Tooltip label={summary}><span className="routine-trigger">{summary}</span></Tooltip></p>
           </div>
           <div className="routine-actions">
             {/* Run now goes through the guards a trigger passes (switched on, approved as it is, previous run done)
                 and opens the run like any scheduled one; the next scheduled time stays as it was. */}
-            <Button size="icon" aria-label={t('Chạy ngay lịch {0}', [item.name])} title={item.enabled ? t('Chạy ngay') : t('Bật lịch để chạy ngay')} disabled={busy || !item.enabled}
-              onClick={() => void action(async () => openTask(await orglet.call('runRoutineNow', { id: item.id })))}><Play size={16} /></Button>
-            <Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} title={t('Sửa lịch')} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button>
+            <Tooltip label={item.enabled ? t('Chạy ngay') : t('Bật lịch để chạy ngay')}><span className="tooltip-anchor"><Button size="icon" aria-label={t('Chạy ngay lịch {0}', [item.name])} disabled={busy || !item.enabled}
+              onClick={() => void action(async () => openTask(await orglet.call('runRoutineNow', { id: item.id })))}><Play size={16} /></Button></span></Tooltip>
+            <Tooltip label={t('Sửa lịch')}><span className="tooltip-anchor"><Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button></span></Tooltip>
             {/* On or off is two states, so it wears a switch (user, 2026-09-19). Its name stays "Bật lịch"
                 whichever way it is set, because the state is what aria-checked says. */}
             <Switch checked={item.enabled} disabled={busy} label={t('Bật lịch')}
@@ -207,10 +207,10 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
           {/* The day so far (COD-288): an hourly schedule's quiet runs collect here instead of a toast each. */}
           {runsToday(item) > 0 && <li><History size={14} aria-hidden="true" />{runsToday(item) === 1 ? t('1 lần chạy hôm nay') : t('{0} lần chạy hôm nay', [runsToday(item)])}</li>}
           {/* Why an hourly schedule spoke up (COD-303): when the decision model flagged a run, and its rating behind the line. */}
-          {announced && <li title={t('Lịch hằng giờ thường im lặng khi xong. Model quyết định chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)]) + (announced.answeredBy ? ` ${t('Trả lời bởi {0} · {1}.', [decisionBackendName(announced.answeredBy.connection), announced.answeredBy.model])}` : '')}><BellRing size={14} aria-hidden="true" />{t('Model quyết định đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li>}
+          {announced && <Tooltip label={t('Lịch hằng giờ thường im lặng khi xong. Model quyết định chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)]) + (announced.answeredBy ? ` ${t('Trả lời bởi {0} · {1}.', [decisionBackendName(announced.answeredBy.connection), announced.answeredBy.model])}` : '')}><li><BellRing size={14} aria-hidden="true" />{t('Model quyết định đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li></Tooltip>}
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
           {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}
-          {item.workspace && <li title={workspaceLevelNames[workspaceLevelOf(item.workspace.permissions)]}><FolderOpen size={14} aria-hidden="true" /><span className="routine-meta-folder">{item.workspace.folderName}</span></li>}
+          {item.workspace && <Tooltip label={workspaceLevelNames[workspaceLevelOf(item.workspace.permissions)]}><li><FolderOpen size={14} aria-hidden="true" /><span className="routine-meta-folder">{item.workspace.folderName}</span></li></Tooltip>}
         </ul>
         <p className="routine-brief"><MessageSquareText size={14} aria-hidden="true" /><span>{item.task.brief}</span></p>
         {/* A miss is news, not an error (COD-283): which run, when, why in plain words, and what catching up does. */}
@@ -477,7 +477,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         <PanelHeading level={3} title={<FieldLabel icon={FolderOpen} required>{t('Thư mục theo dõi')}</FieldLabel>}>
           <Button type="button" variant="outline" disabled={busy} onClick={() => void pickFolder()}><FolderInput size={15} />{folder ? t('Đổi thư mục') : t('Chọn thư mục')}</Button>
         </PanelHeading>
-        {folder ? <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><span title={folder.name}>{folder.name}</span><span className="muted">{t('Chỉ đọc')}</span></p> : <p className="muted">{t('Chưa chọn thư mục.')}</p>}
+        {folder ? <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><Tooltip label={folder.name}><span>{folder.name}</span></Tooltip><span className="muted">{t('Chỉ đọc')}</span></p> : <p className="muted">{t('Chưa chọn thư mục.')}</p>}
         <p className="muted">{t('Mỗi tệp mới trong thư mục này bắt đầu một lần chạy, với tệp đó đính kèm; nhiều tệp đến cùng lúc chạy chung một lần. Chỉ theo dõi khi Orglet đang mở. Tệp có sẵn và tệp đến khi app tắt không được chạy.')}</p>
       </div>}
       {triggerKind === 'app' && <div className="routine-app">

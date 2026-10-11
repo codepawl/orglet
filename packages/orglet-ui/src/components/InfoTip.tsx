@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CheckIcon, CopyIcon } from '../icons';
 import { Button } from './Button';
 import './InfoTip.css';
+import { Tooltip } from './Tooltip';
 
 /** One line of the panel: a label and a value; `mono` for ids and hashes, `onCopy` adds a copy button. */
 export type InfoTipRow = { label: string; value: ReactNode; mono?: boolean; onCopy?: () => void | Promise<void> };
@@ -123,10 +124,10 @@ export function InfoTip({ label, rows, icon, copyLabel }: {
           <dt>{row.label}</dt>
           <dd className={row.mono ? 'org-info-tip-mono' : undefined}>
             <span className="org-info-tip-value">{row.value}</span>
-            {row.onCopy && <Button size="icon" className="org-info-tip-copy" aria-label={copyLabel(row.label)} title={copyLabel(row.label)}
+            {row.onCopy && <Tooltip label={copyLabel(row.label)}><Button size="icon" className="org-info-tip-copy" aria-label={copyLabel(row.label)}
               onClick={() => void copy(row, index)}>
               {copiedIndex === index ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
-            </Button>}
+            </Button></Tooltip>}
           </dd>
         </div>)}
       </dl>

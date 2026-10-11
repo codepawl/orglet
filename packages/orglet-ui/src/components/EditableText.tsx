@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '../cn';
 import './EditableText.css';
+import { Tooltip } from './Tooltip';
 
 /**
  * A name that can be renamed where it is shown. At rest it reads as text; on hover or keyboard focus it shows the
@@ -90,13 +91,12 @@ export function EditableText({ value, onCommit, label, maxLength, disabled, clas
       onBlur={() => void commit().catch(() => undefined)}
     />;
   }
-  return <button
+  return <Tooltip label={label}><button
     type="button"
     className={cn('org-editable-text', className)}
     aria-label={label}
-    title={label}
     disabled={disabled}
     onClick={startEditing}
     onKeyDown={onRestKeyDown}
-  >{shown}</button>;
+  >{shown}</button></Tooltip>;
 }

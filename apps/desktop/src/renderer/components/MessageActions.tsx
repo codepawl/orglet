@@ -8,6 +8,7 @@ import { Button } from './ui';
 import { pickReaction, reactionEmoji, reactionGroups, reactionMeanings, reactionOrder, replyToAnswer, userReactionOn } from './messageMarks';
 import { ReactionBadges, ReactionBar } from './ReactionBar';
 import { saveMessage, unsaveMessage, useSavedMessages, savedKey } from '../saved';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /** The bridge call and the props every reaction control shares: which message, whose marks, and how to run a command. */
 type ReactionProps = {
@@ -50,10 +51,10 @@ export function MessageActions({ taskId, messageId, author, text, reactions, act
   const toggleSaved = () => isSaved ? unsaveMessage(taskId, messageId) : saveMessage({ taskId, messageId, author, text });
   return <div className="message-actions" role="group" aria-label={t('Thao tác với tin nhắn')}>
     {leading}
-    <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
-    {onForward && <Button size="icon" aria-label={t('Chuyển tiếp tin này')} title={t('Chuyển tiếp tin này')} onClick={onForward}><Forward size={15} /></Button>}
+    <Tooltip label={t('Trả lời tin này')}><Button size="icon" aria-label={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button></Tooltip>
+    {onForward && <Tooltip label={t('Chuyển tiếp tin này')}><Button size="icon" aria-label={t('Chuyển tiếp tin này')} onClick={onForward}><Forward size={15} /></Button></Tooltip>}
     <ReactionBar options={reactionOptions()} picked={current} onPick={pick} label={t('Thả react')} icon={<SmilePlus size={15} />} />
-    <Button size="icon" aria-label={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} title={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} aria-pressed={isSaved} className={isSaved ? 'message-saved' : undefined} onClick={toggleSaved}>{isSaved ? <BookmarkCheck size={15} fill="currentColor" /> : <Bookmark size={15} />}</Button>
+    <Tooltip label={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')}><Button size="icon" aria-label={isSaved ? t('Bỏ lưu tin này') : t('Lưu để xem sau')} aria-pressed={isSaved} className={isSaved ? 'message-saved' : undefined} onClick={toggleSaved}>{isSaved ? <BookmarkCheck size={15} fill="currentColor" /> : <Bookmark size={15} />}</Button></Tooltip>
   </div>;
 }
 

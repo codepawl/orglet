@@ -133,8 +133,10 @@ export function Tooltip({ label, shortcut, side = 'top', className, children }: 
     };
   }, [open]);
 
+  // An empty label (a hint that only applies sometimes) shows nothing at all.
+  const shown = open && Boolean(label);
   const childProps = children.props;
-  const describedBy = open
+  const describedBy = shown
     ? [childProps['aria-describedby'], tooltipId].filter(Boolean).join(' ')
     : childProps['aria-describedby'];
   const keepChildRef = (node: HTMLElement | null) => {
@@ -169,7 +171,7 @@ export function Tooltip({ label, shortcut, side = 'top', className, children }: 
   });
 
   const hidden: CSSProperties = { position: 'fixed', left: 0, top: 0, visibility: 'hidden' };
-  const bubble = open && trigger.current && createPortal(
+  const bubble = shown && trigger.current && createPortal(
     <div ref={tooltip} id={tooltipId} role="tooltip" data-popup-open data-side={placement?.side ?? side}
       className={cn('org-tooltip', className)} style={placement?.style ?? hidden}>
       {label}

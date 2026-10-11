@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import './Attachment.css';
+import { Tooltip } from './Tooltip';
 
 /** What a file is, as far as a glance needs to know. Read from the extension of its name. */
 export type FileKind = 'image' | 'video' | 'audio' | 'document' | 'spreadsheet' | 'data' | 'code' | 'archive' | 'text' | 'file';
@@ -63,10 +64,10 @@ export function Attachment({ name, meta, icon, onOpen, onRemove, removeLabel, re
     </span>
   </>;
   if (onOpen) return <li className={className}>
-    <button type="button" className="org-attachment-open" title={name} onClick={onOpen}>{body}</button>
+    <Tooltip label={name}><button type="button" className="org-attachment-open" onClick={onOpen}>{body}</button></Tooltip>
   </li>;
-  return <li className={className} title={name}>
+  return <Tooltip label={name}><li className={className}>
     {body}
-    {onRemove && <button type="button" className="org-attachment-remove" aria-label={removeLabel} title={removeLabel} onClick={onRemove}>{removeIcon}</button>}
-  </li>;
+    {onRemove && <Tooltip label={removeLabel}><button type="button" className="org-attachment-remove" aria-label={removeLabel} onClick={onRemove}>{removeIcon}</button></Tooltip>}
+  </li></Tooltip>;
 }

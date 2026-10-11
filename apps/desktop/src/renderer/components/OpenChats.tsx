@@ -7,6 +7,7 @@ import { StatusMark, openChatMark } from './StatusMark';
 import { statusMarkLabel, useScrolledIntoViewWhenActive } from './SidebarTree';
 import { dwellHandlers } from '../prefetch';
 import type { OpenChatState } from '../openChats';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /** What kind of chat sits on the Open list: one with no row of its own, such as an earlier chat or an older schedule run. */
 export type OpenChatKind = 'side' | 'channel' | 'schedule' | 'earlier';
@@ -54,13 +55,13 @@ export function OpenChatRow({ item, onClose }: { item: OpenChatItem; onClose: ()
     <div className="worker-row">
       <StatusMark variant={mark.variant} tone={mark.tone} label={stateLabel} />
       <span className="row-disclosure" aria-hidden="true">{item.face}</span>
-      <button type="button" className={item.active ? 'worker active' : 'worker'} aria-current={item.active || undefined}
-        aria-description={item.description} title={`${item.name}\n${item.description}\n${stateLabel}`} onClick={item.onOpen}>
+      <Tooltip label={`${item.name}\n${item.description}\n${stateLabel}`}><button type="button" className={item.active ? 'worker active' : 'worker'} aria-current={item.active || undefined}
+        aria-description={item.description} onClick={item.onOpen}>
         {item.kind === 'schedule' && <CalendarClock size={14} className="open-chat-kind" aria-hidden="true" />}
         <span>{item.name}</span>
-      </button>
+      </button></Tooltip>
       <span className="open-chat-close">
-        <Button size="icon" className="row-action" aria-label={t('Đóng {0}', [item.name])} title={t('Đóng (Ctrl W)')} onClick={onClose}><X size={14} /></Button>
+        <Tooltip label={t('Đóng (Ctrl W)')}><Button size="icon" className="row-action" aria-label={t('Đóng {0}', [item.name])} onClick={onClose}><X size={14} /></Button></Tooltip>
       </span>
     </div>
   </div>;

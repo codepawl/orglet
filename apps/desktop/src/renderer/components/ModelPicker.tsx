@@ -12,7 +12,7 @@ import { modelRunnable, openCodeModelIssue } from './openCodeModel';
 import { checkedChoiceValue, modelChoices, type ModelChoice } from '../../shared/modelChoices';
 import { choiceBadge, choiceLabel, shownChoices } from './modelRows';
 import { isOpenCodePlan } from '../../shared/opencode';
-import { Input, Skeleton } from '@codepawlhq/orglet-ui';
+import { Input, Skeleton, Tooltip } from '@codepawlhq/orglet-ui';
 import { modelLists } from '../caches';
 import { modelIdRequired, startingModelId } from './workerModel';
 import { useCached } from '../prefetch';
@@ -225,9 +225,9 @@ export function ModelPicker({ provider, value, onChange, invalid, flash, require
         }} />
       <ChevronDown size={16} className={`model-picker-chevron${open ? ' open' : ''}`} aria-hidden="true" />
       </div>
-      <Button type="button" size="icon" className="model-picker-refresh" disabled={busy || pending} aria-label={t('Làm mới danh sách model')} title={t('Làm mới danh sách model')} onClick={() => void load(true)}>
+      <Tooltip label={t('Làm mới danh sách model')}><span className="tooltip-anchor"><Button type="button" size="icon" className="model-picker-refresh" disabled={busy || pending} aria-label={t('Làm mới danh sách model')} onClick={() => void load(true)}>
         <RefreshCw size={13} className={busy ? 'spin' : undefined} />
-      </Button>
+      </Button></span></Tooltip>
     </div>
     {(notice || replacementId) && <p id={deprecationId} className="model-picker-deprecation">
       {notice && <span className="badge model-deprecation-chip" data-chip="deprecated">{deprecationChipLabel(notice.sunsetAt)}</span>}

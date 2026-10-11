@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { ArrowUpRight, Circle, Crop, Highlighter, Pen, Redo2, Square, Type, Undo2 } from 'lucide-react';
-import { Button, Input, ToolbarToggleGroup, type ToolbarToggleItem } from '@codepawlhq/orglet-ui';
+import { Button, Input, ToolbarToggleGroup, type ToolbarToggleItem, Tooltip } from '@codepawlhq/orglet-ui';
 import { t } from '../i18n';
 import {
   cropFrom, exportFrame, extendStroke, isShape, isStroke, labelFont, paintMarkup, rectFrom, strokeWidth, textSize,
@@ -82,8 +82,8 @@ export function MarkupToolbar({ tools, tool, onTool, palette, color, onColor, le
     <ToolbarToggleGroup label={t('Màu')} items={colorItems} value={color} onValueChange={onColor} className="markup-colors" />
     <ToolbarToggleGroup label={t('Độ dày nét')} items={levelItems} value={level} onValueChange={value => onLevel(value as StrokeLevel)} />
     <span className="markup-history">
-      <Button type="button" size="icon" aria-label={t('Hoàn tác')} title={t('Hoàn tác (Ctrl+Z)')} aria-keyshortcuts="Control+Z" disabled={!canUndo} onClick={onUndo}><Undo2 size={16} /></Button>
-      <Button type="button" size="icon" aria-label={t('Làm lại')} title={t('Làm lại (Ctrl+Shift+Z)')} aria-keyshortcuts="Control+Shift+Z" disabled={!canRedo} onClick={onRedo}><Redo2 size={16} /></Button>
+      <Tooltip label={t('Hoàn tác (Ctrl+Z)')}><span className="tooltip-anchor"><Button type="button" size="icon" aria-label={t('Hoàn tác')} aria-keyshortcuts="Control+Z" disabled={!canUndo} onClick={onUndo}><Undo2 size={16} /></Button></span></Tooltip>
+      <Tooltip label={t('Làm lại (Ctrl+Shift+Z)')}><span className="tooltip-anchor"><Button type="button" size="icon" aria-label={t('Làm lại')} aria-keyshortcuts="Control+Shift+Z" disabled={!canRedo} onClick={onRedo}><Redo2 size={16} /></Button></span></Tooltip>
     </span>
     {children}
   </div>;

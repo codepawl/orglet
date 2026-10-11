@@ -26,7 +26,8 @@ describe('Attachment', () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();
     render(<ul><Attachment name="notes.md" meta="Document · 2 KB" icon={<span>F</span>} onRemove={onRemove} removeLabel="Remove notes.md" removeIcon="×" /></ul>);
-    expect(screen.getByRole('listitem').getAttribute('title')).toBe('notes.md');
+    await user.hover(screen.getByRole('listitem'));
+    expect((await screen.findByRole('tooltip')).textContent).toBe('notes.md');
     expect(screen.getByText('Document · 2 KB').className).toBe('org-attachment-meta');
     await user.click(screen.getByRole('button', { name: 'Remove notes.md' }));
     expect(onRemove).toHaveBeenCalledTimes(1);

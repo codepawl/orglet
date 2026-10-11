@@ -2,6 +2,7 @@ import { AppWindow, FolderOpen, Globe, X } from 'lucide-react';
 import type { WorkspaceLevel } from '../../shared/capability-status';
 import type { PermissionNeed } from '../../shared/permission-needs';
 import { t } from '../i18n';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /**
  * The one quiet line under a message box when the decision model reads the message as needing a permission the chat does not have
@@ -22,9 +23,9 @@ export function PermissionHint({ need, folder, disabled, onApply, onDismiss }: {
     {icon}
     <span>{sentence}</span>
     <button type="button" className="text-link" disabled={disabled} onClick={onApply}>{action}</button>
-    <button type="button" className="permission-hint-dismiss" aria-label={t('Ẩn gợi ý quyền')} title={t('Ẩn gợi ý quyền')} onClick={onDismiss}>
+    <Tooltip label={t('Ẩn gợi ý quyền')}><button type="button" className="permission-hint-dismiss" aria-label={t('Ẩn gợi ý quyền')} onClick={onDismiss}>
       <X size={13} aria-hidden="true" />
-    </button>
+    </button></Tooltip>
   </p>;
 }
 

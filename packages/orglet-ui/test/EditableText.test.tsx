@@ -28,12 +28,14 @@ function deferred() {
 describe('EditableText', () => {
   // COD-239: the chat header's name renames the orglet or crew in place. At rest it is a button that names what it
   // renames, so a screen reader hears "Rename Researcher" and a click or Enter starts editing.
-  it('rests as a named button that shows the current value', () => {
+  it('rests as a named button that shows the current value', async () => {
+    const user = userEvent.setup();
     render(<EditableText value="Researcher" label="Rename Researcher" onCommit={() => undefined} className="topbar-name" />);
     const button = screen.getByRole('button', { name: 'Rename Researcher' });
     expect(button.textContent).toBe('Researcher');
     expect(button.getAttribute('type')).toBe('button');
-    expect(button.getAttribute('title')).toBe('Rename Researcher');
+    await user.hover(button);
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Rename Researcher');
     expect(button.className).toBe('org-editable-text topbar-name');
   });
 

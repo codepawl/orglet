@@ -5,6 +5,7 @@ import { Button } from './ui';
 import { t, translated } from '../i18n';
 import type { ArchiveGroupId } from '../archive';
 import { RowMenu } from './RowMenu';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /** How long an archived item has before it deletes itself; `null` when auto-delete is off. */
 export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 'expiring' };
@@ -37,7 +38,7 @@ const groupTitles: Record<ArchiveGroupId, string> = translated({ orglets: 'Tí',
  */
 export function ArchivedRow({ name, mark, whose, archive, deleteQuestion, deleteBlock, onRestore, onDelete }: Omit<ArchiveRowData, 'key'>) {
   const deletesIn = archive.daysLeft === null ? undefined : archive.daysLeft === 1 ? t('Tự xóa sau 1 ngày') : t('Tự xóa sau {0} ngày', [archive.daysLeft]);
-  return <li className="archive-row" title={[name, whose, deletesIn].filter(Boolean).join('\n')}>
+  return <Tooltip label={[name, whose, deletesIn].filter(Boolean).join('\n')}><li className="archive-row">
     <span className="archive-mark">{mark}</span>
     <span className="setting-text">
       <span className="archive-name">{name}</span>
@@ -50,7 +51,7 @@ export function ArchivedRow({ name, mark, whose, archive, deleteQuestion, delete
         confirm: deleteBlock
           ? { question: deleteBlock.question, label: deleteBlock.actionLabel, icon: Hash, safe: true }
           : { question: deleteQuestion ?? t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
-  </li>;
+  </li></Tooltip>;
 }
 
 /**

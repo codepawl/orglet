@@ -3,7 +3,7 @@ import { ChevronDown, Eye, Lightbulb, Undo2, X } from 'lucide-react';
 import { UsageGauge } from './UsageGauge';
 import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
-import { Input } from '@codepawlhq/orglet-ui';
+import { Input, Tooltip } from '@codepawlhq/orglet-ui';
 import { Button } from './ui';
 import { usageResetLabel } from './PlanUsage';
 import { t } from '../i18n';
@@ -69,9 +69,9 @@ export function LiveIsland({ state, label, named, receipt, workers, actions = []
         <span className="live-island-receipt" key={settledReceipt}>{settledReceipt}</span>
       </div>
       <span className="live-island-content" ref={content}>
-        <span className="live-island-faces" ref={faces} title={workers.map(worker => worker.name).join(', ')}>
+        <Tooltip label={workers.map(worker => worker.name).join(', ')}><span className="live-island-faces" ref={faces}>
           <RosterAvatars workers={workers} size="sm" max={workers.length} />
-        </span>
+        </span></Tooltip>
         <IslandSentence key={label} label={label} named={named} />
         {since !== undefined && <IslandElapsed since={since} />}
         {actions.map(action => <Button key={action.kind} type="button" className="live-island-browser" onClick={action.onSelect}>
@@ -124,7 +124,7 @@ function IslandSentence({ label, named }: { label: string; named?: NamedSentence
   const style = { '--island-name-floor': floor } as CSSProperties;
   return <span className="live-island-label live-island-sentence" style={style}>
     {named.before && <span className="live-island-lead">{named.before}</span>}
-    <span className="live-island-name" ref={name} title={named.name}>{named.name}</span>
+    <Tooltip label={named.name}><span className="live-island-name" ref={name}>{named.name}</span></Tooltip>
     <span className="live-island-action">{named.after}</span>
   </span>;
 }
@@ -145,7 +145,7 @@ export function KnowledgeIsland({ count, review, dismiss, leaving }: { count: nu
         <Lightbulb size={16} aria-hidden="true" />
         <span className="live-island-label" key={label}>{label}</span>
         <Button type="button" className="live-island-action" aria-label={t('Xem gợi ý kiến thức')} onClick={review}>{t('Xem')}</Button>
-        <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
+        <Tooltip label={t('Bỏ qua')}><Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button></Tooltip>
       </span>
     </div>
   </div>;
@@ -180,7 +180,7 @@ export function AccountIsland({ harnessName, target, resetsAt, switchAccount, di
           ? <Button type="button" className="live-island-action" onClick={switchAccount}
             aria-label={retries ? t('Chuyển sang {0} rồi chạy lại', [target.label]) : t('Chuyển sang {0}', [target.label])}>{t('Dùng {0} · còn {1}%', [target.label, 100 - Math.round(target.usedPercent)])}</Button>
           : resetsAt && <span className="live-island-meta">{usageResetLabel(resetsAt)}</span>}
-        <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
+        <Tooltip label={t('Bỏ qua')}><Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button></Tooltip>
       </span>
     </div>
   </div>;

@@ -9,6 +9,7 @@ import { autoMascot, distinctMascot } from './mascotSuggest';
 import { Button, Drawer } from './ui';
 import { crewMembers, orgletDetailChanges, withoutSpendingLimits, proposalCards, proposalModelLabel, showChangeValue, workflowName, workerOfProposal, type ProposalContext } from './proposalValues';
 import { t, tMessage, translated } from '../i18n';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /**
  * The cards a worker's app-change proposals become in the chat (COD-199, redrawn in COD-212). The new orglets of one
@@ -196,10 +197,10 @@ function OrgletRow({ proposal, context, actions, onOpen }: { proposal: AppPropos
       </span>
       <span className="badge">{proposalModelLabel(proposal)}</span>
     </button>
-    {state && <span className={`proposal-orglet-state ${state.tone}`} title={state.title}>{state.text}</span>}
-    {pending && <Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Áp dụng {0}', [proposal.title])} title={t('Áp dụng')} onClick={() => actions.onApply(proposal)}><Check size={16} /></Button>}
-    {pending && <Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Bỏ qua {0}', [proposal.title])} title={t('Bỏ qua')} onClick={() => actions.onDismiss(proposal)}><X size={16} /></Button>}
-    {isUndoable(proposal) && <Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Hoàn tác {0}', [proposal.title])} title={t('Hoàn tác')} onClick={() => actions.onUndo(proposal)}><Undo2 size={16} /></Button>}
+    {state && <Tooltip label={state.title ?? ''}><span className={`proposal-orglet-state ${state.tone}`}>{state.text}</span></Tooltip>}
+    {pending && <Tooltip label={t('Áp dụng')}><span className="tooltip-anchor"><Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Áp dụng {0}', [proposal.title])} onClick={() => actions.onApply(proposal)}><Check size={16} /></Button></span></Tooltip>}
+    {pending && <Tooltip label={t('Bỏ qua')}><span className="tooltip-anchor"><Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Bỏ qua {0}', [proposal.title])} onClick={() => actions.onDismiss(proposal)}><X size={16} /></Button></span></Tooltip>}
+    {isUndoable(proposal) && <Tooltip label={t('Hoàn tác')}><span className="tooltip-anchor"><Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Hoàn tác {0}', [proposal.title])} onClick={() => actions.onUndo(proposal)}><Undo2 size={16} /></Button></span></Tooltip>}
     {proposal.error && pending && <p className="app-proposal-error proposal-orglet-error" role="status">{tMessage(proposal.error)}</p>}
   </li>;
 }

@@ -1,6 +1,7 @@
 import { BookOpen, CalendarClock, ChartColumn, Code, ListChecks, PenLine, RotateCcw, Sparkles, Users, type LucideIcon } from 'lucide-react';
 import { t } from '../i18n';
 import type { Starter, StarterIcon } from '../../shared/starters';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 const starterIcons: Record<StarterIcon, LucideIcon> = {
   documents: BookOpen, review: Sparkles, write: PenLine, data: ChartColumn,
@@ -32,9 +33,9 @@ export function Starters({ starters, onPick, onSchedule, canSchedule }: {
       </li>;
     })}
     {onSchedule && <li>
-      <button type="button" disabled={!canSchedule} title={canSchedule ? undefined : t('Viết tin nhắn trước')} onClick={onSchedule}>
+      <Tooltip label={canSchedule ? '' : t('Viết tin nhắn trước')}><span className="tooltip-anchor"><button type="button" disabled={!canSchedule} onClick={onSchedule}>
         <CalendarClock size={18} aria-hidden="true" />{t('Lên lịch cho tin này')}
-      </button>
+      </button></span></Tooltip>
     </li>}
   </ul>;
 }

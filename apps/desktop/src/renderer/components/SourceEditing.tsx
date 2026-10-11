@@ -5,7 +5,7 @@ import { Button } from './ui';
 import { confirmAction } from './confirm';
 import { SourceViewer, type SourceViewerFrame } from './SourceViewer';
 import type { TextEditorHandle } from './TextEditor';
-import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawlhq/orglet-ui';
+import { Skeleton, SkeletonGroup, SkeletonText, Tooltip } from '@codepawlhq/orglet-ui';
 import { MarkupCanvas, MarkupToolbar, markupPalette, markupPng, markupTools, strokeWidth, textSize, usePicture } from './ImageMarkup';
 import { commit, isChanged, redo, startHistory, undo, type History, type Markup, type MarkupHistory, type MarkupTool, type StrokeLevel } from '../markup';
 import { PDF_TOOLS, changedPage, emptyPdfMarkup, isPdfChanged, markedPages, noteSize, pageMarks, stepPage, withPageMarks, type PdfMarkup } from '../pdfMarkup';
@@ -46,9 +46,9 @@ function EditActions({ dirty, busy, onCancel, onSave, onAsk }: { dirty: boolean;
     <Button type="button" variant="outline" className="doc-action edit-ask" aria-label={t('Hỏi về bản này')} disabled={busy} onClick={onAsk}>
       <MessageSquarePlus size={15} /><span className="edit-action-label">{t('Hỏi về bản này')}</span>
     </Button>
-    <Button type="button" variant="primary" className="doc-action edit-save" aria-label={t('Lưu bản mới')} disabled={busy || !dirty} title={t('Lưu thành bản mới (Ctrl+S)')} aria-keyshortcuts="Control+S" onClick={onSave}>
+    <Tooltip label={t('Lưu thành bản mới (Ctrl+S)')}><span className="tooltip-anchor"><Button type="button" variant="primary" className="doc-action edit-save" aria-label={t('Lưu bản mới')} disabled={busy || !dirty} aria-keyshortcuts="Control+S" onClick={onSave}>
       <Save size={15} /><span className="edit-action-label">{t('Lưu bản mới')}</span>
-    </Button>
+    </Button></span></Tooltip>
   </>;
 }
 

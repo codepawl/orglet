@@ -10,6 +10,7 @@ import { PanelPage } from './PanelPage';
 import { NoticeList } from './NoticeCentre';
 import { RunningGroups } from './RunningCentre';
 import { clockLabel, dayLabel } from './TimeMark';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 /** What Activity counts under each of its views, so the tabs and the sidebar read the same numbers. */
 export function activityCounts(running: readonly RunningItem[], saved: readonly SavedMessage[], waitingElsewhere: number): Record<ActivityTab, number> {
@@ -78,9 +79,9 @@ function SavedList({ saved, chatExists, onOpen }: { saved: readonly SavedMessage
       </>;
       return <li key={`${item.taskId}:${item.messageId}`} className="saved-row">
         {opens
-          ? <button type="button" className="saved-body" title={t('Mở tin nhắn')} onClick={() => onOpen(item.taskId, item.messageId)}>{body}</button>
+          ? <Tooltip label={t('Mở tin nhắn')}><button type="button" className="saved-body" onClick={() => onOpen(item.taskId, item.messageId)}>{body}</button></Tooltip>
           : <div className="saved-body">{body}</div>}
-        <Button size="icon" aria-label={t('Bỏ lưu tin này')} title={t('Bỏ lưu')} onClick={() => unsaveMessage(item.taskId, item.messageId)}><BookmarkX size={16} /></Button>
+        <Tooltip label={t('Bỏ lưu')}><Button size="icon" aria-label={t('Bỏ lưu tin này')} onClick={() => unsaveMessage(item.taskId, item.messageId)}><BookmarkX size={16} /></Button></Tooltip>
       </li>;
     })}
   </ul>;

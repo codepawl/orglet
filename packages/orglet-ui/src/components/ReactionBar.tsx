@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { Button } from './Button';
 import { cn } from '../cn';
 import './ReactionBar.css';
+import { Tooltip } from './Tooltip';
 
 /** What can be thrown: `name` is what is stored, `emoji` is what is drawn, `meaning` names it for assistive technology. */
 export type ReactionOption<Name extends string> = { name: Name; emoji: string; meaning: string };
@@ -47,8 +48,8 @@ export function ReactionBar<Name extends string>({ options, picked, onPick, labe
     close();
   };
   return <div className="org-reaction-bar" ref={root} onKeyDown={closeOnEscape}>
-    <Button ref={trigger} size="icon" aria-label={label} title={label} aria-haspopup="true" aria-expanded={open}
-      onClick={() => setOpen(value => !value)}>{icon}</Button>
+    <Tooltip label={label}><Button ref={trigger} size="icon" aria-label={label} aria-haspopup="true" aria-expanded={open}
+      onClick={() => setOpen(value => !value)}>{icon}</Button></Tooltip>
     {open && <ReactionPicker options={options} picked={picked} label={label} onPick={option => { onPick(option); close(); }} />}
   </div>;
 }
@@ -61,9 +62,9 @@ export function ReactionPicker<Name extends string>({ options, picked, label, on
   onPick: (name: Name) => void;
 }) {
   return <div className="org-reaction-row" role="group" aria-label={label}>
-    {options.map(option => <button key={option.name} type="button" className={option.name === picked ? 'org-reaction-picked' : undefined}
-      aria-pressed={option.name === picked} aria-label={option.meaning} title={option.meaning}
-      onClick={() => onPick(option.name)}>{option.emoji}</button>)}
+    {options.map(option => <Tooltip label={option.meaning} key={option.name}><button type="button" className={option.name === picked ? 'org-reaction-picked' : undefined}
+      aria-pressed={option.name === picked} aria-label={option.meaning}
+      onClick={() => onPick(option.name)}>{option.emoji}</button></Tooltip>)}
   </div>;
 }
 
@@ -86,10 +87,10 @@ export function ReactionBadges<Name extends string>({ badges, align, onPick }: {
 }) {
   if (badges.length === 0) return null;
   return <div className={cn('org-reaction-badges', `org-reaction-badges-${align}`)}>
-    {badges.map(badge => <button key={badge.name} type="button" className="org-reaction-badge" aria-pressed={badge.mine}
-      aria-label={badge.label} title={badge.label} onClick={() => onPick(badge.name)}>
+    {badges.map(badge => <Tooltip label={badge.label} key={badge.name}><button type="button" className="org-reaction-badge" aria-pressed={badge.mine}
+      aria-label={badge.label} onClick={() => onPick(badge.name)}>
       <span className="org-reaction-badge-emoji" aria-hidden="true">{badge.emoji}</span>
       {badge.count > 1 && <span className="org-reaction-badge-count" aria-hidden="true">{badge.count}</span>}
-    </button>)}
+    </button></Tooltip>)}
   </div>;
 }

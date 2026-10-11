@@ -11,7 +11,7 @@ import type { InfoTipRow } from './InfoTip';
 import { languageOf, tokenizeLines, type Language } from './highlight';
 import { currentLocale, t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
-import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawlhq/orglet-ui';
+import { Skeleton, SkeletonGroup, SkeletonText, Tooltip } from '@codepawlhq/orglet-ui';
 import { workspaceDiffs } from '../caches';
 import { useCached } from '../prefetch';
 
@@ -209,9 +209,9 @@ export function DiffViewer({ diff, workerName, info, review, focusPath, onClose 
     review.onApply([...keptFiles, ...keptFolders]);
   };
   const actions = review && <>
-    <Button variant="outline" className="diff-discard" disabled={review.busy} onClick={review.onDiscard} aria-label={t('Bỏ thay đổi')} title={t('Bỏ thay đổi')}>
+    <Tooltip label={t('Bỏ thay đổi')}><span className="tooltip-anchor"><Button variant="outline" className="diff-discard" disabled={review.busy} onClick={review.onDiscard} aria-label={t('Bỏ thay đổi')}>
       <Undo2 size={16} aria-hidden="true" /><span className="diff-action-label">{t('Bỏ thay đổi')}</span>
-    </Button>
+    </Button></span></Tooltip>
     <Button variant="primary" disabled={review.busy || ticked === 0} onClick={apply}><Check size={16} aria-hidden="true" />
       {skipped.size === 0 ? t('Áp dụng') : t('Áp dụng {0}/{1}', [ticked, rows])}
     </Button>
@@ -240,21 +240,21 @@ export type DiffSelection = { isTicked: (path: string) => boolean; toggle: (path
 /** A path as a reviewer scans it: the folder quiet and allowed to shorten, the file's name in full weight. */
 export function PathText({ path }: { path: string }) {
   const cut = path.lastIndexOf('/') + 1;
-  return <span className="diff-path" title={path}>
+  return <Tooltip label={path}><span className="diff-path">
     {cut > 0 && <span className="diff-path-folder">{path.slice(0, cut)}</span>}
     <span className="diff-path-name">{path.slice(cut)}</span>
-  </span>;
+  </span></Tooltip>;
 }
 
 /** Where a moved file came from, quiet, then where it is now. */
 export function FilePath({ file }: { file: Pick<DiffFile, 'path' | 'previousPath'> }) {
   if (!file.previousPath) return <PathText path={file.path} />;
-  return <span className="diff-path-move" title={pathLabel(file)}>
+  return <Tooltip label={pathLabel(file)}><span className="diff-path-move">
     <span className="diff-path-from">{file.previousPath}</span>
     <span className="diff-path-arrow" aria-hidden="true">→</span>
     <span className="visually-hidden"> → </span>
     <PathText path={file.path} />
-  </span>;
+  </span></Tooltip>;
 }
 
 /** The small word for what happened to the file; a modified file needs none, its counts say it. */

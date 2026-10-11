@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { Button } from './Button';
 import './ColorPicker.css';
+import { Tooltip } from './Tooltip';
 
 type Hsv = { hue: number; saturation: number; brightness: number };
 
@@ -132,12 +133,12 @@ export function ColorPicker({ id, value, onChange, presets, saved, onSave, onRem
     if (next) pick(next);
   };
 
-  const swatch = (color: string, label: string) => <button key={color} type="button" className="org-color-picker-swatch"
-    style={{ '--org-swatch': color } as CSSProperties} aria-label={label} aria-pressed={color === value} title={color}
+  const swatch = (color: string, label: string) => <Tooltip label={color} key={color}><button type="button" className="org-color-picker-swatch"
+    style={{ '--org-swatch': color } as CSSProperties} aria-label={label} aria-pressed={color === value}
     onClick={() => pick(color)}>
     {color === value && <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>}
-  </button>;
+  </button></Tooltip>;
 
   return <div id={id} className="org-color-picker" role="group" aria-label={labels.panel} data-popup-open onKeyDown={closeOnEscape}>
     <div className="org-color-picker-editor">
@@ -168,9 +169,9 @@ export function ColorPicker({ id, value, onChange, presets, saved, onSave, onRem
       <span className="org-color-picker-title">{labels.saved}</span>
       <div className="org-color-picker-swatches">{saved.map(color => <span key={color} className="org-color-picker-saved">
         {swatch(color, labels.savedColor(color))}
-        <button type="button" className="org-color-picker-remove" aria-label={labels.removeColor(color)} title={labels.removeTitle} onClick={() => onRemove(color)}>
+        <Tooltip label={labels.removeTitle}><button type="button" className="org-color-picker-remove" aria-label={labels.removeColor(color)} onClick={() => onRemove(color)}>
           <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-        </button>
+        </button></Tooltip>
       </span>)}</div>
     </div>}
     <div className="org-color-picker-actions">

@@ -7,12 +7,14 @@ import { CommandBlock } from '../src';
 const command = 'claude --settings C:\\Users\\ada\\harness-accounts\\work.json';
 
 describe('CommandBlock', () => {
-  it('shows the label, the command and a copy button named by copyLabel', () => {
+  it('shows the label, the command and a copy button named by copyLabel', async () => {
+    const user = userEvent.setup();
     const { container } = render(<CommandBlock command={command} label="Sign in" copyLabel="Copy command" onCopy={() => undefined} />);
     expect(screen.getByText('Sign in').className).toBe('org-command-block-label');
     expect(container.querySelector('code')?.textContent).toBe(command);
     const copy = screen.getByRole('button', { name: 'Copy command' });
-    expect(copy.getAttribute('title')).toBe('Copy command');
+    await user.hover(copy);
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Copy command');
   });
 
   it('breaks the command only after a path separator or a space', () => {

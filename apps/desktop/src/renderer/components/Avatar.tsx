@@ -9,6 +9,7 @@ import { ColorPicker } from './ColorPicker';
 import { Select } from './Select';
 import { Button } from './ui';
 import type { Worker } from '../../shared/contracts';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 
 export { avatarPalette };
 export type { FaceMotion };
@@ -152,7 +153,7 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
   const saveColor = (hex: string) => { onSavedColorsChange?.([hex, ...savedColors.filter(color => color !== hex)].slice(0, 16)); set({ color: hex }); };
   const colorSwatch = (color: string, index: number, label: string) => {
     const checked = index === 0 ? !value.color || value.color === color : value.color === color;
-    return <button key={color} type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={label} title={label} onClick={() => set({ color: index === 0 ? undefined : color })}>{checked && <Check size={12} strokeWidth={3} aria-hidden="true" />}</button>;
+    return <Tooltip label={label} key={color}><button type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={label} onClick={() => set({ color: index === 0 ? undefined : color })}>{checked && <Check size={12} strokeWidth={3} aria-hidden="true" />}</button></Tooltip>;
   };
 
   // The avatar and its quick actions share one centred row; the full choice opens below at full width. The preview
@@ -161,7 +162,7 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
     <div className="avatar-picker-head">
       <Avatar name={name || '?'} seed={seed} mascot={value.mascot} defaultMascot hint={hint} color={value.color} badge={badge} size="xl" motion={{ lead: true, greet: true, cheer }} />
       <div className="avatar-picker-toolbar">
-        <Button type="button" variant="outline" className="avatar-action" onClick={suggest} title={t('Chọn linh vật khác hợp với tên, mô tả và kỹ năng')}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button>
+        <Tooltip label={t('Chọn linh vật khác hợp với tên, mô tả và kỹ năng')}><Button type="button" variant="outline" className="avatar-action" onClick={suggest}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button></Tooltip>
         <Button type="button" variant="outline" className="avatar-action avatar-customize" aria-expanded={open} aria-controls={`${ids}-custom`} onClick={() => { if (!open) setCategory(categoryOf(face) ?? 'base'); setOpen(!open); }}><SlidersHorizontal size={15} aria-hidden="true" />{t('Tùy chỉnh')}<ChevronDown size={15} aria-hidden="true" /></Button>
       </div>
     </div>
@@ -175,7 +176,7 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
             const checked = face === id;
             const focusable = checked || (index === 0 && !mascotCategoryIds[category].includes(face));
             // Each tile is a 3D face that turns and hops only while the pointer or the keyboard is on it.
-            return <button key={id} type="button" role="radio" aria-checked={checked} tabIndex={focusable ? 0 : -1} className="avatar-choice mascot-choice" aria-label={mascotName(id)} title={mascotName(id)} onClick={() => choose(id)}><Orglet3D id={id} seed={index} size={32} color="grid" motion={{ follow: 'hover' }} /></button>;
+            return <Tooltip label={mascotName(id)} key={id}><button type="button" role="radio" aria-checked={checked} tabIndex={focusable ? 0 : -1} className="avatar-choice mascot-choice" aria-label={mascotName(id)} onClick={() => choose(id)}><Orglet3D id={id} seed={index} size={32} color="grid" motion={{ follow: 'hover' }} /></button></Tooltip>;
           })}
         </div>
       </div>
@@ -186,7 +187,7 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
             {colors.map((color, index) => colorSwatch(color, index, index === 0 ? t('Màu gợi ý {0} (tự động)', [color]) : t('Màu gợi ý {0}', [color])))}
             {[...own, ...other].map(color => colorSwatch(color, -1, own.includes(color) ? t('Màu của bạn {0}', [color]) : t('Màu {0}', [color])))}
           </div>
-          <button type="button" className="avatar-swatch avatar-swatch-add" aria-label={t('Tạo màu')} title={t('Tạo màu')} aria-haspopup="dialog" aria-expanded={colorPanel} aria-controls={`${ids}-colors`} onClick={() => setColorPanel(!colorPanel)}><Plus size={14} strokeWidth={2.5} aria-hidden="true" /></button>
+          <Tooltip label={t('Tạo màu')}><button type="button" className="avatar-swatch avatar-swatch-add" aria-label={t('Tạo màu')} aria-haspopup="dialog" aria-expanded={colorPanel} aria-controls={`${ids}-colors`} onClick={() => setColorPanel(!colorPanel)}><Plus size={14} strokeWidth={2.5} aria-hidden="true" /></button></Tooltip>
         </div>
         {colorPanel && <ColorPicker id={`${ids}-colors`} value={value.color ?? colors[0]} onChange={color => set({ color })} presets={colorPresets} saved={savedColors} onSave={saveColor}
           onRemove={color => onSavedColorsChange?.(savedColors.filter(item => item !== color))} onClose={() => { setColorPanel(false); document.querySelector<HTMLButtonElement>(`[aria-controls="${ids}-colors"]`)?.focus(); }} />}
