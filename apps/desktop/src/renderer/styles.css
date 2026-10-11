@@ -3609,3 +3609,24 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .org-drawer:has(.lead-leaves-dialog) { width:min(480px, calc(100vw - 32px)); height:fit-content; max-height:calc(100dvh - 32px); }
 /* Wraps a disabled control so its tooltip still hears the pointer; it adds no box of its own. */
 .tooltip-anchor { display:inline-flex; }
+
+/* Import from Claude Code: a dialog with a checkbox per thing found, and what each one leaves behind. */
+.claude-import { display:flex; flex-direction:column; gap:14px; }
+.claude-import-shape { height:160px; }
+.claude-import-folder { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.claude-import-folder > p { flex:1 1 220px; min-width:0; margin:0; overflow-wrap:anywhere; }
+.claude-import-folder-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.claude-import-group { display:flex; flex-direction:column; gap:6px; }
+.claude-import-group > h3 { margin:0 0 2px; font-size:14px; font-weight:600; }
+.claude-import-item, .claude-import-result { padding:8px 10px; border-radius:10px; background:var(--surface); }
+.claude-import-result { display:flex; align-items:flex-start; gap:10px; }
+.claude-import-text { display:flex; flex-direction:column; gap:2px; min-width:0; overflow-wrap:anywhere; }
+.claude-import-name { font-weight:500; }
+.claude-import-description { font-size:12.5px; line-height:1.45; }
+.claude-import-text small { font-size:12px; line-height:1.4; }
+.claude-import-text .outcome-line { font-size:12.5px; }
+.claude-import-mark { flex:none; margin-top:2px; color:var(--muted); }
+.claude-import-success { color:var(--success); }
+.claude-import-failure { color:var(--error); }
+.claude-import-actions { display:flex; justify-content:flex-end; gap:8px; }
+.org-drawer:has(.claude-import) { width:min(640px, calc(100vw - 32px)); max-height:calc(100dvh - 32px); }
