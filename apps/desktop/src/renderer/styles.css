@@ -3624,7 +3624,8 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .claude-import-name { font-weight:500; }
 .claude-import-description { font-size:12.5px; line-height:1.45; }
 .claude-import-text small { font-size:12px; line-height:1.4; }
-.claude-import-text .outcome-line { font-size:12.5px; }
+.claude-import-text .outcome-line { align-items:center; gap:6px; font-size:12.5px; }
+.claude-import-text .outcome-line > svg { flex:none; }
 .claude-import-mark { flex:none; margin-top:2px; color:var(--muted); }
 .claude-import-success { color:var(--success); }
 .claude-import-failure { color:var(--error); }
