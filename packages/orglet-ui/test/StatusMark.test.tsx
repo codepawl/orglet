@@ -1,14 +1,17 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { axe } from 'vitest-axe';
 import { StatusMark, type StatusMarkTone, type StatusMarkVariant } from '../src';
 
 describe('StatusMark', () => {
-  it('is a status named by its label, with its state in its classes', () => {
+  it('is a status named by its label, with its state in its classes', async () => {
+    const user = userEvent.setup();
     render(<StatusMark variant="busy" tone="working" label="Working" />);
     const mark = screen.getByRole('status', { name: 'Working' });
     expect(mark.className).toBe('org-status-mark org-status-mark-busy org-status-mark-working');
-    expect(mark.getAttribute('title')).toBe('Working');
+    await user.hover(mark);
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Working');
   });
 
   it('draws a different glyph for each state, so colour is never the only difference', () => {

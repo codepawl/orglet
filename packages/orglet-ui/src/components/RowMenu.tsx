@@ -207,8 +207,8 @@ export function RowMenu({ label, items, icon: Icon, cancelLabel, className, alig
   const shortcut = items.find(item => item.shortcut)?.shortcut?.replaceAll('Ctrl', 'Control');
   return <div ref={root} className="org-row-menu" onBlur={event => closeOnFocusLeaving(event.relatedTarget)}
     onKeyDown={event => { if (open) onMenuKey(event); }}>
-    <Tooltip label={label}><span className="tooltip-anchor"><Button ref={trigger} type="button" size={children ? undefined : 'icon'} className={cn(className)} aria-label={label} aria-haspopup="menu"
-      aria-expanded={open} aria-keyshortcuts={shortcut} disabled={disabled} onClick={toggle}>{children ?? <Icon size={16} />}</Button></span></Tooltip>
+    <Tooltip label={label}><Button ref={trigger} type="button" size={children ? undefined : 'icon'} className={cn(className)} aria-label={label} aria-haspopup="menu"
+      aria-expanded={open} aria-keyshortcuts={shortcut} disabled={disabled} onClick={toggle}>{children ?? <Icon size={16} />}</Button></Tooltip>
     {menu}
   </div>;
 }

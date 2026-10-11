@@ -91,12 +91,12 @@ export function EditableText({ value, onCommit, label, maxLength, disabled, clas
       onBlur={() => void commit().catch(() => undefined)}
     />;
   }
-  return <Tooltip label={label}><span className="tooltip-anchor"><button
+  return <Tooltip label={label}><button
     type="button"
     className={cn('org-editable-text', className)}
     aria-label={label}
     disabled={disabled}
     onClick={startEditing}
     onKeyDown={onRestKeyDown}
-  >{shown}</button></span></Tooltip>;
+  >{shown}</button></Tooltip>;
 }

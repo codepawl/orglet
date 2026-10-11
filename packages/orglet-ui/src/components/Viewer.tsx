@@ -35,7 +35,7 @@ export function Viewer({ open, onClose, title, icon, meta, actions, toolbar, clo
       <DialogOverlay />
       <RadixDialog.Content id={id} className={cn('org-viewer', className)} aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} {...returnFocus}>
         <div className="org-viewer-toolbar">
-          <RadixDialog.Close asChild><Tooltip label={closeLabel}><Button size="icon" aria-label={closeLabel}>{closeIcon}</Button></Tooltip></RadixDialog.Close>
+          <Tooltip label={closeLabel}><RadixDialog.Close asChild><Button size="icon" aria-label={closeLabel}>{closeIcon}</Button></RadixDialog.Close></Tooltip>
           {meta === undefined ? heading : <div className="org-viewer-heading">{heading}<span className="org-viewer-meta">{meta}</span></div>}
           <div className="org-viewer-actions">{actions}</div>
         </div>

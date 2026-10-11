@@ -21,15 +21,18 @@ function Harness({ className }: { className?: string }) {
 }
 
 describe('ToolbarToggleGroup', () => {
-  it('is a named radio group with one picked item, a tooltip with the shortcut and the shortcut announced', () => {
+  it('is a named radio group with one picked item, a tooltip with the shortcut and the shortcut announced', async () => {
+    const user = userEvent.setup();
     render(<Harness />);
     const group = screen.getByRole('radiogroup', { name: 'Tool' });
     expect(group).toBeTruthy();
     const pen = screen.getByRole('radio', { name: 'Pen' });
     expect(pen.getAttribute('aria-checked')).toBe('true');
-    expect(pen.getAttribute('title')).toBe('Pen (P)');
+    await user.hover(pen);
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Pen (P)');
     expect(pen.getAttribute('aria-keyshortcuts')).toBe('P');
-    expect(screen.getByRole('radio', { name: 'Text' }).getAttribute('title')).toBe('Text');
+    await user.hover(screen.getByRole('radio', { name: 'Text' }));
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Text');
     expect(screen.getByRole('radio', { name: 'Arrow' }).getAttribute('aria-checked')).toBe('false');
   });
 
