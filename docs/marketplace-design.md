@@ -18,7 +18,7 @@ A listing is data in the template shapes Orglet already reads, checked with the 
 - **A crew**: the existing `orglet-team-template` v1 from `core/storage/templates.ts`, with its orglets, skills and approved crew notes.
 - **A space** (owner, 2026-10-05): `orglet-space-template` v1 in `shared/space-template.ts`. It carries the space's name, its orglets and skills as a crew listing does, its categories, and its channels: each channel's name, topic, category, and either every orglet of its place or the orglets it names. It carries no schedule, no permission and no folder.
 
-Plus listing fields: a slug, a short summary, tags, the language it was written in, a CC BY 4.0 license, the version, and the author.
+Plus listing fields: a slug, a short summary, tags, the language it was written in, the version, and the author.
 
 **A listing never carries**, and the server rejects one that tries: scripts that run (skill package files stay files, as with every import today), MCP servers, the auto-apply switch, permissions, folder grants, browser or desktop grants, connections, keys or tokens, memories, or chats. These are the same things a template already leaves out, for the same reason: they belong to one person's computer.
 
@@ -119,7 +119,7 @@ The marketplace does not wait for sync. Friends you add are ordinary orglets, so
 
 ## Decisions (2026-10-02)
 
-- Listings are shared under **CC BY 4.0**.
+- Everything in the marketplace is public. The window shows no license and asks for none (owner, 2026-10-11). The wire format keeps a `license` field with one fixed value, because released apps read a catalog strictly and refuse a listing without it.
 - Models and harnesses are **suggestions only**, never required connections.
 - Listings are **text only**, with no screenshots, image uploads or image storage. Existing avatar data is allowed.
 
@@ -128,7 +128,7 @@ The marketplace does not wait for sync. Friends you add are ordinary orglets, so
 
 **Home → Marketplace → Discover** opens a validated local catalog immediately and refreshes the public read API in the background. It labels an online catalog, a previously saved catalog, and the bundled CodePawl seed separately. Saved pages and Add actions remain usable while refreshing. Selecting a cached page fences the initial background response, so a late refresh cannot replace that selection. A failed refresh says so and keeps the local copy; it never reports a successful server fetch. Downloaded bodies are size-capped, SHA-256 checked and strictly parsed before caching or import. A corrupt cache cannot bypass those checks. An existing version cannot change its hash or move backward during refresh.
 
-Listings keep names and summaries ahead of grouped type, public author, language/version and license metadata. **Added** and **Update available** describe local copies. **Add another copy** creates a separate friend; it does not replace or update an existing copy. Report and per-version reviewer actions live in the listing's keyboard-accessible options menu. Closing a report returns focus to that menu's persistent trigger.
+Listings keep names and summaries ahead of grouped type, public author and language/version metadata. **Added** and **Update available** describe local copies. **Add another copy** creates a separate friend; it does not replace or update an existing copy. Report and per-version reviewer actions live in the listing's keyboard-accessible options menu. Closing a report returns focus to that menu's persistent trigger.
 
 Each Add is one transaction for skills, orglets, the optional crew and its proposed notes, and `{ listingId, version }` origin metadata. Crew orglets share the references declared in the template; a crew becomes a channel through the existing adoption path. No account, chat history, memory, secret, permission, folder or MCP grant arrives with it. Skill packages remain files awaiting the same local review as template imports; nothing executes during Add.
 
@@ -152,7 +152,7 @@ The API and deployment setup are in [services/market](../services/market/README.
 
 An orglet's menu, a crew channel's menu and a space's menu offer **Publish to marketplace**. A normal channel has no publishing action. The local form asks for a public name, summary, tags, language and changelog. A built-in connection/model can be suggested without changing the local orglets' connection choices. Preview selects only template instructions, skills, avatar data, crew settings and approved non-memory crew notes. Chats, local IDs, permissions, folders, private connections and account credentials stay on the computer.
 
-The form groups public metadata first, with optional version notes and model suggestions behind a disclosure. The preview leads with readable public names, summaries and instructions; labelled disclosures retain every decoded text skill file and the complete exact submission JSON. Nothing executes. Credential or package diagnostics identify a safe logical path and rule; edit the original content and preview again. Sending requires separate license and pending-review acknowledgements and an explicit **Send for review** click in the stable action footer. Every version starts pending. The recorded submission receipt says **Submitted for review**; the latest owner summary separately shows its current pending, approved or rejected state. No reviewer reason or moderator-hidden status is invented.
+The form groups public metadata first, with optional version notes and model suggestions behind a disclosure. The preview leads with readable public names, summaries and instructions; labelled disclosures retain every decoded text skill file and the complete exact submission JSON. Nothing executes. Credential or package diagnostics identify a safe logical path and rule; edit the original content and preview again. Sending requires the pending-review acknowledgement and an explicit **Send for review** click in the stable action footer. Every version starts pending. The recorded submission receipt says **Submitted for review**; the latest owner summary separately shows its current pending, approved or rejected state. No reviewer reason or moderator-hidden status is invented.
 
 Preview binds the source revisions, public metadata, current account generation and target listing summary for ten minutes. Source edits, account changes, changed target state or expiration refuse the initial send. Unrelated chat events do not discard a preview. Core rechecks the persisted source and current server summary at the final save boundary. It writes an immutable request and idempotency key to SQLite before main may dispatch it. A timeout, lost response or malformed success remains **Unknown**. **My listings** lets the person inspect the exact saved public content and retry those same bytes/key, including after an app restart. A failed retry cannot establish that the original attempt never committed. Starting, reconnecting or opening the page never resends an operation.
 

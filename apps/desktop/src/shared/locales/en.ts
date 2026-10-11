@@ -365,7 +365,6 @@ export const en: Dictionary = {
   "Xem trước nội dung công khai": "Preview public content",
   "Toàn bộ nội dung bên dưới sẽ công khai sau khi được duyệt.": "All content below will be public after approval.",
   "Nội dung công khai chính xác": "Exact public content",
-  "Tôi có quyền chia sẻ nội dung này theo CC BY 4.0.": "I have the right to share this content under CC BY 4.0.",
   "Tôi hiểu mỗi phiên bản đều chờ duyệt trước khi xuất hiện công khai.": "I understand that every version waits for review before appearing publicly.",
   "Sửa nội dung": "Edit content",
   "Gửi để duyệt": "Submit for review",

@@ -159,7 +159,7 @@ function MarketReportDialog({ listing, capability, onClose }: { listing: MarketL
     {error && <FieldError className="error">{error}</FieldError>}
     <Outcome unknown={unknown} receipt={receipt} />
     <Select label={t('Lý do report')} value={reason} disabled={busy || !!pending || receipt} onChange={value => setReason(value as typeof reason)} options={[
-      { value: 'security', label: t('An toàn') }, { value: 'privacy', label: t('Riêng tư') }, { value: 'license', label: t('Giấy phép') }, { value: 'other', label: t('Khác') },
+      { value: 'security', label: t('An toàn') }, { value: 'privacy', label: t('Riêng tư') }, { value: 'other', label: t('Khác') },
     ]} />
     <label className="field"><FieldLabel icon={FileText} required>{t('Giải thích ngắn')}</FieldLabel><Textarea value={explanation} maxLength={2048} disabled={busy || !!pending || receipt} onChange={event => setExplanation(event.target.value)} placeholder={t('Nêu nội dung cần kiểm tra, không dán dữ liệu riêng tư.')} /></label>
     {explanation.trim() && !valid && <p className="muted" role="status">{t('Lý do quá dài hoặc có thông tin không thể chia sẻ.')}</p>}

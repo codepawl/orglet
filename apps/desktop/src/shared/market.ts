@@ -29,6 +29,9 @@ export const MarketListing = z.object({
   tags: z.array(z.string().min(1).max(32)).max(10),
   language: z.enum(['en', 'vi']),
   author: z.literal('CodePawl'),
+  // Nothing in the window shows or asks for a license (owner, 2026-10-11: everything in Orglet's marketplace is public).
+  // The field stays on the wire with its one value because released apps read a catalog strictly and refuse a
+  // listing without it.
   license: z.literal('CC-BY-4.0'),
   changelog: z.string().max(2000),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
