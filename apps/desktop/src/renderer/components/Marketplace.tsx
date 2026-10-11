@@ -5,6 +5,7 @@ import { ArrowDownToLine, ChevronLeft, ChevronRight, Flag, RefreshCw, SearchX, S
 import type { MarketCatalogView, MarketDisplayListing, MarketInstallation, MarketUpdate, MarketAdded } from '../../shared/market';
 import { orglet } from '../api';
 import { t, tMessage } from '../i18n';
+import { EmptyPanel } from './EmptyPanel';
 import { Button, Drawer, PanelHeading } from './ui';
 import { toast } from './toast';
 import { MarketOwnListings, listingKindName } from './MarketPublishing';
@@ -126,7 +127,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     })} />}
     <SearchField className="marketplace-search" aria-label={t('Tìm mẫu')} placeholder={t('Tìm theo tên, mô tả, thẻ hoặc tác giả')} value={query} onChange={event => setQuery(event.target.value)} />
     {!catalog ? <div className="marketplace-loading" aria-label={t('Đang tải danh mục')}><div /><div /></div> : <>
-      {catalog.listings.length === 0 && <ul className="friends-sources"><li className="marketplace-empty muted">{t('Chưa có mẫu trên trang này. Bạn có thể làm mới hoặc mở một trang đã lưu.')}</li></ul>}
+      {catalog.listings.length === 0 && <EmptyPanel fill={false} className="marketplace-empty" title={t('Chưa có mẫu trên trang này.')} hint={t('Bạn có thể làm mới hoặc mở một trang đã lưu.')} />}
       {catalog.listings.length > 0 && shown.length === 0 && <p className="marketplace-no-match muted" role="status"><SearchX size={16} aria-hidden="true" />{t('Không có mẫu nào khớp "{0}".', [query.trim()])}</p>}
       {discoverSections(shown).map(section => <section key={section.kind} className="market-section" aria-labelledby={`market-section-${section.kind}`}>
         <h3 id={`market-section-${section.kind}`} className="market-section-heading">{section.kind === 'orglet' ? t('Các Tí') : t('Các không gian')}<span className="muted">{section.listings.length}</span></h3>

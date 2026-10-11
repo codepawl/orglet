@@ -34,7 +34,13 @@ export function Orglet3D({ id, seed, size, color, motion = {} }: { id: MascotId;
   };
   const first = useRef(true);
   useLayoutEffect(() => {
-    handle.current = mountFace(canvas.current!, options);
+    // A canvas with no 2D context (a test DOM, a machine that refuses one) draws no orglet; the page around it,
+    // an empty panel's text and button among them, must still render.
+    try {
+      handle.current = mountFace(canvas.current!, options);
+    } catch {
+      handle.current = null;
+    }
     return () => { handle.current?.unmount(); handle.current = null; };
     // The face is mounted once; later changes go through `update` below.
   }, []);
