@@ -1,5 +1,6 @@
 import { demoReplies } from '../demoReplies';
-import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { Tooltip } from '@codepawlhq/orglet-ui';
 import { ArrowUp, ChevronRight, ChevronUp, Combine, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Run, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
@@ -78,7 +79,13 @@ function restingScrollLeft(strip: HTMLUListElement) {
  * Team and group chats can pass `mentions` so `@` opens a worker picker. In every chat `:sk` offers matching emoji
  * and a finished `:skull:` turns into its emoji (COD-233).
  */
-export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, placeholder, sendLabel, leading, mode, trailing, usage, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void;
+/** Says, on hover or keyboard focus, why the bar under it cannot be typed in; a bar with nothing to explain is left bare. */
+function ComposerHint({ hint, children }: { hint?: string; children: ComponentProps<typeof Tooltip>['children'] }) {
+  return hint ? <Tooltip label={hint}>{children}</Tooltip> : children;
+}
+
+export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, placeholder, sendLabel, leading, mode, trailing, usage, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop, hint }: { value: string;
+  /** Why the bar is read-only, shown as a tooltip over it (owner, 2026-10-12). */ hint?: string; onChange: (value: string) => void; onSubmit: () => void;
   /** Ctrl+Shift+Enter (Cmd on macOS): the other way to send, where the bar has one ("in a new thread", COD-247). */
   onAlternateSubmit?: () => void; label: string; placeholder: string; sendLabel: string; /** The toolbar's left end: the add button. */ leading: ReactNode;
   /** Right after the add button: the approval mode (COD-367), an item of the row itself so it shares the row's line. */ mode?: ReactNode;
@@ -236,7 +243,7 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
   };
   const toolbarShown = hasContent(leading) || hasContent(mode) || hasContent(trailing) || hasContent(usage);
   return <>
-  <form className={`composer${expanded ? ' expanded' : ''}${context ? ' has-context' : ''}${hasAttachments ? ' has-attachments' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) submit(); }}>
+  <ComposerHint hint={hint}><form className={`composer${expanded ? ' expanded' : ''}${context ? ' has-context' : ''}${hasAttachments ? ' has-attachments' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) submit(); }}>
     {emojiOpen && <ul id={listId} className="mention-menu emoji-menu" role="listbox" aria-label={t('Chèn emoji')}>
       {emojis.map((choice, index) => {
         const optionId = `${listId}-emoji-${choice.name}`;
@@ -291,7 +298,7 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
         <ArrowUp size={16} strokeWidth={2.25} />
       </Button>}
     </div>
-  </form>
+  </form></ComposerHint>
   {/* Directly under the box, one line: add at the left, the model or recipient and then the usage ring at the right.
       Out here rather than inside the box, so the box stays the text and its send button, and the model sits on the
       same row as the ring (owner, 2026-09-30). */}
@@ -584,7 +591,7 @@ ${extra}` : extra;
     items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
   return <div className="thread-composer">
     <IslandDock dock={islandDock} fallback={planUsage.island} />
-    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} usage={planUsage.ring} label={t('Tin nhắn')} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(readOnly)} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)}
+    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} usage={planUsage.ring} label={t('Tin nhắn')} hint={readOnly?.note} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(readOnly)} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       context={reply && !pendingDecision ? <div className="composer-reply">
