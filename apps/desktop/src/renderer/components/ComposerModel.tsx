@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { checkedChoiceValue, modelChoices, type ModelChoice } from '../../shared/modelChoices';
@@ -11,6 +11,9 @@ import { ModelMark } from './ProviderMark';
 import { modelRunnable } from './openCodeModel';
 import { modelIdRequired } from './workerModel';
 import { choiceBadge, choiceLabel, shownChoices } from './modelRows';
+
+/** How long after a stale list the window asks the core again. */
+const STALE_LIST_REREAD_MS = 15_000;
 
 /** The value of the More models row; never saved, since that row is an action. */
 const MORE_ROW = '\u0000more';
@@ -43,7 +46,20 @@ export function ComposerModel({ worker, onChange }: {
 }) {
   // The session's copy of the list (COD-218): fetched while the worker's row rested under the pointer, or by the
   // dialog, so the menu is full the first time it opens. Until it lands the menu offers the default and the saved id.
-  const models: ModelEntry[] = useCached(modelLists, worker.provider)?.models ?? [];
+  const list = useCached(modelLists, worker.provider);
+  const models: ModelEntry[] = list?.models ?? [];
+  // A stale list means the core is fetching a newer one (Claude Code names its aliases by starting the CLI, which
+  // takes half a minute). The session's copy would otherwise stay the old one until the app restarts, and showed
+  // "Opus" above "Opus 5.5" all day (owner, 2026-10-11). It is read again until it comes back current.
+  const stale = list?.stale === true;
+  const fetchedAt = list?.fetchedAt;
+  useEffect(() => {
+    if (!stale) return undefined;
+    const timer = setTimeout(() => {
+      modelLists.refresh(worker.provider).catch(() => { /* the kept list stays; the next reading tries again */ });
+    }, STALE_LIST_REREAD_MS);
+    return () => clearTimeout(timer);
+  }, [stale, fetchedAt, worker.provider]);
   const [moreOpen, setMoreOpen] = useState(false);
   // OpenCode plans and custom connections have no default model, so clearing the choice is not offered there.
   const choices = modelChoices(worker.provider, models, !modelIdRequired(worker.provider));

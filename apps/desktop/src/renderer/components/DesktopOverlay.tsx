@@ -81,7 +81,7 @@ export function DesktopOverlay() {
   if (!view.visible) return null;
   const color = workerInk(view.worker);
   const borrowing = view.mode === 'borrow';
-  const label = borrowing ? t('{0} đang dùng chuột của bạn · nhấn Esc để dừng', [view.worker.name]) : t('{0} đang dùng {1}', [view.worker.name, view.app]);
+  const label = borrowing ? t('{0} đang dùng chuột của bạn. Nhấn Esc để dừng.', [view.worker.name]) : t('{0} đang dùng {1}', [view.worker.name, view.app]);
   const cursor = borrowing ? realCursor && { ...realCursor, action: 'move' as const, sequence: 0 } : view.cursor;
   return <div className="desktop-overlay" data-mode={view.mode}>
     <div className="desktop-overlay-glow orglet-glow" />

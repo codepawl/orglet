@@ -205,7 +205,7 @@ function CustomConnectionForm({ initial, hasKey, onDone, onConnections, disabled
     </label>
     <label><FieldLabel icon={KeyRound}>{t('API key')}</FieldLabel>
       <Input type="password" value={draft.key} maxLength={500} disabled={busy} autoComplete="off" spellCheck={false}
-        placeholder={hasKey ? t('Đã lưu · nhập key mới để thay') : t('Không cần cho máy chủ trên máy này')}
+        placeholder={hasKey ? t('Nhập key mới để thay key đã lưu') : t('Không cần cho máy chủ trên máy này')}
         onChange={event => change('key')(event.target.value)} />
     </label>
     <div className="custom-connection-prices">

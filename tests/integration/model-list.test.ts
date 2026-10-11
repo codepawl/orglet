@@ -2,9 +2,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { once } from 'node:events';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
-import { CoreService } from '../../apps/desktop/src/core/service';
+import { CoreService, FIRST_CLAUDE_LIST_WAIT_MS, modelListStale } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { CATALOG_HINT_IDS, acceptCustomModelId, hiddenOpenAIModel, MODEL_LIST_CACHE_VERSION, MODEL_LISTS_SETTING } from '../../apps/desktop/src/shared/models';
 import { EFFORT_METADATA_REFRESH_AT, canStoreModelListRow, readModelListCache } from '../../apps/desktop/src/core/models/cache';
@@ -293,6 +293,75 @@ describe('model list fetch adapters', () => {
       ['sonnet', 'claude-sonnet-5-5'], ['opus', 'claude-opus-5-5'], ['haiku', 'claude-haiku-4-5-20251001'], ['fable', 'claude-fable-5-1'],
     ]);
     expect(refreshed.stale).toBe(false);
+  });
+
+  it('asks Claude Code again soon when some starts did not answer, though the Models API did', async () => {
+    let answering = false;
+    let current = new Date('2026-10-11T08:00:00Z');
+    const resolved: Record<string, string> = { default: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-5-5', fable: 'claude-fable-5-1' };
+    const server = await listen((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ data: Object.values(resolved).map(id => ({ id, display_name: id })), has_more: false }));
+    });
+    try {
+      const core = coreFor(store(), {
+        claudeStart: async (_executable, _env, alias) => answering || alias === 'opus' ? resolved[alias ?? 'default'] : undefined,
+        claudeToken: async () => 'fixture-token',
+        endpoints: { anthropic: server.url },
+      }, () => current, { detect: async () => [signedIn('claude-code', '/bin/claude')], execute: async () => { throw new Error('no exec'); } });
+      const first = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+      expect(first.models.find(model => model.id === 'sonnet')?.resolvedId).toBeUndefined();
+
+      answering = true;
+      current = new Date('2026-10-11T08:11:00Z');
+      expect((await core.command('modelList', { provider: 'claude-code' }) as ModelListResult).stale).toBe(true);
+      await core.waitForModelListRefresh('claude-code');
+      const refreshed = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+      expect(refreshed.models.find(model => model.id === 'sonnet')?.resolvedId).toBe('claude-sonnet-5-5');
+      expect(refreshed.models.filter(model => model.source === 'native').map(model => model.id)).not.toContain('claude-sonnet-5-5');
+    } finally { server.close(); }
+  });
+
+  it('answers the bare aliases when the first Claude Code read takes longer than the window waits, then the names', async () => {
+    const resolved: Record<string, string> = { default: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-5-5', fable: 'claude-fable-5-1' };
+    const releases: Array<() => void> = [];
+    const core = coreFor(store(), {
+      claudeStart: (_executable, _env, alias) => new Promise(resolve => { releases.push(() => resolve(resolved[alias ?? 'default'])); }),
+      claudeToken: async () => undefined,
+    }, undefined, { detect: async () => [signedIn('claude-code', '/bin/claude')], execute: async () => { throw new Error('no exec'); } });
+    vi.useFakeTimers();
+    try {
+      const first = core.command('modelList', { provider: 'claude-code' }) as Promise<ModelListResult>;
+      await vi.advanceTimersByTimeAsync(FIRST_CLAUDE_LIST_WAIT_MS + 1);
+      const quick = await first;
+      expect(quick.stale).toBe(true);
+      expect(quick.models.map(model => [model.id, model.resolvedId])).toEqual([['sonnet', undefined], ['opus', undefined], ['haiku', undefined], ['fable', undefined]]);
+
+      // The starts answer two at a time; each answer lets the next one begin.
+      while (releases.length > 0) {
+        releases.shift()!();
+        await vi.advanceTimersByTimeAsync(1);
+      }
+      await core.waitForModelListRefresh('claude-code');
+      const named = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+      expect(named.models.map(model => model.resolvedId)).toEqual(['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-fable-5-1']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('treats a list saved with an alias left unnamed beside the named models as stale after ten minutes', () => {
+    const fetchedAt = '2026-10-11T08:00:00.000Z';
+    const alias = (id: string, resolvedId?: string) => ({ provider: 'claude-code' as const, id, source: 'alias' as const, ...(resolvedId ? { resolvedId } : {}) });
+    const native = { provider: 'claude-code' as const, id: 'claude-opus-5-5', source: 'native' as const };
+    const partial = { fetchedAt, source: 'alias' as const, models: [alias('opus'), alias('sonnet', 'claude-sonnet-5-5'), native] };
+    expect(modelListStale(partial, new Date('2026-10-11T08:09:00Z'))).toBe(false);
+    expect(modelListStale(partial, new Date('2026-10-11T08:11:00Z'))).toBe(true);
+    // Signed out, the CLI names nothing and no model is listed beside the aliases: that list keeps its day.
+    const bare = { fetchedAt, source: 'alias' as const, models: [alias('opus'), alias('sonnet')] };
+    expect(modelListStale(bare, new Date('2026-10-11T20:00:00Z'))).toBe(false);
+    const whole = { fetchedAt, source: 'alias' as const, models: [alias('opus', 'claude-opus-5-5'), native] };
+    expect(modelListStale(whole, new Date('2026-10-11T20:00:00Z'))).toBe(false);
   });
 
   it('never replaces a Claude Code list that named its models with one that learned nothing (COD-338)', async () => {

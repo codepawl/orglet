@@ -58,7 +58,7 @@ import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
 import { assertSkillReady, inspectPackage, packageForImport, packageForExport } from './skill-package';
 import { taskResultStamp } from '../shared/task-seen';
-import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
+import { claudeCodeModels, fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
 import { EFFORT_METADATA_REFRESH_AT, canStoreModelListRow, dropProviderRow, readModelListCache, readReportedContextWindows, withReportedContextWindows, writeModelListCache } from './models/cache';
 import { CATALOG_HINT_IDS, emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople, parseMentions } from '../shared/mentions';
@@ -141,9 +141,28 @@ const relinkSourceInput = z.object({ taskId: Id, sourceId: Id, path: z.string().
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
 
 /** The empty chat a command names: one worker, a team, or the orglets of a group chat that has not started (COD-215). */
+/** How many aliases of a list are named by the model they stand for (Claude Code), to tell a fuller reading from a thinner one. */
+function namedAliases(row: Pick<ModelListRow, 'models'>): number {
+  return row.models.filter(model => model.source === 'alias' && model.resolvedId).length;
+}
+
+const PARTIAL_MODEL_LIST_RETRY_MS = 10 * 60_000;
+
+/**
+ * How long the first read of Claude Code's list waits for the CLI to name its aliases. The window gives a command 30
+ * seconds, and the starts took 29 to 31 seconds on 2026-10-11, so a first read used to end in "Core không phản hồi".
+ * Past this wait the bare aliases are answered, marked stale, and the names follow when the starts finish.
+ */
+export const FIRST_CLAUDE_LIST_WAIT_MS = 12_000;
+
 /** A cached list is fetched again after a day, or at its `retryAfter` when a fetch learned nothing (COD-338). */
-function modelListStale(row: ModelListRow, now: Date): boolean {
+export function modelListStale(row: ModelListRow, now: Date): boolean {
   if (row.retryAfter) return now.getTime() >= new Date(row.retryAfter).getTime();
+  // A list saved before partial readings got a retry time: an alias left unnamed beside the named models it stands
+  // for is asked about again after ten minutes, not kept for the day.
+  const aliases = row.models.filter(model => model.provider === 'claude-code' && model.source === 'alias');
+  const leftUnnamed = aliases.some(model => !model.resolvedId) && row.models.some(model => model.source === 'native');
+  if (leftUnnamed) return now.getTime() - new Date(row.fetchedAt).getTime() > PARTIAL_MODEL_LIST_RETRY_MS;
   return now.getTime() - new Date(row.fetchedAt).getTime() > MODEL_LIST_TTL_MS;
 }
 
@@ -1595,7 +1614,17 @@ export class CoreService {
       if (stale && !this.modelListFailed.has(provider)) this.scheduleModelListRefresh(provider);
       return this.toModelListResult(provider, row, stale);
     }
-    return this.toModelListResult(provider, await this.refreshModelList(provider), false);
+    const refreshing = this.refreshModelList(provider);
+    if (provider !== 'claude-code' || row || input.refresh) return this.toModelListResult(provider, await refreshing, false);
+    let waiting: ReturnType<typeof setTimeout> | undefined;
+    const waitedLongEnough = new Promise<undefined>(resolve => {
+      waiting = setTimeout(() => resolve(undefined), FIRST_CLAUDE_LIST_WAIT_MS);
+    });
+    const named = await Promise.race([refreshing, waitedLongEnough]);
+    clearTimeout(waiting);
+    if (named) return this.toModelListResult(provider, named, false);
+    void refreshing.then(() => this.notify()).catch(() => {});
+    return this.toModelListResult(provider, { fetchedAt: this.clock().toISOString(), models: claudeCodeModels(), source: 'alias' }, true);
   }
   /** Drop one provider's cached list (API key change, harness Dò lại, or cache-shape bump). */
   invalidateModelList(provider: CredentialProvider | ModelListProviderId) {
@@ -1634,10 +1663,12 @@ export class CoreService {
     const work = fetchProviderList(provider, this.modelListFetchOptions(selectedOllamaModel)).then(row => {
       if ((this.modelListEpoch.get(provider) ?? 0) !== epoch) return previous ?? row;
       this.modelListFailed.delete(provider);
-      // A fetch that learned nothing never replaces a list that did; it only puts off the next try (COD-338).
+      // A fetch that learned less never replaces a list that learned more; it only puts off the next try (COD-338).
+      // A list with no retry learned everything; between two partial ones, the one that named more aliases stays.
+      const learnedLess = Boolean(row.retryAfter && previous && (!previous.retryAfter || namedAliases(previous) > namedAliases(row)));
       const kept = row.error && previous?.retryAfter === EFFORT_METADATA_REFRESH_AT
         ? { ...previous, error: row.error, retryAfter: new Date(this.clock().getTime() + 10 * 60_000).toISOString() }
-        : row.retryAfter && previous && !previous.retryAfter ? { ...previous, retryAfter: row.retryAfter } : row;
+        : learnedLess && previous ? { ...previous, retryAfter: row.retryAfter } : row;
       this.writeModelListRow(provider, kept);
       return this.modelListMemory.byProvider[provider] ?? kept;
     }).catch(error => {

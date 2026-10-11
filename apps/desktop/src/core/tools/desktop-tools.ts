@@ -68,7 +68,7 @@ export const DESKTOP_BORROW_TOO_LONG = 'Kế hoạch này cần hơn 10 giây ch
 export const DESKTOP_BORROW_MINIMIZED = 'Cửa sổ đang thu nhỏ. Orglet không tự mở nó ra để mượn chuột; nhờ người dùng mở lại cửa sổ.';
 export const DESKTOP_BORROW_NOT_AGAIN ='Người dùng đã từ chối hoặc đã dừng một lần mượn chuột trong lượt này, nên Orglet không hỏi mượn lại.';
 /** The notice on screen while a borrow runs; the helper shows it as given, in the app's language. */
-export const DESKTOP_BORROW_INDICATOR = 'Orglet đang dùng chuột và bàn phím của bạn · nhấn Esc để dừng';
+export const DESKTOP_BORROW_INDICATOR = 'Orglet đang dùng chuột và bàn phím của bạn. Nhấn Esc để dừng.';
 
 /** Why the helper did not read or act, in words, with what the worker can do instead. */
 export const desktopProblems: Record<DesktopProblem, { reason: string; hint: string }> = {

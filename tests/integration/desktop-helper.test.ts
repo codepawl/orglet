@@ -207,7 +207,7 @@ describe.runIf(enabled)('the desktop helper on a real window', { timeout: 90_000
       if ('problem' in snapshot) throw new Error(snapshot.problem);
       const ref = refOf(snapshot.snapshot, /"Sketch pad"/);
       return DesktopBorrowResult.parse(await helper.request({
-        kind: 'borrow', runId, handle: window.handle, allow, ref, expect: { name: 'Sketch pad', controlType: 'pane' }, steps, limitMs: 10_000, indicator: 'Orglet test is using your mouse and keyboard · press Esc to stop',
+        kind: 'borrow', runId, handle: window.handle, allow, ref, expect: { name: 'Sketch pad', controlType: 'pane' }, steps, limitMs: 10_000, indicator: 'Orglet test is using your mouse and keyboard. Press Esc to stop.',
       }, signal()));
     }
 

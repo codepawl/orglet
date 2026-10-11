@@ -240,7 +240,7 @@ function SearchResult({ row, index, active, terms, workspace, onPoint, onChoose 
   if (row.kind === 'orglet') {
     faces = <Faces workers={[row.worker]} several={false} fallbackName={row.worker.name} fallbackSeed={row.worker.id} />;
     name = row.worker.name;
-    detail = row.archived ? t('Đã lưu trữ · chọn để khôi phục') : row.worker.description;
+    detail = row.archived ? t('Đã lưu trữ') : row.worker.description;
   } else if (row.kind === 'crew') {
     const members = teamRoster(row.team, workspace.workers);
     faces = <Faces workers={members} several fallbackName={row.team.name} fallbackSeed={row.team.id} />;

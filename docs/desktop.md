@@ -90,7 +90,7 @@ The card says **Researcher wants to borrow your mouse and keyboard in “Untitle
 
 On **Allow once**, Orglet:
 
-1. Frames the whole screen that window is on with a deeper [glow](#the-glow), with a pill at the top that shows the orglet's face and says **Researcher is using your mouse · press Esc to stop**, with **Stop**. The orglet's own cursor rides on your real one while it moves. Only after this is on screen does the first input go out. If the glow cannot show, the helper puts up a plain notice of its own instead.
+1. Frames the whole screen that window is on with a deeper [glow](#the-glow), with a pill at the top that shows the orglet's face and says **Researcher is using your mouse. Press Esc to stop.**, with **Stop**. The orglet's own cursor rides on your real one while it moves. Only after this is on screen does the first input go out. If the glow cannot show, the helper puts up a plain notice of its own instead.
 2. Brings that window to the front.
 3. Does exactly the steps on the card, and nothing else. Before every single input it checks that the time limit has not run out and that the window is still in front. Before typing and before each key it also checks that the keyboard focus is on the element you saw, and never on a password field.
 4. Puts back the window you had in front and your cursor where it was.

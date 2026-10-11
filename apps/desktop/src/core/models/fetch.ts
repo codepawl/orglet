@@ -653,6 +653,28 @@ function harnessOf(list: HarnessInfo[], id: 'claude-code' | 'codex' | 'cursor') 
 /** How soon a Claude Code list that learned nothing is fetched again (COD-338). */
 export const CLAUDE_CODE_RETRY_MS = 10 * 60 * 1000;
 
+/**
+ * How many Claude Code starts run at once. Five at once took 29 to 31 seconds each on 2026-10-11 (2.1.293), close to
+ * the 45-second limit, and all of them timed out together when the computer was busy. Two at once leave each start
+ * room, for about the same total wait.
+ */
+const CLAUDE_START_LANES = 2;
+
+/** Runs the work over the items a few at a time and returns the answers in the order of the items. */
+async function inLanes<Item, Answer>(items: readonly Item[], lanes: number, work: (item: Item) => Promise<Answer>): Promise<Answer[]> {
+  const answers = new Array<Answer>(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      answers[index] = await work(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(lanes, items.length) }, lane));
+  return answers;
+}
+
 /** The header Claude Code's own calls send with its sign-in token (the same one `usage.ts` sends to read the plan). */
 const CLAUDE_OAUTH_BETA = 'oauth-2025-04-20';
 
@@ -676,15 +698,17 @@ async function fetchClaudeCode(options: ModelListFetchOptions): Promise<Pick<Mod
   const env = harnessAccountEnv('claude-code', info.configDir);
   const asked = [undefined, ...CLAUDE_CODE_ALIASES.map(alias => alias.id)];
   const [started, named] = await Promise.all([
-    Promise.all(asked.map(alias => start(info.executable, env, alias).catch(() => undefined))),
+    inLanes(asked, CLAUDE_START_LANES, alias => start(info.executable, env, alias).catch(() => undefined)),
     readClaudeCodeNames(info.configDir, options).catch(() => undefined),
   ]);
   const [defaultModel, ...resolved] = started;
   const aliases = Object.fromEntries(CLAUDE_CODE_ALIASES.map((alias, index) => [alias.id, resolved[index]]));
   const row = withCatalogHint('claude-code', claudeCodeEntries({ defaultModel, aliases, named }), 'alias');
-  // Signed in, yet nothing learned: keep the plain aliases for now and ask again soon, not a day later (COD-338).
-  const learnedNothing = !named && started.every(model => model === undefined);
-  if (!learnedNothing) return row;
+  // Signed in, yet a start did not say which model it runs: keep what was learned and ask again soon, not a day later
+  // (COD-338). A start times out on a busy computer, and with the Models API answering, an alias left unnamed shows as
+  // a bare "Opus" above the "Opus 5.5" it stands for (seen 2026-10-11, the dev app started during a build).
+  const everyStartAnswered = started.every(model => model !== undefined);
+  if (everyStartAnswered && named) return row;
   return { ...row, retryAfter: new Date(options.now().getTime() + CLAUDE_CODE_RETRY_MS).toISOString() };
 }
 

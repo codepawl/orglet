@@ -31,12 +31,15 @@ Orglet's renderer uses the generic kit in `packages/orglet-ui` (`@codepawlhq/org
    state's colour (`StatusMark`, `--success`, `--error`). Colour alone is never the only signal.
 9. **The shape says what a control does.** Two states: `Switch`. Pick from a list or confirm once: `Checkbox`. One
    of a few: `Select`. Icons sit left of text; icon-only buttons need `aria-label`.
-10. **Quiet shell.** Calm ChatGPT-like layout, tight spacing, details on demand. A close (X) button belongs only to
+10. **A state and an instruction are never joined with a middle dot.** No "Off · turn the switch on", "Needs a
+    folder · pick one" or "Saved · type a new key": say the state alone, and when an instruction is needed make it its
+    own sentence. A note under a menu row is one short line that does not wrap (owner, 2026-10-11).
+11. **Quiet shell.** Calm ChatGPT-like layout, tight spacing, details on demand. A close (X) button belongs only to
     a centred dialog; a panel or page is left by navigating or by the toggle that opened it.
-11. **UI is checked on the rendered screen, not only in code.** After any UI change run `pnpm build`, then
+12. **UI is checked on the rendered screen, not only in code.** After any UI change run `pnpm build`, then
     `pnpm test:alignment`, and fix every finding. A new screen is added to `scripts/alignment-check.mjs` in the same
     change.
-12. **Docs and tests in the same change** (README plus the matching `docs/` page; `tests/integration/*.test.ts`).
+13. **Docs and tests in the same change** (README plus the matching `docs/` page; `tests/integration/*.test.ts`).
 
 ## Where to read next
 
