@@ -1051,6 +1051,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .library-title { font-size:14px; font-weight:500; color:var(--text); }
 .library-summary { font-size:12.5px; line-height:1.45; color:var(--muted); font-weight:400; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .library-item .badge { margin-left:auto; }
+.library-row { display:flex; align-items:center; gap:4px; }
+.library-row .library-item { flex:1; min-width:0; width:auto; }
+.library-row .row-action { flex-shrink:0; margin-right:0; color:var(--muted); }
+.library-row .row-action:hover:not(:disabled),.library-row .row-action:focus-visible,.library-row .row-action[aria-expanded=true] { background:var(--row-hover); color:var(--text); }
 .search-dialog { position:fixed; left:50%; top:16vh; transform:translateX(-50%); z-index:11; width:min(800px, calc(100vw - 32px)); max-height:min(620px, calc(100dvh - 16vh - 24px)); display:flex; flex-direction:column; background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; outline:none; overflow:hidden; }
 .search-dialog-input { display:flex; align-items:center; gap:12px; padding:14px 14px 14px 22px; color:var(--muted); }
 .search-dialog-input input { flex:1; min-width:0; border:0; outline:none; background:transparent; font-size:17px; color:var(--text); }

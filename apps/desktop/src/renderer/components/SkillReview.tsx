@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { Connections, Skill, Workspace } from '../../shared/contracts';
+import type { Connections, Skill, Worker, Workspace } from '../../shared/contracts';
 import type { HarnessInfo } from '../../shared/harness';
+import { LibraryRow } from './LibraryRow';
+import type { RowMenuItem } from './RowMenu';
 import { skillSummary } from '../../shared/skill-summary';
 import { Button } from './ui';
-import { FileText, FolderInput, Plus, Sparkles, SquareTerminal } from 'lucide-react';
+import { FileText, FolderInput, Plus, Sparkles, SquareTerminal, Trash } from 'lucide-react';
 import { Select } from './Select';
 import { toast } from './toast';
 import { t, tMessage } from '../i18n';
@@ -31,13 +33,13 @@ export function SkillLibraryActions({ onOpen, workspace, connections, harnesses 
   </>;
 }
 
-export function SkillLibrary({ skills, onOpen }: { skills: Skill[]; onOpen: (skill?: Skill) => void }) {
+export function SkillLibrary({ skills, workers, onOpen }: { skills: Skill[]; /** Every orglet, live or archived: a skill one of them uses cannot be deleted. */ workers: Pick<Worker, 'name' | 'skillId'>[]; onOpen: (skill?: Skill) => void }) {
   if (skills.length === 0) return <EmptyPanel title={t('Chưa có skill nào.')} hint={t('Tạo một skill mới, hoặc nhập một gói từ thư mục.')} />;
   return <div className="form">
     {skills.map(skill => {
       const summary = skillSummary(skill.content);
       // An imported package is read from disk when its review opens; resting on the row reads it ahead of the click.
-      return <Button key={skill.id} variant="outline" className="library-item" onClick={() => onOpen(skill)} {...dwellHandlers(skill.package ? resting => skillReviews.dwell(skillReviewKey(skill), resting) : undefined)}>
+      return <LibraryRow key={skill.id} menuLabel={t('Tùy chọn {0}', [skill.name])} items={[skillDeleteItem(skill, skills.length, workers)]}><Button variant="outline" className="library-item" onClick={() => onOpen(skill)} {...dwellHandlers(skill.package ? resting => skillReviews.dwell(skillReviewKey(skill), resting) : undefined)}>
         <Sparkles size={18} aria-hidden="true" className="library-icon" />
         <span className="library-text">
           <span className="library-title">{skill.name}</span>
@@ -45,9 +47,23 @@ export function SkillLibrary({ skills, onOpen }: { skills: Skill[]; onOpen: (ski
           {skill.package && <small className="muted">{t('Gói {0} · {1}', [skill.package.hash.slice(0, 8), skill.package.reviewedHash === skill.package.hash ? t('Đã review') : t('Cần review')])}</small>}
         </span>
         <span className="badge">v{skill.revision}</span>
-      </Button>;
+      </Button></LibraryRow>;
     })}
   </div>;
+}
+
+/** Delete is offered always, but greyed with the reason while an orglet uses the skill or it is the last one. */
+function skillDeleteItem(skill: Skill, skillCount: number, workers: Pick<Worker, 'name' | 'skillId'>[]): RowMenuItem {
+  const users = workers.filter(worker => worker.skillId === skill.id);
+  const blocked = users.length > 0 || skillCount <= 1;
+  const hint = users.length === 1 ? t('Đang dùng bởi {0}', [users[0].name])
+    : users.length > 1 ? t('Đang dùng bởi {0} và {1} Tí khác', [users[0].name, users.length - 1])
+    : skillCount <= 1 ? t('Cần giữ ít nhất một skill') : undefined;
+  return {
+    label: t('Xóa'), icon: Trash, danger: true, disabled: blocked, ...(hint ? { hint } : {}),
+    confirm: { question: t('Xóa skill này?'), label: t('Xóa') },
+    onSelect: () => { void orglet.call('deleteSkill', { id: skill.id }).catch(failure => toast(tMessage(String(failure)), 'error', t('Skill'))); },
+  };
 }
 
 /** The key a package's review is kept under: the hash pins it to one immutable package. */

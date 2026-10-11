@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Globe, Hash, UserRound, Users, FileText, Pin, Search, Tag, Target, Type } from 'lucide-react';
+import { Archive, Globe, Hash, UserRound, Users, FileText, Pin, Search, Tag, Target, Trash, Type } from 'lucide-react';
 import { channelLabel } from '../../shared/channels';
 import type { Worker, Workspace } from '../../shared/contracts';
 import { isMemory, type ContextManifest, type Knowledge, type KnowledgeScope, type RunContext } from '../../shared/knowledge';
@@ -8,7 +8,9 @@ import { Button, FieldLabel } from './ui';
 import { StatusMark, type StatusMarkState } from './StatusMark';
 import { Avatar } from './Avatar';
 import { Select } from './Select';
-import { t } from '../i18n';
+import { t, tMessage } from '../i18n';
+import { LibraryRow } from './LibraryRow';
+import { toast } from './toast';
 import { EmptyPanel } from './EmptyPanel';
 import { orglet } from '../api';
 import { SwitchField } from './Switch';
@@ -65,10 +67,18 @@ export function KnowledgeLibrary({ workspace, onOpen, onOpenChat }: { workspace:
   const proposed = visible.filter(item => item.status === 'proposed');
   const approved = visible.filter(item => item.status === 'approved' && !isMemory(item));
   const memories = visible.filter(item => item.status === 'approved' && isMemory(item)).sort((first, second) => second.createdAt.localeCompare(first.createdAt));
-  const row = (item: Knowledge) => <Button key={item.id} variant="outline" className="library-item" onClick={() => onOpen(item)}>
-    <span className="library-text">{item.title}<small className="muted">{scopeLabel(item.scope, workspace)}{item.tags.length ? ` · ${item.tags.join(', ')}` : ''}</small></span>
-    {item.pinned && <Pin size={14} aria-label={t('Luôn nạp')} />}<span className="badge">v{item.revision}</span>
-  </Button>;
+  const act = (perform: () => Promise<unknown>) => {
+    void perform().catch(failure => toast(tMessage(String(failure)), 'error', t('Knowledge')));
+  };
+  const row = (item: Knowledge) => <LibraryRow key={item.id} menuLabel={t('Tùy chọn {0}', [item.title])} items={[
+    ...(item.status === 'proposed' ? [] : [{ label: t('Lưu trữ'), icon: Archive, onSelect: () => act(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'archive' })) }]),
+    { label: t('Xóa'), icon: Trash, danger: true, confirm: { question: t('Xóa knowledge này?'), label: t('Xóa') }, onSelect: () => act(() => orglet.call('deleteKnowledge', { id: item.id })) },
+  ]}>
+    <Button variant="outline" className="library-item" onClick={() => onOpen(item)}>
+      <span className="library-text">{item.title}<small className="muted">{scopeLabel(item.scope, workspace)}{item.tags.length ? ` · ${item.tags.join(', ')}` : ''}</small></span>
+      {item.pinned && <Pin size={14} aria-label={t('Luôn nạp')} />}<span className="badge">v{item.revision}</span>
+    </Button>
+  </LibraryRow>;
   // A library with nothing in it is the app's empty panel; the search box and the empty headings would only list zeros.
   if (!query && visible.length === 0 && !error) return <EmptyPanel title={t('Chưa có knowledge nào.')} hint={t('Tạo một ghi chú để Tí dùng lại, hoặc để Tí tự ghi nhớ từ các cuộc trò chuyện.')} />;
   return <div className="form">
