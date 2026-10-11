@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { CircleX, RotateCcw, TriangleAlert } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
+import { UsageGauge } from './UsageGauge';
 import { composerUsageTone, contextPercent, usageRingFor, type ChatContext, type ComposerUsage, type ContextLine, type HarnessPlan } from '../../shared/composer-usage';
 import { SYSTEM_ACCOUNT_ID, type HarnessBankedResets, type HarnessInfo, type HarnessUsageWindow } from '../../shared/harness';
 import { currentLocale, t } from '../i18n';
@@ -231,8 +232,8 @@ export function PlanUsageNote({ usage, busy, onSwitch }: { usage: ComposerUsage;
   const target = shown.tone === 'out' && offer?.kind === 'switch' ? offer : undefined;
   const targetLabel = target ? harnessAccountLabel(shown.harness, target.accountId) : '';
   return <div className="usage-note" data-tone={shown.tone} role="status">
-    {/* The mark says which state it is without the colour: a triangle for running low, a crossed circle for out. */}
-    <p>{shown.tone === 'out' ? <CircleX size={14} aria-hidden="true" /> : <TriangleAlert size={14} aria-hidden="true" />}<span>{sentence}</span></p>
+    {/* The dial says which state it is without the colour: its needle stands in the middle while a little is left and lies at the far right once nothing is. */}
+    <p><UsageGauge level={shown.tone === 'out' ? 'out' : 'near'} size={14} /><span>{sentence}</span></p>
     {target && <Button type="button" variant="outline" disabled={busy} onClick={() => onSwitch(shown.harness, target.accountId)}>
       {t('Dùng {0} · còn {1}%', [targetLabel, 100 - Math.round(target.usedPercent)])}
     </Button>}

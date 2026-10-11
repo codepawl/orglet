@@ -8,7 +8,7 @@ import { taskDraftKey } from '../drafts';
 import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
-import { Skeleton, SkeletonGroup } from '@codepawlhq/orglet-ui';
+import { Skeleton, SkeletonGroup, Tooltip } from '@codepawlhq/orglet-ui';
 import { formatMoney } from './money';
 import type { SourceTarget } from './SourcePanel';
 import { ReviewSummary } from './ReviewSummary';
@@ -325,15 +325,21 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
   const bylineClass = (author?: Run, working = false) => working ? 'message-byline working' : author && landed(author) ? 'message-byline landed' : 'message-byline';
   /**
    * The head of an orglet's message (COD-365): its face in the gutter, carrying the state the face plays (thinking
-   * while the run works, a nod when the answer lands), and on the line beside it the name, the role it played for a
-   * crew and the model that wrote it.
+   * while the run works, a nod when the answer lands), and on the line beside it the name and the role it played for a
+   * crew. A direct chat also names the connection that wrote it. A channel leaves it out, and says nothing of an orglet
+   * that left, since the fade already does (owner, 2026-10-12): the face and the name say both on hover.
    */
+  const whoWrote = (author: Run) => {
+    const said = t('{0} ({1})', [author.snapshot.worker.name, providerName(author.snapshot.worker.provider)]);
+    return isGhost(author) ? t('{0}, đã rời kênh', [said]) : said;
+  };
   const workerHeader = (author?: Run, working = false): MessageHeader => ({
-    face: <span className={bylineClass(author, working)}>{author
+    face: !author ? <span className={bylineClass(author, working)}><span className="orglet-mark small">o</span></span> : <Tooltip label={whoWrote(author)} side="bottom"><span className={bylineClass(author, working)}>{author
       ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} />
-      : <span className="orglet-mark small">o</span>}</span>,
-    name: <><strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}
-      {isGhost(author) && <span className="byline-role byline-left">{t('đã rời kênh')}</span>}</>,
+      : <span className="orglet-mark small">o</span>}</span></Tooltip>,
+    name: <>{author ? <Tooltip label={whoWrote(author)} side="bottom"><strong>{author.snapshot.worker.name}</strong></Tooltip> : <strong>Orglet</strong>}{author && bylineRole(author)}
+      {author && channelOrglets === undefined && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}
+      {isGhost(author) && <span className="visually-hidden">{t('đã rời kênh')}</span>}</>,
   });
   const personHeader: MessageHeader = { face: <PersonFace />, name: <strong>{t('Bạn')}</strong> };
   /** A schedule's post: the orglet that ran it, and the schedule it came from beside the name (owner, 2026-10-07). */
