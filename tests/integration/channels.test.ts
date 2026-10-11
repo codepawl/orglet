@@ -9,6 +9,7 @@ import type { Task, Team, Worker } from '../../apps/desktop/src/shared/contracts
 import { Channel, channelNameFrom, channelOrgletIds, isChannelChat, isLegacyGroupChat } from '../../apps/desktop/src/shared/channels';
 import { liveWorkerTask, newChatKey, newChatKeyNames } from '../../apps/desktop/src/shared/live-task';
 import { channelFromRecipient, channelMembersFromSelection, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from '../../apps/desktop/src/renderer/channelChat';
+import { assigneeLabel, taskWorkers } from '../../apps/desktop/src/renderer/assignees';
 import { noSelection } from '../../apps/desktop/src/renderer/sidebarSelection';
 
 /*
@@ -67,10 +68,14 @@ describe('an empty channel in the window', () => {
     expect(channelTaskInput(open, { brief: 'Hi' })).toEqual({ brief: 'Hi', channelId: 'ch', workerId: 'b', assignees: ['b', 'c', 'a'] });
   });
 
-  it('is gone once it is not listed or nobody in it can answer', () => {
+  it('is gone once it is not listed', () => {
     expect(openEmptyChannel('other', [empty], roster)).toBeUndefined();
-    expect(openEmptyChannel('ch', [empty], { workers: [], teams: [] })).toBeUndefined();
     expect(openEmptyChannel(undefined, [empty], roster)).toBeUndefined();
+  });
+
+  it('stays open with no orglet in it, so the window can ask for one', () => {
+    const open = openEmptyChannel('ch', [empty], { workers: [], teams: [] })!;
+    expect(open).toMatchObject({ channelId: 'ch', name: 'launch', workerIds: [] });
   });
 
   it('round-trips through the navigation recipient', () => {
@@ -253,5 +258,15 @@ describe('channels in the core', () => {
     store = new Store(path);
     core = new CoreService(store, () => {}, async () => { throw new Error('Demo orglets never call a model.'); });
     expect(store.get<Task>('tasks', legacy.id).channel?.name).toBe('Researcher, Writer');
+  });
+});
+
+describe('a channel with nobody in it', () => {
+  it('answers with no orglet, not with the one its row still names', () => {
+    const row = { teamId: undefined, assignees: [] as string[], workerId: 'a' };
+    const workspace = { workers: [{ id: 'a', name: 'Ada' }, { id: 'b', name: 'Bo' }] as Worker[], teams: [] };
+    expect(taskWorkers(row, workspace)).toEqual([]);
+    expect(assigneeLabel(row, workspace, { all: 'All', many: count => String(count) })).toBeUndefined();
+    expect(taskWorkers({ ...row, assignees: ['b'] }, workspace).map(worker => worker.id)).toEqual(['b']);
   });
 });

@@ -30,7 +30,7 @@ export function MemberColumn({ you, onYou, members, others, working, leadId, onM
   onMessage: (worker: Worker) => void;
   /** Opens that orglet's settings, where its role, model and memory are. */
   onEdit: (worker: Worker) => void;
-  /** Whether this orglet can be taken out of the channel: not the lead, and not the last one in it. */
+  /** Whether this orglet can be taken out of the channel: not the lead of a channel where the lead splits the work. The last orglet may go. */
   removable: (worker: Worker) => boolean;
   /** Takes the orglet out of the channel. Its messages stay, and it stays an orglet. */
   onRemove: (worker: Worker) => void;

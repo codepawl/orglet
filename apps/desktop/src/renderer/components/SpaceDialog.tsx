@@ -77,7 +77,8 @@ export function SpaceDialog({ open, draft, workspace, onClose, onCreated }: { op
   const submit = () => {
     const trimmed = name.trim();
     if (!trimmed) return fail('general', t('Đặt tên cho không gian.'), 'name');
-    if (!orgletIds.length) return fail('members', t('Chọn ít nhất một Tí.'), 'members');
+    // A new space needs an orglet; a saved one may have none and gets them again here.
+    if (!editing && !orgletIds.length) return fail('members', t('Chọn ít nhất một Tí.'), 'members');
     if (categories.some(category => !category.name.trim())) return fail('categories', t('Đặt tên cho từng nhóm, hoặc xóa nhóm trống.'), 'category');
     const fields = {
       name: trimmed,

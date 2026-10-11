@@ -15,6 +15,12 @@ export type PublishingSource = { kind: 'orglet' | 'crew' | 'space'; entityId: st
 const SPACE_NOT_PUBLISHABLE = 'Không gian này đã bị xóa.';
 const CHANNEL_NAMES_REPEAT = 'Hai kênh trong không gian trùng tên. Đổi tên một kênh rồi xem trước lại.';
 const SPACE_HAS_NO_CHANNEL = 'Không gian chưa có kênh nào để chia sẻ.';
+const SPACE_HAS_NO_ORGLET = 'Không gian chưa có Tí nào để chia sẻ.';
+
+/** The template keys of the orglets a channel lists, without any that are not part of the listing. */
+function listedKeys(channel: { members: readonly { id: string }[] }, workerKeys: ReadonlyMap<string, string>): string[] {
+  return channel.members.flatMap(member => workerKeys.get(member.id) ?? []);
+}
 
 /** The channels of a space as they are now, written in or empty, oldest first so that the listing keeps their order. */
 function spaceChannels(store: Store, spaceId: string): Channel[] {
@@ -78,6 +84,7 @@ export function projectPublishingSource(store: Store, source: PublishingSource, 
   const channels = space ? spaceChannels(store, space.id) : [];
   if (space) {
     if (!channels.length) throw new Error(SPACE_HAS_NO_CHANNEL);
+    if (!workers.length) throw new Error(SPACE_HAS_NO_ORGLET);
     if (new Set(channels.map(channel => channel.name.toLowerCase())).size !== channels.length) throw new Error(CHANNEL_NAMES_REPEAT);
   }
   const categoryKeys = new Map((space?.categories ?? []).map((category, index) => [category.id, `category-${index + 1}`]));
@@ -92,7 +99,8 @@ export function projectPublishingSource(store: Store, source: PublishingSource, 
         name: channel.name,
         ...(channel.topic ? { topic: channel.topic } : {}),
         ...(channel.categoryId && categoryKeys.has(channel.categoryId) ? { categoryKey: categoryKeys.get(channel.categoryId) } : {}),
-        ...(channel.access === 'listed' ? { memberKeys: channel.members.flatMap(member => workerKeys.get(member.id) ?? []) } : {}),
+        // A listed channel with nobody in it shares no list: it takes its place's orglets when the listing is added.
+        ...(channel.access === 'listed' && listedKeys(channel, workerKeys).length ? { memberKeys: listedKeys(channel, workerKeys) } : {}),
       })),
     },
     workers: workers.map(worker => ({ ...publicWorker(worker, suggestion), key: workerKeys.get(worker.id), skillKey: skillKeys.get(worker.skillId) })),

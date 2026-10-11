@@ -21,7 +21,7 @@ export function SpaceHomePage({ space, channelCount, onCreateChannel, onOpenSetu
     <section className="space-home" aria-labelledby="space-home-title">
       <SpaceMark seed={space.id} color={space.color} />
       <h2 id="space-home-title">{space.name}</h2>
-      <p className="muted">{orgletCount === 1 ? t('1 Tí trong không gian này.') : t('{0} Tí trong không gian này.', [orgletCount])}</p>
+      <p className="muted">{orgletCount === 0 ? t('Không gian này chưa có Tí nào. Thêm Tí trong phần thiết lập để có người trả lời.') : orgletCount === 1 ? t('1 Tí trong không gian này.') : t('{0} Tí trong không gian này.', [orgletCount])}</p>
       <p className="muted">{channelCount === 0
         ? t('Chưa có kênh nào. Tạo kênh đầu tiên để các Tí bắt đầu làm việc cùng nhau.')
         : t('Chọn một kênh ở thanh bên, hoặc tạo kênh mới.')}</p>

@@ -66,7 +66,7 @@ import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../sh
 import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
-import { adoptCrews, Channels, channelForGroup } from './storage/channels';
+import { adoptCrews, Channels, channelForGroup, CHANNEL_HAS_NO_ORGLETS } from './storage/channels';
 import { Spaces, storedSpaces } from './storage/spaces';
 import { spaceChatCapabilities } from '../shared/spaces';
 import { orgletPlaces } from '../shared/unfriend';
@@ -1769,7 +1769,7 @@ export class CoreService {
   }
   /**
    * Unfriends an orglet: it leaves the person's DMs, and leaves each space or channel it is in unless the person kept
-   * it there. A place that would be left with no orglet always keeps it. With no place left the orglet is deleted as
+   * it there. A place left with no orglet stays, empty. With no place left the orglet is deleted as
    * `deleteEntity` does; otherwise it is marked unfriended and keeps working in the places that kept it.
    */
   private unfriendWorker(input: Args<'unfriendWorker'>): UnfriendResult {
@@ -1779,7 +1779,7 @@ export class CoreService {
     adoptCrews(this.store, () => this.clock().toISOString());
     const places = orgletPlaces(this.store.workspace(), input.id);
     const isKept = (place: { kind: string; id: string }) => input.keep.some(kept => kept.kind === place.kind && kept.id === place.id);
-    const kicked = places.filter(place => place.canKick && !isKept(place));
+    const kicked = places.filter(place => !isKept(place));
     for (const place of kicked) {
       if (place.kind === 'channel') this.assertChannelIdle(place.id);
     }
@@ -2267,6 +2267,8 @@ export class CoreService {
     return group.find(worker => worker.id === target.workerId);
   }
   private prepareTask(input: TaskInput): Task {
+    // A channel with nobody in it keeps its messages, but no run can answer a new one.
+    if (Array.isArray(input.assignees) && !input.assignees.length) throw new Error(CHANNEL_HAS_NO_ORGLETS);
     if (input.teamId) this.assertAssignable('team', input.teamId);
     const team = input.teamId ? this.store.get<Team>('teams', input.teamId) : undefined;
     if (!input.assignees) for (const workerId of team ? [...team.memberIds, team.synthesizerId] : [input.workerId]) this.assertAssignable('worker', workerId);

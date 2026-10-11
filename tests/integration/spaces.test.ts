@@ -51,9 +51,9 @@ describe('who a place in a space has', () => {
     expect(membersOutsideScope([{ kind: 'crew', id: ids.a }], [ids.a])).toEqual([{ kind: 'crew', id: ids.a }]);
   });
 
-  it('refuses a space with no orglet, a repeated orglet or a repeated category', () => {
+  it('accepts a space with no orglet, and refuses a repeated orglet or a repeated category', () => {
     const base = { id: ids.space, name: 'Launch', orgletIds: [ids.a], categories: [] };
-    expect(Space.safeParse({ ...base, orgletIds: [] }).success).toBe(false);
+    expect(Space.safeParse({ ...base, orgletIds: [] }).success).toBe(true);
     expect(Space.safeParse({ ...base, orgletIds: [ids.a, ids.a] }).success).toBe(false);
     expect(Space.safeParse({ ...base, categories: [{ id: ids.category, name: 'x' }, { id: ids.category, name: 'y' }] }).success).toBe(false);
   });
@@ -173,12 +173,12 @@ describe('spaces in the core', () => {
     expect(memberIds(emptyChannel(listed))).toEqual([editor.id]);
   });
 
-  it('refuses a save that would leave a channel with nobody, and keeps the space as it was', async () => {
+  it('lets a save leave a channel with nobody in it, and the channel stays', async () => {
     const spaceId = await newSpace([scout.id, writer.id]);
     const only = await core.command('createChannel', { name: 'solo', topic: '', members: [orglet(writer.id)], spaceId, access: 'listed' }) as string;
-    await expect(core.command('updateSpace', { id: spaceId, name: 'Launch', orgletIds: [scout.id], categories: [] })).rejects.toThrow('chưa có Tí nào');
-    expect(space(spaceId).orgletIds).toEqual([scout.id, writer.id]);
-    expect(memberIds(emptyChannel(only))).toEqual([writer.id]);
+    await core.command('updateSpace', { id: spaceId, name: 'Launch', orgletIds: [scout.id], categories: [] });
+    expect(space(spaceId).orgletIds).toEqual([scout.id]);
+    expect(memberIds(emptyChannel(only))).toEqual([]);
   });
 
   it('keeps a lead channel\'s crew record in step, and refuses a save that would take its lead away', async () => {

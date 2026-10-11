@@ -53,7 +53,7 @@ describe('unfriending an orglet in the core', () => {
   const memberIds = (channel: Channel) => channel.members.map(member => member.id);
   const liveWorkerIds = () => store.workspace().workers.map(worker => worker.id);
 
-  it('lists the spaces and channels an orglet is in, and marks a place it cannot leave', async () => {
+  it('lists the spaces and channels an orglet is in, every one of them leavable', async () => {
     const spaceId = await newSpace([scout.id, writer.id]);
     await newChannel('inside', [scout.id], { spaceId });
     const turns = await newChannel('turns', [scout.id, writer.id]);
@@ -64,14 +64,14 @@ describe('unfriending an orglet in the core', () => {
 
     const places = placesOf(scout.id);
     expect(places.slice(0, 2)).toEqual([
-      { kind: 'space', id: spaceId, name: 'Launch', canKick: true },
-      { kind: 'space', id: soloSpace, name: 'Solo', canKick: false },
+      { kind: 'space', id: spaceId, name: 'Launch' },
+      { kind: 'space', id: soloSpace, name: 'Solo' },
     ]);
     expect(places.slice(2)).toHaveLength(3);
     expect(places.slice(2)).toEqual(expect.arrayContaining([
-      { kind: 'channel', id: turns, name: 'turns', canKick: true },
-      { kind: 'channel', id: lead, name: 'lead', canKick: true },
-      { kind: 'channel', id: alone, name: 'alone', canKick: false },
+      { kind: 'channel', id: turns, name: 'turns' },
+      { kind: 'channel', id: lead, name: 'lead' },
+      { kind: 'channel', id: alone, name: 'alone' },
     ]));
     expect(placesOf(editor.id)).toEqual([]);
   });
@@ -80,7 +80,7 @@ describe('unfriending an orglet in the core', () => {
     const spaceId = await newSpace([scout.id, writer.id]);
     const solo = await newChannel('solo', [scout.id], { spaceId, access: 'listed' });
     const soloLead = await newChannel('solo lead', [scout.id], { spaceId, access: 'listed', mode: 'lead' });
-    expect(placesOf(scout.id)).toEqual([{ kind: 'space', id: spaceId, name: 'Launch', canKick: true }]);
+    expect(placesOf(scout.id)).toEqual([{ kind: 'space', id: spaceId, name: 'Launch' }]);
 
     expect(await unfriend(scout.id)).toEqual({ outcome: 'deleted', kicked: 1, kept: 0 });
     expect(memberIds(emptyChannel(solo))).toEqual([writer.id]);
@@ -89,10 +89,14 @@ describe('unfriending an orglet in the core', () => {
     expect(crew.synthesizerId).toBe(writer.id);
   });
 
-  it('keeps an orglet in a space when a category that lists only it would be left with nobody', async () => {
+  it('lets an orglet leave a space whose category lists only it, and the category is then empty', async () => {
     const categoryId = '11111111-1111-4111-8111-111111111111';
     const spaceId = await core.command('createSpace', { name: 'Launch', orgletIds: [scout.id, writer.id], categories: [{ id: categoryId, name: 'Field', orgletIds: [scout.id] }] }) as string;
-    expect(placesOf(scout.id)).toEqual([{ kind: 'space', id: spaceId, name: 'Launch', canKick: false }]);
+    expect(placesOf(scout.id)).toEqual([{ kind: 'space', id: spaceId, name: 'Launch' }]);
+    expect(await unfriend(scout.id)).toEqual({ outcome: 'deleted', kicked: 1, kept: 0 });
+    const space = store.workspace().spaces.find(item => item.id === spaceId)!;
+    expect(space.orgletIds).toEqual([writer.id]);
+    expect(space.categories[0].orgletIds).toEqual([]);
   });
 
   it('deletes the orglet when every place lets it go', async () => {
@@ -143,13 +147,114 @@ describe('unfriending an orglet in the core', () => {
     expect(memberIds(emptyChannel(lead))).toEqual([writer.id, editor.id]);
   });
 
-  it('keeps a place that would be left with nobody, even when the person did not ask to keep it', async () => {
-    const spaceId = await newSpace([editor.id, writer.id]);
+  it('lets the last orglet leave a space and a loose turn channel, and both stay empty', async () => {
+    const spaceId = await newSpace([editor.id]);
+    const inSpace = await newChannel('inside', [editor.id], { spaceId });
     const alone = await newChannel('alone', [editor.id]);
 
-    expect(await unfriend(editor.id)).toEqual({ outcome: 'unfriended', kicked: 1, kept: 1 });
-    expect(store.workspace().spaces.find(space => space.id === spaceId)!.orgletIds).toEqual([writer.id]);
+    expect(await unfriend(editor.id)).toEqual({ outcome: 'deleted', kicked: 2, kept: 0 });
+    expect(liveWorkerIds()).not.toContain(editor.id);
+    const space = store.workspace().spaces.find(item => item.id === spaceId)!;
+    expect(space.orgletIds).toEqual([]);
+    expect(memberIds(emptyChannel(inSpace))).toEqual([]);
+    expect(memberIds(emptyChannel(alone))).toEqual([]);
+  });
+
+  it('lets the last orglet leave a lead channel: the channel stays and falls back to taking turns', async () => {
+    const lead = await newChannel('lead', [editor.id], { mode: 'lead' });
+    const crewId = emptyChannel(lead).crewId!;
+    expect(crewId).toBeDefined();
+
+    expect(await unfriend(editor.id)).toEqual({ outcome: 'deleted', kicked: 1, kept: 0 });
+    expect(memberIds(emptyChannel(lead))).toEqual([]);
+    expect(emptyChannel(lead).crewId).toBeUndefined();
+    expect(store.workspace().teams.map(team => team.id)).not.toContain(crewId);
+  });
+
+  it('keeps the orglet when the person unchecks the place it is alone in', async () => {
+    const alone = await newChannel('alone', [editor.id]);
+    expect(await unfriend(editor.id, [{ kind: 'channel', id: alone }])).toEqual({ outcome: 'unfriended', kicked: 0, kept: 1 });
     expect(memberIds(emptyChannel(alone))).toEqual([editor.id]);
+  });
+
+  it('keeps a written channel and its messages when its last orglet leaves, and refuses a new message', async () => {
+    const loose = await newChannel('loose', [editor.id]);
+    const taskId = await core.command('createTask', { workerId: editor.id, channelId: loose, brief: 'Before', ...message }) as string;
+    await settled(taskId);
+
+    await unfriend(editor.id);
+    const row = store.get<Task>('tasks', taskId);
+    expect(row.deletedAt).toBeUndefined();
+    expect(row.assignees).toEqual([]);
+    expect(row.channel!.members).toEqual([]);
+    expect(store.workspace().tasks.map(task => task.id)).toContain(taskId);
+    expect(store.detail(taskId).runs).toHaveLength(1);
+
+    await expect(core.command('reviseTask', { taskId, brief: 'Anyone there?', ...message })).rejects.toThrow('Kênh chưa có Tí nào để trả lời. Thêm một Tí.');
+    expect(store.detail(taskId).runs).toHaveLength(1);
+  });
+
+  it('refuses the first message of an empty channel with nobody in it, and answers once an orglet is added back', async () => {
+    const loose = await newChannel('loose', [editor.id]);
+    await unfriend(editor.id);
+    await expect(core.command('createTask', { workerId: scout.id, channelId: loose, brief: 'Hello', ...message })).rejects.toThrow('Kênh chưa có Tí nào để trả lời. Thêm một Tí.');
+
+    await core.command('updateChannel', { id: loose, name: 'loose', topic: '', members: [orglet(writer.id)] });
+    const taskId = await core.command('createTask', { workerId: writer.id, channelId: loose, brief: 'Hello', ...message }) as string;
+    await settled(taskId);
+    expect(store.get<Task>('tasks', taskId).assignees).toEqual([writer.id]);
+    expect(store.detail(taskId).runs).toHaveLength(1);
+  });
+
+  it('adds an orglet back to a written channel that was empty, and it answers the next message', async () => {
+    const loose = await newChannel('loose', [editor.id]);
+    const taskId = await core.command('createTask', { workerId: editor.id, channelId: loose, brief: 'Before', ...message }) as string;
+    await settled(taskId);
+    await unfriend(editor.id);
+
+    await core.command('updateChannel', { id: loose, name: 'loose', topic: '', members: [orglet(writer.id)] });
+    expect(store.get<Task>('tasks', taskId).assignees).toEqual([writer.id]);
+    expect(store.get<Task>('tasks', taskId).workerId).toBe(writer.id);
+    await core.command('reviseTask', { taskId, brief: 'Now?', ...message });
+    await settled(taskId);
+    expect(store.detail(taskId).runs).toHaveLength(2);
+  });
+
+  it('saves an existing space and channel with no orglets through the editor commands, but a new one still needs one', async () => {
+    const spaceId = await newSpace([scout.id, writer.id]);
+    const inSpace = await newChannel('inside', [scout.id], { spaceId, access: 'listed' });
+    const loose = await newChannel('loose', [scout.id]);
+
+    await core.command('updateChannel', { id: loose, name: 'loose', topic: '', members: [] });
+    expect(memberIds(emptyChannel(loose))).toEqual([]);
+    await core.command('updateSpace', { id: spaceId, name: 'Launch', orgletIds: [], categories: [] });
+    expect(store.workspace().spaces.find(space => space.id === spaceId)!.orgletIds).toEqual([]);
+    expect(memberIds(emptyChannel(inSpace))).toEqual([]);
+
+    await expect(core.command('createSpace', { name: 'Nobody', orgletIds: [], categories: [] })).rejects.toThrow('Không gian cần ít nhất một Tí.');
+    await expect(core.command('createChannel', { name: 'nobody', topic: '', members: [] })).rejects.toThrow('Kênh cần ít nhất một thành viên.');
+  });
+
+  it('adds an orglet back to an empty space and its channels can take it again', async () => {
+    const spaceId = await newSpace([editor.id]);
+    const inSpace = await newChannel('inside', [editor.id], { spaceId });
+    await unfriend(editor.id);
+    expect(memberIds(emptyChannel(inSpace))).toEqual([]);
+
+    await core.command('updateSpace', { id: spaceId, name: 'Launch', orgletIds: [writer.id], categories: [] });
+    expect(memberIds(emptyChannel(inSpace))).toEqual([writer.id]);
+    const taskId = await core.command('createTask', { workerId: writer.id, channelId: inSpace, brief: 'Hello', ...message }) as string;
+    await settled(taskId);
+    expect(store.get<Task>('tasks', taskId).assignees).toEqual([writer.id]);
+  });
+
+  it('does not strand a schedule of a lead channel: its last orglet cannot leave while the schedule is on', async () => {
+    const lead = await newChannel('lead', [editor.id], { mode: 'lead' });
+    const crewId = emptyChannel(lead).crewId!;
+    const schedule = { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency: 'daily', weekday: 1 };
+    await core.command('saveRoutine', { name: 'Digest', enabled: true, schedule, task: { workerId: editor.id, teamId: crewId, sourceIds: [], brief: 'Digest', consent: false, budgetMicros: 1000 } });
+    await expect(unfriend(editor.id)).rejects.toThrow('Tắt hoặc xóa lịch Digest trước.');
+    expect(memberIds(emptyChannel(lead))).toEqual([editor.id]);
   });
 
   it('archives the orglet\'s own DM chats and leaves its channel chats alone', async () => {
