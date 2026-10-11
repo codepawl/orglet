@@ -9,6 +9,7 @@ import { StatusMark, type StatusMarkState } from './StatusMark';
 import { Avatar } from './Avatar';
 import { Select } from './Select';
 import { t } from '../i18n';
+import { EmptyPanel } from './EmptyPanel';
 import { orglet } from '../api';
 import { SwitchField } from './Switch';
 import { FieldError, Input, Textarea } from '@codepawlhq/orglet-ui';
@@ -68,6 +69,8 @@ export function KnowledgeLibrary({ workspace, onOpen, onOpenChat }: { workspace:
     <span className="library-text">{item.title}<small className="muted">{scopeLabel(item.scope, workspace)}{item.tags.length ? ` · ${item.tags.join(', ')}` : ''}</small></span>
     {item.pinned && <Pin size={14} aria-label={t('Luôn nạp')} />}<span className="badge">v{item.revision}</span>
   </Button>;
+  // A library with nothing in it is the app's empty panel; the search box and the empty headings would only list zeros.
+  if (!query && visible.length === 0 && !error) return <EmptyPanel title={t('Chưa có knowledge nào.')} hint={t('Tạo một ghi chú để Tí dùng lại, hoặc để Tí tự ghi nhớ từ các cuộc trò chuyện.')} />;
   return <div className="form">
     <label><FieldLabel icon={Search}>{t('Tìm knowledge')}</FieldLabel><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Từ khóa hoặc tag')} maxLength={200} /></label>
     {proposed.length > 0 && <section aria-label={t('Chờ duyệt')}><LibraryHeading tone="pending">{t('Chờ duyệt ({0})', [proposed.length])}</LibraryHeading>{proposed.map(row)}</section>}

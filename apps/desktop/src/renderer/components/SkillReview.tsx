@@ -6,6 +6,7 @@ import { FileText, FolderInput, Plus, Sparkles } from 'lucide-react';
 import { Select } from './Select';
 import { toast } from './toast';
 import { t, tMessage } from '../i18n';
+import { EmptyPanel } from './EmptyPanel';
 import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
 import { Skeleton, SkeletonGroup, SkeletonText, Textarea } from '@codepawlhq/orglet-ui';
@@ -26,6 +27,7 @@ export function SkillLibraryActions({ onOpen }: { onOpen: (skill?: Skill) => voi
 }
 
 export function SkillLibrary({ skills, onOpen }: { skills: Skill[]; onOpen: (skill?: Skill) => void }) {
+  if (skills.length === 0) return <EmptyPanel title={t('Chưa có skill nào.')} hint={t('Tạo một skill mới, hoặc nhập một gói từ thư mục.')} />;
   return <div className="form">
     {skills.map(skill => {
       const summary = skillSummary(skill.content);
