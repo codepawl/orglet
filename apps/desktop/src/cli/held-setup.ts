@@ -110,10 +110,6 @@ function onOff(word: string | undefined): boolean {
   throw new UsageError(t('Gõ on hoặc off.'));
 }
 
-function usdMicros(text: string | undefined): number {
-  if (!text || !/^\d{1,5}(\.\d{1,6})?$/.test(text)) throw new UsageError(t('Số tiền USD không hợp lệ: {0}.', text ?? ''));
-  return Math.round(Number(text) * 1_000_000);
-}
 
 function connectionBody(command: 'connect' | 'disconnect', positionals: string[]): SetupRequest {
   const forSearch = positionals[0] === 'search';
@@ -155,7 +151,7 @@ function grantBody(options: Options): HeldBody {
     }
     case 'mcp-remove': return { action: 'mcp-remove', server: needed(first, t('tên máy chủ MCP')) };
     case 'mcp-sign-in': return { action: 'mcp-sign-in', server: needed(first, t('tên máy chủ MCP')), ...(options.flags.has('--cancel') ? { cancel: true } : {}) };
-    case 'limit': return { action: 'limit', ...chatFields(options), budgetMicros: usdMicros(first) };
+    case 'limit': return { action: 'limit', ...chatFields(options) };
     case 'space-tools': return { action: 'space-tools', space: needed(first, t('tên không gian')), capabilities: options.positionals.slice(2) };
     case 'decision-model': return { action: 'decision-model', entries: first === 'off' ? [] : options.positionals.slice(1).map(decisionEntry) };
     case 'analytics':

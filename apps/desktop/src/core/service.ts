@@ -130,7 +130,6 @@ const resetClaimFailures: Record<Exclude<HarnessResetOutcome, HarnessResetAnswer
 };
 
 /** The Limit per task of a chat whose orglet or crew never set one, as the composer and the terminal command use. */
-const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 /** Only main sends this, with the path its picker returned; the window never names a path. */
 const relinkSourceInput = z.object({ taskId: Id, sourceId: Id, path: z.string().min(1).max(32768) }).strict();
 
@@ -718,7 +717,6 @@ export class CoreService {
         }
         if (!['paused', 'interrupted', 'waiting_budget'].includes(task.status)) throw new Error('Task không ở trạng thái có thể tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
-        task.budgetMicros = this.currentTaskLimit(task) ?? task.budgetMicros;
         if (task.teamSnapshot) {
           this.teams.assertResumable(task.id);
           task.pauseReason = undefined; task.handoff = undefined; this.store.update('tasks', task);
@@ -746,7 +744,7 @@ export class CoreService {
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Task đang chạy.');
         if (task.status === 'completed') throw new Error('Task đã hoàn tất. Tạo task mới để chạy lại.');
         if (task.decisionRequests?.some(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt)) throw new Error('Trả lời câu hỏi đang chờ hoặc gửi yêu cầu mới trước khi thử lại.');
-        this.start({ ...task, budgetMicros: this.currentTaskLimit(task) ?? task.budgetMicros }); return;
+        this.start(task); return;
       }
       case 'workspaceRecovery': return new WorkspaceRecovery(this.store).view(commands.workspaceRecovery.parse(args).taskId);
       case 'recoveryFile': {
@@ -1093,7 +1091,7 @@ export class CoreService {
         if (task.channel) {
           this.store.transaction(() => {
             if (input.localOnly !== undefined) this.store.sync.setLocalOnly({ kind: 'task', id: task.id, localOnly: input.localOnly });
-            this.store.update('tasks', { ...task, budgetMicros: input.budgetMicros });
+            this.store.update('tasks', task);
           });
           this.notify();
           return;
@@ -1106,7 +1104,7 @@ export class CoreService {
         const first = team?.synthesizerId ?? workerIds?.[0] ?? this.store.workspace().workers[0]?.id;
         if (!first) throw new Error('Chưa có Tí nào để giao việc.');
         const { teamId: _teamId, teamSnapshot: _snapshot, assignees: _assignees, ...rest } = task;
-        const updated: Task = { ...rest, workerId: first, ...(team ? { teamId: team.id, teamSnapshot: team } : {}), ...(assignee.kind === 'all' ? { assignees: 'all' as const } : workerIds && workerIds.length > 1 ? { assignees: workerIds } : {}), budgetMicros: input.budgetMicros };
+        const updated: Task = { ...rest, workerId: first, ...(team ? { teamId: team.id, teamSnapshot: team } : {}), ...(assignee.kind === 'all' ? { assignees: 'all' as const } : workerIds && workerIds.length > 1 ? { assignees: workerIds } : {}) };
         const titles = { ...this.store.setting<Record<string, string>>('taskTitles', {}) };
         if (input.title) titles[task.id] = input.title; else delete titles[task.id];
         // A chat given several orglets becomes a channel, named by its title or theirs (COD-361).
@@ -1907,7 +1905,7 @@ export class CoreService {
     if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
     this.policy.assertStart(task.teamId, task.id);
     const planFirst = input.planFirst ?? this.continuesPlanFirst(task, input.continueFrom);
-    const revised: Task = { ...task, currentTurnId: id(), currentTurnCreatedAt: this.store.sync.turns.nextCreatedAt(task.id), sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}), ...(planFirst ? { planFirst } : {}) }, inputRevision: Math.max(task.inputRevision ?? 0, ...this.store.sync.turns.list(task.id).map(turn => turn.localRevision)) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : waiting ? task.status : 'queued', pendingStart: active || waiting || undefined, pauseReason: undefined, handoff: undefined,
+    const revised: Task = { ...task, currentTurnId: id(), currentTurnCreatedAt: this.store.sync.turns.nextCreatedAt(task.id), sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}), ...(planFirst ? { planFirst } : {}) }, inputRevision: Math.max(task.inputRevision ?? 0, ...this.store.sync.turns.list(task.id).map(turn => turn.localRevision)) + 1, consent: input.consent, providerScopes: input.providerScopes, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : waiting ? task.status : 'queued', pendingStart: active || waiting || undefined, pauseReason: undefined, handoff: undefined,
       decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
         ? { ...request, interruptedAt: now() } : request) };
     this.store.transaction(() => {
@@ -2013,13 +2011,12 @@ export class CoreService {
     if (existing) {
       const providerScopes = this.chatProviders(existing);
       const excludedSources = (existing.currentInput ?? existing).excludedSources;
-      this.reviseTask({ taskId: existing.id, brief, sourceIds, excludedSources, consent: true, providerScopes, budgetMicros: existing.budgetMicros }, forwarded);
+      this.reviseTask({ taskId: existing.id, brief, sourceIds, excludedSources, consent: true, providerScopes }, forwarded);
       return existing.id;
     }
     const team = target.kind === 'team' ? this.store.get<Team>('teams', target.id) : undefined;
     const owner = team ? { workerId: team.synthesizerId, teamId: team.id } : { workerId: target.id };
-    const budgetMicros = (team ?? this.store.get<Worker>('workers', owner.workerId)).taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
-    const taskInput: TaskInput = { ...owner, brief, sourceIds, consent: true, providerScopes: this.chatProviders(owner), budgetMicros };
+    const taskInput: TaskInput = { ...owner, brief, sourceIds, consent: true, providerScopes: this.chatProviders(owner) };
     return this.createTask(taskInput, undefined, await this.resolveNewChatWorkspace(taskInput), forwarded);
   }
   /** The chat a forward to this place lands in: that chat, or the orglet's or crew's main chat once it has one. */
@@ -2050,7 +2047,7 @@ export class CoreService {
     if (sourceIds.some(sourceId => !main.sourceIds.includes(sourceId))) throw new Error('Chat phụ chỉ mang theo tệp đã có trong chat chính.');
     const task = this.prepareTask({
       workerId: main.workerId, brief: input.brief, sourceIds, excludedSources: input.excludedSources,
-      consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(main) ?? input.budgetMicros,
+      consent: input.consent, providerScopes: input.providerScopes,
       ...(main.toolCapabilities ? { toolCapabilities: [...main.toolCapabilities] } : {}),
       ...(main.browser ? { browser: structuredClone(main.browser) } : {}),
       ...(main.desktop ? { desktop: structuredClone(main.desktop) } : {}),
@@ -2229,16 +2226,6 @@ export class CoreService {
       for (const routine of this.store.all<Routine>('routines')) if (routine.lastTaskId === task.id) { const { lastTaskId: _last, ...kept } = routine; this.store.update('routines', kept); }
     });
   }
-  /**
-   * The Limit per task a crew or orglet chat runs under is that crew's or orglet's current setting, so raising it in
-   * settings reaches the chat's next turn, retry and resume; a run already in flight keeps the limit it started with.
-   * Group chats and scheduled runs keep the limit saved on their own row.
-   */
-  private currentTaskLimit(task: Pick<Task, 'teamId' | 'workerId' | 'assignees' | 'routineId'>): number | undefined {
-    if (task.assignees || task.routineId) return undefined;
-    if (task.teamId) return this.store.all<Team>('teams').find(team => team.id === task.teamId)?.taskBudgetMicros;
-    return this.store.all<Worker>('workers').find(worker => worker.id === task.workerId)?.taskBudgetMicros;
-  }
   /** Workers of a group chat in sidebar order, or undefined when one worker (or a team) handles the task. */
   private groupWorkers(task: Pick<Task, 'assignees'>) {
     if (!task.assignees) return undefined;
@@ -2379,7 +2366,7 @@ export class CoreService {
     if (forwarded || planFirst) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, ...(forwarded ? { forwarded } : {}), ...(planFirst ? { planFirst } : {}) };
     this.store.transaction(() => {
       // A schedule's run takes its place under the day's cap in the same transaction that writes it (COD-288).
-      if (routine) task.routineDay = this.routines.admitRun(routine, task.budgetMicros);
+      if (routine) task.routineDay = this.routines.dayOfRun(routine);
       this.store.put('tasks', task);
       this.chatSearch.indexTurn(task.id, 0, task.currentInput ?? task, task.createdAt);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });

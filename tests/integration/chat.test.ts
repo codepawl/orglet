@@ -98,7 +98,7 @@ it('falls back to a shortened first line when the model gives no title', () => {
   expect(taskTitle('"Kế hoạch."', chat, 'Chào bạn')).toBe('Kế hoạch');
 });
 
-it('changes who a task is assigned to, its name and limit, but not while it runs', async () => {
+it('changes who a task is assigned to and its name, ignores the limit of an older caller, and refuses while it runs', async () => {
   const workerId = await chatWorker('openai');
   const other = await core.command('saveWorker', { name: 'Kế toán', instructions: 'Help with accounting.', provider: 'openai', skillId: store.all<Worker>('workers')[0].skillId, taskBudgetMicros: 100_000 }) as Worker;
   replies.push(answer('Chào.'));
@@ -106,7 +106,8 @@ it('changes who a task is assigned to, its name and limit, but not while it runs
   await until(() => store.detail(taskId).task.status === 'completed');
   await core.command('updateTask', { id: taskId, title: 'Sổ sách', assignee: { kind: 'workers', workerIds: [other.id] }, budgetMicros: 200_000 });
   const task = store.detail(taskId).task;
-  expect(task).toMatchObject({ workerId: other.id, budgetMicros: 200_000 });
+  expect(task).toMatchObject({ workerId: other.id });
+  expect(task.budgetMicros).not.toBe(200_000);
   expect(store.setting<Record<string, string>>('taskTitles', {})[taskId]).toBe('Sổ sách');
 
   // The new assignee answers the next message and sees the earlier chat.

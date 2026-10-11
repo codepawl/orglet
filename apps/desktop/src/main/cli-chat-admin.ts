@@ -19,7 +19,6 @@ import { importFiles, readTask, turnResult, waitForTurn, type CliDependencies } 
 const MAX_LISTED_CHATS = 200;
 /** The characters of a chat id `orglet chats` prints, enough to tell chats apart. */
 const SHORT_ID_LENGTH = 8;
-const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 
 type Request<Op extends CliRequest['op']> = Extract<CliRequest, { op: Op }>;
 
@@ -64,7 +63,6 @@ export class CliChatAdmin {
       excludedSources: [],
       consent: true,
       providerScopes: providerScopes(runners),
-      budgetMicros: task.budgetMicros,
     }));
     return this.settle(sideId, request.wait, request.timeoutSeconds, signal);
   }
@@ -113,7 +111,6 @@ export class CliChatAdmin {
       excludedSources: [],
       consent: true,
       providerScopes: providerScopes(workers),
-      budgetMicros: workers[0].taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS,
     };
     const taskId = String(await this.dependencies.request('createTask', input));
     const sent = await this.settle(taskId, request.wait, request.timeoutSeconds, signal);
@@ -131,22 +128,17 @@ export class CliChatAdmin {
   }
 
   /**
-   * Who answers a chat and its cost limit, the two settings of the chat dialog that are not a grant. The limit may only
-   * go down: what a chat may spend is set in the window, where the person sees the figure. A channel keeps its members
-   * (`members` changes them) and takes only the limit.
+   * Who answers a chat, the one setting of the chat dialog that is not a grant. A channel keeps its members (`members`
+   * changes them). An older command's budget is ignored: a task has no limit.
    */
   async chatSettings(request: Request<'chat-settings'>): Promise<ChatSettingsValue> {
     const workspace = await this.workspace();
     const { task } = targetChat(workspace, request);
     if (task.sideOf || task.routineId) throw new CliFailure('failed', 'Chỉ đổi được Tí và giới hạn của chat chính hoặc kênh.');
-    if (request.budgetMicros !== undefined && request.budgetMicros > task.budgetMicros) {
-      throw new CliFailure('failed', 'Terminal chỉ hạ được giới hạn của chat. Tăng giới hạn trong app.');
-    }
     if (task.channel && request.names) throw new CliFailure('failed', 'Đổi thành viên của kênh bằng orglet members.');
-    const budgetMicros = request.budgetMicros ?? task.budgetMicros;
-    await this.dependencies.request('updateTask', { id: task.id, title: task.title ?? '', assignee: assigneeOf(workspace, task, request.names), budgetMicros });
+    await this.dependencies.request('updateTask', { id: task.id, title: task.title ?? '', assignee: assigneeOf(workspace, task, request.names) });
     const after = (await this.workspace()).tasks.find(item => item.id === task.id) ?? task;
-    return { taskId: task.id, name: chatName(workspace, after), with: taskRunners(workspace, after).map(runner => runner.name), budgetMicros };
+    return { taskId: task.id, name: chatName(workspace, after), with: taskRunners(workspace, after).map(runner => runner.name) };
   }
 
   /** Renames, archives, restores or deletes one chat; deleting needs the chat's displayed name typed out. */

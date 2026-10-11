@@ -190,9 +190,10 @@ describe('channels in the core', () => {
     await core.command('renameTask', { id: taskId, title: 'brainstorm' });
     expect(store.get<Task>('tasks', taskId).channel?.name).toBe('brainstorm');
     await expect(core.command('renameTask', { id: taskId, title: '' })).rejects.toThrow('Kênh cần một tên.');
-    // The chat's own settings keep only the limit for a channel.
+    // The chat's own settings take nothing for a channel now; an older caller's limit is accepted and ignored.
     await core.command('updateTask', { id: taskId, title: 'other', assignee: { kind: 'workers', workerIds: [scout.id] }, budgetMicros: 900_000 });
-    expect(store.get<Task>('tasks', taskId)).toMatchObject({ budgetMicros: 900_000, assignees: [editor.id, scout.id], channel: { name: 'brainstorm' } });
+    expect(store.get<Task>('tasks', taskId)).toMatchObject({ assignees: [editor.id, scout.id], channel: { name: 'brainstorm' } });
+    expect(store.get<Task>('tasks', taskId).budgetMicros).not.toBe(900_000);
   });
 
   it('refuses a channel nobody in it can answer, and members that are not listed', async () => {

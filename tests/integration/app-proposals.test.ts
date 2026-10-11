@@ -75,9 +75,29 @@ describe('proposal tools', () => {
     expect(snapshotCapabilities('openai')).toContain('app.propose');
   });
 
+  it('rejects a per-task budget in a new proposal, and applies an older stored one without the amount', async () => {
+    const worker = await chatWorker();
+    const scout = { targetId: null, ref: 'scout', name: 'Research Scout', description: null, instructions: 'Search papers.', provider: null, modelId: null, skillId: null, skillRef: null };
+    replies.push(call('propose_orglet', { ...scout, taskBudgetMicros: 900_000 }), answer('Tried.'));
+    const rejectedTaskId = await chat(worker.id, 'Make me a research scout');
+    expect(proposalsOf(rejectedTaskId)).toEqual([]);
+    expect(toolResults()[0]).toHaveProperty('error');
+
+    replies.push(call('propose_orglet', scout), answer('Proposed a scout.'));
+    const taskId = await chat(worker.id, 'Make me a research scout');
+    const [proposal] = proposalsOf(taskId);
+    const stored = JSON.parse(String(store.db.prepare('SELECT data FROM app_proposals WHERE id=?').get(proposal.id)!.data));
+    stored.payload.fields.taskBudgetMicros = 900_000;
+    store.db.prepare('UPDATE app_proposals SET data=? WHERE id=?').run(JSON.stringify(stored), proposal.id);
+
+    const applied = await core.command('applyAppProposal', { id: proposal.id }) as AppProposal;
+    expect(applied.status).toBe('applied');
+    expect(store.get<Worker>('workers', applied.target!.id)).not.toHaveProperty('taskBudgetMicros');
+  });
+
   it('stores an orglet proposal as a pending card and creates the worker only when the user applies it', async () => {
     const worker = await chatWorker();
-    replies.push(call('propose_orglet', { targetId: null, ref: 'scout', name: 'Research Scout', description: 'Finds papers', instructions: 'Search and summarise papers.', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null }), answer('Proposed a scout.'));
+    replies.push(call('propose_orglet', { targetId: null, ref: 'scout', name: 'Research Scout', description: 'Finds papers', instructions: 'Search and summarise papers.', provider: null, modelId: null, skillId: null, skillRef: null }), answer('Proposed a scout.'));
     const taskId = await chat(worker.id, 'Make me a research scout');
     expect(store.detail(taskId).task.status).toBe('completed');
     const [proposal] = proposalsOf(taskId);
@@ -97,7 +117,7 @@ describe('proposal tools', () => {
     expect(applied).toMatchObject({ status: 'applied', automatic: false, target: { kind: 'worker' } });
     expect(applied.undo).toBeUndefined();
     const created = store.get<Worker>('workers', applied.target!.id);
-    expect(created).toMatchObject({ name: 'Research Scout', provider: 'openai', skillId: worker.skillId, taskBudgetMicros: 400_000, revision: 1, description: 'Finds papers', avatar: { mascot: 'search' } });
+    expect(created).toMatchObject({ name: 'Research Scout', provider: 'openai', skillId: worker.skillId, revision: 1, description: 'Finds papers', avatar: { mascot: 'search' } });
     expect(created).not.toHaveProperty('autoApplyProposals');
     // The workspace lists the applied change so the renderer can announce it, naming the worker that proposed it.
     expect(store.workspace().recentAppChanges[0]).toMatchObject({ id: proposal.id, taskId, kind: 'orglet', action: 'create', title: 'Research Scout', automatic: false, workerName: worker.name });
@@ -108,9 +128,9 @@ describe('proposal tools', () => {
     const worker = await chatWorker();
     replies.push(
       call('propose_skill', { targetId: null, ref: 'review', name: 'Code review', content: 'Review diffs for bugs and style.' }),
-      call('propose_orglet', { targetId: null, ref: 'reviewer', name: 'Reviewer', description: null, instructions: 'Review code.', provider: null, modelId: null, skillId: null, skillRef: 'review', taskBudgetMicros: null }),
-      call('propose_orglet', { targetId: null, ref: 'writer', name: 'Writer', description: null, instructions: 'Write docs.', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null }),
-      call('propose_crew', { targetId: null, ref: 'crew', name: 'Review crew', instructions: 'Review then document.', memberIds: [worker.id], memberRefs: ['reviewer', 'writer'], leadId: null, leadRef: 'reviewer', workflow: 'sequential', monthlyBudgetMicros: null, taskBudgetMicros: null }),
+      call('propose_orglet', { targetId: null, ref: 'reviewer', name: 'Reviewer', description: null, instructions: 'Review code.', provider: null, modelId: null, skillId: null, skillRef: 'review' }),
+      call('propose_orglet', { targetId: null, ref: 'writer', name: 'Writer', description: null, instructions: 'Write docs.', provider: null, modelId: null, skillId: null, skillRef: null }),
+      call('propose_crew', { targetId: null, ref: 'crew', name: 'Review crew', instructions: 'Review then document.', memberIds: [worker.id], memberRefs: ['reviewer', 'writer'], leadId: null, leadRef: 'reviewer', workflow: 'sequential', monthlyBudgetMicros: null }),
       call('propose_crew_template', { teamId: null, teamRef: 'crew' }),
       call('propose_schedule', { targetId: null, name: 'Monday review', brief: 'Review last week.', frequency: 'weekly', time: '09:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh', workerId: null, workerRef: null, teamId: null, teamRef: 'crew' }),
       answer('All proposed.'),
@@ -139,13 +159,13 @@ describe('proposal tools', () => {
     expect(applied[4].target).toEqual({ kind: 'template', id: team.id });
     expect(JSON.parse(core.templates.export(team.id)).team.name).toBe('Review crew');
     const routine = store.get<Routine>('routines', applied[5].target!.id);
-    expect(routine).toMatchObject({ name: 'Monday review', enabled: false, schedule: { frequency: 'weekly', time: '09:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh' }, task: { teamId: team.id, workerId: reviewer.id, brief: 'Review last week.', consent: false, budgetMicros: 400_000 } });
+    expect(routine).toMatchObject({ name: 'Monday review', enabled: false, schedule: { frequency: 'weekly', time: '09:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh' }, task: { teamId: team.id, workerId: reviewer.id, brief: 'Review last week.', consent: false } });
   });
 
   it('proposes edits as before → after, creates a new revision on apply, and leaves the running snapshot alone', async () => {
     const worker = await chatWorker();
     replies.push(
-      call('propose_orglet', { targetId: worker.id, ref: null, name: null, description: null, instructions: 'Answer in Vietnamese.', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null }),
+      call('propose_orglet', { targetId: worker.id, ref: null, name: null, description: null, instructions: 'Answer in Vietnamese.', provider: null, modelId: null, skillId: null, skillRef: null }),
       call('propose_skill', { targetId: worker.skillId, ref: null, name: null, content: 'Updated skill text.' }),
       call('propose_settings', { theme: 'dark', language: null, accentColor: null, logoColor: null, interfaceFont: 'SF Pro Text', codeFont: null, copyFormat: null, downloadFormat: null, autoTitles: null, confirmOpenTask: null }),
       answer('Edits proposed.'),
@@ -170,8 +190,8 @@ describe('proposal tools', () => {
   it('returns a mistake to the model as the tool answer and lets the run finish', async () => {
     const worker = await chatWorker();
     replies.push(
-      call('propose_orglet', { targetId: null, ref: null, name: 'Nameless', description: null, instructions: null, provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null }),
-      call('propose_crew', { targetId: null, ref: null, name: 'Ghost crew', instructions: 'x', memberIds: null, memberRefs: ['nobody'], leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: null, taskBudgetMicros: null }),
+      call('propose_orglet', { targetId: null, ref: null, name: 'Nameless', description: null, instructions: null, provider: null, modelId: null, skillId: null, skillRef: null }),
+      call('propose_crew', { targetId: null, ref: null, name: 'Ghost crew', instructions: 'x', memberIds: null, memberRefs: ['nobody'], leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: null }),
       call('propose_settings', { theme: 'system', language: null, accentColor: null, logoColor: null, interfaceFont: null, codeFont: null, copyFormat: null, downloadFormat: null, autoTitles: null, confirmOpenTask: null }),
       answer('Could not.'),
     );
@@ -203,7 +223,7 @@ describe('what the tools cannot reach', () => {
     for (const forbidden of ['apiKey', 'connectionLimitMicros', 'providerConsent', 'providerConcurrency', 'autoUpdate', 'marketAutoUpdate', 'archiveRetentionDays', 'connections', 'harnessAccounts', 'backup']) {
       expect(ProposeSettings.safeParse({ ...settings, [forbidden]: true }).success).toBe(false);
     }
-    const orglet = { targetId: null, ref: null, name: 'X', description: null, instructions: 'Y', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null };
+    const orglet = { targetId: null, ref: null, name: 'X', description: null, instructions: 'Y', provider: null, modelId: null, skillId: null, skillRef: null };
     for (const forbidden of ['autoApplyProposals', 'toolCapabilities', 'workspace', 'apiKey', 'permissions']) {
       expect(ProposeOrglet.safeParse({ ...orglet, [forbidden]: true }).success).toBe(false);
       expect(ProposeOrglet.partial().safeParse({ ...orglet, [forbidden]: true }).success).toBe(false);
@@ -212,7 +232,7 @@ describe('what the tools cannot reach', () => {
 
   it('fails the run, stores nothing and grants nothing when a call carries a forbidden field', async () => {
     const worker = await chatWorker();
-    replies.push(call('propose_orglet', { targetId: worker.id, ref: null, name: null, description: null, instructions: null, provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null, autoApplyProposals: true }));
+    replies.push(call('propose_orglet', { targetId: worker.id, ref: null, name: null, description: null, instructions: null, provider: null, modelId: null, skillId: null, skillRef: null, autoApplyProposals: true }));
     const taskId = await chat(worker.id);
     expect(store.detail(taskId).task.status).toBe('failed');
     expect(proposalsOf(taskId)).toEqual([]);
@@ -227,7 +247,7 @@ describe('auto-apply', () => {
     const worker = await chatWorker({ autoApplyProposals: true });
     expect(store.get<Worker>('workers', worker.id).autoApplyProposals).toBe(true);
     replies.push(
-      call('propose_orglet', { targetId: null, ref: 'helper', name: 'Helper', description: null, instructions: 'Help.', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null }),
+      call('propose_orglet', { targetId: null, ref: 'helper', name: 'Helper', description: null, instructions: 'Help.', provider: null, modelId: null, skillId: null, skillRef: null }),
       settingsCall(),
       answer(),
     );
@@ -247,7 +267,7 @@ describe('auto-apply', () => {
     await expect(core.command('undoAppProposal', { id: orglet.id })).rejects.toThrow('không hoàn tác được');
   });
 
-  it('never applies on its own with the switch off, and a raised limit or a template still waits for a click', async () => {
+  it('never applies on its own with the switch off, and a raised monthly limit or a template still waits for a click', async () => {
     const worker = await chatWorker();
     replies.push(settingsCall(), answer());
     const quiet = await chat(worker.id);
@@ -258,22 +278,19 @@ describe('auto-apply', () => {
     await core.command('saveWorker', { ...store.get<Worker>('workers', worker.id), autoApplyProposals: true });
     const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' }) as Team;
     replies.push(
-      call('propose_orglet', { targetId: worker.id, ref: null, name: null, description: null, instructions: null, provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: 900_000 }),
-      call('propose_crew', { targetId: team.id, ref: null, name: null, instructions: null, memberIds: null, memberRefs: null, leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: 9_000_000, taskBudgetMicros: null }),
+      call('propose_crew', { targetId: team.id, ref: null, name: null, instructions: null, memberIds: null, memberRefs: null, leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: 9_000_000 }),
       call('propose_crew_template', { teamId: team.id, teamRef: null }),
-      call('propose_crew', { targetId: team.id, ref: null, name: 'Renamed crew', instructions: null, memberIds: null, memberRefs: null, leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: null, taskBudgetMicros: null }),
+      call('propose_crew', { targetId: team.id, ref: null, name: 'Renamed crew', instructions: null, memberIds: null, memberRefs: null, leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: null }),
       answer(),
     );
     const taskId = await chat(worker.id);
-    const [budget, monthly, template, rename] = proposalsOf(taskId);
-    expect(budget).toMatchObject({ status: 'pending', hold: 'budget', heldReason: 'budget' });
+    const [monthly, template, rename] = proposalsOf(taskId);
     expect(monthly).toMatchObject({ status: 'pending', hold: 'budget', heldReason: 'budget' });
     expect(template).toMatchObject({ status: 'pending', hold: 'template', heldReason: 'template' });
     expect(rename).toMatchObject({ status: 'applied', automatic: true, undo: { kind: 'restore', entity: 'team' } });
-    expect(store.get<Worker>('workers', worker.id).taskBudgetMicros).toBe(400_000);
     expect(store.get<Team>('teams', team.id)).toMatchObject({ name: 'Renamed crew', monthlyBudgetMicros: 5_000_000 });
-    await core.command('applyAppProposal', { id: budget.id });
-    expect(store.get<Worker>('workers', worker.id).taskBudgetMicros).toBe(900_000);
+    await core.command('applyAppProposal', { id: monthly.id });
+    expect(store.get<Team>('teams', team.id).monthlyBudgetMicros).toBe(9_000_000);
   });
 
   it('holds every proposal of a run that read unvetted content, even with the switch on', async () => {
@@ -321,8 +338,8 @@ describe('auto-apply', () => {
 describe('one-shot harness answers', () => {
   type Answer = Record<string, unknown>;
   let harnessCore: CoreService; let harnessStore: Store; let requests: HarnessRequest[]; let answers: Answer[];
-  const orgletItem = (ref: string, name: string, instructions: string) => ({ tool: 'propose_orglet', arguments: { targetId: null, ref, name, description: null, instructions, provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null } });
-  const crewItem = (memberRefs: string[], leadRef: string | null = null) => ({ tool: 'propose_crew', arguments: { targetId: null, ref: 'desk', name: 'Fact Desk', instructions: 'Find, check, summarise.', memberIds: null, memberRefs, leadId: null, leadRef, workflow: 'sequential', monthlyBudgetMicros: null, taskBudgetMicros: null } });
+  const orgletItem = (ref: string, name: string, instructions: string) => ({ tool: 'propose_orglet', arguments: { targetId: null, ref, name, description: null, instructions, provider: null, modelId: null, skillId: null, skillRef: null } });
+  const crewItem = (memberRefs: string[], leadRef: string | null = null) => ({ tool: 'propose_crew', arguments: { targetId: null, ref: 'desk', name: 'Fact Desk', instructions: 'Find, check, summarise.', memberIds: null, memberRefs, leadId: null, leadRef, workflow: 'sequential', monthlyBudgetMicros: null } });
   const factDesk = () => [orgletItem('finder', 'Finder', 'Find documents.'), orgletItem('checker', 'Checker', 'Check the figures.'), orgletItem('writer', 'Writer', 'Write the summary.'), crewItem(['finder', 'checker', 'writer'], 'writer')];
 
   function harnessFixture(provider: 'claude-code' | 'codex' | 'cursor') {
@@ -387,7 +404,7 @@ describe('one-shot harness answers', () => {
     const worker = await harnessWorker('claude-code');
     answers.push({ message: 'Partly.', title: null, report: null, appProposals: [
       orgletItem('finder', 'Finder', 'Find documents.'),
-      { tool: 'propose_orglet', arguments: { targetId: null, ref: 'nameless', name: null, description: null, instructions: 'x', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null } },
+      { tool: 'propose_orglet', arguments: { targetId: null, ref: 'nameless', name: null, description: null, instructions: 'x', provider: null, modelId: null, skillId: null, skillRef: null } },
       { tool: 'propose_budget', arguments: {} },
       { tool: 'propose_orglet', arguments: { autoApplyProposals: true } },
       crewItem(['finder', 'nobody']),

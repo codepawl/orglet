@@ -53,7 +53,6 @@ export class CliChatActions {
       planFirst: input.planFirst,
       consent: true,
       providerScopes,
-      budgetMicros: detail.task.budgetMicros,
       onlyWhenIdle: true,
     });
     return this.settle(chat, task.id, 'revise', request.wait, request.timeoutSeconds, signal);
@@ -112,7 +111,6 @@ export class CliChatActions {
       excludedSources: input.excludedSources,
       consent: true,
       providerScopes: provider === 'demo' ? [] : [provider],
-      budgetMicros: detail.task.budgetMicros,
     });
     return this.settle(chat, taskId, 'continue', request.wait, request.timeoutSeconds, signal);
   }

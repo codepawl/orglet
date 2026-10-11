@@ -18,7 +18,6 @@ import { ProposalImprovement, ProposeSelfImprovement } from './self-improvement'
 const Text = (max: number) => z.string().trim().min(1).max(max);
 /** A short handle a later proposal in the same reply uses to point at something proposed before it. */
 export const ProposalRef = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/i, 'Ref là chữ, số, gạch nối hoặc gạch dưới.');
-const Budget = z.number().int().min(1000).max(100_000_000);
 const Workflow = z.enum(['sequential', 'parallel']);
 const Weekday = z.number().int().min(0).max(6);
 const Theme = z.enum(['system', 'light', 'dark']);
@@ -35,7 +34,6 @@ export const ProposeOrglet = z.object({
   effort: z.union([Effort, z.literal('auto')]).nullable(),
   skillId: Id.nullable(),
   skillRef: ProposalRef.nullable(),
-  taskBudgetMicros: Budget.nullable(),
 }).strict();
 export const ProposeCrew = z.object({
   targetId: Id.nullable(),
@@ -48,7 +46,6 @@ export const ProposeCrew = z.object({
   leadRef: ProposalRef.nullable(),
   workflow: Workflow.nullable(),
   monthlyBudgetMicros: z.number().int().min(1000).max(1_000_000_000).nullable(),
-  taskBudgetMicros: Budget.nullable(),
 }).strict();
 export const ProposeCrewTemplate = z.object({
   teamId: Id.nullable(),

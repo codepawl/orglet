@@ -78,7 +78,7 @@ describe('schedule proposals', () => {
     expect(appChanges.schedules).toEqual([{
       id: expect.any(String), name: 'Morning review', enabled: false, start: { kind: 'schedule' },
       clock: { frequency: 'hours', time: '00:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh', everyHours: 4, window: { from: '08:00', to: '18:00' }, weekdaysOnly: true },
-      dailyCapMicros: 500_000, runsAs: { orgletId: helper.id }, perRunBudgetMicros: 100_000,
+      dailyCapMicros: 500_000, runsAs: { orgletId: helper.id },
     }]);
     expect(appChanges.watchFolders).toEqual([{ id: folder.folderId, name: 'Invoices' }]);
     expect(JSON.stringify(appChanges)).not.toContain(directory.replace(/\\/g, '\\\\'));
@@ -108,14 +108,13 @@ describe('schedule proposals', () => {
     });
   });
 
-  it('refuse a clock that does not hold together, and a daily cap below one run', async () => {
+  it('refuse a clock that does not hold together', async () => {
     const worker = await chatWorker();
     replies.push(
       call('propose_schedule', scheduleProposal({ name: 'A', brief: 'x', frequency: 'hours', windowFrom: '08:00', windowTo: '20:00' })),
       call('propose_schedule', scheduleProposal({ name: 'B', brief: 'x', frequency: 'daily', time: '09:00', everyHours: 2 })),
       call('propose_schedule', scheduleProposal({ name: 'C', brief: 'x', frequency: 'hours', everyHours: 2, windowFrom: '08:00' })),
       call('propose_schedule', scheduleProposal({ name: 'D', brief: 'x', frequency: 'hours', everyHours: 2, windowFrom: '20:00', windowTo: '08:00' })),
-      call('propose_schedule', scheduleProposal({ name: 'E', brief: 'x', frequency: 'daily', time: '09:00', dailyCapMicros: 1000 })),
       answer('Could not.'),
     );
     const taskId = await chat(worker.id);
@@ -126,7 +125,6 @@ describe('schedule proposals', () => {
       'everyHours, windowFrom, windowTo và weekdaysOnly chỉ dùng khi frequency là "hours".',
       'Khung giờ cần cả windowFrom và windowTo.',
       expect.stringContaining('Giờ bắt đầu của khung giờ phải trước giờ kết thúc.'),
-      'Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.',
     ]);
   });
 

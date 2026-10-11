@@ -152,7 +152,7 @@ describe('orglet chat actions in the app', () => {
     const before = structuredClone(detail);
     const core = fakeCore(() => detail);
     expect(await core.operations.run({ op: 'revise', token, to: 'res', message: '2', text: 'corrected text', wait: false, timeoutSeconds: 5 }, core.signal)).toMatchObject({ action: 'revise', waited: false });
-    expect(core.calls.find(call => call.command === 'reviseTask')?.args).toEqual({ taskId, brief: 'corrected text', sourceIds: ['original'], excludedSources: detail.runs[1].snapshot.input!.excludedSources, replyTo: artifactIds[0], planFirst: true, consent: true, providerScopes: ['openai'], budgetMicros: 500_000, onlyWhenIdle: true });
+    expect(core.calls.find(call => call.command === 'reviseTask')?.args).toEqual({ taskId, brief: 'corrected text', sourceIds: ['original'], excludedSources: detail.runs[1].snapshot.input!.excludedSources, replyTo: artifactIds[0], planFirst: true, consent: true, providerScopes: ['openai'], onlyWhenIdle: true });
     expect(detail).toEqual(before);
   });
 
@@ -243,7 +243,7 @@ describe('orglet chat actions in the app', () => {
     const outOfSteps = [run(0, 0), run(1, 1), run(2, 2, { outOfSteps: true })];
     const core = fakeCore(() => chatDetail({}, outOfSteps));
     await core.operations.run({ op: 'control', token, to: 'res', action: 'continue', wait: false, timeoutSeconds: 5 }, core.signal);
-    expect(core.calls.find(call => call.command === 'reviseTask')?.args).toMatchObject({ taskId, continueFrom: runIds[2], consent: true, providerScopes: ['openai'], budgetMicros: 500_000 });
+    expect(core.calls.find(call => call.command === 'reviseTask')?.args).toMatchObject({ taskId, continueFrom: runIds[2], consent: true, providerScopes: ['openai'] });
   });
 
   it('answers a question with a choice number, and never an MCP approval', async () => {

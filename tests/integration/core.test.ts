@@ -109,19 +109,19 @@ describe('durable task runtime', () => {
     expect(store.detail(task.id).runs[0].error).toContain('thu hồi');
   });
   it('marks crashed runs interrupted without replaying requests or dropping reservations', () => {
-    const { task, run } = fixtureRun(); const ledger = new BudgetLedger(store); ledger.reserve(run.id, task.id, 'openai', 100, 1000, 1000);
+    const { task, run } = fixtureRun(); const ledger = new BudgetLedger(store); ledger.reserve(run.id, task.id, 'openai', 100);
     store.close(); store = new Store(join(directory, 'test.sqlite'));
     expect(store.detail(task.id).task.status).toBe('interrupted'); expect(store.detail(task.id).usage.uncertainCount).toBe(1); expect(dispatches).toBe(0);
     expect(store.budgetReservations()).toMatchObject([{ taskId: task.id, reason: 'interrupted', actualMicros: null }]);
   });
-  it('enforces the shared connection cap under competing reservations', async () => {
+  it('records competing reservations without refusing either for money', async () => {
     const a = fixtureRun(); const b = fixtureRun(); const ledger = new BudgetLedger(store);
-    const results = await Promise.allSettled([a, b].map(({ task, run }) => Promise.resolve().then(() => ledger.reserve(run.id, task.id, 'openai', 600, 1000, 1000))));
-    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1); expect(store.usage().reservedMicros).toBe(600);
-    expect(() => ledger.reserve(a.run.id, a.task.id, 'openai', 0, 1000, 1000)).toThrow(BudgetError);
+    const results = await Promise.allSettled([a, b].map(({ task, run }) => Promise.resolve().then(() => ledger.reserve(run.id, task.id, 'openai', 600))));
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(2); expect(store.usage().reservedMicros).toBe(1200);
+    expect(() => ledger.reserve(a.run.id, a.task.id, 'openai', 0)).toThrow(BudgetError);
   });
   it('does not allow a caller to settle a reservation twice', () => {
-    const { task, run } = fixtureRun(); const ledger = new BudgetLedger(store); const reservation = ledger.reserve(run.id, task.id, 'openai', 100, 1000, 1000);
+    const { task, run } = fixtureRun(); const ledger = new BudgetLedger(store); const reservation = ledger.reserve(run.id, task.id, 'openai', 100);
     ledger.settle(reservation, 10, 10); expect(() => ledger.settle(reservation, 10, 10)).toThrow(); expect(store.usage().chargedMicros).toBe(20);
   });
   it('rejects non-allowlisted commands and does not expose source paths in workspace/detail', async () => {

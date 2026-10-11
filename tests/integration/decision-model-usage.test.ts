@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ModelAdapter, ModelReply } from '../../apps/desktop/src/core/adapters/openai';
-import { BudgetError, BudgetLedger, cost } from '../../apps/desktop/src/core/budgets/ledger';
+import { BudgetLedger, cost } from '../../apps/desktop/src/core/budgets/ledger';
 import { DecisionUsageLedger } from '../../apps/desktop/src/core/budgets/decision-usage';
 import { Decisions, type DecisionsDependencies } from '../../apps/desktop/src/core/decisions/service';
 import { REPORT_TOOL } from '../../apps/desktop/src/core/decisions/emulated';
@@ -187,11 +187,9 @@ describe('counting what the decision model used', () => {
     // 6,000,000 tokens at $0.10 per million: 600,000 micro-dollars on OpenAI, for this chat.
     await counted(store, { saved: openAi, fetcher: answerFetcher(openAiReply(6_000_000)) }).decide('hello', oneQuestion, 1536, { taskId: task.id });
     const ledger = new BudgetLedger(store);
-    expect(() => ledger.reserve(run.id, task.id, 'openai', 200_000, 10_000_000, 700_000)).toThrow(BudgetError);
-    expect(() => ledger.reserve(run.id, task.id, 'openai', 100_000, 650_000, 10_000_000)).toThrow(BudgetError);
-    expect(ledger.reserve(run.id, task.id, 'openai', 40_000, 10_000_000, 700_000)).toBeTruthy();
-    // Another connection has its own allowance.
-    expect(ledger.reserve(run.id, task.id, 'anthropic', 200_000, 10_000_000, 700_000)).toBeTruthy();
+    // The decision model's spend is recorded, and nothing refuses a request for money.
+    expect(ledger.reserve(run.id, task.id, 'openai', 200_000)).toBeTruthy();
+    expect(ledger.reserve(run.id, task.id, 'anthropic', 200_000)).toBeTruthy();
   });
 });
 

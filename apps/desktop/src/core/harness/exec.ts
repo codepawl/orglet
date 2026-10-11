@@ -63,12 +63,12 @@ export class HarnessLimitError extends HarnessError {
   }
 }
 /**
- * The CLI stopped because it reached the spending cap Orglet passed it (`--max-budget-usd`, only Claude Code has one).
- * A known outcome, not an unknown request: the runner treats it like its own budget stop and words it for the chat.
+ * The CLI stopped because it reached a spending cap (`--max-budget-usd`, only Claude Code has one). Orglet passes none
+ * now that a task has no limit, so this only parses what an older request or the CLI's own setting can still produce.
  */
 export class HarnessBudgetError extends HarnessError {
   constructor(public readonly limitUsd: number, public readonly costUsd: number | null) {
-    super(`Claude Code dừng vì đã dùng hết phần còn lại của giới hạn mỗi task ($${limitUsd.toFixed(2)}). Nâng Giới hạn mỗi task của kênh hoặc Tí, rồi thử lại.`);
+    super(`Claude Code dừng vì chạm giới hạn chi phí của chính nó ($${limitUsd.toFixed(2)}).`);
   }
 }
 export class HarnessTerminationError extends HarnessError {

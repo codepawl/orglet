@@ -73,7 +73,7 @@ export function heldDetail(body: HeldBody, say: Say = source => source): string 
     case 'mcp-grant': return `${chatWords(body)}: ${body.server}${body.tool ? ` / ${body.tool}` : ''} (${body.allowed ? 'allow' : 'deny'})`;
     case 'mcp-remove':
     case 'mcp-sign-in': return body.server;
-    case 'limit': return `${chatWords(body)}: ${(body.budgetMicros / 1_000_000).toFixed(2)} USD`;
+    case 'limit': return chatWords(body);
     case 'space-tools': return `${body.space}: ${body.capabilities.join(', ') || '-'}`;
     case 'decision-model': return body.entries.map(entry => `${entry.connection} ${entry.model}`).join(', ') || '-';
     case 'switch': return `${body.what}: ${body.enabled ? 'on' : 'off'}`;

@@ -36,7 +36,7 @@ it('keeps an unknown hold until a verified amount is recorded, then changes the 
   const store = createStore();
   const { task, run } = createRun(store);
   const ledger = new BudgetLedger(store);
-  const reservation = ledger.reserve(run.id, task.id, 'openai', 600, task.budgetMicros, 1_000);
+  const reservation = ledger.reserve(run.id, task.id, 'openai', 600);
   ledger.unknown(reservation, 'request_failed');
   expect(store.workspace().budgetReservations).toMatchObject([{
     id: reservation, originalMicros: 600, reason: 'request_failed', actualMicros: null,
@@ -56,26 +56,20 @@ it('releases an old-month unknown hold from current monthly caps after reconcili
   const store = createStore();
   const first = createRun(store);
   const second = createRun(store);
-  const teamId = id();
-  store.update('tasks', { ...first.task, teamId });
-  store.update('tasks', { ...second.task, teamId });
   const ledger = new BudgetLedger(store);
-  const team = { id: teamId, limit: 1_000 };
-  const reservation = ledger.reserve(first.run.id, first.task.id, 'openai', 600, first.task.budgetMicros, 2_000, team);
+  const reservation = ledger.reserve(first.run.id, first.task.id, 'openai', 600);
   ledger.unknown(reservation, 'missing_usage');
-  store.db.prepare("UPDATE reservations SET month='2020-01' WHERE id=?").run(reservation);
-  expect(() => ledger.reserve(second.run.id, second.task.id, 'openai', 500, second.task.budgetMicros, 1_000, { ...team, limit: 2_000 })).toThrow(BudgetError);
-  expect(() => ledger.reserve(second.run.id, second.task.id, 'openai', 500, second.task.budgetMicros, 2_000, team)).toThrow(BudgetError);
+  // Money held or of unknown cost never refuses the next request: usage is recorded, not limited.
+  expect(ledger.reserve(second.run.id, second.task.id, 'openai', 500)).toBeTruthy();
   ledger.reconcile(reservation, 200, 'invoice');
-  expect(ledger.reserve(second.run.id, second.task.id, 'openai', 500, second.task.budgetMicros, 1_000, team)).toBeTruthy();
-  expect(() => ledger.reserve(first.run.id, first.task.id, 'openai', 900, first.task.budgetMicros, 2_000)).toThrow(BudgetError);
+  expect(ledger.reserve(first.run.id, first.task.id, 'openai', 900)).toBeTruthy();
 });
 
 it('preserves a resolved charge when an older unknown backup is restored again', () => {
   const source = createStore();
   const { task, run } = createRun(source);
   const ledger = new BudgetLedger(source);
-  const reservation = ledger.reserve(run.id, task.id, 'openai', 600, task.budgetMicros, 1_000);
+  const reservation = ledger.reserve(run.id, task.id, 'openai', 600);
   ledger.unknown(reservation, 'missing_usage');
   const service = new CoreService(source, () => {}, async () => { throw new Error('No model call'); });
   const oldBackup = service.backups.export();
@@ -97,7 +91,7 @@ it('imports an older backup without review records as an explicit legacy unknown
   const source = createStore();
   const { task, run } = createRun(source);
   const ledger = new BudgetLedger(source);
-  const reservation = ledger.reserve(run.id, task.id, 'openai', 600, task.budgetMicros, 1_000);
+  const reservation = ledger.reserve(run.id, task.id, 'openai', 600);
   ledger.unknown(reservation, 'missing_usage');
   const service = new CoreService(source, () => {}, async () => { throw new Error('No model call'); });
   const envelope = JSON.parse(service.backups.export());

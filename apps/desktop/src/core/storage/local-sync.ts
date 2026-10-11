@@ -878,7 +878,7 @@ export class LocalSync {
         throughRevision: this.turns.list(data.value.sideOf.taskId).find(turn => turn.id === data.value.sideOf!.throughTurnId)!.localRevision } : undefined;
       const { participants: _participants, ...publicChat } = data.value;
       const chat = { ...publicChat, sideOf };
-      if (!this.exists('tasks', chat.id)) this.store.put('tasks', { ...chat, brief: '', sourceIds: [], status: 'completed', budgetMicros: 0, consent: false, accepted: false } satisfies Task);
+      if (!this.exists('tasks', chat.id)) this.store.put('tasks', { ...chat, brief: '', sourceIds: [], status: 'completed', consent: false, accepted: false } satisfies Task);
       else {
         const task = this.store.get<Task>('tasks', data.value.id);
         if (task.createdAt !== data.value.createdAt) throw new Error('Định danh chat đã có thời điểm tạo khác.');

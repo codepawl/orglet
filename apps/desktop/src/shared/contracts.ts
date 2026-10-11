@@ -101,8 +101,7 @@ export const WorkerInput = z.object({
   // Selected or typed model slug. Absence means the catalog suggestion for this provider (or the CLI default for a harness).
   modelId: CustomModelId.optional(),
   effort: Effort.optional(),
-  // Limit per task for this worker's chat: reserved against for a paid API, passed to Claude Code as its spending cap;
-  // Codex, Cursor Agent, Gemini CLI and Demo have no cap to give it to.
+  // Kept only so older data and callers still parse; a chat has no limit per task and nothing reads this (owner, 2026-10-11).
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
   // Presentation only: shown in the app and carried by templates, never sent to a model.
   avatar: WorkerAvatar.optional(),
@@ -131,6 +130,7 @@ export const TeamInput = z.object({
   reviewPolicy: ReviewPolicy.optional(),
   workHours: WorkHours.optional(),
   maxConcurrentTasks: z.number().int().min(1).max(MAX_CREW_CONCURRENT_TASKS).optional(),
+  // Kept only so older data and callers still parse; nothing reads this (owner, 2026-10-11).
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
 });
 export type Team = z.infer<typeof TeamInput> & { id: string; revision: number };
@@ -157,6 +157,8 @@ export type FormatPreference = z.infer<typeof FormatPreference>;
 export type EntityState = Record<'workers' | 'teams', Record<string, { archivedAt?: string; deletedAt?: string; unfriendedAt?: string }>>;
 /** What unfriending an orglet did: it was deleted when no place kept it, else it stays as an unfriended member. */
 export type UnfriendResult = { outcome: 'deleted' | 'unfriended'; kicked: number; kept: number };
+/** The per-task amount old rows, backups, sync records and terminal commands still carry; accepted and ignored. */
+const LegacyTaskBudget = z.number().int().min(0).max(100_000_000);
 export const TaskInput = z.object({
   workerId: Id, teamId: Id.optional(), brief: z.string().trim().min(1).max(16000),
   // Group chat: several workers, or 'all' (every worker, including ones added later), answer each message in turn.
@@ -172,7 +174,8 @@ export const TaskInput = z.object({
   desktop: DesktopChoice.optional(),
   excludedSources: z.array(z.object({ name: z.string().max(4096), reason: z.string().max(2000) }).strict()).max(20020).optional(),
   providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES).optional(),
-  budgetMicros: z.number().int().min(1000).max(100_000_000),
+  // Kept only so older data and callers still parse; a task has no limit of its own and nothing reads this (owner, 2026-10-11).
+  budgetMicros: LegacyTaskBudget.optional(),
 });
 export type TaskInput = z.infer<typeof TaskInput>;
 // `forwarded` is set by the core on a forward's turn (COD-257); the window can never send one in a brief of its own.
@@ -279,7 +282,7 @@ export type SourceOrigin = { id: string; path: string | null };
 export type SourceBytes = { name: string; mimeType: string; bytes: Uint8Array };
 export type FolderIntake = { sources: Source[]; skipped: { name: string; reason: string }[] };
 export type TaskStatus = 'queued' | 'running' | 'pausing' | 'paused' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_budget' | 'waiting_input';
-export type Task = { currentTurnCreatedAt?: string; currentTurnId?: string; turnIds?: Record<number, string>; toolCapabilities?: ToolCapability[]; messageReactions?: MessageReaction[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** A new input was saved while an older run was stopping; dispatch only after it settles. */ pendingStart?: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; /** The schedule's name, kept on its runs when the schedule is deleted (COD-283); they stay chats. */ routineName?: string; /** The local day, in the schedule's time zone, whose daily cap this run counts against (COD-288). */ routineDay?: string; /** the decision model's look at a quiet schedule run's answer, and whether it was announced for it (COD-303). */ attention?: RunAttention; /** Where a schedule's run was posted, in its orglet's DM or its channel (owner, 2026-10-07). */ deliveredTo?: import('./side-threads').ScheduleDeliveredTo; /** Who the decision model picked to answer the group-chat messages that tagged nobody (COD-305). */ routedTurns?: TurnRoute[]; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; decisionRequests?: DecisionRequest[]; /** MCP tools this chat allows without asking again, per server or per tool (COD-241). */ mcpGrants?: McpGrant[]; /** Set on a side thread: the main chat it was started from (COD-247). */ sideOf?: SideOf; /** Set on a channel's row: its name, topic and members (COD-361). */ channel?: Channel; /** Answers brought in from side threads, shown as quoted messages in this main chat (COD-247). */ quotes?: ChatQuote[]; /** The browser's profile and site list (COD-261); absent is the Clean profile and no list. */ browser?: BrowserChoice; /** The desktop programs the chat granted (COD-261, phase 2a); absent is none. */ desktop?: DesktopChoice; inputRevision?: number; currentInput?: RunInput };
+export type Task = { currentTurnCreatedAt?: string; currentTurnId?: string; turnIds?: Record<number, string>; toolCapabilities?: ToolCapability[]; messageReactions?: MessageReaction[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; /* Kept only so older rows still parse; nothing reads it (owner, 2026-10-11). */ budgetMicros?: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** A new input was saved while an older run was stopping; dispatch only after it settles. */ pendingStart?: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; /** The schedule's name, kept on its runs when the schedule is deleted (COD-283); they stay chats. */ routineName?: string; /** The local day, in the schedule's time zone, whose daily cap this run counts against (COD-288). */ routineDay?: string; /** the decision model's look at a quiet schedule run's answer, and whether it was announced for it (COD-303). */ attention?: RunAttention; /** Where a schedule's run was posted, in its orglet's DM or its channel (owner, 2026-10-07). */ deliveredTo?: import('./side-threads').ScheduleDeliveredTo; /** Who the decision model picked to answer the group-chat messages that tagged nobody (COD-305). */ routedTurns?: TurnRoute[]; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; decisionRequests?: DecisionRequest[]; /** MCP tools this chat allows without asking again, per server or per tool (COD-241). */ mcpGrants?: McpGrant[]; /** Set on a side thread: the main chat it was started from (COD-247). */ sideOf?: SideOf; /** Set on a channel's row: its name, topic and members (COD-361). */ channel?: Channel; /** Answers brought in from side threads, shown as quoted messages in this main chat (COD-247). */ quotes?: ChatQuote[]; /** The browser's profile and site list (COD-261); absent is the Clean profile and no list. */ browser?: BrowserChoice; /** The desktop programs the chat granted (COD-261, phase 2a); absent is none. */ desktop?: DesktopChoice; inputRevision?: number; currentInput?: RunInput };
 export type RunStage = 'plan' | 'member' | 'synthesis' | 'group';
 /**
  * Why a run stopped, in a form the renderer can act on without reading the message: `unresolved_attempt` means an
@@ -344,10 +347,10 @@ export const commands = {
   task: z.object({ id: Id, recentTurns: z.number().int().min(1).max(100_000).optional() }),
   // The first message of a chat may ask for Plan first too (COD-367); it lands on that turn's input, never the chat row.
   createTask: TaskInput.extend({ planFirst: PlanFirst.optional() }),
-  reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, onlyWhenIdle: z.literal(true).optional(), consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, onlyWhenIdle: z.literal(true).optional(), consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: LegacyTaskBudget.optional() }).strict(),
   // A message sent "in a new thread" from an orglet's main chat (COD-247): a side thread of the same orglet, with the
   // main chat's permissions and never more. `taskId` is the main chat; the sources must already belong to it.
-  startSideThread: RunInput.omit({ replyTo: true, forwarded: true, continueFrom: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  startSideThread: RunInput.omit({ replyTo: true, forwarded: true, continueFrom: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: LegacyTaskBudget.optional() }).strict(),
   // Copies a side thread's answer into its main chat as a quoted message; it never starts a run.
   bringIntoMainChat: z.object({ artifactId: Id }).strict(),
   // Sends one message of a chat to up to five other chats as the person's own message (COD-257); each one is a turn there.
@@ -498,7 +501,7 @@ export const commands = {
   spaceFromCategory: z.object({ category: z.string().trim().min(1).max(40) }).strict(),
   // Every idle channel outside the spaces goes into the space kept for them, made with this name on first need.
   adoptLooseChannels: z.object({ name: z.string().trim().min(1).max(40) }).strict(),
-  updateTask: z.object({ localOnly: z.boolean().optional(), id: Id, title: z.string().trim().max(120), assignee: z.discriminatedUnion('kind', [z.object({ kind: z.literal('workers'), workerIds: z.array(Id).min(1).max(50) }).strict(), z.object({ kind: z.literal('team'), teamId: Id }).strict(), z.object({ kind: z.literal('all') }).strict()]), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  updateTask: z.object({ localOnly: z.boolean().optional(), id: Id, title: z.string().trim().max(120), assignee: z.discriminatedUnion('kind', [z.object({ kind: z.literal('workers'), workerIds: z.array(Id).min(1).max(50) }).strict(), z.object({ kind: z.literal('team'), teamId: Id }).strict(), z.object({ kind: z.literal('all') }).strict()]), budgetMicros: LegacyTaskBudget.optional() }).strict(),
   // The order the person keeps rows in. `channels` and `categories` are the order inside spaces: one list each for
   // every space, since a channel and a category belong to one space only.
   reorder: z.object({ kind: z.enum(['teams', 'workers', 'channels', 'categories', 'spaces']), ids: z.array(Id).max(1000) }).strict(),

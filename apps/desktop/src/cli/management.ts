@@ -9,11 +9,13 @@ export type OrgletConfig = z.infer<typeof OrgletConfig>;
 export type CrewConfig = z.infer<typeof CrewConfig>;
 export const OrgletPatch = OrgletConfig.partial().extend({
   modelId: OrgletConfig.shape.modelId.nullable(),
+  // Kept only so older config files still parse; ignored (owner, 2026-10-11).
   taskBudgetMicros: OrgletConfig.shape.taskBudgetMicros.nullable(),
   description: OrgletConfig.shape.description.nullable(),
   avatar: WorkerAvatar.extend({ color: WorkerAvatar.shape.color.nullable() }).strict().nullable().optional(),
 }).strict();
 export const CrewPatch = CrewConfig.partial().extend({
+  // Kept only so older config files still parse; ignored (owner, 2026-10-11).
   taskBudgetMicros: CrewConfig.shape.taskBudgetMicros.nullable(),
   maxConcurrentTasks: CrewConfig.shape.maxConcurrentTasks.nullable(),
 }).strict();

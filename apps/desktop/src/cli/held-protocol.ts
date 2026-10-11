@@ -61,7 +61,8 @@ const SetupBodies = [
   z.object({ action: z.literal('mcp-grant'), ...ChatFields, server: Name, tool: z.string().min(1).max(128).optional(), allowed: z.boolean() }).strict(),
   z.object({ action: z.literal('mcp-remove'), server: Name }).strict(),
   z.object({ action: z.literal('mcp-sign-in'), server: Name, cancel: z.boolean().optional() }).strict(),
-  z.object({ action: z.literal('limit'), ...ChatFields, budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  z.object({ action: z.literal('limit'), ...ChatFields, // Kept only so an older terminal command still parses; it changes nothing (a task has no limit, owner 2026-10-11).
+    budgetMicros: z.number().int().min(0).max(100_000_000).optional() }).strict(),
   z.object({ action: z.literal('space-tools'), space: Name, capabilities: Capabilities }).strict(),
   z.object({ action: z.literal('decision-model'), entries: z.array(z.object({ connection: Provider, model: z.string().trim().min(1).max(200) }).strict()).max(8) }).strict(),
   z.object({ action: z.literal('switch'), what: z.enum(['analytics', 'cli-path', 'send-to']), enabled: z.boolean() }).strict(),
@@ -140,7 +141,7 @@ export const HELD_ACTIONS: Record<HeldAction, { keys: readonly string[]; label: 
   'mcp-grant': { keys: ['setMcpGrant'], label: 'Cho hoặc rút quyền MCP của một chat' },
   'mcp-remove': { keys: ['removeMcpServer'], label: 'Xóa một máy chủ MCP' },
   'mcp-sign-in': { keys: ['signInMcpServer', 'cancelMcpSignIn'], label: 'Đăng nhập máy chủ MCP bằng trình duyệt' },
-  limit: { keys: [], label: 'Tăng giới hạn chi phí của một chat', scope: 'setup' },
+  limit: { keys: [], label: 'Lệnh cũ đổi giới hạn của một chat; không còn đổi gì', scope: 'setup' },
   'space-tools': { keys: [], label: 'Đổi công cụ mà kênh mới của một không gian bắt đầu với', scope: 'setup' },
   'decision-model': { keys: ['saveDecisionModelSetting'], label: 'Chọn kết nối cho mô hình quyết định' },
   switch: { keys: ['setAnalytics', 'setCliOnPath', 'setSendTo'], label: 'Đổi một công tắc của app' },

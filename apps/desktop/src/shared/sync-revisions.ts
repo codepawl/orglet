@@ -7,10 +7,12 @@ import { SyncRevisionId, SyncClock } from './sync';
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 // These are data projections. Local proposal/MCP approval and package review authority never travels with a revision.
 export const SyncWorker = WorkerInput.pick({ name: true, instructions: true, provider: true, skillId: true, modelId: true,
+  // `taskBudgetMicros` is kept only so older records still parse; nothing reads it (owner, 2026-10-11).
   effort: true, taskBudgetMicros: true, avatar: true, description: true }).extend({ id: Id }).strict();
 export const SyncSkill = SkillInput.pick({ name: true, content: true }).extend({ id: Id,
   package: SkillPackage.omit({ reviewedHash: true }).strict().optional() }).strict();
 export const SyncTeam = TeamInput.pick({ name: true, instructions: true, memberIds: true, synthesizerId: true, workflow: true,
+  // `taskBudgetMicros` is kept only so older records still parse; nothing reads it (owner, 2026-10-11).
   monthlyBudgetMicros: true, maxConcurrentTasks: true, taskBudgetMicros: true }).extend({ id: Id }).strict();
 export const SyncKnowledge = Knowledge.omit({ revision: true }).strict();
 const Revision = { revisionId: SyncRevisionId, generation: Integer.refine(value => value > 0), clock: SyncClock };

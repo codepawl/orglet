@@ -340,12 +340,15 @@ describe('stopped chats', () => {
     expect(core.running()).toEqual([]);
   });
 
-  it('shows a chat stopped at its limit as waiting for budget', async () => {
+  it('does not stop a chat for money, whatever amount the connection setting holds', async () => {
     const workerId = await useOpenAi(2);
-    const taskId = await startChat(workerId, 'Too little money', 1000);
-    await until(() => statusOf(taskId) === 'waiting_budget' && !core.runner.isActive(taskId));
-    expect(summary(itemsOf(taskId))).toEqual([{ task: taskId, state: 'queued', wait: { kind: 'budget' } }]);
-    expect(runningCount(core.running())).toBe(0);
+    store.setSetting('connectionLimitMicros', 1);
+    const taskId = await startChat(workerId, 'Too little money');
+    await until(() => gates.length === 1);
+    expect(statusOf(taskId)).not.toBe('waiting_budget');
+    openNextGate();
+    await until(() => statusOf(taskId) === 'completed');
+    expect(core.running()).toEqual([]);
     expectSidebarAgrees();
   });
 });

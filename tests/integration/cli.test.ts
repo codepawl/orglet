@@ -344,7 +344,7 @@ describe('orglet round trip through the real server', () => {
     expect(value).toMatchObject({ chat: { name: 'Researcher' }, taskId, waited: true, finished: true, status: 'completed', errors: [] });
     expect(value.answers.map(answer => answer.text)).toEqual(['Hello from Demo']);
     const created = started.core.calls.find(item => item.command === 'createTask');
-    expect(created?.args).toEqual({ workerId, brief: 'hello', sourceIds: [], excludedSources: [], consent: true, providerScopes: [], budgetMicros: 500_000 });
+    expect(created?.args).toEqual({ workerId, brief: 'hello', sourceIds: [], excludedSources: [], consent: true, providerScopes: [] });
     expect(started.core.calls.some(item => item.command === 'importSources')).toBe(false);
   });
 

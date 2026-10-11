@@ -114,7 +114,6 @@ function newRoutine(workspace: Workspace, request: SaveRequest): RoutineSave {
     excludedSources: [],
     consent: providerScopes.length > 0,
     providerScopes,
-    budgetMicros: requireField(request.budgetMicros, '--budget'),
   };
   const timing = {
     timeZone: request.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -151,7 +150,7 @@ function editedRoutine(workspace: Workspace, existing: Routine, request: SaveReq
     enabled: request.enabled ?? existing.enabled,
     schedule,
     ...(trigger ? { trigger } : {}),
-    task: { ...task, ...(request.brief ? { brief: request.brief } : {}), ...(request.budgetMicros ? { budgetMicros: request.budgetMicros } : {}) },
+    task: { ...task, ...(request.brief ? { brief: request.brief } : {}), },
   };
 }
 
@@ -191,7 +190,6 @@ function scheduleRow(workspace: Workspace, routine: Routine): CliScheduleRow {
     ...(routine.schedule.everyHours ? { everyHours: routine.schedule.everyHours } : {}),
     timeZone: routine.schedule.timeZone,
     nextDueAt: routine.nextDueAt,
-    budgetMicros: routine.task.budgetMicros,
     ...(routine.schedule.dailyCapMicros ? { dailyCapMicros: routine.schedule.dailyCapMicros } : {}),
     ...(today ? { runsToday: today.runs, spentTodayMicros: today.spentMicros } : {}),
   };

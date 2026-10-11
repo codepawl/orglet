@@ -383,7 +383,7 @@ describe('a chat run through the adapter', () => {
     expect(detail.task.status).toBe('completed');
     expect(detail.usage.chargedMicros).toBe(0);
     expect(detail.usage.uncertainCount).toBe(1);
-    expect(detail.usage.reservedMicros).toBe(task.budgetMicros);
+    expect(detail.usage.reservedMicros).toBe(1000);
     expect(store.budgetReservations()).toMatchObject([{ provider: customProviderId(connection.id), reason: 'missing_usage', actualMicros: null }]);
   });
 

@@ -828,7 +828,7 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packa
   });
 });
 
-it('keeps reported CLI costs across tool steps and resume without charging the API ledger', async () => {
+it('keeps reported CLI costs across tool steps without a cap or charging the API ledger', async () => {
   run.snapshot.worker.provider = 'claude-code';
   task.providerScopes = ['claude-code'];
   store.update('runs', run);
@@ -849,15 +849,8 @@ it('keeps reported CLI costs across tool steps and resume without charging the A
       },
     }, undefined, undefined, fixture());
   await core.runner.run(task, run);
-  expect(budgets).toEqual([5, 2]);
-  expect(store.detail(task.id).task.status).toBe('waiting_budget');
-  const checkpoint = JSON.parse(String(store.db.prepare('SELECT data FROM checkpoints WHERE id=?').get(run.id)!.data));
-  expect(checkpoint.phase).toBe('ready');
-  expect(checkpoint.harnessCostMicros).toBe(5_000_000);
-  task = { ...store.get<Task>('tasks', task.id), budgetMicros: 7_000_000 };
-  store.update('tasks', task);
-  await core.runner.run(task, store.get<Run>('runs', run.id));
-  expect(budgets).toEqual([5, 2, 2]);
+  // No cap is passed, so a run that reports more than the chat's old amount is not stopped.
+  expect(budgets).toEqual([undefined, undefined, undefined]);
   expect(store.detail(task.id).task.status).toBe('completed');
   expect(store.detail(task.id).artifacts).toHaveLength(1);
   expect(store.db.prepare('SELECT * FROM reservations').all()).toEqual([]);

@@ -192,14 +192,15 @@ it('requires renewed approval when the installed model pricing catalog changes',
     expect(store.get<Routine>('routines', routine.id).pending?.reason).toContain('model đã đổi'); expect(store.workspace().tasks).toHaveLength(0);
   } finally { Object.assign(modelCatalog.openai, { pricingVersion: original }); }
 });
-it('keeps reservations and provider budget gates for automatic execution', async () => {
+it('runs an automatic task whatever amount the connection setting holds', async () => {
   let calls = 0;
-  core = new CoreService(store, () => {}, async () => ({ async request() { calls++; throw new Error('Budget must block dispatch'); } }), undefined, () => current);
+  core = new CoreService(store, () => {}, async () => ({ async request() { calls++; throw new Error('Fixture provider failure'); } }), undefined, () => current);
   const worker = store.workspace().workers[0]; await core.command('saveWorker', { ...worker, provider: 'openai' });
-  const routine = await save({ task: { workerId: worker.id, sourceIds: [], brief: 'Budget fixture', consent: true, providerScopes: ['openai'], budgetMicros: 1000 } });
+  store.setSetting('connectionLimitMicros', 1);
+  const routine = await save({ task: { workerId: worker.id, sourceIds: [], brief: 'Budget fixture', consent: true, providerScopes: ['openai'] } });
   await core.tick(); current = new Date('2026-01-05T02:00:00Z'); await core.tick(); await idle();
   const lastTaskId = store.get<Routine>('routines', routine.id).lastTaskId!;
-  expect(store.get<Task>('tasks', lastTaskId).status).toBe('waiting_budget'); expect(calls).toBe(0);
+  expect(store.get<Task>('tasks', lastTaskId).status).not.toBe('waiting_budget'); expect(calls).toBeGreaterThan(0);
 });
 it('pauses in-flight work at shift end and rejects a second task at capacity', async () => {
   current = new Date('2026-01-05T09:00:00Z'); let entered!: () => void; let release!: () => void; let calls = 0;

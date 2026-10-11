@@ -230,7 +230,7 @@ export function RoutinesPanel({ workspace, routines = workspace.routines, draft,
           {trigger.kind === 'schedule' && <li><Globe size={14} aria-hidden="true" />{item.schedule.timeZone}</li>}
           {trigger.kind === 'schedule' && item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(nextRunAt(item, workspace.routineToday?.[item.id]?.day), item.schedule.timeZone)])}</li>}
           <li>{assigneeFace(item)}{assignee(item)}</li>
-          <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
+          <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros ?? 0)])}</li>
           {/* The day so far (COD-288): an hourly schedule's quiet runs collect here instead of a toast each, and a
               cap shows what today's runs used of it. */}
           {runsToday(item) > 0 && <li><History size={14} aria-hidden="true" />{runsToday(item) === 1 ? t('1 lần chạy hôm nay') : t('{0} lần chạy hôm nay', [runsToday(item)])}</li>}

@@ -22,7 +22,6 @@ const ORGLET_FIELDS: Field[] = [
   { key: 'provider', label: t("Kết nối") },
   { key: 'modelId', label: t("Model"), hint: t("Gõ ID model, hoặc để trống để dùng mặc định của kết nối") },
   { key: 'skillId', label: t("Skill") },
-  { key: 'taskBudgetMicros', label: t("Giới hạn mỗi việc (USD)"), hint: t("Không bắt buộc · 0.001 đến 100 · tối đa sáu chữ số thập phân") },
   { key: 'color', label: t("Màu"), hint: t("Không bắt buộc · #rrggbb") },
 ];
 /** A channel whose orglets take turns has no lead and no limits: its name, topic and who is in it. */
@@ -40,7 +39,6 @@ const CREW_FIELDS: Field[] = [
   { key: 'synthesizerId', label: t("Tí dẫn dắt") },
   { key: 'workflow', label: t("Cách phối hợp") },
   { key: 'monthlyBudgetMicros', label: t("Giới hạn tháng (USD)"), hint: t("0.001 đến 1000 · tối đa sáu chữ số thập phân") },
-  { key: 'taskBudgetMicros', label: t("Giới hạn mỗi việc (USD)"), hint: t("Không bắt buộc · 0.001 đến 100") },
   { key: 'maxConcurrentTasks', label: t("Số chat cùng lúc"), hint: t("Không bắt buộc · số nguyên từ 1 đến 8") },
 ];
 

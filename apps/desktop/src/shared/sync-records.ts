@@ -35,6 +35,7 @@ export const SyncSource = z.object({ id: Id, name: z.string().max(2000), bytes: 
   hash: z.string().regex(/^[a-f0-9]{64}$/), format: DataFormat.optional(), media: z.enum(['image', 'video', 'audio', 'pdf']).optional(), editedFrom: Id.optional() }).strict();
 export const SyncRoutine = Routine.pick({ id: true, name: true, schedule: true, enabled: true }).extend({
   trigger: z.enum(['schedule', 'folder', 'called', 'app']),
+  // `budgetMicros` is kept only so older records still parse; nothing reads it (owner, 2026-10-11).
   task: TaskInput.pick({ workerId: true, teamId: true, brief: true, sourceIds: true, budgetMicros: true }).strict(),
 }).strict();
 export const SyncRun = z.object({ id: Id, taskId: Id, turnId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(),
