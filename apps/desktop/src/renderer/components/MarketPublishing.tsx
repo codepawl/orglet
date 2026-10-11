@@ -93,7 +93,7 @@ export function PublicContentPreview({ requestText }: { requestText: string }) {
   const skills = submission.kind === 'orglet' ? [submission.template.skill] : submission.template.skills;
   const kindName = listingKindName(submission.kind);
   return <div className="market-content-preview">
-    <section className="market-preview-summary"><h3>{submission.name}</h3><p>{submission.summary}</p><p className="muted">{kindName} · {submission.language.toUpperCase()} · {submission.license}{submission.tags.length > 0 && ` · ${submission.tags.join(', ')}`}</p>{submission.changelog && <p>{submission.changelog}</p>}</section>
+    <section className="market-preview-summary"><h3>{submission.name}</h3><p>{submission.summary}</p><p className="muted">{kindName} · {submission.language.toUpperCase()}{submission.tags.length > 0 && ` · ${submission.tags.join(', ')}`}</p>{submission.changelog && <p>{submission.changelog}</p>}</section>
     {submission.kind === 'space' && <section><h3>{submission.template.space.name}</h3>
       <ul className="market-space-channels">
         {submission.template.space.channels.map((channel, index) => {
@@ -125,7 +125,6 @@ export function MarketPublishingDialog({ source, sourceRevision, requiresSuggest
   const [optionsOpen, setOptionsOpen] = useState(requiresSuggestion);
   const [own, setOwn] = useState<PublishingOwnView>();
   const [preview, setPreview] = useState<PublishingPreview>();
-  const [license, setLicense] = useState(false);
   const [pendingAcknowledged, setPendingAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -138,7 +137,6 @@ export function MarketPublishingDialog({ source, sourceRevision, requiresSuggest
   const invalidate = () => {
     previewGeneration.current += 1;
     setPreview(undefined);
-    setLicense(false);
     setPendingAcknowledged(false);
   };
   useEffect(() => {
@@ -211,10 +209,9 @@ export function MarketPublishingDialog({ source, sourceRevision, requiresSuggest
       </> : <>
         <p>{t('Toàn bộ nội dung bên dưới sẽ công khai sau khi được duyệt.')}</p>
         <PublicContentPreview requestText={preview.requestText} />
-        <Checkbox required checked={license} onChange={event => setLicense(event.target.checked)}>{t('Tôi có quyền chia sẻ nội dung này theo CC BY 4.0.')}</Checkbox>
         <Checkbox required checked={pendingAcknowledged} onChange={event => setPendingAcknowledged(event.target.checked)}>{t('Tôi hiểu mỗi phiên bản đều chờ duyệt trước khi xuất hiện công khai.')}</Checkbox>
         {preview.capability.status !== 'available' && <p className="muted" role="status">{capabilityLabel(preview.capability.status)}</p>}
-        <div className="actions sticky-actions"><Button type="button" variant="outline" disabled={busy} onClick={invalidate}><X size={16} />{t('Sửa nội dung')}</Button><Button type="button" disabled={busy || !license || !pendingAcknowledged || preview.capability.status !== 'available'} onClick={() => void run({ action: 'submit', previewId: preview.previewId })}><Send size={16} />{t('Gửi để duyệt')}</Button></div>
+        <div className="actions sticky-actions"><Button type="button" variant="outline" disabled={busy} onClick={invalidate}><X size={16} />{t('Sửa nội dung')}</Button><Button type="button" disabled={busy || !pendingAcknowledged || preview.capability.status !== 'available'} onClick={() => void run({ action: 'submit', previewId: preview.previewId })}><Send size={16} />{t('Gửi để duyệt')}</Button></div>
         {(preview.capability.status === 'local' || preview.capability.status === 'upgradeRequired') && <Button type="button" variant="outline" disabled={busy} onClick={() => {
           invalidate();
           void orglet.accountSignIn().catch(reason => setError(tMessage(reason.message)));

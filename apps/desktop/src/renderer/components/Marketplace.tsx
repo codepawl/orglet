@@ -89,7 +89,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     <ListingFace listingId={listing.listingId} kind={listing.kind} name={listing.name} summary={listing.summary} />
     <div className="friend-source-text">
       <h3 className="friend-name">{listing.name}</h3><p className="market-listing-summary">{listing.summary}</p>
-      <div className="market-listing-meta"><span>{listingKindName(listing.kind)}</span><span className="market-listing-author">{typeof listing.author === 'string' ? listing.author : listing.author.displayName}</span><span>{listing.language.toUpperCase()} · v{listing.version}</span><span>{listing.license}</span></div>
+      <div className="market-listing-meta"><span>{listingKindName(listing.kind)}</span><span className="market-listing-author">{typeof listing.author === 'string' ? listing.author : listing.author.displayName}</span><span>{listing.language.toUpperCase()} · v{listing.version}</span></div>
       {copies.length > 0 && <p className="market-listing-installed">{copies.length === 1 ? t('Đã thêm') : t('Đã thêm {0} bản trên máy', [copies.length])}{copies.some(item => item.updateAvailable) && ` · ${t('Có bản cập nhật')}`}</p>}
     </div>
     <div className="market-listing-actions">

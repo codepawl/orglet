@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ArchiveRestore, FileUp, Store, UserPlus, UserRoundPlus } from 'lucide-react';
-import { Input, Tooltip } from '@codepawlhq/orglet-ui';
+import { Input } from '@codepawlhq/orglet-ui';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 import { Avatar } from './Avatar';
@@ -8,9 +8,6 @@ import { Button, Drawer } from './ui';
 import { ChatHeader } from './ChatViews';
 import { Marketplace } from './Marketplace';
 import type { MarketAdded } from '../../shared/market';
-
-/** A ready-made group of orglets with its channel, offered under Add orglet (COD-366); `members` names its orglets in `templates/catalog.json`, the lead last. */
-export type FriendTemplate = { id: 'research-review' | 'writing-desk' | 'data-check'; name: string; description: string; members: readonly string[] };
 
 /** The pages Home can show in the main panel. Add orglet used to be one; it is a dialog now. */
 export type HomePageView = 'market';
@@ -30,10 +27,11 @@ export function MarketplacePage({ onMarketAdded }: { onMarketAdded: (result: Mar
 
 /**
  * Add orglet, in a dialog over the chat (user, 2026-10-06): it is one small form and a short list, which as a page
- * left the main panel mostly empty and took the chat away. It makes an orglet from a name, and lists the other ways
- * to add one: a ready-made group, a template file, an archived orglet to bring back. Each of them closes the dialog.
+ * left the main panel mostly empty and took the chat away. It makes an orglet from a name or from a template file,
+ * both on the first row, and lists the orglets to befriend again or bring back from the archive. Ready-made orglets
+ * and spaces are the Marketplace page's, not this dialog's (owner, 2026-10-11). Each action closes the dialog.
  */
-export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefriend, onCreate, onRestore, templates, onTemplate, onImport, busy }: {
+export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefriend, onCreate, onRestore, onImport }: {
   open: boolean;
   onClose: () => void;
   archived: readonly Worker[];
@@ -43,10 +41,7 @@ export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefrien
   /** Opens the new-orglet dialog with this name already typed. */
   onCreate: (name: string) => void;
   onRestore: (worker: Worker) => void;
-  templates: readonly FriendTemplate[];
-  onTemplate: (id: FriendTemplate['id']) => void;
   onImport: () => void;
-  busy: boolean;
 }) {
   const [name, setName] = useState('');
   const create = (event: FormEvent) => {
@@ -63,6 +58,7 @@ export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefrien
         <form className="friends-add-form" onSubmit={create}>
           <Input aria-label={t('Tên Tí')} placeholder={t('Nhập tên Tí')} value={name} maxLength={80} onChange={event => setName(event.target.value)} />
           <Button type="submit" disabled={!name.trim()}><UserRoundPlus size={16} />{t('Tạo Tí')}</Button>
+          <Button type="button" variant="outline" onClick={onImport}><FileUp size={16} />{t('Nhập mẫu')}</Button>
         </form>
       </section>
       {unfriended.length > 0 && <section className="page-section" aria-labelledby="friends-unfriended-title">
@@ -71,43 +67,20 @@ export function AddOrgletDialog({ open, onClose, archived, unfriended, onBefrien
           {unfriended.map(({ worker, stillIn }) => <li key={worker.id} className="friend-source">
             <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="md" />
             <span className="friend-source-text"><span className="friend-name">{worker.name}</span><span className="friend-status">{t('Vẫn ở {0}', [stillIn])}</span></span>
-            <Button variant="outline" disabled={busy} onClick={() => onBefriend(worker)}><UserPlus size={16} />{t('Kết bạn lại')}</Button>
+            <Button variant="outline" onClick={() => onBefriend(worker)}><UserPlus size={16} />{t('Kết bạn lại')}</Button>
           </li>)}
         </ul>
       </section>}
-      <section className="page-section" aria-labelledby="friends-other-title">
-        <h2 id="friends-other-title">{t('Cách khác để thêm Tí')}</h2>
-        <p className="muted">{t('Không muốn tự tạo? Đưa về một Tí đã lưu trữ, chọn một nhóm làm sẵn hoặc nhập mẫu từ tệp.')}</p>
+      {archived.length > 0 && <section className="page-section" aria-labelledby="friends-archived-title">
+        <h2 id="friends-archived-title">{t('Đã lưu trữ')}</h2>
         <ul className="friends-sources">
-          {templates.map(template => {
-            // The group's faces sit beside its name and say how many orglets it adds; who they are is on hover (user, 2026-10-06).
-            const who = t('{0} Tí: {1}', [template.members.length, template.members.join(', ')]);
-            return <li key={template.id} className="friend-source">
-              <span className="friend-source-text">
-                <span className="friend-name friend-template-name">
-                  <Tooltip label={who}>
-                    <span className="friend-faces" role="img" aria-label={who} tabIndex={0}>
-                      {template.members.slice(0, 3).map(member => <Avatar key={member} name={member} seed={`${template.id}:${member}`} defaultMascot size="xs" />)}
-                    </span>
-                  </Tooltip>
-                  {template.name}
-                </span>
-                <span className="friend-status">{template.description}</span>
-              </span>
-              <Button variant="outline" disabled={busy} aria-label={t('Thêm {0}', [template.name])} onClick={() => onTemplate(template.id)}><UserRoundPlus size={16} />{t('Thêm')}</Button>
-            </li>;
-          })}
-          <li className="friend-source">
-            <span className="friend-source-text"><span className="friend-name">{t('Nhập mẫu từ tệp')}</span><span className="friend-status">{t('Một tệp mẫu đã xuất từ Orglet.')}</span></span>
-            <Button variant="outline" disabled={busy} onClick={onImport}><FileUp size={16} />{t('Nhập mẫu')}</Button>
-          </li>
           {archived.map(worker => <li key={worker.id} className="friend-source">
             <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="md" />
-            <span className="friend-source-text"><span className="friend-name">{worker.name}</span><span className="friend-status">{t('Đã lưu trữ')}</span></span>
-            <Button variant="outline" disabled={busy} onClick={() => onRestore(worker)}><ArchiveRestore size={16} />{t('Khôi phục')}</Button>
+            <span className="friend-source-text"><span className="friend-name">{worker.name}</span>{worker.description && <span className="friend-status">{worker.description}</span>}</span>
+            <Button variant="outline" onClick={() => onRestore(worker)}><ArchiveRestore size={16} />{t('Khôi phục')}</Button>
           </li>)}
         </ul>
-      </section>
+      </section>}
     </div>
   </Drawer>;
 }

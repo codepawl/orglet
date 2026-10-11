@@ -244,7 +244,6 @@ try {
   await page.getByLabel('Nội dung công khai chính xác').waitFor({ state: 'detached' });
   await preparePreview(page);
   await page.getByRole('checkbox').nth(0).check();
-  await page.getByRole('checkbox').nth(1).check();
   await page.getByRole('button', { name: 'Gửi để duyệt', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'Chưa rõ kết quả' }).waitFor();
   const initialRequests = await app.evaluate(() => global.__publishingFixture.requests);
