@@ -3,12 +3,12 @@ import { basename, dirname, join, relative, isAbsolute, resolve } from 'node:pat
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { hostname as osHostname, release as osRelease, userInfo } from 'node:os';
+import { homedir, hostname as osHostname, release as osRelease, userInfo } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
-import { commands, Id, ApiProvider, CredentialProvider, type Connections, type Reply, type Command, type Workspace, TextFormat, type Source } from '../shared/contracts';
+import { commands, Id, ApiProvider, CredentialProvider, type Connections, type Reply, type Command, type Workspace, TextFormat, type Source, type Skill } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { PickWorkspace } from '../shared/workspace-access';
 import { OPENCODE_DOCS_URLS } from '../shared/opencode';
@@ -17,6 +17,7 @@ import { MEDIA_SOURCE_EXTENSIONS, TEXT_SOURCE_EXTENSIONS } from '../shared/sourc
 import { Credentials, OLLAMA_LOCAL_TOKEN } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
 import { readSkillDirectory, writeSkillDirectory } from './skill-files';
+import { importClaudeCodeEntries, scanClaudeCode } from './claude-code-scan';
 import { isViteDevRequest, preferLoopbackIpv4 } from './vite-dev-url';
 import { executeProfile, cancelProfile, stopProfiles } from './profiler';
 import { Updater, updaterLogWriter } from './updater';
@@ -1232,6 +1233,39 @@ async function start() {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn thư mục chứa SKILL.md (tối đa 1 MB)'), properties: ['openDirectory'] });
     if (result.canceled) return null;
     return request('skillImport', await readSkillDirectory(result.filePaths[0]));
+  });
+  // Claude Code import (docs/import-from-claude-code.md). The folder is read when the person opens the dialog, and a
+  // project is read only after they pick it; the import re-reads the same folder, so the window sends ids, never paths or secrets.
+  let claudeCodeProject: string | undefined;
+  const claudeCodeScan = async () => {
+    const workspace = await request('workspace', {}) as Workspace;
+    const lower = (names: string[]) => new Set(names.map(name => name.toLowerCase()));
+    return scanClaudeCode({
+      home: homedir(),
+      ...(claudeCodeProject ? { projectFolder: claudeCodeProject } : {}),
+      existing: { skills: lower(workspace.skills.map(skill => skill.name)), workers: lower(workspace.workers.map(worker => worker.name)), mcp: lower(workspace.mcpServers.map(server => server.name)) },
+    });
+  };
+  handle('orglet:claude-code-scan', async raw => {
+    const { chooseProject } = z.object({ chooseProject: z.boolean() }).strict().parse(raw);
+    if (chooseProject) {
+      const result = await dialog.showOpenDialog(window, { title: tr('Chọn thư mục dự án có .claude hoặc .mcp.json'), properties: ['openDirectory'] });
+      if (result.canceled) return null;
+      claudeCodeProject = result.filePaths[0];
+    } else {
+      claudeCodeProject = undefined;
+    }
+    return (await claudeCodeScan()).listing;
+  });
+  handle('orglet:claude-code-import', async raw => {
+    const ids = z.array(z.string().min(1).max(400)).max(300).parse(raw);
+    const { entries } = await claudeCodeScan();
+    const results = await importClaudeCodeEntries(entries, ids, {
+      importSkill: skillPackage => request('skillImport', skillPackage) as Promise<Skill>,
+      saveMcpServer: draft => saveMcpDraft(draft),
+    });
+    announceChange();
+    return results;
   });
   handle('orglet:skill-export', async raw => {
     const content = await request('skillExport', Id.parse(raw));

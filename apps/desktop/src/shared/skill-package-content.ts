@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { PackageInput, SkillMetadata, SkillPackage, SKILL_PACKAGE_LIMIT, SKILL_FILE_LIMIT } from './skill-package';
 import { StructuredReport, Finding } from './contracts';
 
-const supportedTools = new Set(['read_source', 'profile_dataset', 'audit_run_log', 'submit_report', 'reply', 'read_skill_resource']);
+export const supportedTools = new Set(['read_source', 'profile_dataset', 'audit_run_log', 'submit_report', 'reply', 'read_skill_resource']);
 const Manifest = z.object({
   input_schema: z.record(z.string(), z.unknown()), output_schema: z.record(z.string(), z.unknown()),
   required_permissions: z.array(z.string().max(100)).max(20), evaluator: z.string().max(100),

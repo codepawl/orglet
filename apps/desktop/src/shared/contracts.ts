@@ -587,6 +587,10 @@ export interface Bridge {
   exportTemplate(teamId: string): Promise<boolean>;
   importTemplate(): Promise<Team | null>;
   importSkill(): Promise<Skill | null>;
+  /** Lists what a Claude Code folder holds (the home folder, or a project the person picks) without importing it; null when the pick is cancelled. */
+  scanClaudeCode(options: { chooseProject: boolean }): Promise<import('./claude-code-import').ClaudeCodeListing | null>;
+  /** Imports the checked skills and MCP servers of the last scan; orglets from subagents are saved by the window. Secrets stay in main. */
+  importClaudeCode(ids: string[]): Promise<import('./claude-code-import').ClaudeCodeImportResult[]>;
   exportSkill(id: string): Promise<boolean>;
   openPricing(provider: ApiProvider): Promise<void>;
   backup(): Promise<boolean>;
