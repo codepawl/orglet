@@ -114,7 +114,18 @@ const radioKeys = (event: KeyboardEvent<HTMLDivElement>) => {
 
 /** One swatch of the body or the eyes group: the look it would give, drawn in the current colour. */
 function LookChoice({ label, look, seed, ink, checked, onChoose }: { label: string; look: OrgletLook; seed: number; ink: string; checked: boolean; onChoose: (look: OrgletLook) => void }) {
-  return <Tooltip label={label}><button type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} className="avatar-choice mascot-choice" aria-label={label} onClick={() => onChoose(look)}><Orglet3D look={look} seed={seed} size={32} color={ink} motion={{ follow: 'hover' }} /></button></Tooltip>;
+  return <Tooltip label={label}><button type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} className="avatar-choice mascot-choice" aria-label={label} style={{ color: ink }} onClick={() => onChoose(look)}><Orglet3D look={look} seed={seed} size={32} color={ink} motion={{ follow: 'hover' }} /></button></Tooltip>;
+}
+
+/**
+ * The person's own face: the first letter of their name in a ring. A person is not an orglet, so no orglet look stands
+ * for them (owner, 2026-10-12: only an orglet is drawn as one).
+ */
+export function PersonAvatar({ name, size = 'sm' }: { name: string; size?: AvatarSize }) {
+  const letter = [...name.trim()][0]?.toLocaleUpperCase() ?? '?';
+  return <span className={`avatar ${size} rounded person`} style={{ '--avatar-color': 'var(--text)' } as CSSProperties} aria-hidden="true">
+    <span className="avatar-face">{letter}</span>
+  </span>;
 }
 
 /**

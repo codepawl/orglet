@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import { arrivedWithChat } from '../chatSwitch';
 import { AnchoredPopover } from './AnchoredPopover';
 import { LeadLeavesDialog } from './LeadLeavesDialog';
-import { Avatar, workerInk } from './Avatar';
+import { Avatar, PersonAvatar, workerInk } from './Avatar';
 import { ProviderMark } from './ProviderMark';
 import { RowMenu } from './RowMenu';
 import { Button } from './ui';
@@ -49,7 +49,7 @@ export function MemberColumn({ you, onYou, members, working, leadId, onMessage, 
       <li>
         {/* The person's own row opens their account, the way an orglet's row opens its profile (user, 2026-10-05). */}
         <Button type="button" className="member-row member-you" aria-label={t('Tài khoản và cài đặt')} onClick={onYou}>
-          <Avatar name={you} seed={you} size="sm" />
+          <PersonAvatar name={you} />
           <span className="member-text">
             <span className="member-name">{you}{you !== youWord && <span className="member-lead">{youWord}</span>}</span>
           </span>
