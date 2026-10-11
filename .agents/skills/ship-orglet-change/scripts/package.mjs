@@ -20,7 +20,8 @@ const log = openSync(logPath, 'w');
 // It is for packaging alone: never start the app, a dev server or a smoke with this variable changed.
 const environment = process.platform === 'win32' ? { ...process.env, USERPROFILE: join(tmpdir(), 'ofh') } : process.env;
 
-const child = spawn('pnpm', ['--config.verify-deps-before-run=false', 'build'], { env: environment, shell: true, stdio: ['ignore', log, log] });
+// One fixed line through the shell: pnpm is a script on Windows.
+const child = spawn('pnpm --config.verify-deps-before-run=false build', { env: environment, shell: true, stdio: ['ignore', log, log] });
 try {
   setPriority(child.pid, constants.priority.PRIORITY_BELOW_NORMAL);
 } catch {

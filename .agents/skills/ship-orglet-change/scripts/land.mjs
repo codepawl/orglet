@@ -30,8 +30,14 @@ function read(command, args) {
 
 /** Runs a command with its output shown; throws with `failure` when it exits non-zero. */
 function run(command, args, failure) {
-  const result = spawnSync(command, args, { stdio: 'inherit', shell: process.platform === 'win32' && command === 'pnpm' });
+  const result = spawnSync(command, args, { stdio: 'inherit' });
   if (result.status !== 0) throw new Error(failure);
+}
+
+/** pnpm is a script on Windows, so it goes through the shell, as one fixed line with nothing from outside in it. */
+function typecheck() {
+  const result = spawnSync('pnpm --config.verify-deps-before-run=false typecheck', { stdio: 'inherit', shell: true });
+  if (result.status !== 0) throw new Error('Typecheck fails on this branch joined with main. Fix it before pushing.');
 }
 
 function assertReady(branch) {
@@ -88,7 +94,7 @@ try {
   const branch = read('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
   assertReady(branch);
   const moved = rebaseOnMain();
-  run('pnpm', ['--config.verify-deps-before-run=false', 'typecheck'], 'Typecheck fails on this branch joined with main. Fix it before pushing.');
+  typecheck();
   if (flag('--check')) {
     console.log('The branch sits on the newest main and typechecks. Nothing was pushed.');
   } else {
