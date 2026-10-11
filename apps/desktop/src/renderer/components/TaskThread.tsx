@@ -116,7 +116,7 @@ function rememberDismissedLimitRun(taskId: string, runId: string) {
   } catch { /* a blocked store brings the offer back next time, nothing worse */ }
 }
 
-export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
+export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đã tạm dừng', waiting_input: 'Chờ bổ sung bằng chứng' });
 
 type Turn = { missingInput: boolean; revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; forwarded?: ForwardedMessage; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
 
@@ -444,7 +444,7 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
     action(async () => {
       try {
         await orglet.call('reviseTask', { taskId: detail.task.id, brief: t('Tiếp tục từ chỗ đã dừng.'), continueFrom: run.id, sourceIds, excludedSources: input.excludedSources,
-          consent: true, providerScopes: provider === 'demo' ? [] : [provider], budgetMicros: detail.task.budgetMicros });
+          consent: true, providerScopes: provider === 'demo' ? [] : [provider] });
       } finally { setContinuing(false); }
     });
   };
@@ -466,7 +466,7 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
     action(async () => {
       try {
         await orglet.call('reviseTask', { taskId: detail.task.id, brief: t('Làm theo kế hoạch trên.'), replyTo: plan.id, sourceIds, excludedSources: input.excludedSources,
-          consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
+          consent: true, providerScopes: providers });
       } finally { setFollowing(false); }
     });
   };

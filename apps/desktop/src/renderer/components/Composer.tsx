@@ -520,7 +520,7 @@ ${extra}` : extra;
     const sent = added.sources;
     action(async () => {
       try {
-        await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros, ...planFirstInput(draftKey) });
+        await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, ...planFirstInput(draftKey) });
         readSentMessage(detail.task.id, extra, permissionHint?.enabled ?? false);
         clearSentFiles(sent);
         clearReplyTarget();
@@ -567,7 +567,7 @@ ${extra}` : extra;
     const sent = added.sources;
     action(async () => {
       try {
-        const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros, ...planFirstInput(draftKey) });
+        const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, ...planFirstInput(draftKey) });
         clearSentFiles(sent);
         // A side thread started in Plan first stays in it, so its own bar reads the same way until Follow the plan.
         if (planFirstChosen(draftKey)) setPlanFirst(taskDraftKey(sideTaskId), true);

@@ -16,7 +16,7 @@ export function unansweredTurnLine(runs: readonly Run[], headline: Run | undefin
   if (counted.some(run => run.status === 'interrupted')) return { text: t('Lượt này dừng giữa chừng vì app đã đóng.') };
   if (last?.status === 'cancelled' || headline?.error === CANCELLED_ERROR) return { text: t('Lượt này đã dừng trước khi trả lời.') };
   if (last?.status === 'waiting_input') return { text: t('Lượt này đã dừng khi đang chờ bạn.') };
-  if (last?.status === 'waiting_budget') return { text: t('Lượt này dừng vì hết ngân sách.') };
+  if (last?.status === 'waiting_budget') return { text: t('Lượt này đã tạm dừng trước khi trả lời.') };
   if (last?.status === 'paused') return { text: t('Lượt này đã tạm dừng trước khi trả lời.') };
   if (headline?.error) {
     const detail = tMessage(headline.error);

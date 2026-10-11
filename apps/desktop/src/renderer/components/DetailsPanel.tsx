@@ -184,8 +184,6 @@ function ChatSubject({ team, worker, group, groupName, members }: { team?: Team;
         <Fact icon={team.workflow === 'parallel' ? Shuffle : ListOrdered} title={team.workflow === 'parallel' ? t('làm song song') : t('làm lần lượt')}>
           {team.workflow === 'parallel' ? t('song song') : t('lần lượt')}
         </Fact>
-        {/* "/month" on the value itself: a bare "$5.00" beside the chat's "$0.00 used / $0.50" read as the same budget. */}
-        <Fact icon={Wallet} title={t('Ngân sách tháng')}>{t('{0}/tháng', [formatMoney(team.monthlyBudgetMicros ?? 0)])}</Fact>
       </div>
     </div>;
   }
@@ -208,10 +206,7 @@ function ChatSubject({ team, worker, group, groupName, members }: { team?: Team;
         {providerName(worker.provider)}
       </span>
     </p>
-    {(worker.description || worker.taskBudgetMicros != null) && <p className="details-subject-note">
-      {worker.description}
-      {worker.taskBudgetMicros != null && <Fact icon={Wallet} title={t('Ngân sách mỗi việc')}>{formatMoney(worker.taskBudgetMicros)}</Fact>}
-    </p>}
+    {worker.description && <p className="details-subject-note">{worker.description}</p>}
   </div>;
 }
 

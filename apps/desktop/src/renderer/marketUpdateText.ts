@@ -11,7 +11,7 @@ export function wideningText(widening: MarketWidening): string {
 
 /** Why an update is left for the person even when marketplace updates are automatic. */
 export function blockText(block: MarketUpdateBlock): string {
-  if (block === 'widening') return t('Bản mới mở rộng những gì mục này được làm hoặc được chi, nên cần bạn xem trước.');
+  if (block === 'widening') return t('Bản mới mở rộng những gì mục này được làm, nên cần bạn xem trước.');
   if (block === 'customized') return t('Bạn đã chỉnh sửa bản này, nên cần bạn xem bản so sánh trước.');
   return t('Orglet không biết bản này đã được chỉnh sửa chưa, nên cần bạn xem bản so sánh trước.');
 }

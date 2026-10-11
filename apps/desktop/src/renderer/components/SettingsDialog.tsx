@@ -16,7 +16,7 @@ import { Button } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
 import { BudgetReconciliation } from './BudgetReconciliation';
-import { formatMoney, moneySymbol, toAmount, toMicros } from './money';
+import { formatMoney } from './money';
 import { currencies, CurrencyCode, usdCurrency } from '../../shared/currency';
 import { ProviderMark } from './ProviderMark';
 import { StatusMark, type StatusMarkState } from './StatusMark';
@@ -77,7 +77,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
   // The browser orglets read pages in, and the profiles the person signs in to themselves (COD-261).
   { id: 'browser', label: 'Trình duyệt', icon: <AppWindow size={16} /> },
-  { id: 'usage', label: 'Chi phí & giới hạn', icon: <Wallet size={16} /> },
+  { id: 'usage', label: 'Chi phí', icon: <Wallet size={16} /> },
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
   { id: 'about', label: 'Giới thiệu', icon: <Info size={16} /> },
 ];
@@ -86,7 +86,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
-  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi kết nối / tháng', providerConcurrency: 'Yêu cầu cùng lúc mỗi nhà cung cấp', providerConsent: 'Provider được phép',
+  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', providerConcurrency: 'Yêu cầu cùng lúc mỗi nhà cung cấp', providerConsent: 'Provider được phép',
   autoUpdate: 'Tự động cập nhật', marketAutoUpdate: 'Tự cập nhật mục từ Marketplace', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', showWork: 'Hiện cách Tí làm việc', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
@@ -443,8 +443,6 @@ async function copyText(value: string) {
 
 /** The terminal the person picked for login commands (COD-230): UI chrome, so localStorage. */
 const loginShellKey = 'orglet.login-shell';
-/** The window no longer reads a connection limit from the core; the section that shows one is removed by the window rebuild (owner, 2026-10-11). */
-const LEGACY_CONNECTION_LIMIT_MICROS = 5_000_000;
 function readLoginShell(): LoginShell | undefined {
   try { return (localStorage.getItem(loginShellKey) as LoginShell | null) ?? undefined; } catch { return undefined; }
 }
@@ -602,10 +600,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const closeColorPanel = useCallback(() => setColorPanel(false), []);
   const accent = workspace.accentColor ?? DEFAULT_ACCENT_COLOR;
   const customAccent = !accentSwatches.some(color => color.toLowerCase() === accent.toLowerCase());
-  const [limit, setLimit] = useState(toAmount(LEGACY_CONNECTION_LIMIT_MICROS));
-  const [limitError, setLimitError] = useState('');
-  const savedLimit = useRef(LEGACY_CONNECTION_LIMIT_MICROS);
-  useEffect(() => { if (!open) { setLimitError(''); setLimit(toAmount(LEGACY_CONNECTION_LIMIT_MICROS)); setKeyDrafts({}); setEditing({}); setReplacing({}); } }, [open, LEGACY_CONNECTION_LIMIT_MICROS, currency.code, currency.rate]);
+  useEffect(() => { if (!open) { setKeyDrafts({}); setEditing({}); setReplacing({}); } }, [open, currency.code, currency.rate]);
 
   /** A budget reservation is named by the chat it belongs to, the way the reconciliation list names it. */
   const reservationName = (reservationId: string) => {
@@ -621,8 +616,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; marketAutoUpdate: boolean; backgroundNotifications: boolean; terminalAccess: boolean; showWork: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
-    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: LEGACY_CONNECTION_LIMIT_MICROS, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; marketAutoUpdate: boolean; backgroundNotifications: boolean; terminalAccess: boolean; showWork: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
+    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
     return t('Đã lưu');
   }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
   const eraseMessage = (summary: EraseSummary) => {
@@ -640,12 +635,6 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     if (scope === 'chats' || scope === 'sources' || scope === 'everything') forgetAllDrafts();
     return eraseMessage(summary);
   }, eraseNames[scope]);
-  const commitLimit = () => {
-    const micros = toMicros(limit);
-    if (!Number.isFinite(micros) || micros < 1000 || micros > 1_000_000_000) { setLimitError(t('Nhập từ {0} đến {1}.', [formatMoney(1000), formatMoney(1_000_000_000)])); return; }
-    setLimitError('');
-    if (micros !== savedLimit.current) { savedLimit.current = micros; void save({ connectionLimitMicros: micros }); }
-  };
   /** The MCP server open in its editor, or a new one; the heading's Add opens it (COD-241). */
   const [mcpEditing, setMcpEditing] = useState<McpEditing>();
   /** Whether the new browser profile form is open; the heading's Add opens it (COD-261). */
@@ -728,8 +717,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 <Select ariaLabel={t('Định dạng khi tải xuống')} className="setting-select" value={workspace.downloadFormat} disabled={busy} onChange={value => void save({ downloadFormat: value as Workspace['downloadFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản (.txt)') }, { value: 'markdown', label: 'Markdown (.md)' }]} />
               </Row>
               <Row title={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
-                ? `${t('Quá mức thì chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
-                : t('Quá mức thì chờ, chưa trừ ngân sách.')}>
+                ? `${t('Quá mức thì chờ.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
+                : t('Quá mức thì chờ.')}>
                 <Select ariaLabel={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: value === 1 ? t('1 yêu cầu') : t('{0} yêu cầu', [value]), detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
             </>}
@@ -904,11 +893,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
             {tab === 'usage' && <>
               <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
-              <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{workspace.usage.uncertainCount === 1 ? t('1 yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.') : t('{0} yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Yêu cầu đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
+              <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{workspace.usage.uncertainCount === 1 ? t('1 yêu cầu chưa rõ chi phí.') : t('{0} yêu cầu chưa rõ chi phí.', [workspace.usage.uncertainCount])}</span> : t('Yêu cầu đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
               {(workspace.usage.unpricedDecisionCalls ?? 0) > 0 && <Row title={t('Câu hỏi nền chưa rõ chi phí')} description={<span className="error">{t('Model quyết định hỏi qua kết nối chưa có giá đã xác minh, hoặc nhà cung cấp không báo số token. Số token vẫn được tính.')}</span>}><span className="setting-value">{workspace.usage.unpricedDecisionCalls}</span></Row>}
-              <Row id="limit-label" title={t('Giới hạn mỗi kết nối / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng kết nối API.')}>
-                <span className={`org-money-input ${limitError ? 'org-money-input-invalid' : ''}`}><span aria-hidden>{moneySymbol()}</span><input aria-labelledby="limit-label" aria-invalid={Boolean(limitError)} aria-describedby={limitError ? 'limit-error' : undefined} inputMode="decimal" value={limit} disabled={busy} onChange={event => setLimit(event.target.value)} onBlur={commitLimit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLimit(); } }} /></span>
-              </Row>
               <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Lưu bằng USD theo giá provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>
                 <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); }, t('Tiền tệ'))} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
               </Row>
@@ -919,7 +905,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 setBusy(true);
                 try {
                   await orglet.call('reconcileBudget', { reservationId, amountMicros, source });
-                  toast(t('Đã lưu đối soát ngân sách.'), 'success', reservationName(reservationId));
+                  toast(t('Đã lưu đối soát chi phí.'), 'success', reservationName(reservationId));
                 } catch (error) {
                   toast((error as Error).message, 'error', reservationName(reservationId));
                   throw error;

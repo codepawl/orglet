@@ -7,8 +7,7 @@ import { Avatar } from './Avatar';
 import { isMascot, mascotIds, type MascotId } from './mascots';
 import { autoMascot, distinctMascot } from './mascotSuggest';
 import { Button, Drawer } from './ui';
-import { formatMoney } from './money';
-import { crewMembers, orgletDetailChanges, proposalCards, proposalModelLabel, showChangeValue, workflowName, workerOfProposal, type ProposalContext } from './proposalValues';
+import { crewMembers, orgletDetailChanges, withoutSpendingLimits, proposalCards, proposalModelLabel, showChangeValue, workflowName, workerOfProposal, type ProposalContext } from './proposalValues';
 import { t, tMessage, translated } from '../i18n';
 
 /**
@@ -37,15 +36,15 @@ const editTitles: Record<AppProposalKind, string> = translated({
   orglet: 'Sửa Tí', crew: 'Sửa kênh', crew_template: 'Xuất template', skill: 'Skill · bản mới', schedule: 'Sửa lịch', settings: 'Cài đặt',
 });
 const fieldNames: Record<string, string> = translated({
-  name: 'Tên', description: 'Mô tả', instructions: 'Hướng dẫn', provider: 'Model', modelId: 'ID model', effort: 'Mức suy nghĩ', skillId: 'Kỹ năng', taskBudgetMicros: 'Giới hạn mỗi task',
-  memberIds: 'Thành viên', synthesizerId: 'Tí trưởng', workflow: 'Cách chạy', monthlyBudgetMicros: 'Ngân sách tháng', content: 'Nội dung',
-  brief: 'Tin nhắn', schedule: 'Lịch', dailyCapMicros: 'Giới hạn mỗi ngày', trigger: 'Bắt đầu', target: 'Giao cho', enabled: 'Bật lịch', team: 'Kênh được xuất',
+  name: 'Tên', description: 'Mô tả', instructions: 'Hướng dẫn', provider: 'Model', modelId: 'ID model', effort: 'Mức suy nghĩ', skillId: 'Kỹ năng',
+  memberIds: 'Thành viên', synthesizerId: 'Tí trưởng', workflow: 'Cách chạy', content: 'Nội dung',
+  brief: 'Tin nhắn', schedule: 'Lịch', trigger: 'Bắt đầu', target: 'Giao cho', enabled: 'Bật lịch', team: 'Kênh được xuất',
   theme: 'Giao diện', language: 'Ngôn ngữ', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Font giao diện', codeFont: 'Font code',
   copyFormat: 'Định dạng sao chép', downloadFormat: 'Định dạng tải xuống', autoTitles: 'Tự đặt tên chat', confirmOpenTask: 'Hỏi trước khi mở công việc',
 });
 const holdReasons: Record<ProposalHold, string> = translated({
   untrusted: 'Chờ bạn bấm: lượt này đã đọc web, tệp hoặc tin của Tí khác.',
-  budget: 'Chờ bạn bấm: đề xuất nâng một giới hạn chi tiêu.',
+  budget: 'Chờ bạn bấm: đề xuất này cần bạn xem trước.',
   template: 'Chờ bạn bấm: cần chọn nơi lưu tệp template.',
   self: 'Chờ bạn bấm: đề xuất này đổi cách Tí làm việc.',
   enable: 'Chờ bạn bấm: bật lịch là cho phép nó chạy và tiêu tiền.',
@@ -237,13 +236,11 @@ function OrgletGroupCard({ proposals, context, actions }: { proposals: AppPropos
   </section>;
 }
 
-/** A new crew as its people: the members' faces with the lead marked, then how it runs and what it may spend. */
+/** A new crew as its people: the members' faces with the lead marked, then how it runs. */
 function CrewBody({ proposal, context }: { proposal: AppProposal; context: ProposalContext }) {
   const members = crewMembers(proposal, context);
   const after = (field: string) => proposal.changes.find(change => change.field === field)?.after;
   const workflow = after('workflow');
-  const monthly = after('monthlyBudgetMicros');
-  const perTask = after('taskBudgetMicros');
   return <>
     <ul className="proposal-crew-members" aria-label={t('Thành viên')}>
       {members.map(member => <li key={member.key} className="proposal-crew-member">
@@ -256,16 +253,15 @@ function CrewBody({ proposal, context }: { proposal: AppProposal; context: Propo
     </ul>
     <div className="proposal-crew-chips">
       {workflow && <span className="badge">{workflowName(workflow)}</span>}
-      {monthly && /^\d+$/.test(monthly) && <span className="badge">{t('{0}/tháng', [formatMoney(Number(monthly))])}</span>}
-      {perTask && /^\d+$/.test(perTask) && <span className="badge">{t('{0} mỗi task', [formatMoney(Number(perTask))])}</span>}
     </div>
   </>;
 }
 
 /** The lines of a creation minus the name, which is already the title; an edit keeps every line it changes. */
 function cardChanges(proposal: AppProposal): ProposalChange[] {
-  if (proposal.action !== 'create') return proposal.changes;
-  return proposal.changes.filter(change => !(change.field === 'name' && change.after === proposal.title));
+  const changes = withoutSpendingLimits(proposal.changes);
+  if (proposal.action !== 'create') return changes;
+  return changes.filter(change => !(change.field === 'name' && change.after === proposal.title));
 }
 
 function ProposalCard({ proposal, context, tasks, actions }: { proposal: AppProposal; context: ProposalContext; tasks: readonly Pick<Task, 'id' | 'title'>[]; actions: ProposalActions }) {

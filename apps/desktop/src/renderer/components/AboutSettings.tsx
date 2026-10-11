@@ -261,7 +261,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, onMarketAutoUpdat
     <Row id="auto-update-label" title={t('Tự động cập nhật')} description={t('Tải ngầm bản mới rồi báo để bạn khởi động lại.')}>
       <Switch checked={workspace.autoUpdate} disabled={busy || unsupported} labelledBy="auto-update-label" onChange={onAutoUpdate} />
     </Row>
-    <Row id="market-auto-update-label" title={t('Tự cập nhật mục từ Marketplace')} description={t('Một bản cập nhật đổi cách một Tí làm việc, nên mặc định app chờ bạn. Bản bạn đã chỉnh sửa hoặc bản mở rộng quyền, ngân sách vẫn luôn chờ bạn xem.')}>
+    <Row id="market-auto-update-label" title={t('Tự cập nhật mục từ Marketplace')} description={t('Một bản cập nhật đổi cách một Tí làm việc, nên mặc định app chờ bạn. Bản bạn đã chỉnh sửa hoặc bản mở rộng quyền vẫn luôn chờ bạn xem.')}>
       <Switch checked={workspace.marketAutoUpdate} disabled={busy} labelledBy="market-auto-update-label" onChange={onMarketAutoUpdate} />
     </Row>
     <MarketUpdatesBlock workspace={workspace} busy={busy} act={act} />

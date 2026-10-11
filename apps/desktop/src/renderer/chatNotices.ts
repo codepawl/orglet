@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Routine, Task, TaskStatus, Workspace } from '../shared/contracts';
-import { DAILY_CAP_REACHED, SKIPPED_WHILE_INACTIVE } from '../shared/schedule';
+import { SKIPPED_WHILE_INACTIVE } from '../shared/schedule';
 import { triggerOf } from '../shared/routine-triggers';
 import { isQuietScheduleRun } from '../shared/quiet-runs';
 import { BACKGROUND_NOTICE_CHARS, type BackgroundNotice } from '../shared/background-notice';
@@ -254,7 +254,6 @@ export function backgroundNotices(finished: readonly FinishedChat[], names: Chat
  * said once, as news rather than a problem (COD-288); the core writes that note once a day, not once per skipped run.
  */
 export function blockedScheduleNotice(blocked: BlockedSchedule): { text: string; tone: 'error' | 'info'; about: string } {
-  if (blocked.reason === DAILY_CAP_REACHED) return { text: t('{0} đã chạm giới hạn chi phí hôm nay', [blocked.routine.name]), tone: 'info', about: tMessage(blocked.reason) };
   return { text: t('{0} chưa chạy', [blocked.routine.name]), tone: 'error', about: tMessage(blocked.reason) };
 }
 

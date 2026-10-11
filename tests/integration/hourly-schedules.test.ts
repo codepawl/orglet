@@ -5,10 +5,9 @@ import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
-import { DAILY_CAP_REACHED, SKIPPED_PREVIOUS_RUNNING, Schedule, nextOccurrence, normalizedSchedule, runsPerDay, scheduleDay } from '../../apps/desktop/src/shared/schedule';
+import { SKIPPED_PREVIOUS_RUNNING, Schedule, nextOccurrence, normalizedSchedule, runsPerDay, scheduleDay } from '../../apps/desktop/src/shared/schedule';
 import type { Routine, RoutineToday, Task } from '../../apps/desktop/src/shared/contracts';
-import { backgroundNotices, blockedScheduleNotice, blockedSchedules, inAppNotice, quietRun, type ChatNames } from '../../apps/desktop/src/renderer/chatNotices';
-import { costCeiling, nextRunAt } from '../../apps/desktop/src/renderer/components/RoutinesPanel';
+import { backgroundNotices, inAppNotice, quietRun, type ChatNames } from '../../apps/desktop/src/renderer/chatNotices';
 import { cadenceInWords } from '../../apps/desktop/src/renderer/scheduleWords';
 import { setLanguage } from '../../apps/desktop/src/renderer/i18n';
 
@@ -93,25 +92,7 @@ describe('hourly and weekday schedule math (COD-288)', () => {
   });
 });
 
-describe('the editor and the card say what a schedule may cost (COD-288)', () => {
-  it('shows the ceiling before saving, or the lower daily cap', () => {
-    setLanguage('en');
-    const officeHours: Schedule = { ...hourly, window: { from: '09:00', to: '18:00' } };
-    expect(costCeiling(officeHours, 'schedule', 500_000, undefined)).toBe('Up to 9 runs a day · up to $4.50 a day at $0.50 per run.');
-    expect(costCeiling(officeHours, 'schedule', 500_000, 2_000_000)).toBe('Up to 9 runs a day · at most $2.00 a day, your cap.');
-    expect(costCeiling(officeHours, 'schedule', 500_000, 9_000_000)).toBe('Up to 9 runs a day · up to $4.50 a day at $0.50 per run.');
-    expect(costCeiling(daily, 'schedule', 500_000, undefined)).toBe('Up to 1 run a day · up to $0.50 a day.');
-    expect(costCeiling({ ...daily, frequency: 'weekly' }, 'schedule', 500_000, undefined)).toBe('Up to 1 run a week · up to $0.50 a week.');
-    expect(costCeiling(daily, 'folder', 500_000, 2_000_000)).toBe('At most $2.00 a day, however many times it runs.');
-  });
-
-  it('shows the next run on a later day once today\'s cap is reached', () => {
-    const officeHours: Schedule = { ...hourly, window: { from: '09:00', to: '18:00' } };
-    const capped = { schedule: officeHours, nextDueAt: '2026-01-05T04:00:00.000Z', notice: { at: '2026-01-05T03:10:00.000Z', reason: DAILY_CAP_REACHED } };
-    expect(nextRunAt(capped, '2026-01-05')).toBe('2026-01-06T02:00:00.000Z');
-    expect(nextRunAt({ ...capped, notice: undefined }, '2026-01-05')).toBe('2026-01-05T04:00:00.000Z');
-  });
-
+describe('the card names the cadence (COD-288)', () => {
   it('names the cadence in a few words', () => {
     setLanguage('en');
     expect(cadenceInWords(hourly)).toBe('Every hour');
@@ -144,16 +125,6 @@ describe('notices of an hourly schedule (COD-288)', () => {
     expect(backgroundNotices([failed, waiting, held], names, true)).toHaveLength(3);
     // A daily schedule's run is still news every time.
     expect(inAppNotice({ task: run('daily', 'morning', 'completed'), outcome: 'done' }, names)?.text).toBe('Morning note is ready');
-  });
-
-  it('says the day\'s cap once, as news rather than a problem', () => {
-    setLanguage('en');
-    const before = { ...office };
-    const capped = { ...office, notice: { at: '2026-09-27T05:00:00.000Z', reason: DAILY_CAP_REACHED } };
-    const blocked = blockedSchedules([before], [capped]);
-    expect(blocked).toHaveLength(1);
-    expect(blockedScheduleNotice(blocked[0])).toEqual({ text: 'Inbox sweep reached today\'s cost cap', tone: 'info', about: 'The schedule reached today\'s cost cap, so its remaining runs today are skipped. It runs again after midnight.' });
-    expect(blockedSchedules([capped], [capped])).toEqual([]);
   });
 });
 
