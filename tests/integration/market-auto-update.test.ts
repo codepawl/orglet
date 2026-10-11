@@ -10,7 +10,7 @@ import { parseArguments } from '../../apps/desktop/src/cli/arguments';
 import { formatPreferences, formatUpdateCheck } from '../../apps/desktop/src/cli/output';
 import { COMMAND_PARITY } from '../../apps/desktop/src/cli/parity';
 import { MARKET_SEED_BODIES, seedCatalog } from '../../apps/desktop/src/shared/market-seed';
-import { automaticUpdateBlock, MarketUpdateRecords, type MarketListing } from '../../apps/desktop/src/shared/market';
+import { MarketUpdateRecords, type MarketListing } from '../../apps/desktop/src/shared/market';
 import { commands, type Skill, type Team, type Worker } from '../../apps/desktop/src/shared/contracts';
 
 let store: Store;
@@ -56,11 +56,11 @@ describe('the preference', () => {
     expect(store.workspace().marketAutoUpdate).toBe(false);
     expect(commands.settings.safeParse({ theme: 'system', connectionLimitMicros: 1, marketAutoUpdate: 'yes' }).success).toBe(false);
     const core = new CoreService(store, () => {}, async () => { throw new Error('no model'); });
-    await core.command('settings', { theme: 'system', connectionLimitMicros: store.workspace().connectionLimitMicros, marketAutoUpdate: true });
+    await core.command('settings', { theme: 'system', marketAutoUpdate: true });
     expect(store.workspace().marketAutoUpdate).toBe(true);
-    await core.command('settings', { theme: 'system', connectionLimitMicros: store.workspace().connectionLimitMicros });
+    await core.command('settings', { theme: 'system' });
     expect(store.workspace().marketAutoUpdate).toBe(true);
-    await core.command('settings', { theme: 'system', connectionLimitMicros: store.workspace().connectionLimitMicros, marketAutoUpdate: false });
+    await core.command('settings', { theme: 'system', marketAutoUpdate: false });
     expect(store.workspace().marketAutoUpdate).toBe(false);
   });
 });
@@ -109,27 +109,25 @@ describe('automatic marketplace updates', () => {
     expect(store.get<Worker>('workers', added.entityId).instructions).toBe('My own instructions');
   });
 
-  it('leave an update that raises a spending limit for the person, and apply one that lowers it', async () => {
+  it('does not hold back an update that only raises a spending amount', async () => {
     const server = await remote();
     const added = await server.market.add('research-friend', 1);
     turnOn();
     await server.publish(template => { template.worker.taskBudgetMicros = 2_000_000; });
     await server.updates.run();
-    expect(store.get<Worker>('workers', added.entityId).taskBudgetMicros).toBe(2_000_000);
     await server.publish(template => { template.worker.taskBudgetMicros = 9_000_000; });
     await server.updates.run();
-    expect(store.get<Worker>('workers', added.entityId).taskBudgetMicros).toBe(2_000_000);
-    expect(server.updates.records()[0]).toMatchObject({ status: 'needs-review', block: 'widening', widening: [{ kind: 'task-budget' }] });
-    expect(automaticUpdateBlock(await server.market.previewUpdate(added.entityId))).toBe('widening');
+    expect(server.updates.records()[0]).not.toMatchObject({ block: 'widening' });
+    expect(store.get<Worker>('workers', added.entityId).taskBudgetMicros).toBe(9_000_000);
   });
 
-  it('leave a channel update that adds an orglet or raises the monthly budget for the person', async () => {
+  it('leave a channel update that adds an orglet for the person, and not one that only raises the monthly budget', async () => {
     const server = await remote('crew');
     const added = await server.market.add('research-review', 1);
     const team = store.get<Team>('teams', added.entityId);
     turnOn();
     await server.publish(template => {
-      template.team.monthlyBudgetMicros = team.monthlyBudgetMicros + 1_000_000;
+      template.team.monthlyBudgetMicros = (team.monthlyBudgetMicros ?? 0) + 1_000_000;
       template.team.memberKeys.push('extra');
       template.workers.push({ ...template.workers[0], key: 'extra', name: 'Extra helper' });
     });
@@ -137,7 +135,7 @@ describe('automatic marketplace updates', () => {
     expect(store.get<Team>('teams', added.entityId).memberIds).toHaveLength(team.memberIds.length);
     const [record] = server.updates.records();
     expect(record).toMatchObject({ status: 'needs-review', block: 'widening' });
-    expect(record.widening?.map(item => item.kind).sort()).toEqual(['monthly-budget', 'new-orglet']);
+    expect(record.widening?.map(item => item.kind)).toEqual(['new-orglet']);
   });
 
   it('record a failure with its reason once and do not try again until a newer version appears', async () => {

@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { commands, RoutineInput, TaskInput, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
+import { commands, ChannelLeadSettings, TeamInput, RoutineInput, TaskInput, type Task, type Team, type Worker } from '../../apps/desktop/src/shared/contracts';
 import { SyncRoutine } from '../../apps/desktop/src/shared/sync-records';
 import { ProposeCrew, ProposeOrglet } from '../../apps/desktop/src/shared/app-proposals';
+import { updateWidening } from '../../apps/desktop/src/core/market/widening';
+import { Schedule } from '../../apps/desktop/src/shared/schedule';
+import { parseArguments } from '../../apps/desktop/src/cli/arguments';
 
 // A chat, crew or orglet has no spending limit of its own (owner, 2026-10-11). Older rows, backups, sync records and
 // terminal commands still carry `budgetMicros`; it is accepted and ignored.
@@ -88,5 +91,42 @@ describe('a chat is never stopped by a per-task amount', () => {
     expect(detail.task.status).toBe('completed');
     expect(requests).toBeGreaterThanOrEqual(2);
     expect(detail.usage.chargedMicros).toBeGreaterThan(1000);
+  });
+});
+
+describe('older data that still carries a money limit', () => {
+  const memberId = '33333333-3333-4333-8333-333333333333';
+  const crew = { name: 'Crew', instructions: 'Work together.', memberIds: [memberId], synthesizerId: memberId, workflow: 'parallel' as const };
+
+  it('parses the settings command with or without a connection limit', () => {
+    expect(commands.settings.safeParse({ theme: 'system' }).success).toBe(true);
+    expect(commands.settings.safeParse({ theme: 'system', connectionLimitMicros: 5_000_000 }).success).toBe(true);
+  });
+
+  it('parses a crew and a channel lead with or without a monthly budget', () => {
+    expect(TeamInput.safeParse(crew).success).toBe(true);
+    expect(TeamInput.safeParse({ ...crew, monthlyBudgetMicros: 5_000_000 }).success).toBe(true);
+    expect(ChannelLeadSettings.safeParse({ monthlyBudgetMicros: 5_000_000 }).success).toBe(true);
+  });
+
+  it('parses a schedule with or without a daily cap, and the terminal command still accepts --daily-cap', () => {
+    const schedule = { frequency: 'daily', time: '09:00', weekday: 1, timeZone: 'UTC' };
+    expect(Schedule.safeParse(schedule).success).toBe(true);
+    expect(Schedule.safeParse({ ...schedule, dailyCapMicros: 2_000_000 }).success).toBe(true);
+    const command = parseArguments(['schedule', 'add', 'Morning', '--to', 'Researcher', '--brief', 'Look', '--every', 'daily', '--at', '09:00', '--daily-cap', '2']);
+    expect(JSON.stringify(command)).not.toContain('dailyCapMicros');
+  });
+
+  it('does not call a marketplace update wider because it only raises a money amount', () => {
+    const entityId = '44444444-4444-4444-8444-444444444444';
+    const previous = { ...crew, id: entityId, revision: 1, monthlyBudgetMicros: 1_000_000, taskBudgetMicros: 100_000 } as Team;
+    const store = { get: () => previous } as never;
+    const origin = { entityId, workerIds: { lead: memberId }, skillIds: {} } as never;
+    const template = {
+      workers: [{ key: 'lead', name: 'Lead' }],
+      skills: [],
+      team: { ...crew, monthlyBudgetMicros: 900_000_000, taskBudgetMicros: 90_000_000, memberKeys: ['lead'], synthesizerKey: 'lead' },
+    } as never;
+    expect(updateWidening(store, origin, template)).toEqual([]);
   });
 });

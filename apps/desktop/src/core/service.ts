@@ -11,7 +11,7 @@ import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDir
 import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView, type WorkspacePermission } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { z } from 'zod';
-import { commands, CredentialProvider, Id, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine, type UnfriendResult } from '../shared/contracts';
+import { commands, CredentialProvider, Id, LEGACY_MONTHLY_BUDGET_MICROS, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine, type UnfriendResult } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { BudgetLedger } from './budgets/ledger';
 import { Checkpoints } from './storage/checkpoints';
@@ -528,7 +528,7 @@ export class CoreService {
         const template = templates.find(item => item.id === input.templateId)!;
         const skill: Skill = { id: id(), name: `${template.name} evidence policy`, content: template.instructions, revision: 1 };
         const workers: Worker[] = [...template.members, template.synthesizer].map(role => ({ ...role, id: id(), provider: input.provider, skillId: skill.id, revision: 1 }));
-        const team: Team = { id: id(), name: template.name, instructions: template.instructions, memberIds: workers.slice(0, -1).map(w => w.id), synthesizerId: workers.at(-1)!.id, workflow: 'parallel', monthlyBudgetMicros: 5_000_000, revision: 1, ...(template.preflight ? { preflight: PreflightPolicy.parse(template.preflight) } : {}), ...(template.reviewPolicy ? { reviewPolicy: ReviewPolicy.parse(template.reviewPolicy) } : {}) };
+        const team: Team = { id: id(), name: template.name, instructions: template.instructions, memberIds: workers.slice(0, -1).map(w => w.id), synthesizerId: workers.at(-1)!.id, workflow: 'parallel', monthlyBudgetMicros: LEGACY_MONTHLY_BUDGET_MICROS, revision: 1, ...(template.preflight ? { preflight: PreflightPolicy.parse(template.preflight) } : {}), ...(template.reviewPolicy ? { reviewPolicy: ReviewPolicy.parse(template.reviewPolicy) } : {}) };
         this.store.versionMany([{ table: 'skills', value: skill }, ...workers.map(value => ({ table: 'workers' as const, value })), { table: 'teams', value: team }]);
         this.notify(); return team;
       }
@@ -1199,7 +1199,8 @@ export class CoreService {
     for (const workerId of [...input.memberIds, input.synthesizerId]) this.assertAssignable('worker', workerId);
     if (input.id) this.store.get<Team>('teams', input.id);
     const { expectedRevision, ...fields } = input;
-    const team: Team = { ...fields, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
+    // A computer that has not updated still requires a monthly amount on every channel it reads over sync (owner, 2026-10-11).
+    const team: Team = { monthlyBudgetMicros: LEGACY_MONTHLY_BUDGET_MICROS, ...fields, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
     this.store.version('teams', team);
     return team;
   }
@@ -1246,7 +1247,6 @@ export class CoreService {
     if (input.backgroundNotifications !== undefined) this.store.setSetting('backgroundNotifications', input.backgroundNotifications);
     if (input.terminalAccess !== undefined) this.store.setSetting('terminalAccess', input.terminalAccess);
     if (input.showWork !== undefined) this.store.setSetting('showWork', input.showWork);
-    if (input.connectionLimitMicros !== undefined) this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
     if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);
     // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.
     if (input.providerConsent) this.store.setSetting('providerConsent', input.providerConsent);

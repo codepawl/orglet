@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { BuiltInProviderId, type Worker, type Skill, type Team } from '../../shared/contracts';
+import { BuiltInProviderId, LEGACY_MONTHLY_BUDGET_MICROS, type Worker, type Skill, type Team } from '../../shared/contracts';
 import { isMemory, type Knowledge } from '../../shared/knowledge';
 import { PublicWorker, PublicSkill, PublicSpaceTemplate, PublicTeamTemplate, PublicWorkerTemplate } from '../../shared/market-publishing';
 import type { Task } from '../../shared/contracts';
@@ -113,7 +113,7 @@ export function projectPublishingSource(store: Store, source: PublishingSource, 
       name: team.name,
       instructions: team.instructions,
       workflow: team.workflow,
-      monthlyBudgetMicros: team.monthlyBudgetMicros,
+      monthlyBudgetMicros: team.monthlyBudgetMicros ?? LEGACY_MONTHLY_BUDGET_MICROS,
       ...(team.preflight !== undefined ? { preflight: team.preflight } : {}),
       ...(team.reviewPolicy !== undefined ? { reviewPolicy: team.reviewPolicy } : {}),
       ...(team.workHours !== undefined ? { workHours: team.workHours } : {}),

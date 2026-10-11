@@ -129,7 +129,7 @@ describe('orglet library in the app', () => {
     expect(await core.operations.run({ op: 'preferences', token }, core.signal)).toEqual({ language: 'en', theme: 'system' } satisfies PreferencesValue);
     expect(core.calls.some(call => call.command === 'settings')).toBe(false);
     await core.operations.run({ op: 'preferences', token, language: 'vi', theme: 'dark' }, core.signal);
-    expect(core.argsOf('settings')).toEqual({ theme: 'dark', connectionLimitMicros: 5_000_000, language: 'vi' });
+    expect(core.argsOf('settings')).toEqual({ theme: 'dark', language: 'vi' });
     expect(core.settingsChanges).toEqual([{ language: 'vi', theme: 'dark' }]);
     // Issue 554 phase 2 lets the terminal change the looks and behaviour settings (cli-reach.test.ts); consent, limits and providers stay out.
     for (const extra of [{ providerConsent: ['openai'] }, { showWork: false }, { connectionLimitMicros: 1 }, { webSearchProvider: 'exa' }, { providerConcurrency: 4 }]) {

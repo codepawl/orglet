@@ -25,12 +25,7 @@ export const EveryHours = z.literal(EVERY_HOURS_CHOICES);
  */
 export const ScheduleWindow = z.object({ from: ClockTime, to: ClockTime }).strict().refine(window => window.from < window.to, 'Giờ bắt đầu của khung giờ phải trước giờ kết thúc.');
 export type ScheduleWindow = z.infer<typeof ScheduleWindow>;
-/** The most a schedule's runs may cost in one local day: twenty-four runs at the highest per-run limit. */
-export const MAX_DAILY_CAP_MICROS = 2_400_000_000;
-/**
- * `everyHours`, `window` and `weekdaysOnly` belong to an hourly schedule only. `dailyCapMicros` is the most the
- * schedule's runs of one local day may cost, whatever starts them (COD-288); absent means runs × the per-run limit.
- */
+/** `everyHours`, `window` and `weekdaysOnly` belong to an hourly schedule only. */
 export const Schedule = z.object({
   timeZone: TimeZone,
   time: ClockTime,
@@ -39,13 +34,11 @@ export const Schedule = z.object({
   everyHours: EveryHours.optional(),
   window: ScheduleWindow.optional(),
   weekdaysOnly: z.boolean().optional(),
-  dailyCapMicros: z.number().int().min(1000).max(MAX_DAILY_CAP_MICROS).optional(),
+  // Kept only so older data and callers still parse; a schedule has no daily cap and nothing reads this (owner, 2026-10-11).
+  dailyCapMicros: z.number().int().min(0).optional(),
 }).strict().refine(schedule => schedule.frequency !== 'hours' || schedule.everyHours !== undefined, 'Chọn số giờ giữa hai lần chạy.');
 export type Schedule = z.infer<typeof Schedule>;
-/**
- * Why a run did not start: the schedule's runs of today already cost as much as its daily cap allows, counting a
- * run still going at its whole limit (COD-288). The card shows it as the cap reached, not as a missed run.
- */
+/** A notice older versions saved when a schedule hit its daily cap; nothing sets it now, and it is kept only to clear those notices. */
 export const DAILY_CAP_REACHED = 'Lịch đã chạm giới hạn chi phí hôm nay, nên các lần chạy còn lại trong ngày được bỏ qua. Lịch chạy lại sau nửa đêm.';
 /** An hourly schedule's time came while its previous run was still going or waiting for the person, so it skipped it. */
 export const SKIPPED_PREVIOUS_RUNNING = 'Lần chạy trước chưa xong nên lịch bỏ qua các giờ chạy cho đến khi nó xong.';

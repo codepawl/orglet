@@ -185,7 +185,7 @@ function ChatSubject({ team, worker, group, groupName, members }: { team?: Team;
           {team.workflow === 'parallel' ? t('song song') : t('lần lượt')}
         </Fact>
         {/* "/month" on the value itself: a bare "$5.00" beside the chat's "$0.00 used / $0.50" read as the same budget. */}
-        <Fact icon={Wallet} title={t('Ngân sách tháng')}>{t('{0}/tháng', [formatMoney(team.monthlyBudgetMicros)])}</Fact>
+        <Fact icon={Wallet} title={t('Ngân sách tháng')}>{t('{0}/tháng', [formatMoney(team.monthlyBudgetMicros ?? 0)])}</Fact>
       </div>
     </div>;
   }

@@ -104,7 +104,6 @@ describe('preferences', () => {
     const changed = await operations.run({ op: 'preferences', token, autoTitles: !before.autoTitles, archiveRetentionDays: 30, copyFormat: 'markdown', accentColor: '#112233', interfaceFont: 'Fira Sans', backgroundNotifications: false }, signal);
     expect(changed).toMatchObject({ autoTitles: !before.autoTitles, archiveRetentionDays: 30, copyFormat: 'markdown', accentColor: '#112233', interfaceFont: 'Fira Sans', backgroundNotifications: false });
     const after = store.workspace();
-    expect(after.connectionLimitMicros).toBe(before.connectionLimitMicros);
     expect(after.providerConsent ?? []).toEqual(before.providerConsent ?? []);
     await operations.run({ op: 'preferences', token, interfaceFont: null }, signal);
     expect(store.workspace().interfaceFont).toBeUndefined();
@@ -257,7 +256,7 @@ describe('looking at the app', () => {
 
   it('shows spend, the release notes and the updater', async () => {
     const spend = await show('spend');
-    expect(spend.rows[0]).toMatchObject({ chargedMicros: expect.any(Number), reservedMicros: expect.any(Number), connectionLimitMicros: expect.any(Number) });
+    expect(spend.rows[0]).toMatchObject({ chargedMicros: expect.any(Number), reservedMicros: expect.any(Number) });
     expect((await show('changelog')).rows).toEqual([{ version: '0.13.0', name: 'Release 0.13.0', publishedAt: '2026-10-08T00:00:00.000Z', url: 'https://example.com/r' }]);
     expect((await show('update')).rows).toEqual([{ status: 'ready', version: '0.14.0' }]);
     expect(await operationsWith({}, app).run({ op: 'update-check', token }, signal)).toEqual({ status: 'checking', market: { available: [], records: [] } });

@@ -75,7 +75,7 @@ const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tok
 const LedgerCache = z.object({ ledger_id: Id, cache_read_tokens: Integer, cache_write_tokens: Integer }).strict();
 const ReservationReview = z.object({ reservation_id: Id, reason: z.enum(['missing_usage', 'request_failed', 'interrupted', 'legacy']), noted_at: z.iso.datetime(), actual_amount: Integer.nullable(), verified_source: z.enum(['provider_dashboard', 'invoice']).nullable(), resolved_at: z.iso.datetime().nullable() }).strict();
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
-const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000) }).strict();
+const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), /* Kept only so older backups still parse; there is no connection limit (owner, 2026-10-11). */ connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000).optional() }).strict();
 const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge }).strict();
 const EntityStateEntry = z.object({ archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional(), unfriendedAt: z.iso.datetime().optional() }).strict();
 const EntityStates = z.object({ workers: z.record(Id, EntityStateEntry), teams: z.record(Id, EntityStateEntry) }).strict();
@@ -527,7 +527,7 @@ function snapshot(store: Store): Payload {
     reservationReviews: store.db.prepare('SELECT * FROM reservation_reviews ORDER BY rowid').all(),
     ledgerCache: store.db.prepare('SELECT * FROM ledger_cache ORDER BY rowid').all(),
     // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
-    settings: { theme: store.setting('theme', 'system'), connectionLimitMicros: store.setting('connectionLimitMicros', 5_000_000) },
+    settings: { theme: store.setting('theme', 'system') },
   });
 }
 

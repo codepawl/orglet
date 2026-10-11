@@ -175,7 +175,6 @@ export function formatSchedules(value: SchedulesValue): string {
     row.enabled ? 'on' : 'off',
     row.target,
     `${scheduleTiming(row)} (${row.timeZone})`,
-    row.dailyCapMicros ? t('{0} mỗi ngày', formatUsd(row.dailyCapMicros)) : t('Không giới hạn mỗi ngày'),
   ])).join('\n');
 }
 

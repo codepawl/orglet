@@ -130,7 +130,7 @@ describe('proposal tools', () => {
       call('propose_skill', { targetId: null, ref: 'review', name: 'Code review', content: 'Review diffs for bugs and style.' }),
       call('propose_orglet', { targetId: null, ref: 'reviewer', name: 'Reviewer', description: null, instructions: 'Review code.', provider: null, modelId: null, skillId: null, skillRef: 'review' }),
       call('propose_orglet', { targetId: null, ref: 'writer', name: 'Writer', description: null, instructions: 'Write docs.', provider: null, modelId: null, skillId: null, skillRef: null }),
-      call('propose_crew', { targetId: null, ref: 'crew', name: 'Review crew', instructions: 'Review then document.', memberIds: [worker.id], memberRefs: ['reviewer', 'writer'], leadId: null, leadRef: 'reviewer', workflow: 'sequential', monthlyBudgetMicros: null }),
+      call('propose_crew', { targetId: null, ref: 'crew', name: 'Review crew', instructions: 'Review then document.', memberIds: [worker.id], memberRefs: ['reviewer', 'writer'], leadId: null, leadRef: 'reviewer', workflow: 'sequential' }),
       call('propose_crew_template', { teamId: null, teamRef: 'crew' }),
       call('propose_schedule', { targetId: null, name: 'Monday review', brief: 'Review last week.', frequency: 'weekly', time: '09:00', weekday: 1, timeZone: 'Asia/Ho_Chi_Minh', workerId: null, workerRef: null, teamId: null, teamRef: 'crew' }),
       answer('All proposed.'),
@@ -191,7 +191,7 @@ describe('proposal tools', () => {
     const worker = await chatWorker();
     replies.push(
       call('propose_orglet', { targetId: null, ref: null, name: 'Nameless', description: null, instructions: null, provider: null, modelId: null, skillId: null, skillRef: null }),
-      call('propose_crew', { targetId: null, ref: null, name: 'Ghost crew', instructions: 'x', memberIds: null, memberRefs: ['nobody'], leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: null }),
+      call('propose_crew', { targetId: null, ref: null, name: 'Ghost crew', instructions: 'x', memberIds: null, memberRefs: ['nobody'], leadId: null, leadRef: null, workflow: null }),
       call('propose_settings', { theme: 'system', language: null, accentColor: null, logoColor: null, interfaceFont: null, codeFont: null, copyFormat: null, downloadFormat: null, autoTitles: null, confirmOpenTask: null }),
       answer('Could not.'),
     );
@@ -267,7 +267,7 @@ describe('auto-apply', () => {
     await expect(core.command('undoAppProposal', { id: orglet.id })).rejects.toThrow('không hoàn tác được');
   });
 
-  it('never applies on its own with the switch off, and a raised monthly limit or a template still waits for a click', async () => {
+  it('never applies on its own with the switch off, and a template still waits for a click', async () => {
     const worker = await chatWorker();
     replies.push(settingsCall(), answer());
     const quiet = await chat(worker.id);
@@ -278,19 +278,15 @@ describe('auto-apply', () => {
     await core.command('saveWorker', { ...store.get<Worker>('workers', worker.id), autoApplyProposals: true });
     const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' }) as Team;
     replies.push(
-      call('propose_crew', { targetId: team.id, ref: null, name: null, instructions: null, memberIds: null, memberRefs: null, leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: 9_000_000 }),
       call('propose_crew_template', { teamId: team.id, teamRef: null }),
-      call('propose_crew', { targetId: team.id, ref: null, name: 'Renamed crew', instructions: null, memberIds: null, memberRefs: null, leadId: null, leadRef: null, workflow: null, monthlyBudgetMicros: null }),
+      call('propose_crew', { targetId: team.id, ref: null, name: 'Renamed crew', instructions: null, memberIds: null, memberRefs: null, leadId: null, leadRef: null, workflow: null }),
       answer(),
     );
     const taskId = await chat(worker.id);
-    const [monthly, template, rename] = proposalsOf(taskId);
-    expect(monthly).toMatchObject({ status: 'pending', hold: 'budget', heldReason: 'budget' });
+    const [template, rename] = proposalsOf(taskId);
     expect(template).toMatchObject({ status: 'pending', hold: 'template', heldReason: 'template' });
     expect(rename).toMatchObject({ status: 'applied', automatic: true, undo: { kind: 'restore', entity: 'team' } });
-    expect(store.get<Team>('teams', team.id)).toMatchObject({ name: 'Renamed crew', monthlyBudgetMicros: 5_000_000 });
-    await core.command('applyAppProposal', { id: monthly.id });
-    expect(store.get<Team>('teams', team.id).monthlyBudgetMicros).toBe(9_000_000);
+    expect(store.get<Team>('teams', team.id)).toMatchObject({ name: 'Renamed crew' });
   });
 
   it('holds every proposal of a run that read unvetted content, even with the switch on', async () => {
@@ -339,7 +335,7 @@ describe('one-shot harness answers', () => {
   type Answer = Record<string, unknown>;
   let harnessCore: CoreService; let harnessStore: Store; let requests: HarnessRequest[]; let answers: Answer[];
   const orgletItem = (ref: string, name: string, instructions: string) => ({ tool: 'propose_orglet', arguments: { targetId: null, ref, name, description: null, instructions, provider: null, modelId: null, skillId: null, skillRef: null } });
-  const crewItem = (memberRefs: string[], leadRef: string | null = null) => ({ tool: 'propose_crew', arguments: { targetId: null, ref: 'desk', name: 'Fact Desk', instructions: 'Find, check, summarise.', memberIds: null, memberRefs, leadId: null, leadRef, workflow: 'sequential', monthlyBudgetMicros: null } });
+  const crewItem = (memberRefs: string[], leadRef: string | null = null) => ({ tool: 'propose_crew', arguments: { targetId: null, ref: 'desk', name: 'Fact Desk', instructions: 'Find, check, summarise.', memberIds: null, memberRefs, leadId: null, leadRef, workflow: 'sequential' } });
   const factDesk = () => [orgletItem('finder', 'Finder', 'Find documents.'), orgletItem('checker', 'Checker', 'Check the figures.'), orgletItem('writer', 'Writer', 'Write the summary.'), crewItem(['finder', 'checker', 'writer'], 'writer')];
 
   function harnessFixture(provider: 'claude-code' | 'codex' | 'cursor') {

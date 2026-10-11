@@ -1,7 +1,7 @@
 import { t } from './text';
 import { COMPLETION_SHELLS, type CompletionShell } from './completion';
 import { ChatId, DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_READ_TURNS, MAX_WAIT_SECONDS, MessageRef, SHOW_TOPICS, UserMessageRef, TEMPLATE_IDS, type ChatChange, type ChatControl, type CliRequestBody, type ShowTopic } from './protocol';
-import { ClockTime, EVERY_HOURS_CHOICES, MAX_DAILY_CAP_MICROS } from '../shared/schedule';
+import { ClockTime, EVERY_HOURS_CHOICES } from '../shared/schedule';
 import { MEMORY_TEXT_LIMIT } from '../shared/knowledge';
 import { ProviderId } from '../shared/contracts';
 import { MAX_FORWARD_TARGETS } from '../shared/forward';
@@ -173,7 +173,7 @@ function withEntityAliases(help: string): string {
 
 export const COMMAND_HELP: Record<CommandName, string> = {
   config: t("Cách dùng: orglet config [--json]\n\nHiện cấu hình có thể sửa, ID, phiên bản, skill và tên kết nối.\nKhông bao gồm khóa hay quyền truy cập."),
-  create: withEntityAliases(t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nKênh cần name và members, một danh sách {\"kind\":\"orglet\",\"id\":\"<ID>\"}. topic và mode (turns hoặc lead) là tùy chọn. Khi lead chia việc, lead là cài đặt của nó: synthesizerId, instructions, workflow, monthlyBudgetMicros và maxConcurrentTasks.\nTên cũ memberIds và các trường của lead đặt ngoài lead vẫn dùng được.\nGiới hạn là số nguyên phần triệu USD.")),
+  create: withEntityAliases(t("Cách dùng: orglet create <orglet|channel> --config <file.json> [--json]\n\nTạo Tí hoặc kênh. Dùng \"orglet config --json\" để xem ID skill và thành viên.\nTrong TUI, /new mở form bằng bàn phím.\nTí cần name, instructions, provider và skillId.\nKênh cần name và members, một danh sách {\"kind\":\"orglet\",\"id\":\"<ID>\"}. topic và mode (turns hoặc lead) là tùy chọn. Khi lead chia việc, lead là cài đặt của nó: synthesizerId, instructions, workflow và maxConcurrentTasks.\nTên cũ memberIds và các trường của lead đặt ngoài lead vẫn dùng được.\nGiới hạn là số nguyên phần triệu USD.")),
   edit: withEntityAliases(t("Cách dùng: orglet edit <orglet|channel> \"<tên>\" --config <patch.json> [--json]\n\nChỉ thay đổi trường được cung cấp; giữ nguyên trường bị bỏ qua.\nnull xóa giá trị tùy chọn của Tí; topic rỗng xóa chủ đề của kênh. Từ chối cấu hình vừa bị thay đổi ở nơi khác.\nKênh lần lượt trả lời chỉ nhận cài đặt lead khi có \"mode\": \"lead\".\nTrong TUI, /edit mở thiết lập của chat đang chọn.")),
   delete: withEntityAliases(`${t("Cách dùng: orglet delete <orglet|channel> \"<tên>\" --confirm \"<tên đầy đủ>\" [--json]\n\nCần tên đầy đủ khớp hoàn toàn. Chat cũ vẫn đọc được.\nKênh, lịch đang bật và việc đang chạy có thể ngăn xóa. Xóa Tí cuối cùng thì danh sách để trống.\nKênh lần lượt trả lời đã có tin nhắn thì xóa như một chat (bên dưới).\nTrong TUI, /delete yêu cầu gõ tên.")}\n\n${t("Xóa một chat: orglet delete --chat <mã> --confirm \"<tên chat>\" [--json]\nCần tên chat khớp hoàn toàn, như orglet chats in ra. Không thể hoàn tác.")}`),
   chat: `Usage: orglet chat [--to <name>]
@@ -966,7 +966,6 @@ function parseSpace(options: Options): ParsedCommand {
 const SCHEDULE_VERBS = ['add', 'edit', 'on', 'off', 'delete', 'dismiss', 'catch-up'] as const;
 /** Weekday names `--day` takes, in the schedule's numbering: 0 is Sunday. */
 const WEEKDAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-const MICROS_PER_USD = 1_000_000;
 
 /** `orglet schedule <add|edit|on|off|delete> "<name>" [options]`. */
 function parseSchedule(options: Options): ParsedCommand {
@@ -1001,7 +1000,6 @@ function scheduleFields(options: Options): ScheduleFields {
     ...(options.at !== undefined ? { time: parseClock(options.at) } : {}),
     ...(options.day !== undefined ? { weekday: parseWeekday(options.day) } : {}),
     ...(options.timezone?.trim() ? { timeZone: options.timezone.trim() } : {}),
-    ...(options.dailyCap !== undefined ? { dailyCapMicros: parseUsd('--daily-cap', options.dailyCap, MAX_DAILY_CAP_MICROS) } : {}),
     ...(options.called ? { trigger: 'called' as const } : {}),
     ...(options.off ? { enabled: false } : {}),
   };
@@ -1133,12 +1131,3 @@ function preferenceChanges(extra: Record<string, string>): PreferenceChanges {
 }
 
 const FORMAT_CHOICES = ['ask', 'text', 'markdown'] as const;
-
-/** A USD amount with up to six decimals, kept as integer micros the way the app stores money. */
-function parseUsd(option: string, value: string, maximumMicros: number): number {
-  const trimmed = value.trim().replace(/^\$/, '');
-  if (!/^\d+(\.\d{1,6})?$/.test(trimmed)) throw new UsageError(t("{0} cần số tiền USD như 0.50.", option));
-  const micros = Math.round(Number(trimmed) * MICROS_PER_USD);
-  if (micros < 1000 || micros > maximumMicros) throw new UsageError(t("{0} cần từ 0.001 đến {1} USD.", option, maximumMicros / MICROS_PER_USD));
-  return micros;
-}

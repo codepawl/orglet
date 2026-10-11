@@ -44,6 +44,7 @@ export const ChannelConfig = z.object({
   topic: z.string().max(CHANNEL_TOPIC_LIMIT).optional(),
   members: z.array(ChannelMember),
   mode: ChannelMode,
+  // monthlyBudgetMicros and taskBudgetMicros are kept only so older config files still parse; ignored (owner, 2026-10-11).
   lead: TeamInput.pick({ synthesizerId: true, instructions: true, workflow: true, monthlyBudgetMicros: true, maxConcurrentTasks: true, taskBudgetMicros: true }).strict().optional(),
 }).strict();
 export type ChannelConfig = z.infer<typeof ChannelConfig>;

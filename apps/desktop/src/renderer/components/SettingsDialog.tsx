@@ -443,6 +443,8 @@ async function copyText(value: string) {
 
 /** The terminal the person picked for login commands (COD-230): UI chrome, so localStorage. */
 const loginShellKey = 'orglet.login-shell';
+/** The window no longer reads a connection limit from the core; the section that shows one is removed by the window rebuild (owner, 2026-10-11). */
+const LEGACY_CONNECTION_LIMIT_MICROS = 5_000_000;
 function readLoginShell(): LoginShell | undefined {
   try { return (localStorage.getItem(loginShellKey) as LoginShell | null) ?? undefined; } catch { return undefined; }
 }
@@ -600,10 +602,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const closeColorPanel = useCallback(() => setColorPanel(false), []);
   const accent = workspace.accentColor ?? DEFAULT_ACCENT_COLOR;
   const customAccent = !accentSwatches.some(color => color.toLowerCase() === accent.toLowerCase());
-  const [limit, setLimit] = useState(toAmount(workspace.connectionLimitMicros));
+  const [limit, setLimit] = useState(toAmount(LEGACY_CONNECTION_LIMIT_MICROS));
   const [limitError, setLimitError] = useState('');
-  const savedLimit = useRef(workspace.connectionLimitMicros);
-  useEffect(() => { if (!open) { setLimitError(''); setLimit(toAmount(workspace.connectionLimitMicros)); setKeyDrafts({}); setEditing({}); setReplacing({}); } }, [open, workspace.connectionLimitMicros, currency.code, currency.rate]);
+  const savedLimit = useRef(LEGACY_CONNECTION_LIMIT_MICROS);
+  useEffect(() => { if (!open) { setLimitError(''); setLimit(toAmount(LEGACY_CONNECTION_LIMIT_MICROS)); setKeyDrafts({}); setEditing({}); setReplacing({}); } }, [open, LEGACY_CONNECTION_LIMIT_MICROS, currency.code, currency.rate]);
 
   /** A budget reservation is named by the chat it belongs to, the way the reconciliation list names it. */
   const reservationName = (reservationId: string) => {
@@ -620,7 +622,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   };
   // Settings apply as soon as they change; the command always carries the full current set.
   const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; marketAutoUpdate: boolean; backgroundNotifications: boolean; terminalAccess: boolean; showWork: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
-    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
+    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: LEGACY_CONNECTION_LIMIT_MICROS, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
     return t('Đã lưu');
   }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
   const eraseMessage = (summary: EraseSummary) => {

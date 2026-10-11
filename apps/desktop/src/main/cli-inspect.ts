@@ -114,7 +114,6 @@ export class CliInspect {
       uncertainCount: usage.uncertainCount,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
-      connectionLimitMicros: workspace.connectionLimitMicros,
       unsettledReservations: unresolved,
     };
     return { what: 'spend', rows: [row] };

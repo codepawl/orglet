@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { RunActivity } from '../shared/run-activity';
 import { FORWARD_NOTE_CHARS, MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
-import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency } from '../shared/schedule';
+import { ClockTime, EveryHours, ScheduleFrequency } from '../shared/schedule';
 import { FormatPreference, ProviderId } from '../shared/contracts';
 import { FontFamily } from '../shared/fonts';
 import { Language } from '../shared/i18n';
@@ -194,7 +194,8 @@ export const CliRequest = z.discriminatedUnion('op', [
     timeZone: z.string().trim().min(1).max(100).optional(),
     // Kept only so an older terminal command still parses; ignored (a task has no limit, owner 2026-10-11).
     budgetMicros: z.number().int().min(0).max(100_000_000).optional(),
-    dailyCapMicros: z.number().int().min(1000).max(MAX_DAILY_CAP_MICROS).optional(),
+    // Kept only so an older terminal command still parses; ignored (a schedule has no daily cap, owner, 2026-10-11).
+    dailyCapMicros: z.number().int().min(0).optional(),
     trigger: z.enum(['schedule', 'called']).optional(),
     enabled: z.boolean().optional(),
   }).strict(),
@@ -373,7 +374,6 @@ export type CliScheduleRow = {
   everyHours?: number;
   timeZone: string;
   nextDueAt: string;
-  dailyCapMicros?: number;
   runsToday?: number;
   spentTodayMicros?: number;
 };

@@ -38,18 +38,8 @@ const CREW_FIELDS: Field[] = [
   { key: 'memberIds', label: t("Thành viên") },
   { key: 'synthesizerId', label: t("Tí dẫn dắt") },
   { key: 'workflow', label: t("Cách phối hợp") },
-  { key: 'monthlyBudgetMicros', label: t("Giới hạn tháng (USD)"), hint: t("0.001 đến 1000 · tối đa sáu chữ số thập phân") },
   { key: 'maxConcurrentTasks', label: t("Số chat cùng lúc"), hint: t("Không bắt buộc · số nguyên từ 1 đến 8") },
 ];
-
-/** Money stays integer micros; decimal input is split rather than multiplied as a float. */
-export function parseDollarLimit(text: string, maximum: number): number {
-  if (!/^\d+(?:\.\d{1,6})?$/.test(text)) throw new Error(t("Nhập số tiền USD với tối đa sáu chữ số thập phân."));
-  const [whole, fraction = ''] = text.split('.');
-  const micros = Number(whole) * 1_000_000 + Number(fraction.padEnd(6, '0'));
-  if (!Number.isSafeInteger(micros) || micros < 1000 || micros > maximum) throw new Error(t('Dùng số tiền từ 0.001 đến {0} USD.', maximum / 1_000_000));
-  return micros;
-}
 
 export class ManagementEditor {
   state: EditorState;
@@ -249,7 +239,6 @@ export class ManagementEditor {
   draft(): string {
     if (this.state !== 'value' || this.isPicker || !this.field) return '';
     const value = this.field.key === 'color' ? (this.values.avatar as { color?: string } | undefined)?.color : this.values[this.field.key];
-    if (this.field.key.endsWith('BudgetMicros') && typeof value === 'number') return String(value / 1_000_000);
     return value === null || value === undefined ? '' : String(value);
   }
 
@@ -265,7 +254,7 @@ export class ManagementEditor {
 
   private initialize(): void {
     this.values = this.kind === 'team'
-      ? { name: '', instructions: '', memberIds: [], synthesizerId: this.catalog.orglets[0]?.id, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 }
+      ? { name: '', instructions: '', memberIds: [], synthesizerId: this.catalog.orglets[0]?.id, workflow: 'parallel' }
       : { name: '', instructions: '', provider: 'codex', skillId: this.catalog.skills[0]?.id };
   }
 
@@ -315,15 +304,12 @@ export class ManagementEditor {
     if (field.key === 'synthesizerId') return this.catalog.orglets.find(entity => entity.id === value)?.config.name ?? t("Chọn Tí dẫn dắt");
     if (field.key === 'memberIds') return t('Đã chọn {0}', (value as string[]).length);
     if (field.key === 'color') return (this.values.avatar as { color?: string } | undefined)?.color ?? t("tự động");
-    if (field.key.endsWith('BudgetMicros') && typeof value === 'number') return `$${value / 1_000_000}`;
     return value === null || value === undefined || value === '' ? '—' : String(value).replace(/\s+/gu, ' ');
   }
 
   private setTextValue(text: string): void {
     const key = this.field!.key;
-    if (key.endsWith('BudgetMicros')) {
-      this.values[key] = text.trim() === '' && key !== 'monthlyBudgetMicros' ? null : parseDollarLimit(text.trim(), key === 'monthlyBudgetMicros' ? 1_000_000_000 : 100_000_000);
-    } else if (key === 'maxConcurrentTasks') {
+    if (key === 'maxConcurrentTasks') {
       if (text.trim() && (!/^[1-8]$/.test(text.trim()))) throw new Error(t("Dùng số nguyên từ 1 đến 8, hoặc để trống."));
       this.values[key] = text.trim() ? Number(text.trim()) : null;
     } else if (key === 'color') {

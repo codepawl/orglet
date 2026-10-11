@@ -113,6 +113,7 @@ export type MarketUpdate = {
 export type MarketInstallation = { entityId: string; kind: MarketKind; listingId: string; version: number; name: string; updateAvailable: boolean; latestVersion?: number };
 
 export const MarketWidening = z.object({
+  // 'task-budget' and 'monthly-budget' are never produced now; kept only so update records saved earlier still parse (owner, 2026-10-11).
   kind: z.enum(['new-orglet', 'task-budget', 'monthly-budget', 'concurrency', 'skill-files', 'channel-rules']),
   name: z.string().max(200),
 }).strict();

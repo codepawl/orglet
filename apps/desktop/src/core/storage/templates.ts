@@ -1,5 +1,5 @@
 import { TeamTemplate as Template, validateTemplateReferences } from '../../shared/templates';
-import { type Worker, type Skill, type Team } from '../../shared/contracts';
+import { LEGACY_MONTHLY_BUDGET_MICROS, type Worker, type Skill, type Team } from '../../shared/contracts';
 import { Store, id } from './database';
 import { packageForImport } from '../skill-package';
 import { isMemory, type Knowledge } from '../../shared/knowledge';
@@ -18,7 +18,7 @@ export class TeamTemplates {
     const knowledge = this.store.all<Knowledge>('knowledge').filter(item => item.status === 'approved' && !isMemory(item) && item.scope.type === 'team' && item.scope.id === team.id).map(({ title, content, tags, pinned }) => ({ title, content, tags, pinned }));
     const text = JSON.stringify(Template.parse({
       format: 'orglet-team-template', version: 1,
-      team: { name: team.name, instructions: team.instructions, workflow: team.workflow, monthlyBudgetMicros: team.monthlyBudgetMicros, ...(team.reviewPolicy ? { reviewPolicy: team.reviewPolicy } : {}), ...(team.preflight ? { preflight: team.preflight } : {}), ...(team.workHours ? { workHours: team.workHours } : {}), ...(team.maxConcurrentTasks ? { maxConcurrentTasks: team.maxConcurrentTasks } : {}), memberKeys: team.memberIds.map(workerId => workerKeys.get(workerId)), synthesizerKey: workerKeys.get(team.synthesizerId) },
+      team: { name: team.name, instructions: team.instructions, workflow: team.workflow, monthlyBudgetMicros: team.monthlyBudgetMicros ?? LEGACY_MONTHLY_BUDGET_MICROS, ...(team.reviewPolicy ? { reviewPolicy: team.reviewPolicy } : {}), ...(team.preflight ? { preflight: team.preflight } : {}), ...(team.workHours ? { workHours: team.workHours } : {}), ...(team.maxConcurrentTasks ? { maxConcurrentTasks: team.maxConcurrentTasks } : {}), memberKeys: team.memberIds.map(workerId => workerKeys.get(workerId)), synthesizerKey: workerKeys.get(team.synthesizerId) },
       workers: workers.map(worker => ({ key: workerKeys.get(worker.id), name: worker.name, instructions: worker.instructions, provider: worker.provider, skillKey: skillKeys.get(worker.skillId), ...(worker.modelId ? { modelId: worker.modelId } : {}), ...(worker.effort ? { effort: worker.effort } : {}), ...(worker.avatar ? { avatar: worker.avatar } : {}), ...(worker.description ? { description: worker.description } : {}) })),
       skills: skills.map(skill => ({ key: skillKeys.get(skill.id), name: skill.name, content: skill.content, ...(skill.package ? { package: skill.package } : {}) })),
       ...(knowledge.length ? { knowledge } : {}),

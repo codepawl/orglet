@@ -11,24 +11,6 @@ import type { Task } from '../../shared/contracts';
 /** A task a routine started that is still going or waiting for the person; the routine's next run waits for it. */
 export const UNFINISHED_TASK_STATUSES: readonly Task['status'][] = ['queued', 'running', 'pausing', 'paused', 'interrupted', 'waiting_budget', 'waiting_input'];
 
-type RunCost = { usedMicros: number };
-
-/** Every run a routine started on one local day, with what each one charged or still holds. */
-function runCostsOfDay(store: Store, routineId: string, day: string): RunCost[] {
-  const rows = store.db.prepare(`SELECT
-      (SELECT COALESCE(SUM(CASE WHEN r.state='settled' THEN COALESCE(l.amount,0) ELSE r.amount END),0)
-        FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id WHERE r.task_id=t.id) AS used
-    FROM tasks t WHERE json_extract(t.data,'$.routineId')=? AND json_extract(t.data,'$.routineDay')=?`).all(routineId, day);
-  return rows.map(row => ({ usedMicros: Number(row.used) }));
-}
-
-/** What a routine's runs of one day cost so far: settled charges plus what is still held or unknown. */
-export function spentOnDay(store: Store, routineId: string, day: string): number {
-  let total = 0;
-  for (const run of runCostsOfDay(store, routineId, day)) total += run.usedMicros;
-  return total;
-}
-
 /**
  * Each routine's runs and spend on its own current day, read in one pass for the workspace view: `days` maps a
  * routine to the day it is in now, in its time zone.
