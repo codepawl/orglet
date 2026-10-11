@@ -24,14 +24,13 @@ import { CommandBlock, FieldError, Input, Textarea, Tooltip } from '@codepawlhq/
 import { isBlank, useFieldErrors } from '../fieldErrors';
 import { APP_TRIGGER_KEYWORD_LIMIT, APP_TRIGGER_MINUTES, triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
 import { permissionsForLevel, workspaceLevelOf, workspaceLevels, type WorkspaceLevel } from '../../shared/capability-status';
-import { workspaceLevelNames } from './PermissionControls';
+import { webSearchPermissionNote, workspaceLevelNames } from './PermissionControls';
 import { toast } from './toast';
 import { Avatar, RosterAvatars } from './Avatar';
 import { teamRoster } from '../assignees';
 import { BrowserSitesEditor, profileOptions, useBrowserState } from './BrowserSettings';
 import { browserLevelOf, capabilitiesWithBrowserLevel, defaultBrowserChoice, routineBrowserLevels, type BrowserLevel, type BrowserProfileId, type BrowserSite } from '../../shared/browser';
 import { snapshotCapabilities, withCapability, type ToolCapability } from '../../shared/tool-policy';
-import { WEB_SEARCH_PROVIDER_NAMES } from '../../shared/web-tools';
 import { decisionBackendName } from '../decisionBackends';
 
 /** Read when shown, so it follows the interface language like every other message. */
@@ -530,7 +529,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         </SwitchField>}
       </div>
       <SwitchField checked={web} onChange={setWeb} disabled={!providers.length}
-        description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[workspace.webSearchProvider]])}>
+        description={webSearchPermissionNote(workspace.webSearchProvider)}>
         <FieldLabel icon={Globe}>{t('Đọc và tìm kiếm web')}</FieldLabel>
       </SwitchField>
       <Select label={<FieldLabel icon={AppWindow}>{t('Trình duyệt')}</FieldLabel>} value={browserLevel} onChange={value => setBrowserLevel(value as BrowserLevel)}
