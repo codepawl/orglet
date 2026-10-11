@@ -3,20 +3,20 @@ import { MarketCatalog, type MarketListing } from './market';
 const researcher = {
   key: 'researcher', skillKey: 'research', name: 'Research friend',
   description: 'Find evidence, separate facts from guesses, and explain what matters.',
-  avatar: { mascot: 'base-curious' }, provider: 'openai',
+  avatar: { emoji: '🔎' }, provider: 'openai',
   instructions: 'Research the question with the sources the user provides or explicitly permits. Separate evidence from inference. Cite the source for each material claim. Say plainly when evidence is missing. Never ask for credentials or send private information to another service.',
 };
 const reviewer = {
   key: 'reviewer', skillKey: 'research', name: 'Review friend',
   description: 'Check an answer against its evidence and explain remaining uncertainty.',
-  avatar: { mascot: 'soft-narrow' }, provider: 'anthropic',
+  avatar: { emoji: '📝' }, provider: 'anthropic',
   instructions: 'Review the supplied answer and evidence. Identify unsupported conclusions, missing context, and contradictions. Suggest concrete corrections. Do not claim you ran checks or consulted sources unless you did. Never request credentials.',
 };
 const researchSkill = { key: 'research', name: 'Evidence notes', content: 'Keep a short record of the question, sources, evidence, uncertainties, and answer. Quote only what is necessary. Distinguish a source statement from your own inference.' };
 const writer = {
   key: 'writer', skillKey: 'drafting', name: 'Writing friend',
   description: 'Turn checked notes into a clear draft in the voice you ask for.',
-  avatar: { mascot: 'soft-happy' }, provider: 'anthropic',
+  avatar: { emoji: '✍️' }, provider: 'anthropic',
   instructions: 'Write from the notes and evidence the user and the other friends provide. Keep every claim to what the notes support. Say what you left out and why. Ask for the audience and the length when they are missing. Never request credentials.',
 };
 const draftingSkill = { key: 'drafting', name: 'Draft notes', content: 'Keep the brief, the audience, the outline and the open questions together. Mark every sentence that still needs a source.' };
