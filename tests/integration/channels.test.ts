@@ -8,7 +8,7 @@ import { migrateGroupChats } from '../../apps/desktop/src/core/storage/channels'
 import type { Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
 import { Channel, channelNameFrom, channelOrgletIds, isChannelChat, isLegacyGroupChat } from '../../apps/desktop/src/shared/channels';
 import { liveWorkerTask, newChatKey, newChatKeyNames } from '../../apps/desktop/src/shared/live-task';
-import { channelFromRecipient, channelMembersFromSelection, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from '../../apps/desktop/src/renderer/channelChat';
+import { channelFromRecipient, channelMembersFromSelection, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, spaceLandingChannel, openEmptyChannel, sidebarChannels } from '../../apps/desktop/src/renderer/channelChat';
 import { assigneeLabel, taskWorkers } from '../../apps/desktop/src/renderer/assignees';
 import { noSelection } from '../../apps/desktop/src/renderer/sidebarSelection';
 
@@ -113,6 +113,33 @@ describe('the sidebar Channels section', () => {
     const tasks = [chat('older', '2026-09-24T10:00:00.000Z', { channel: { id: 'x', name: 'older' } }), chat('newer', '2026-09-25T10:00:00.000Z', { assignees: ['a'], channel: { id: 'y', name: 'newer' } })];
     expect(sidebarChannels(tasks, [empty]).map(entry => entry.kind === 'chat' ? entry.task.id : entry.channel.id)).toEqual(['empty', 'newer', 'older']);
     expect(openChannelChats(tasks).map(task => task.id)).toEqual(['newer', 'older']);
+  });
+
+  it('opens a space on the channel last shown there, or on the first one the sidebar lists', () => {
+    const space = { id: 'space', categories: [{ id: 'plan' }, { id: 'copy' }] };
+    const inSpace = (id: string, createdAt: string, categoryId?: string) => chat(`task-${id}`, createdAt, { channel: { id, name: id, spaceId: 'space', ...(categoryId ? { categoryId } : {}) } });
+    const tasks: Row[] = [
+      inSpace('drafts', '2026-09-25T10:00:00.000Z', 'copy'),
+      inSpace('roadmap', '2026-09-24T10:00:00.000Z', 'plan'),
+      inSpace('general', '2026-09-23T10:00:00.000Z'),
+      chat('elsewhere', '2026-09-26T10:00:00.000Z', { channel: { id: 'other', name: 'other', spaceId: 'another' } }),
+    ];
+    const waiting = { ...empty, id: 'ideas', spaceId: 'space', categoryId: 'plan', createdAt: '2026-09-26T10:00:00.000Z' };
+    const entries = sidebarChannels(tasks, [waiting]);
+    type Row = { id: string; createdAt: string; channel?: { id: string; name: string; spaceId?: string; categoryId?: string } };
+    const idOf = (entry: ReturnType<typeof spaceLandingChannel<Row>>) => entry ? (entry.kind === 'chat' ? entry.task.channel?.id : entry.channel.id) : undefined;
+    // No category comes first, then each category in the space's order.
+    expect(idOf(spaceLandingChannel(entries, space, [], undefined))).toBe('general');
+    // The channel last on screen wins, written in or still empty.
+    expect(idOf(spaceLandingChannel(entries, space, [], 'drafts'))).toBe('drafts');
+    expect(idOf(spaceLandingChannel(entries, space, [], 'ideas'))).toBe('ideas');
+    // One that is gone, or belongs to another space, falls back to the first.
+    expect(idOf(spaceLandingChannel(entries, space, [], 'other'))).toBe('general');
+    // Inside a group the person's own order decides.
+    const categorized = entries.filter(entry => idOf(entry) !== 'general');
+    expect(idOf(spaceLandingChannel(categorized, space, ['roadmap', 'ideas'], undefined))).toBe('roadmap');
+    expect(idOf(spaceLandingChannel(categorized, space, ['ideas', 'roadmap'], undefined))).toBe('ideas');
+    expect(spaceLandingChannel(entries, { id: 'empty-space', categories: [] }, [], undefined)).toBeUndefined();
   });
 
   it('leaves out DMs, crews, side threads, schedule runs, archived and deleted chats', () => {

@@ -58,7 +58,7 @@ export function channelMembersFromSelection(selection: SidebarSelection): Channe
   return undefined;
 }
 
-type ChannelRow = { id: string; createdAt: string; teamId?: string; assignees?: 'all' | string[]; routineId?: string; sideOf?: unknown; archivedAt?: string; deletedAt?: string; channel?: { id: string; name: string } };
+type ChannelRow = { id: string; createdAt: string; teamId?: string; assignees?: 'all' | string[]; routineId?: string; sideOf?: unknown; archivedAt?: string; deletedAt?: string; channel?: { id: string; name: string; spaceId?: string; categoryId?: string } };
 
 /** One row of the sidebar's Channels section: a channel with messages, or one created and still empty. */
 export type SidebarChannel<T extends ChannelRow> = { kind: 'chat'; task: T; createdAt: string } | { kind: 'empty'; channel: EmptyChannel; createdAt: string };
@@ -68,6 +68,33 @@ export function sidebarChannels<T extends ChannelRow>(tasks: readonly T[], empty
   const chats = tasks.filter(task => isChannelChat(task) && !task.archivedAt && !task.deletedAt).map(task => ({ kind: 'chat' as const, task, createdAt: task.createdAt }));
   const waiting = empty.map(channel => ({ kind: 'empty' as const, channel, createdAt: channel.createdAt }));
   return [...chats, ...waiting].sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+}
+
+/**
+ * The channel a space's tile opens (owner, 2026-10-11): the one last on screen there, or the first one as the sidebar
+ * lists them, which is the channels with no category and then each category's in the space's order, each group in the
+ * order the person keeps. Undefined when the space has no channel.
+ */
+export function spaceLandingChannel<T extends ChannelRow>(
+  entries: readonly SidebarChannel<T>[],
+  space: { id: string; categories: readonly { id: string }[] },
+  channelOrder: readonly string[],
+  rememberedChannelId: string | undefined,
+): SidebarChannel<T> | undefined {
+  const channelOf = (entry: SidebarChannel<T>) => entry.kind === 'chat' ? entry.task.channel : entry.channel;
+  const inSpace = entries.filter(entry => channelOf(entry)?.spaceId === space.id);
+  const remembered = inSpace.find(entry => channelOf(entry)?.id === rememberedChannelId);
+  if (remembered) return remembered;
+  const categoryIds = space.categories.map(category => category.id);
+  const placed = inSpace.map((entry, index) => {
+    const channel = channelOf(entry);
+    const kept = channel ? channelOrder.indexOf(channel.id) : -1;
+    // A category the space no longer has lists its channels with the uncategorized ones, as the sidebar does.
+    const group = channel?.categoryId ? categoryIds.indexOf(channel.categoryId) + 1 : 0;
+    return { entry, group, place: kept >= 0 ? kept : channelOrder.length + index };
+  });
+  placed.sort((first, second) => first.group - second.group || first.place - second.place);
+  return placed[0]?.entry;
 }
 
 /** The open channels with messages, for the rail and the Open list. */

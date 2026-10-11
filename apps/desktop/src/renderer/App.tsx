@@ -93,7 +93,7 @@ import { permissionsForLevel, permissionState, type WorkspaceLevel } from '../sh
 import { ComposerPermissionHint, readSentMessage, type PermissionHintControls } from './permissionHints';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 import { noSelection, pruneSelection, selectRange, toggleSelection, type SelectionPickMode, type SidebarSelection, type SidebarSelectionSection } from './sidebarSelection';
-import { channelFromRecipient, channelNameOf, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels } from './channelChat';
+import { channelFromRecipient, channelNameOf, channelRecipient, channelTaskInput, emptyChannelKey, memberNames, openChannelChats, openEmptyChannel, sidebarChannels, spaceLandingChannel } from './channelChat';
 import { CHANNEL_NAME_LIMIT, channelLabel, isChannelChat } from '../shared/channels';
 import { ChannelDialog, type ChannelDraft } from './components/ChannelDialog';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
@@ -127,7 +127,7 @@ import { AddOrgletDialog, MarketplacePage } from './components/FriendsPage';
 import { MarketPublishingDialog, publishingSourceRevision, publishingRequiresSuggestion } from './components/MarketPublishing';
 import { ActivityPage, activityTabLabel, activityCounts } from './components/ActivityPage';
 import { MemberColumn } from './components/MemberColumn';
-import { readArea, writeArea, readOpenSpace, writeOpenSpace, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, type Area, type ActivityTab, activityTabs } from './areas';
+import { readArea, writeArea, readOpenSpace, writeOpenSpace, readSpaceChannels, writeSpaceChannel, readClosedFolders, writeClosedFolders, folderKey, spaceFolderNames, workingOrgletIds, type Area, type ActivityTab, activityTabs } from './areas';
 import { SpaceDialog, type SpaceDraft } from './components/SpaceDialog';
 import { SpaceHomePage } from './components/SpaceHomePage';
 import { CategoryDialog, type CategoryDraft } from './components/CategoryDialog';
@@ -764,6 +764,11 @@ export function App() {
     setSideThread({ taskId: id, mainTaskId, messageId });
     setPanel('thread');
   };
+  // The channel on screen is the one its space opens on next time.
+  const shownSpaceChannel = (selected ? workspace?.tasks.find(task => task.id === selected)?.channel : undefined) ?? workspace?.emptyChannels.find(channel => channel.id === emptyChannelId);
+  useEffect(() => {
+    if (shownSpaceChannel?.spaceId) writeSpaceChannel(shownSpaceChannel.spaceId, shownSpaceChannel.id);
+  }, [shownSpaceChannel?.spaceId, shownSpaceChannel?.id]);
   /** Switches the sidebar to the area that owns a chat: its space's channels, or Home. */
   const showAreaOfChat = (task: Task) => {
     setArea(areaOfTask(task));
@@ -2503,8 +2508,17 @@ export function App() {
       active: area === 'channels' && openSpace?.id === space.id && !pagePanelOpen,
       onSelect: function goToSpace() {
         if (leavingPage(goToSpace)) return;
+        // A space opens on a channel (owner, 2026-10-11): the one last on screen there, else its first; its own page
+        // only when it has no channel yet.
+        const landing = spaceLandingChannel(channelEntries, space, workspace.channelOrder ?? [], readSpaceChannels()[space.id]);
+        if (landing?.kind === 'chat') { openTask(landing.task.id); return; }
+        if (landing) { showEmptyChannel(landing.channel.id); return; }
+        clearSelection();
+        leaveThread();
+        setTeamId('');
         setOpenSpace(space.id);
         setArea('channels');
+        setSpaceHomeOpen(true);
       },
     })),
     { key: 'activity', icon: <Bell size={20} />, activeIcon: BellFilled, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity' && !pagePanelOpen, count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: goToActivity },

@@ -52,6 +52,29 @@ export function writeOpenSpace(spaceId: string) {
   }
 }
 
+const spaceChannelsKey = 'orglet.spaceChannels';
+
+/** The channel last on screen in each space, by space id. UI chrome: it only decides what a space's tile opens. */
+export function readSpaceChannels(): Record<string, string> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(spaceChannelsKey) ?? '{}');
+    if (typeof saved !== 'object' || saved === null || Array.isArray(saved)) return {};
+    return Object.fromEntries(Object.entries(saved).filter((pair): pair is [string, string] => typeof pair[1] === 'string'));
+  } catch {
+    return {};
+  }
+}
+
+export function writeSpaceChannel(spaceId: string, channelId: string) {
+  try {
+    const saved = readSpaceChannels();
+    if (saved[spaceId] === channelId) return;
+    localStorage.setItem(spaceChannelsKey, JSON.stringify({ ...saved, [spaceId]: channelId }));
+  } catch {
+    /* storage unavailable: the space opens on its first channel */
+  }
+}
+
 const closedFoldersKey = 'orglet.closedSpaceFolders';
 
 /** The rail folders the person closed, by folded name. Which folders are open is UI chrome, like the open area. */
