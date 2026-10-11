@@ -1,19 +1,25 @@
 import { useEffect, useState, type PointerEvent, type ReactNode } from 'react';
+import { mascotIds } from './mascots';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
 import { Button } from './ui';
 
 /*
  * What a main panel shows when it has nothing to list (owner, 2026-10-11: the no-orglet page, everywhere a panel is
- * empty). The monochrome orglet of the startup screen stands in the middle with one line saying what is missing, an
+ * empty). A monochrome orglet stands in the middle, a different one each time the panel appears (owner, 2026-10-12:
+ * its shape and its manner are drawn at random), with one line saying what is missing, an
  * optional line saying how it fills, and an optional button. It hops in, turns after the pointer, smiles when the
  * panel is tapped, stretches while the pointer rests on the button, and dozes when left alone. The motion is the
  * orglet's own; the panel never fades or slides.
  */
 
-// The startup face's size and personality, so it reads as the same orglet.
+// The startup face's size, so it reads as one of the same family.
 const FACE_SIZE = 80;
-const FACE_SEED = 29;
+
+/** Which orglet stands in the panel: any shape, with a seed for how it moves. Drawn once for each time the panel appears. */
+function randomFace() {
+  return { id: mascotIds[Math.floor(Math.random() * mascotIds.length)], seed: Math.floor(Math.random() * 1000) };
+}
 // Left alone this long, the orglet dozes.
 const DOZE_AFTER_SECONDS = 25;
 
@@ -33,6 +39,7 @@ export function EmptyPanel({ title, hint, action, fill = true, className }: {
   fill?: boolean;
   className?: string;
 }) {
+  const [face] = useState(randomFace);
   const [cheer, setCheer] = useState(0);
   const [cue, setCue] = useState<Cue>();
   const [lastTouch, setLastTouch] = useState(0);
@@ -56,7 +63,7 @@ export function EmptyPanel({ title, hint, action, fill = true, className }: {
 
   return <div className={`empty-panel${fill ? ' empty-panel-fill' : ''}${className ? ` ${className}` : ''}`} role="status" onPointerDown={tap}>
     <div className="startup-face">
-      <Orglet3D id="classic" seed={FACE_SEED} size={FACE_SIZE} color="mono" motion={{ lead: true, greet: true, cheer, moment: cue }} />
+      <Orglet3D id={face.id} seed={face.seed} size={FACE_SIZE} color="mono" motion={{ lead: true, greet: true, cheer, moment: cue }} />
     </div>
     <p className="empty-panel-title">{title}</p>
     {hint && <p className="empty-panel-hint">{hint}</p>}
