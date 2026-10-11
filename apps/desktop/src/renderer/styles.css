@@ -190,8 +190,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Each permission is a title over a one-line description; 18px between them keeps one row from reading as the next
    row's caption (owner, 2026-09-25: "dính chùm"). */
 .permissions { display:flex; flex-direction:column; gap:18px; min-width:0; container-type:inline-size; }
-.permissions .org-switch-field-title,.permission-folder-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
-.permissions .org-switch-field-title svg,.permission-folder-title svg,.permission-folder-name svg { flex-shrink:0; color:var(--muted); }
+/* A switch's title that starts with an icon keeps the icon on the title's line, wherever the switch is: the space
+   dialog's permissions drew it above the title, because this rule only reached the chat's own list. */
+.org-switch-field-title:has(> svg),.permission-folder-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
+.org-switch-field-title > svg,.permission-folder-title svg,.permission-folder-name svg { flex-shrink:0; color:var(--muted); }
 .permissions .org-switch-field-description,.permission-folder-description { display:flex; flex-direction:column; gap:2px; line-height:1.45; }
 .permissions-reason { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; font-size:13px; line-height:1.45; color:var(--muted); }
 .permissions-reason .org-button { min-height:28px; padding:3px 10px; font-size:12px; border-radius:14px; }
@@ -3307,6 +3309,8 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-rail-list > li { position:relative; }
 .area-rail-list > li.area-dragging { z-index:3; }
 .area-rail-list > li.area-dragging .area-tile { box-shadow:0 8px 24px rgb(0 0 0 / .14); }
+/* The tile a dragged space is held over, about to share a folder with it: the folder's own outline, ahead of time. */
+.area-rail-list > li.area-merge-target { border-radius:18px; box-shadow:0 0 0 4px var(--window), 0 0 0 5px var(--border), inset 0 0 0 100px color-mix(in srgb, var(--text) 6%, transparent); }
 .area-folder { display:flex; flex-direction:column; align-items:center; gap:8px; }
 .area-folder.open { padding:4px; margin:-4px; border-radius:18px; box-shadow:inset 0 0 0 1px var(--border); }
 .area-folder-tile { color:var(--muted); }

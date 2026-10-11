@@ -74,7 +74,7 @@ function Tile({ entry, onMoveKey }: { entry: AreaRailEntry; onMoveKey?: TileMove
 
 function FolderTiles({ folder, onReorder }: { folder: AreaRailFolder; onReorder: (keys: string[]) => void }) {
   const tip = useContext(TipContext);
-  const inside = useReorder(folder.entries.map(entry => entry.key), onReorder);
+  const inside = useReorder(folder.entries.map(entry => entry.key), onReorder, { startOnMove: true });
   const waiting = folder.entries.reduce((total, entry) => total + (entry.count ?? 0), 0);
   const holdsOpenPage = folder.entries.some(entry => entry.active);
   return <div className={`area-folder${folder.open ? ' open' : ''}`}>
@@ -87,7 +87,7 @@ function FolderTiles({ folder, onReorder }: { folder: AreaRailFolder; onReorder:
       <RowMenu label={t('Tùy chọn thư mục {0}', [folder.label])} className="area-tile-menu" align="start" contextMenuOf=".area-tile-slot" items={folder.menuItems} />
     </div>
     {folder.open && <ul className="area-rail-list" aria-label={folder.label}>{inside.order.flatMap(key => folder.entries.filter(entry => entry.key === key)).map(entry => {
-      const { ref, style, dragging, onMoveKey, ...pointer } = inside.bind(entry.key);
+      const { ref, style, dragging, merging: _merging, onMoveKey, ...pointer } = inside.bind(entry.key);
       // The folder's own list is dragged apart from the rail's: the press must not also lift the folder.
       return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : undefined} {...pointer} onPointerDown={event => { event.stopPropagation(); pointer.onPointerDown(event); }}><Tile entry={entry} onMoveKey={onMoveKey} /></li>;
     })}</ul>}
@@ -102,7 +102,7 @@ function FolderTiles({ folder, onReorder }: { folder: AreaRailFolder; onReorder:
  * A tile's name shows beside it while the pointer is on it (user, 2026-10-05), the way Discord names a server.
  * Spaces can sit in folders (user, 2026-10-05): a folder is an outlined group with its own tile, which opens and closes it.
  */
-export function AreaRail({ entries, spaces, onReorderSpaces, onCreateSpace, onHover, onOpenSidebar, trail }: {
+export function AreaRail({ entries, spaces, onReorderSpaces, onGroupSpaces, onCreateSpace, onHover, onOpenSidebar, trail }: {
   /** The app's own places: Home, Activity, Library, Schedules. */
   entries: readonly AreaRailEntry[];
   /** The person's spaces and their folders, under a divider of their own (user, 2026-10-05), the way Discord parts its servers from Home. */
@@ -112,6 +112,11 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onCreateSpace, onHo
    * folder moves as one tile with the spaces in it; a space inside a folder moves among that folder's spaces.
    */
   onReorderSpaces: (spaceKeys: string[]) => void;
+  /**
+   * A space was dropped on the middle of another tile (owner, 2026-10-12, as Discord folds servers): on a space, the
+   * two share a new folder; on a folder, the space goes into it. Both are the tiles' keys.
+   */
+  onGroupSpaces: (draggedKey: string, overKey: string) => void;
   /** The **+** under the spaces makes a space and nothing else (user, 2026-10-05): the rail lists spaces, so that is what it adds. */
   onCreateSpace: () => void;
   /** Back and forward along the places the person has been (user, 2026-10-05), at the top of the rail the way Discord has them. */
@@ -128,7 +133,13 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onCreateSpace, onHo
     if (!('kind' in item)) return [item.key];
     return insideFolder?.key === item.key ? insideFolder.keys : item.entries.map(entry => entry.key);
   };
-  const rail = useReorder(spaces.map(entry => entry.key), keys => onReorderSpaces(keys.flatMap(key => spaceKeysUnder(key))));
+  // A space dropped on the middle of another space, or of a folder, joins it; a folder itself only changes place.
+  const isFolder = (key: string) => spaces.some(entry => entry.key === key && 'kind' in entry);
+  const rail = useReorder(spaces.map(entry => entry.key), keys => onReorderSpaces(keys.flatMap(key => spaceKeysUnder(key))), {
+    startOnMove: true,
+    canMerge: (draggedKey, overKey) => !isFolder(draggedKey) && draggedKey !== overKey,
+    onMerge: onGroupSpaces,
+  });
   const reorderInFolder = (folderKey: string, keys: string[]) => onReorderSpaces(rail.order.flatMap(key => spaceKeysUnder(key, { key: folderKey, keys })));
   const control: TipControl = {
     show: (label, tile) => {
@@ -153,8 +164,8 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onCreateSpace, onHo
     {spaces.length > 0 && <span className="area-rail-divider" aria-hidden="true" />}
     {spaces.length > 0 && <ul className="area-rail-list" aria-label={t('Không gian')}>
       {rail.order.flatMap(key => spaces.filter(entry => entry.key === key)).map(entry => {
-        const { ref, style, dragging, onMoveKey, ...pointer } = rail.bind(entry.key);
-        return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : undefined} {...pointer}>
+        const { ref, style, dragging, merging, onMoveKey, ...pointer } = rail.bind(entry.key);
+        return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : merging ? 'area-merge-target' : undefined} {...pointer}>
           {'kind' in entry ? <FolderTiles folder={entry} onReorder={keys => reorderInFolder(entry.key, keys)} /> : <Tile entry={entry} onMoveKey={onMoveKey} />}
         </li>;
       })}

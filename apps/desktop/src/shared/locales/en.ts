@@ -4941,7 +4941,7 @@ export const en: Dictionary = {
   "Cấp quyền (thư mục, công cụ, MCP…) và lưu khóa bí mật trong phiên terminal này, tối đa 15 phút.": "Grant access (folders, tools, MCP...) and save secret keys in this terminal session, for 15 minutes at most.",
   "Gói được giữ nguyên. Script không chạy; skill không cấp thêm quyền.": "The package is kept as imported. Scripts never run; a skill grants no access.",
   "Hôm nay {0}": "Today {0}",
-  "Một bản cập nhật đổi cách một Tí làm việc, nên mặc định app chờ bạn. Bản bạn đã chỉnh sửa hoặc bản mở rộng quyền vẫn luôn chờ bạn xem.": "An update changes how an orglet works, so by default the app waits for you. A copy you edited, or an update that widens access, always waits for your look.",
+  'Bản mới của một mục bạn đã thêm được áp dụng ngầm. Bản bạn đã chỉnh sửa hoặc bản mở rộng quyền vẫn luôn chờ bạn xem.': 'A new version of something you added is applied in the background. A copy you edited, or an update that widens access, always waits for your look.',
   "OpenAI, Anthropic, Grok, OpenRouter hoặc một máy chủ tương thích OpenAI. Trả theo lượng dùng.": "OpenAI, Anthropic, Grok, OpenRouter or an OpenAI-compatible server. Pay per use.",
   "Orglet không biết giá của kết nối này: chi phí chỉ được ghi khi bạn nhập chi phí thật trong Cài đặt → Chi phí.": "Orglet does not know this connection’s price: its cost is recorded only once you enter the real cost in Settings → Costs.",
   "Quá mức thì chờ.": "Extra steps wait.",

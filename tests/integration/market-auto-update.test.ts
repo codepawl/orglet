@@ -50,23 +50,26 @@ async function remote(kind: 'orglet' | 'crew' = 'orglet') {
 }
 
 function turnOn() { store.setSetting('marketAutoUpdate', true); }
+function turnOff() { store.setSetting('marketAutoUpdate', false); }
 
 describe('the preference', () => {
-  it('is off by default, saved through settings, and refuses anything but a boolean', async () => {
-    expect(store.workspace().marketAutoUpdate).toBe(false);
+  it('is on by default, saved through settings, and refuses anything but a boolean', async () => {
+    expect(store.workspace().marketAutoUpdate).toBe(true);
     expect(commands.settings.safeParse({ theme: 'system', connectionLimitMicros: 1, marketAutoUpdate: 'yes' }).success).toBe(false);
     const core = new CoreService(store, () => {}, async () => { throw new Error('no model'); });
-    await core.command('settings', { theme: 'system', marketAutoUpdate: true });
-    expect(store.workspace().marketAutoUpdate).toBe(true);
-    await core.command('settings', { theme: 'system' });
-    expect(store.workspace().marketAutoUpdate).toBe(true);
     await core.command('settings', { theme: 'system', marketAutoUpdate: false });
     expect(store.workspace().marketAutoUpdate).toBe(false);
+    // A save that says nothing about it leaves the person's choice alone.
+    await core.command('settings', { theme: 'system' });
+    expect(store.workspace().marketAutoUpdate).toBe(false);
+    await core.command('settings', { theme: 'system', marketAutoUpdate: true });
+    expect(store.workspace().marketAutoUpdate).toBe(true);
   });
 });
 
 describe('automatic marketplace updates', () => {
   it('apply nothing while the preference is off, and show the update as available', async () => {
+    turnOff();
     const server = await remote();
     const added = await server.market.add('research-friend', 1);
     await server.publish(template => { template.worker.instructions = 'Updated instructions'; });
@@ -180,6 +183,7 @@ describe('automatic marketplace updates', () => {
     await server.market.add('research-friend', 1);
     const calls = () => vi.mocked(server.fetcher).mock.calls.length;
     const initial = calls();
+    turnOff();
     await server.updates.checkWhenDue();
     expect(calls()).toBe(initial);
     turnOn();

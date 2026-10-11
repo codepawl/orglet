@@ -742,7 +742,6 @@ const SCREENS = [
     await page.getByRole('dialog').getByText(label('Tạo token tại {0}', ['https://github.com/settings/personal-access-tokens/new']), { exact: true }).waitFor();
   } },
   { name: 'settings-browser', family: 'settings', open: page => openSettingsTab(page, 'Trình duyệt') },
-  { name: 'settings-costs', family: 'settings', open: page => openSettingsTab(page, 'Chi phí') },
   { name: 'settings-data', family: 'settings', open: page => openSettingsTab(page, 'Dữ liệu') },
   { name: 'settings-account', family: 'settings', open: page => openSettingsTab(page, 'Tài khoản') },
   { name: 'settings-account-signing-in', family: 'settings', open: async page => {

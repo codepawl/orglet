@@ -98,6 +98,6 @@ When the provider's own list marks the chosen model as deprecated, the picker sh
 
 Orglet sets no spending limit. It records and shows what each chat used, and only for requests it makes itself through an API key; harness runs count against their own plan, and Ollama is free. To cap spending, set a limit with the provider.
 
-- **Settings → Costs** sets how many requests may run at once per provider (1–8), and which providers are allowed. It also lists **Charges to reconcile**: requests that failed or came back without usage stay unknown until you check the provider's bill and enter the real amount. Orglet never assumes a failed request was free.
+- **Settings → Chat** sets how many requests may run at once per provider (1–8). Settings has no Costs page: a request that failed or came back without usage is recorded as unknown, and the provider's own usage page is where to read what it cost.
 
 Cancelling a run stops further requests; a request already in flight may still be billed.

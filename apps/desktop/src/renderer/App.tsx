@@ -2630,7 +2630,25 @@ export function App() {
     ...folderNames.filter(name => !space.folder || folderKey(name) !== folderKey(space.folder)).map(name => ({ label: t('Chuyển vào thư mục {0}', [name]), icon: FolderInput, onSelect: () => moveSpaceToFolder(space, name) })),
     { label: t('Chuyển vào thư mục mới'), icon: FolderPlus, onSelect: () => moveSpaceToFolder(space, newFolderName()) },
     ...(space.folder ? [{ label: t('Đưa ra khỏi thư mục'), icon: FolderMinus, onSelect: () => moveSpaceToFolder(space, null) }] : []),
+    // The same delete the space's own menu has, where a person looks for it first: on the tile (owner, 2026-10-12).
+    { label: t('Xóa không gian'), icon: Trash, danger: true, onSelect: () => deleteSpace(space), confirm: { question: t('Xóa không gian {0}? Các kênh của nó vẫn còn, nằm ngoài mọi không gian.', [space.name]), label: t('Xóa không gian') } },
   ];
+  /** A space dropped on another tile of the rail: into that folder, or with that space into a new folder at its place. */
+  const groupSpaces = (draggedKey: string, overKey: string) => {
+    const spaceOf = (key: string) => workspace.spaces.find(space => `space:${space.id}` === key);
+    const dragged = spaceOf(draggedKey);
+    if (!dragged) return;
+    const inFolder = (space: Space, folder: string) => orglet.call('updateSpace', { id: space.id, name: space.name, ...(space.color ? { color: space.color } : {}), orgletIds: space.orgletIds, categories: space.categories, folder });
+    const folderName = overKey.startsWith('folder:') ? folderNames.find(name => `folder:${folderKey(name)}` === overKey) : undefined;
+    const over = spaceOf(overKey);
+    if (!folderName && !over) return;
+    action(async () => {
+      const folder = folderName ?? over?.folder ?? newFolderName();
+      if (over && over.folder !== folder) await inFolder(over, folder);
+      await inFolder(dragged, folder);
+      setClosedFolders(closedFolders.filter(name => name !== folderKey(folder)));
+    });
+  };
   const toggleFolder = (name: string) => {
     const key = folderKey(name);
     setClosedFolders(closedFolders.includes(key) ? closedFolders.filter(item => item !== key) : [...closedFolders, key]);
@@ -2781,14 +2799,13 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} onReorderSpaces={keys => { void action(() => orglet.call('reorder', { kind: 'spaces', ids: keys.map(key => key.slice('space:'.length)) })); }} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onGroupSpaces={groupSpaces} onReorderSpaces={keys => { void action(() => orglet.call('reorder', { kind: 'spaces', ids: keys.map(key => key.slice('space:'.length)) })); }} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
         { label: t('Cài đặt'), icon: SlidersHorizontal, onSelect: () => openSettings() },
         // What people reach for from their own face (user, 2026-10-06): how much they have used, whether there is a
         // newer Orglet, and the way out. The other settings pages are one step further, inside Settings.
-        { label: t('Mức dùng'), icon: Wallet, onSelect: () => openSettings('usage') },
         { label: t('Kiểm tra bản cập nhật'), icon: RefreshCw, onSelect: () => { openSettings('about'); void orglet.checkForUpdates().catch(() => undefined); } },
         { label: t('Thoát Orglet'), icon: LogOut, danger: true, onSelect: () => void orglet.quit() },
       ]}

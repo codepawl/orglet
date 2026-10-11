@@ -22,19 +22,33 @@ export function statusMarkLabel(status: StatusMarkState): string {
 }
 
 const HOLD_MS = 350, SLOP_PX = 6;
-type RowBindings = { ref: (element: HTMLElement | null) => void; style?: CSSProperties; dragging: boolean; onPointerDown: (event: PointerEvent<HTMLElement>) => void; onPointerMove: (event: PointerEvent<HTMLElement>) => void; onPointerUp: (event: PointerEvent<HTMLElement>) => void; onPointerCancel: () => void; onClickCapture: (event: React.MouseEvent) => void; onMoveKey: (event: KeyboardEvent) => void };
+type RowBindings = { ref: (element: HTMLElement | null) => void; style?: CSSProperties; dragging: boolean; /** Another row is held over this one, about to be joined with it. */ merging: boolean; onPointerDown: (event: PointerEvent<HTMLElement>) => void; onPointerMove: (event: PointerEvent<HTMLElement>) => void; onPointerUp: (event: PointerEvent<HTMLElement>) => void; onPointerCancel: () => void; onClickCapture: (event: React.MouseEvent) => void; onMoveKey: (event: KeyboardEvent) => void };
 
 /**
  * Press-and-hold reordering for one sidebar list. Holding a row lifts it; moving the pointer slides the other rows
  * aside, and releasing commits the new order. Alt+Arrow keys do the same from the keyboard.
  */
-export function useReorder(ids: string[], commit: (ids: string[]) => void) {
+export type ReorderOptions = {
+  /** Lifts a row as soon as the pointer drags it, with no hold: for a list that never scrolls under the pointer. */
+  startOnMove?: boolean;
+  /**
+   * Dropping one row on the middle of another joins them instead of reordering (spaces into a folder, the way Discord
+   * folds servers). `canMerge` says which pairs may; `onMerge` is called on the drop.
+   */
+  canMerge?: (draggedId: string, overId: string) => boolean;
+  onMerge?: (draggedId: string, overId: string) => void;
+};
+
+/** How much of a row's height around its middle counts as "on it" rather than "past it". */
+const MERGE_BAND = 0.25;
+
+export function useReorder(ids: string[], commit: (ids: string[]) => void, options: ReorderOptions = {}) {
   const [override, setOverride] = useState<string[] | null>(null);
   const order = override ?? ids;
   const elements = useRef(new Map<string, HTMLElement>());
   const press = useRef<{ id: string; x: number; y: number; timer: number; pointer: number; target: HTMLElement } | null>(null);
   const suppressClick = useRef(false);
-  const [drag, setDrag] = useState<{ id: string; from: number; target: number; offset: number; tops: number[]; heights: number[]; step: number } | null>(null);
+  const [drag, setDrag] = useState<{ id: string; from: number; target: number; offset: number; tops: number[]; heights: number[]; step: number; over?: string } | null>(null);
 
   // Once the saved order arrives from the core, drop the optimistic copy.
   useEffect(() => { if (override && override.join() === ids.join()) setOverride(null); }, [ids, override]);
@@ -57,38 +71,56 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void) {
       else if (drag.from < drag.target && index > drag.from && index <= drag.target) style = { transform: `translateY(${-drag.step}px)` };
       else if (drag.from > drag.target && index < drag.from && index >= drag.target) style = { transform: `translateY(${drag.step}px)` };
     }
+    /** Lifts this row: measures every row once, takes the pointer, and starts the drag. */
+    const lift = (target: HTMLElement) => {
+      if (!press.current) return;
+      const rects = order.map(item => elements.current.get(item)?.getBoundingClientRect());
+      if (rects.some(rect => !rect)) return;
+      const tops = rects.map(rect => rect!.top), heights = rects.map(rect => rect!.height);
+      const from = order.indexOf(id);
+      const gap = order.length > 1 ? Math.max(0, (from + 1 < order.length ? tops[from + 1] - tops[from] - heights[from] : tops[from] - tops[from - 1] - heights[from - 1])) : 0;
+      window.clearTimeout(press.current.timer);
+      try { target.setPointerCapture(press.current.pointer); } catch { /* pointer already released */ }
+      setDrag({ id, from, target: from, offset: 0, tops, heights, step: heights[from] + gap });
+    };
+    /** Half the height of the band around another row's middle that means "on it", or 0 when the two cannot join. */
+    const band = (at: number, heights: number[]) => options.canMerge?.(id, order[at]) ? heights[at] * MERGE_BAND : 0;
     return {
       ref: element => { if (element) elements.current.set(id, element); else elements.current.delete(id); },
-      style, dragging: drag?.id === id,
+      style, dragging: drag?.id === id, merging: drag?.over === id,
       onPointerDown: event => {
         if (event.button !== 0 || (event.target as HTMLElement).closest('input,[data-no-drag]')) return;
         clearPress();
         const target = event.currentTarget;
-        const timer = window.setTimeout(() => {
-          const rects = order.map(item => elements.current.get(item)?.getBoundingClientRect());
-          if (rects.some(rect => !rect)) return;
-          const tops = rects.map(rect => rect!.top), heights = rects.map(rect => rect!.height);
-          const from = order.indexOf(id);
-          const gap = order.length > 1 ? Math.max(0, (from + 1 < order.length ? tops[from + 1] - tops[from] - heights[from] : tops[from] - tops[from - 1] - heights[from - 1])) : 0;
-          try { target.setPointerCapture(press.current!.pointer); } catch { /* pointer already released */ }
-          setDrag({ id, from, target: from, offset: 0, tops, heights, step: heights[from] + gap });
-        }, HOLD_MS);
+        const timer = window.setTimeout(() => lift(target), HOLD_MS);
         press.current = { id, x: event.clientX, y: event.clientY, timer, pointer: event.pointerId, target };
       },
       onPointerMove: event => {
-        if (!drag && press.current && Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y) > SLOP_PX) clearPress();
+        if (!drag && press.current && Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y) > SLOP_PX) {
+          if (options.startOnMove && press.current.id === id) lift(press.current.target);
+          else clearPress();
+        }
         if (!drag || drag.id !== id || !press.current) return;
         const offset = event.clientY - press.current.y;
         const centre = drag.tops[drag.from] + drag.heights[drag.from] / 2 + offset;
+        const middle = (at: number) => drag.tops[at] + drag.heights[at] / 2;
+        // A row gives way once the dragged one has passed its middle and, where the two can join, the band around it.
         let target = drag.from;
-        while (target + 1 < order.length && centre > drag.tops[target + 1] + drag.heights[target + 1] / 2) target++;
-        while (target > 0 && centre < drag.tops[target - 1] + drag.heights[target - 1] / 2) target--;
-        setDrag({ ...drag, offset, target });
+        while (target + 1 < order.length && centre > middle(target + 1) + band(target + 1, drag.heights)) target++;
+        while (target > 0 && centre < middle(target - 1) - band(target - 1, drag.heights)) target--;
+        const overIndex = order.findIndex((other, at) => other !== id && band(at, drag.heights) > 0 && Math.abs(centre - middle(at)) <= band(at, drag.heights));
+        setDrag({ ...drag, offset, target, over: overIndex >= 0 ? order[overIndex] : undefined });
       },
       onPointerUp: () => {
         clearPress();
         if (!drag || drag.id !== id) return;
         suppressClick.current = true;
+        if (drag.over !== undefined) {
+          const over = drag.over;
+          setDrag(null);
+          options.onMerge?.(id, over);
+          return;
+        }
         const next = [...order]; next.splice(drag.from, 1); next.splice(drag.target, 0, id);
         setDrag(null); apply(next);
       },
@@ -121,7 +153,8 @@ export type RowSelection = { picking: boolean; selected: boolean; onPick: (mode:
 export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, onDwell, menu, reorder, arriving, selection, children, childrenLabel }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; /** The pointer came to rest on the row, or left it: what the click will open is fetched ahead of it (COD-218). */ onDwell?: (resting: boolean) => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection;
   /** Rows listed under this one: an orglet's side threads (COD-247) and its schedules' runs (COD-258). */ children?: ReactNode;
   /** What the rows under this one are, for assistive technology. */ childrenLabel?: string }) {
-  const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
+  // `merging` is the rail's; a sidebar row never joins another, and it must not reach the DOM as an attribute.
+  const { ref, style, dragging, merging: _merging, onMoveKey, ...pointer } = reorder;
   const dwell = dwellHandlers(onDwell);
   const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
   const selected = selection?.selected ?? false;
