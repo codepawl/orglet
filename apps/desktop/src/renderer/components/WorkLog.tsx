@@ -140,7 +140,7 @@ function EditStep({ entry, diffRun, status }: { entry: TraceEntry; diffRun: Work
 const traceIcons: Record<TraceKind, LucideIcon> = {
   memory: Brain, knowledge: BookOpen, read: FileText, search: Search, list: FolderSearch, skill: BookOpen,
   web_search: Globe, web_read: Globe, dataset: Table2, edit: FileDiff, folder: FolderPlus, move: FolderInput, delete: Trash2, command: Terminal, handoff: UserRound,
-  remembered: Brain, proposal: Lightbulb, withheld: ImageOff, failed: Ban, other: Wrench, mcp: Blocks,
+  remembered: Brain, proposal: Lightbulb, withheld: ImageOff, failed: Ban, other: Wrench, mcp: Blocks, mcp_approved: ShieldCheck,
   browser_open: AppWindow, browser_read: AppWindow, browser_find: ScanSearch, browser_screenshot: Camera, browser_scroll: MoveVertical,
   browser_click: MousePointerClick, browser_type: TextCursorInput, browser_select: ListChecks, browser_press: Keyboard, browser_wait: Hourglass, browser_asked: ShieldCheck,
   desktop_read: MonitorSmartphone, desktop_find: ScanSearch, desktop_screenshot: Camera, desktop_act: MousePointerClick, desktop_asked: ShieldCheck, desktop_borrow: Mouse,
@@ -169,6 +169,7 @@ function traceVerb(kind: TraceKind): string {
     case 'delete': return t('Đã xóa');
     case 'command': return t('Chạy lệnh');
     case 'mcp': return t('Dùng công cụ MCP');
+    case 'mcp_approved': return t('Dùng công cụ MCP');
     case 'browser_open': return t('Mở trang');
     case 'browser_read': return t('Đọc nội dung trang');
     case 'browser_find': return t('Tìm trên trang');

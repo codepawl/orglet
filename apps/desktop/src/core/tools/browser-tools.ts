@@ -15,7 +15,9 @@ import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { checkBrowserUrl } from './browser-policy';
 import { classifyBrowserStep, riskReasons, type BrowserVerdict } from './browser-risk';
 import { BrowserPerson } from './browser-person';
-import type { ActionToJudge, SecondOpinion } from '../decisions/action-risk';
+import type { ActionToJudge, AutoApproval, SecondOpinion } from '../decisions/action-risk';
+import type { ApprovedBy } from '../../shared/tool-policy';
+import { approvedWithoutAsking, standingApprovalOf } from './held-approval';
 
 /**
  * The core side of Orglet's browser (COD-261). Every step is decided here before the host does it: the capability,
@@ -272,7 +274,7 @@ function stoppedNotes(acted: BrowserActResult): string[] {
   return notes;
 }
 
-type ActionRow = { id: string; run_id: string; call_id: string; tab_id: string | null; kind: string; origin: string | null; target: string | null; risk: string; outcome: string; screenshot_id: string | null; at: string };
+type ActionRow = { id: string; run_id: string; call_id: string; tab_id: string | null; kind: string; origin: string | null; target: string | null; risk: string; outcome: string; screenshot_id: string | null; approved_by: string | null; at: string };
 
 /** Everything one acting step needs from the run that takes it. */
 export type BrowserActContext = {
@@ -299,6 +301,8 @@ export class BrowserTools {
   readonly person: BrowserPerson;
   /** The decision model's second opinion on steps the rules let through (COD-306); unset in tests and where the decision model cannot run. */
   secondOpinion?: SecondOpinion;
+  /** Auto mode's way to ask whether a held step may go ahead without the person; unset where the decision model cannot run. */
+  autoApproval?: AutoApproval;
 
   constructor(private store: Store, private host?: BrowserHost, notify: () => void = () => {}, personWaitMs?: number) {
     this.person = new BrowserPerson(notify, personWaitMs);
@@ -328,14 +332,15 @@ export class BrowserTools {
     return actionId;
   }
 
-  private settle(actionId: string, outcome: BrowserOutcome, detail: { tabId?: string | null; url?: string | null; screenshotId?: string; risk?: BrowserRisk; element?: string | null } = {}) {
-    const row = this.store.db.prepare('SELECT tab_id,origin,target,risk,screenshot_id FROM browser_actions WHERE id=?').get(actionId) as Pick<ActionRow, 'tab_id' | 'origin' | 'target' | 'risk' | 'screenshot_id'> | undefined;
+  private settle(actionId: string, outcome: BrowserOutcome, detail: { tabId?: string | null; url?: string | null; screenshotId?: string; risk?: BrowserRisk; element?: string | null; approvedBy?: ApprovedBy } = {}) {
+    const row = this.store.db.prepare('SELECT tab_id,origin,target,risk,screenshot_id,approved_by FROM browser_actions WHERE id=?').get(actionId) as Pick<ActionRow, 'tab_id' | 'origin' | 'target' | 'risk' | 'screenshot_id' | 'approved_by'> | undefined;
     if (!row) return;
     const url = detail.url ?? null;
     // An acting step keeps the element's name as its target (null when it has none); its page is the origin.
     const target = detail.element !== undefined ? detail.element?.slice(0, 300) ?? null : url ? url.slice(0, 300) : row.target;
-    this.store.db.prepare('UPDATE browser_actions SET outcome=?,tab_id=?,origin=?,target=?,risk=?,screenshot_id=? WHERE id=?').run(
-      outcome, detail.tabId ?? row.tab_id, url ? originOf(url) : row.origin, target, detail.risk ?? row.risk, detail.screenshotId ?? row.screenshot_id, actionId);
+    this.store.db.prepare('UPDATE browser_actions SET outcome=?,tab_id=?,origin=?,target=?,risk=?,screenshot_id=?,approved_by=? WHERE id=?').run(
+      outcome, detail.tabId ?? row.tab_id, url ? originOf(url) : row.origin, target, detail.risk ?? row.risk, detail.screenshotId ?? row.screenshot_id,
+      detail.approvedBy ?? row.approved_by, actionId);
   }
 
   private rememberTab(runId: string, tabId: string, url: string) {
@@ -555,6 +560,17 @@ export class BrowserTools {
         event: browserEvents.actRefused(site, context.asking.reason), readPage: false,
       };
     }
+    // Auto and Bypass answer the card for the person. A step the decision model already read as risky is not asked about twice.
+    const decidedBy = await approvedWithoutAsking({
+      standing: standingApprovalOf(run, context.currentTask()),
+      autoApproval: this.autoApproval,
+      action: verdict.reasons.includes(riskReasons.secondOpinion) ? undefined : browserActionToJudge(step, inspected, site),
+      taskId: context.asking.taskId,
+    });
+    if (decidedBy) {
+      this.settle(actionId, 'unknown', { approvedBy: decidedBy });
+      return this.perform(context, actionId, { ...planned, asked: true, replay: 'never' }, policy, request);
+    }
     const pointer = step.kind === 'click' || step.kind === 'type' || step.kind === 'select' ? step.kind : undefined;
     const screenshotId = await this.askingPicture(run.id, tabId, expect?.ref, pointer, policy(), request);
     if (screenshotId) this.settle(actionId, 'unknown', { screenshotId });
@@ -576,6 +592,7 @@ export class BrowserTools {
       this.settle(actionId, 'declined');
       return { result: { declined: true, error: reason, element: label }, event: declinedEvent(step.kind, label, site), readPage: false };
     }
+    this.settle(actionId, 'unknown', { approvedBy: 'person' });
     return this.perform(context, actionId, { ...planned, asked: true, replay: 'never' }, policy, request);
   }
 
@@ -766,7 +783,7 @@ export class BrowserTools {
       WHERE runs.task_id=? ORDER BY actions.at, actions.rowid`).all(taskId) as ActionRow[];
     return rows.map(row => BrowserAction.parse({
       id: row.id, runId: row.run_id, callId: row.call_id, tabId: row.tab_id, kind: row.kind, origin: row.origin, target: row.target,
-      risk: row.risk, outcome: row.outcome, screenshotId: row.screenshot_id, at: row.at,
+      risk: row.risk, outcome: row.outcome, screenshotId: row.screenshot_id, approvedBy: row.approved_by ?? null, at: row.at,
     }));
   }
 

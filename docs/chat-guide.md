@@ -226,15 +226,21 @@ To have changes applied as soon as a run finishes, turn off **Review before appl
 
 ### The mode next to +
 
-The button next to **+** under the message box shows how the next message is handled. Click it, or tab to it and press Enter, for the **Mode** menu. Pick a row with the mouse, the arrow keys and Enter, or its number:
+The button next to **+** under the message box shows how the chat handles approvals. Click it, or tab to it and press Enter, for the **Mode** menu. Pick a row with the mouse, the arrow keys and Enter, or its number from 1 to 5:
 
-1. **Ask before applying** (the default): changes wait for you to review them, as above.
-2. **Apply changes**: changes reach the folder when the orglet finishes. This is **Review before applying** turned off, so changing one changes the other.
-3. **Plan first**: the orglet may read and search the working folder, your files and the web, but changes nothing. It cannot edit, move or delete files, run commands, act on web pages or in apps, or use MCP tools. It answers with a plan, and under the plan **Follow the plan** sends "Follow the plan above." as your next message, back in the mode you had before. Plan first stays on for later messages until you click **Follow the plan** or pick another mode, so you can talk the plan over first.
+1. **Auto**: a light decision model, the one you set up in Settings, decides whether to let a step on a web page, in a desktop app or through an MCP tool go ahead. It lets through the steps it finds low risk and asks you about the rest. Changes reach your folder when the orglet finishes. Without a decision model connected the row says so, and the chat asks you about every step.
+2. **Manual**: the orglet asks before every change and every step. Changes wait for you to review them, as above. This is **Review before applying** turned on, and a new chat starts here.
+3. **Accept edits**: changes reach the folder when the orglet finishes. Every other step still asks you. This is **Review before applying** turned off, so changing one changes the other.
+4. **Plan**: the orglet may read and search the working folder, your files and the web, but changes nothing. It cannot edit, move or delete files, run commands, act on web pages or in apps, or use MCP tools. It answers with a plan, and under the plan **Follow the plan** sends "Follow the plan above." as your next message, back in the mode you had before. Plan stays on for later messages until you click **Follow the plan** or pick another mode, so you can talk the plan over first.
+5. **Bypass permissions**: Orglet does not ask before it calls tools, acts on pages and apps, or borrows your mouse. Changes reach the folder when the orglet finishes. Choosing it asks once, in a small dialog, before it turns on, and declining leaves the mode as it was. While it is on, the button under the message box wears a warning mark. Use it only in a chat where you trust everything the orglet may meet.
 
-Ask before applying and Apply changes need a working folder the orglet may edit. Without one, the rows say **Needs a working folder**, and picking one opens the folder picker. With a read-only folder they ask for edit access instead. Plan first works without a folder.
+Turning **Review before applying** on in Details puts an Auto or Bypass chat back in Manual. In Details → Browser and Desktop apps, a step that Auto or Bypass allowed says so after its name.
 
-In a crew or a channel, each orglet's changes are applied as it finishes, so the mode reads **Apply changes** and **Ask before applying** cannot be picked; Plan first applies to every orglet in the turn. A side thread uses its main chat's permissions, so only Plan first can be switched there. The mode never skips the cards that ask before a step on a web page, in a desktop app or through an MCP tool. Those always ask.
+Some things are refused or asked in every mode, Bypass included. Orglet will not type passwords or card numbers into a page and will not solve a CAPTCHA. A change to the app that an orglet proposes, and a change an orglet proposes to its own instructions, always wait for your click.
+
+Manual and Accept edits need a working folder the orglet may edit. Without one, the rows say **Needs a working folder**, and picking one opens the folder picker. With a read-only folder they ask for edit access instead. Auto, Plan and Bypass work without a folder.
+
+In a crew or a channel, each orglet's changes are applied as it finishes, so the mode reads **Accept edits** and the other rows cannot be picked; Plan applies to every orglet in the turn. A side thread uses its main chat's permissions, so only Plan can be switched there.
 
 ## Details
 

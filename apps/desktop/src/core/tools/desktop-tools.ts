@@ -21,7 +21,9 @@ import { BrowserPerson } from './browser-person';
 import { findInSnapshot, snapshotPage } from './browser-tools';
 import { classifyDesktopStep, desktopRiskReasons, type DesktopVerdict } from './desktop-risk';
 import { DesktopOverlayDirector, type OverlayTarget } from './desktop-overlay';
-import type { SecondOpinion } from '../decisions/action-risk';
+import type { AutoApproval, SecondOpinion } from '../decisions/action-risk';
+import type { ApprovedBy } from '../../shared/tool-policy';
+import { approvedWithoutAsking, standingApprovalOf } from './held-approval';
 
 /**
  * The core side of desktop apps (COD-261, phase 2a). Every step is decided here before the helper does it: the
@@ -228,7 +230,7 @@ function isDesktopSnapshot(content: unknown) {
   }
 }
 
-type ActionRow = { id: string; run_id: string; call_id: string; kind: string; program: string | null; window_title: string | null; target: string | null; risk: string; outcome: string; screenshot_id: string | null; duration_ms: number | null; at: string };
+type ActionRow = { id: string; run_id: string; call_id: string; kind: string; program: string | null; window_title: string | null; target: string | null; risk: string; outcome: string; screenshot_id: string | null; duration_ms: number | null; approved_by: string | null; at: string };
 
 /** Everything one borrow needs from the run that asks for it: the same as an acting step. */
 export type DesktopBorrowContext = Omit<DesktopActContext, 'name'>;
@@ -262,6 +264,8 @@ export class DesktopTools {
   private overlaySink?: (state: DesktopOverlayState) => Promise<boolean> | void;
   /** The decision model's second opinion on steps the rules let through (COD-306); unset in tests and where the decision model cannot run. */
   secondOpinion?: SecondOpinion;
+  /** Auto mode's way to ask whether a held step may go ahead without the person; unset where the decision model cannot run. */
+  autoApproval?: AutoApproval;
 
   /**
    * `ownPrograms` are Orglet's own file names (Orglet.exe, or electron.exe in development), which no chat may ever
@@ -346,13 +350,13 @@ export class DesktopTools {
     return actionId;
   }
 
-  private settle(actionId: string, outcome: DesktopOutcome, detail: { window?: HostWindow; element?: string; screenshotId?: string; risk?: DesktopRisk; durationMs?: number } = {}) {
-    const row = this.store.db.prepare('SELECT program,window_title,target,risk,screenshot_id,duration_ms FROM desktop_actions WHERE id=?').get(actionId) as Pick<ActionRow, 'program' | 'window_title' | 'target' | 'risk' | 'screenshot_id' | 'duration_ms'> | undefined;
+  private settle(actionId: string, outcome: DesktopOutcome, detail: { window?: HostWindow; element?: string; screenshotId?: string; risk?: DesktopRisk; durationMs?: number; approvedBy?: ApprovedBy } = {}) {
+    const row = this.store.db.prepare('SELECT program,window_title,target,risk,screenshot_id,duration_ms,approved_by FROM desktop_actions WHERE id=?').get(actionId) as Pick<ActionRow, 'program' | 'window_title' | 'target' | 'risk' | 'screenshot_id' | 'duration_ms' | 'approved_by'> | undefined;
     if (!row) return;
-    this.store.db.prepare('UPDATE desktop_actions SET outcome=?,program=?,window_title=?,target=?,risk=?,screenshot_id=?,duration_ms=? WHERE id=?').run(
+    this.store.db.prepare('UPDATE desktop_actions SET outcome=?,program=?,window_title=?,target=?,risk=?,screenshot_id=?,duration_ms=?,approved_by=? WHERE id=?').run(
       outcome, detail.window ? detail.window.executable.slice(0, 120) : row.program, detail.window ? detail.window.title.slice(0, 300) : row.window_title,
       detail.element !== undefined ? detail.element.slice(0, 300) : row.target, detail.risk ?? row.risk, detail.screenshotId ?? row.screenshot_id,
-      detail.durationMs ?? row.duration_ms, actionId);
+      detail.durationMs ?? row.duration_ms, detail.approvedBy ?? row.approved_by, actionId);
   }
 
   private refusedStep(actionId: string, problem: DesktopProblem, window: string, extra: Record<string, unknown> = {}): DesktopStep {
@@ -489,6 +493,19 @@ export class DesktopTools {
         event: desktopEvents.refused(title, context.asking.reason), readWindow: false,
       };
     }
+    // Auto and Bypass answer the card for the person. A step the decision model already read as risky is not asked about twice.
+    const decidedBy = await approvedWithoutAsking({
+      standing: standingApprovalOf(run, context.currentTask()),
+      autoApproval: this.autoApproval,
+      action: verdict.reasons.includes(desktopRiskReasons.secondOpinion) || (kind !== 'invoke' && kind !== 'toggle') ? undefined : {
+        surface: 'desktop', kind, element: label, controlType: target.controlType, program: inspected.executable, window: target.windowName, inDialog: target.inDialog,
+      },
+      taskId: context.asking.taskId,
+    });
+    if (decidedBy) {
+      this.settle(actionId, 'unknown', { approvedBy: decidedBy });
+      return this.perform(context, actionId, { ...planned, asked: true, replay: 'never' }, allow, request);
+    }
     const screenshotId = await this.askingPicture(run.id, handle, ref, allow(), request);
     if (screenshotId) this.settle(actionId, 'unknown', { screenshotId });
     const view: DesktopApprovalView = {
@@ -508,6 +525,7 @@ export class DesktopTools {
       const reason = answer === 'decline' ? DESKTOP_PERSON_DECLINED : DESKTOP_PERSON_DID_NOT_ANSWER;
       return { result: { declined: true, error: reason, element: label }, event: desktopEvents.declined(label, title), readWindow: false };
     }
+    this.settle(actionId, 'unknown', { approvedBy: 'person' });
     return this.perform(context, actionId, { ...planned, asked: true, replay: 'never' }, allow, request);
   }
 
@@ -657,27 +675,33 @@ export class DesktopTools {
       return this.refusedStep(actionId, checked.problem, title, { element: label });
     }
 
-    // Why Orglet asks: always the borrow itself, and whatever pressing that element would ask about on its own.
-    const pressing = input.steps.some(step => step.kind === 'click') ? classifyDesktopStep({ kind: 'invoke', target }).reasons : [];
-    const screenshotId = await this.askingPicture(run.id, handle, input.ref, allow(), request);
-    if (screenshotId) this.settle(actionId, 'unknown', { screenshotId });
-    const view: DesktopApprovalView = {
-      id: id(), runId: run.id, actionId, workerName: run.snapshot.worker.name, kind: 'borrow', element: label, program: inspected.executable, window: title,
-      borrow: { steps: input.steps, limitSeconds: DESKTOP_BORROW_LIMIT_MS / 1000 }, reasons: [...new Set([desktopRiskReasons.borrow, ...pressing])],
-      ...(screenshotId ? { screenshotId } : {}), requestedAt: now(),
-    };
-    let answer: Awaited<ReturnType<BrowserPerson['ask']>>;
-    try {
-      answer = await this.person.ask(context.asking.taskId, view, signal);
-    } catch (error) {
-      this.settle(actionId, 'declined');
-      throw error;
-    }
-    if (answer !== 'allow') {
-      this.settle(actionId, 'declined');
-      this.borrowRefusedRuns.add(run.id);
-      const reason = answer === 'decline' ? DESKTOP_PERSON_DECLINED : DESKTOP_PERSON_DID_NOT_ANSWER;
-      return { result: { declined: true, error: reason, element: label, next: 'Do not ask to borrow again in this turn. Tell the person which step is left for them.' }, event: desktopEvents.borrowDeclined(title), readWindow: false };
+    // Only Bypass lets a borrow of the real mouse go ahead unasked; Auto still asks the person.
+    if (standingApprovalOf(run, context.currentTask()) === 'bypass') {
+      this.settle(actionId, 'unknown', { approvedBy: 'bypass' });
+    } else {
+      // Why Orglet asks: always the borrow itself, and whatever pressing that element would ask about on its own.
+      const pressing = input.steps.some(step => step.kind === 'click') ? classifyDesktopStep({ kind: 'invoke', target }).reasons : [];
+      const screenshotId = await this.askingPicture(run.id, handle, input.ref, allow(), request);
+      if (screenshotId) this.settle(actionId, 'unknown', { screenshotId });
+      const view: DesktopApprovalView = {
+        id: id(), runId: run.id, actionId, workerName: run.snapshot.worker.name, kind: 'borrow', element: label, program: inspected.executable, window: title,
+        borrow: { steps: input.steps, limitSeconds: DESKTOP_BORROW_LIMIT_MS / 1000 }, reasons: [...new Set([desktopRiskReasons.borrow, ...pressing])],
+        ...(screenshotId ? { screenshotId } : {}), requestedAt: now(),
+      };
+      let answer: Awaited<ReturnType<BrowserPerson['ask']>>;
+      try {
+        answer = await this.person.ask(context.asking.taskId, view, signal);
+      } catch (error) {
+        this.settle(actionId, 'declined');
+        throw error;
+      }
+      if (answer !== 'allow') {
+        this.settle(actionId, 'declined');
+        this.borrowRefusedRuns.add(run.id);
+        const reason = answer === 'decline' ? DESKTOP_PERSON_DECLINED : DESKTOP_PERSON_DID_NOT_ANSWER;
+        return { result: { declined: true, error: reason, element: label, next: 'Do not ask to borrow again in this turn. Tell the person which step is left for them.' }, event: desktopEvents.borrowDeclined(title), readWindow: false };
+      }
+      this.settle(actionId, 'unknown', { approvedBy: 'person' });
     }
 
     return new ToolCalls(this.store).execute({
@@ -811,7 +835,7 @@ export class DesktopTools {
       WHERE runs.task_id=? ORDER BY actions.at, actions.rowid`).all(taskId) as ActionRow[];
     return rows.map(row => DesktopAction.parse({
       id: row.id, runId: row.run_id, callId: row.call_id, kind: row.kind, program: row.program, window: row.window_title, target: row.target,
-      risk: row.risk, outcome: row.outcome, screenshotId: row.screenshot_id, durationMs: row.duration_ms ?? null, at: row.at,
+      risk: row.risk, outcome: row.outcome, screenshotId: row.screenshot_id, durationMs: row.duration_ms ?? null, approvedBy: row.approved_by ?? null, at: row.at,
     }));
   }
 

@@ -12,14 +12,14 @@ import { WorkspaceRuntime } from '../../apps/desktop/src/core/tools/workspace-ru
 import type { Run, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { ToolCapability } from '../../apps/desktop/src/shared/tool-policy';
 import type { WorkspaceGrantView } from '../../apps/desktop/src/shared/workspace-access';
-import { answersWithPlan, approvalModeOf, canFollowPlan, capabilitiesForMode, changesMode, folderNeedFor } from '../../apps/desktop/src/shared/approval-mode';
+import { answersWithPlan, approvalModeOf, approvalModes, canFollowPlan, capabilitiesForMode, changesMode, folderNeedFor } from '../../apps/desktop/src/shared/approval-mode';
 import { PermissionControls } from '../../apps/desktop/src/renderer/components/PermissionControls';
 import { ChatModePicker } from '../../apps/desktop/src/renderer/components/ApprovalModePicker';
 import { movePlanFirst, planFirstChosen, setPlanFirst } from '../../apps/desktop/src/renderer/planFirst';
 import { isPlanRequest, planReply } from './team-plan';
 
 /*
- * COD-367: the approval mode under the prompt bar. Ask before applying and Apply changes are the chat's
+ * COD-367: the approval mode under the prompt bar. Manual and Accept edits are the chat's
  * `workspace.apply`, the same value as the Details switch; Plan first is a flag on one message's input, frozen with the
  * run, which withholds every tool that changes something. No network: the adapter is a fixture recording each request.
  */
@@ -28,25 +28,44 @@ const CHANGE_TOOLS = ['workspace_write', 'workspace_create_folder', 'workspace_m
 const READ_TOOLS = ['workspace_list', 'workspace_read', 'workspace_search'];
 
 describe('the mode mapping', () => {
-  it('reads Ask and Apply off workspace.apply and keeps every other permission', () => {
+  it('lists the five modes in the order the picker shows them', () => {
+    expect(approvalModes).toEqual(['auto', 'manual', 'acceptEdits', 'plan', 'bypass']);
+  });
+
+  it('reads Manual and Accept edits off workspace.apply and keeps every other permission', () => {
     const base: ToolCapability[] = ['source.read', 'network.web'];
-    expect(changesMode(base, false)).toBe('ask');
-    expect(changesMode([...base, 'workspace.apply'], false)).toBe('apply');
-    expect(capabilitiesForMode(base, 'apply')).toEqual(['source.read', 'network.web', 'workspace.apply']);
-    expect(capabilitiesForMode([...base, 'workspace.apply'], 'ask')).toEqual(base);
+    expect(changesMode(base, false)).toBe('manual');
+    expect(changesMode([...base, 'workspace.apply'], false)).toBe('acceptEdits');
+    expect(capabilitiesForMode(base, 'acceptEdits')).toEqual(['source.read', 'network.web', 'workspace.apply']);
+    expect(capabilitiesForMode([...base, 'workspace.apply'], 'manual')).toEqual(base);
   });
 
-  it('shows Plan first over the chat mode, and a crew or channel as Apply, since it never holds changes', () => {
+  it('reads Auto and Bypass off their capabilities and sets exactly one of the three', () => {
+    const base: ToolCapability[] = ['source.read', 'network.web'];
+    const auto = capabilitiesForMode(base, 'auto');
+    expect(auto).toEqual(['source.read', 'network.web', 'workspace.apply', 'approval.auto']);
+    expect(changesMode(auto, false)).toBe('auto');
+    const bypass = capabilitiesForMode(auto, 'bypass');
+    expect(bypass).toEqual(['source.read', 'network.web', 'workspace.apply', 'approval.bypass']);
+    expect(changesMode(bypass, false)).toBe('bypass');
+    expect(capabilitiesForMode(bypass, 'acceptEdits')).toEqual(['source.read', 'network.web', 'workspace.apply']);
+    expect(capabilitiesForMode(bypass, 'manual')).toEqual(base);
+    expect(changesMode(bypass, true)).toBe('bypass');
+  });
+
+  it('shows Plan first over the chat mode, and a crew or channel as Accept edits, since it never holds changes', () => {
     expect(approvalModeOf({ capabilities: ['workspace.apply'], planFirst: true, appliesAtOnce: false })).toBe('plan');
-    expect(approvalModeOf({ capabilities: [], planFirst: false, appliesAtOnce: false })).toBe('ask');
-    expect(approvalModeOf({ capabilities: [], planFirst: false, appliesAtOnce: true })).toBe('apply');
+    expect(approvalModeOf({ capabilities: [], planFirst: false, appliesAtOnce: false })).toBe('manual');
+    expect(approvalModeOf({ capabilities: [], planFirst: false, appliesAtOnce: true })).toBe('acceptEdits');
   });
 
-  it('asks for a folder only for the modes that change the folder', () => {
-    expect(folderNeedFor('ask', 'none')).toBe('pick');
-    expect(folderNeedFor('apply', 'read')).toBe('edit');
-    expect(folderNeedFor('apply', 'write')).toBeUndefined();
+  it('asks for a folder only for the modes that hold or apply changes', () => {
+    expect(folderNeedFor('manual', 'none')).toBe('pick');
+    expect(folderNeedFor('acceptEdits', 'read')).toBe('edit');
+    expect(folderNeedFor('acceptEdits', 'write')).toBeUndefined();
     expect(folderNeedFor('plan', 'none')).toBeUndefined();
+    expect(folderNeedFor('auto', 'none')).toBeUndefined();
+    expect(folderNeedFor('bypass', 'read')).toBeUndefined();
   });
 
   it('offers Follow the plan under the latest Plan first answer only, never a crew member part', () => {
@@ -76,19 +95,19 @@ describe('the picker and the Details switch', () => {
 
   it('show the same mode from the same permissions, whichever control changed them', () => {
     const asking: ToolCapability[] = ['source.read'];
-    expect(picker(asking)).toContain('aria-label="Mode: Ask before applying"');
+    expect(picker(asking)).toContain('aria-label="Mode: Manual"');
     expect(details(asking)).toContain('Review before applying');
     expect(reviewOn(details(asking))).toBe(true);
 
-    // Choosing Apply changes in the picker gives the chat workspace.apply, which Details shows as review off.
-    const applying = capabilitiesForMode(asking, 'apply');
-    expect(picker(applying)).toContain('aria-label="Mode: Apply changes"');
+    // Choosing Accept edits in the picker gives the chat workspace.apply, which Details shows as review off.
+    const applying = capabilitiesForMode(asking, 'acceptEdits');
+    expect(picker(applying)).toContain('aria-label="Mode: Accept edits"');
     expect(reviewOn(details(applying))).toBe(false);
   });
 
   it('keeps Plan first on the bar, without touching the permissions Details shows', () => {
     setPlanFirst('task:plan', true);
-    expect(picker(['source.read'], 'task:plan')).toContain('aria-label="Mode: Plan first"');
+    expect(picker(['source.read'], 'task:plan')).toContain('aria-label="Mode: Plan"');
     expect(reviewOn(details(['source.read']))).toBe(true);
     movePlanFirst('task:plan', 'task:created');
     expect(planFirstChosen('task:plan')).toBe(false);

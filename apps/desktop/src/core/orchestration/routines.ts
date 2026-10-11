@@ -225,7 +225,8 @@ export class Routines {
   private runCapabilities(routine: Routine, workspace: RoutineWorkspace): ToolCapability[] {
     const lead = this.store.get<Worker>('workers', routine.task.workerId);
     const base = routine.task.toolCapabilities ?? snapshotCapabilities(lead.provider);
-    const withoutApply = base.filter(capability => capability !== 'workspace.apply');
+    // Nobody watches a scheduled run, so it never inherits Auto or Bypass permissions from the chat it was made in.
+    const withoutApply = base.filter(capability => capability !== 'workspace.apply' && capability !== 'approval.auto' && capability !== 'approval.bypass');
     if (workspace.review) return withoutApply;
     return [...withoutApply, 'workspace.apply'];
   }

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolCapability } from './tool-policy';
+import { ApprovedBy, type ToolCapability } from './tool-policy';
 
 /**
  * Browser use (COD-261): reading pages, and at the "read and act" level clicking, typing and choosing on them. An
@@ -169,6 +169,8 @@ export const BrowserAction = z.object({
   risk: BrowserRisk,
   outcome: BrowserOutcome,
   screenshotId: z.uuid().nullable(),
+  /** Who allowed a step that asked: the person, or Auto or Bypass mode. Null for a step that never asked. */
+  approvedBy: ApprovedBy.nullable(),
   at: z.iso.datetime(),
 }).strict();
 export type BrowserAction = z.infer<typeof BrowserAction>;

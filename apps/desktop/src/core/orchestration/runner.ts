@@ -45,6 +45,8 @@ import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedAn
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, frozenDecisionModelFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
+import type { AutoApproval } from '../decisions/action-risk';
+import { approvedWithoutAsking, standingApprovalOf } from '../tools/held-approval';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, historyBudgetFor, mainChatTurns, threadMessages, threadSnippetMessages, type ThreadExtras } from '../context/thread';
 import { ProviderSlots, type SlotWait } from './slots';
@@ -595,6 +597,8 @@ export class Runner {
    * fails or is late. Unset in tests that do not need it.
    */
   knowledgeFit?: (message: string, notes: NoteCandidate[], taskId?: string) => Promise<Map<string, number> | undefined>;
+  /** Auto mode's way to ask whether a held MCP call may go ahead without the person; unset where the decision model cannot run. */
+  autoApproval?: AutoApproval;
   /** Refresh native effort metadata only before a new run freezes its model and settings. */
   prepareEffort?: (worker: Worker) => Promise<void>;
   constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string, effort?: NativeEffortSetting) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() }), private browser?: BrowserTools, private desktop?: DesktopTools) {
@@ -1696,10 +1700,26 @@ export class Runner {
         const mcpTool = mcpToolOf(run, this.store.get<Task>('tasks', task.id), call.name);
         if (mcpTool) {
           const current = this.store.get<Task>('tasks', task.id);
-          if (!mcpCallGranted(current.mcpGrants, mcpTool.serverId, mcpTool.tool)) {
+          const mayAsk = run.stage === undefined && !options.keepTaskOpen;
+          // Auto and Bypass answer the card for the person, as a one-time choice that saves no grant on the chat.
+          const granted = mcpCallGranted(current.mcpGrants, mcpTool.serverId, mcpTool.tool);
+          const decidedBy = !granted && mayAsk
+            ? await approvedWithoutAsking({
+              standing: standingApprovalOf(run, current),
+              autoApproval: this.autoApproval,
+              action: { surface: 'mcp', server: mcpTool.serverName, tool: mcpTool.tool, argumentsText: call.arguments },
+              taskId: task.id,
+            })
+            : undefined;
+          if (decidedBy) {
+            this.event(run.id, decidedBy === 'bypass'
+              ? `Chế độ Bỏ qua quyền đã cho phép công cụ MCP: ${mcpTool.tool} · ${mcpTool.serverName}`
+              : `Chế độ Tự động đã cho phép công cụ MCP: ${mcpTool.tool} · ${mcpTool.serverName}`);
+          }
+          if (!granted && !decidedBy) {
             // A solo chat can stop and ask, the way request_user_decision does. A crew or group member cannot hold
             // the turn, so its call comes back refused and the person allows the server in Details instead.
-            if (run.stage === undefined && !options.keepTaskOpen) {
+            if (mayAsk) {
               this.askMcpApproval(task, run, mcpTool, call, { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] });
               return;
             }

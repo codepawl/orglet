@@ -10,23 +10,30 @@ import { isHarness } from './harness';
  * working copy in to the folder at once; without it, which is the default, a solo chat's changes wait for the person
  * to review and apply them (COD-279). It offers no tool.
  */
-export const ToolCapability = z.enum(['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act', 'workspace.apply']);
+export const ToolCapability = z.enum(['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act', 'workspace.apply', 'approval.auto', 'approval.bypass']);
 export type ToolCapability = z.infer<typeof ToolCapability>;
-export const ToolCapabilities = z.array(ToolCapability).max(10)
+export const ToolCapabilities = z.array(ToolCapability).max(12)
   .refine(capabilities => new Set(capabilities).size === capabilities.length, 'Quyền công cụ bị trùng.')
+  .refine(capabilities => !(capabilities.includes('approval.auto') && capabilities.includes('approval.bypass')), 'Chỉ chọn được một chế độ duyệt: Tự động hoặc Bỏ qua quyền.')
+  .refine(capabilities => !(capabilities.includes('approval.auto') || capabilities.includes('approval.bypass')) || capabilities.includes('workspace.apply'), 'Chế độ duyệt tự động cần quyền áp dụng thay đổi vào thư mục.')
   .refine(capabilities => !capabilities.includes('browser.act') || capabilities.includes('browser.read'), 'Thao tác trên trang cần quyền đọc trang.')
   .refine(capabilities => !capabilities.includes('desktop.act') || capabilities.includes('desktop.read'), 'Thao tác trên ứng dụng cần quyền đọc cửa sổ.');
 
+/** Who allowed a held action: the person on its card, or Auto or Bypass mode without asking. A journal row that was never asked has none. */
+export const ApprovedBy = z.enum(['person', 'auto', 'bypass']);
+export type ApprovedBy = z.infer<typeof ApprovedBy>;
+
 export function supportedCapabilities(_provider: string): ToolCapability[] {
-  return ['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act', 'workspace.apply'];
+  return ['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act', 'workspace.apply', 'approval.auto', 'approval.bypass'];
 }
 
 /**
  * Whether losing this capability stops the work that uses it. Losing `workspace.apply` turns review on, which a running
- * run meets at its hand-in anyway (its permissions are intersected with the chat's), so nothing needs to stop.
+ * run meets at its hand-in anyway (its permissions are intersected with the chat's), so nothing needs to stop. Losing
+ * `approval.auto` or `approval.bypass` only makes the next held action ask the person again.
  */
 export function removalStopsWork(capability: ToolCapability): boolean {
-  return capability !== 'workspace.apply';
+  return capability !== 'workspace.apply' && capability !== 'approval.auto' && capability !== 'approval.bypass';
 }
 
 /**
@@ -40,6 +47,7 @@ export function withCapability(previous: readonly ToolCapability[], capability: 
   if (!enabled && capability === 'browser.read') next = next.filter(item => item !== 'browser.act');
   if (enabled && capability === 'desktop.act' && !next.includes('desktop.read')) next.push('desktop.read');
   if (!enabled && capability === 'desktop.read') next = next.filter(item => item !== 'desktop.act');
+  if (!enabled && capability === 'workspace.apply') next = next.filter(item => item !== 'approval.auto' && item !== 'approval.bypass');
   return next;
 }
 
