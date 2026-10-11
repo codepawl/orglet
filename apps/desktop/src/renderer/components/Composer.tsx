@@ -1,6 +1,5 @@
 import { demoReplies } from '../demoReplies';
 import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { Tooltip } from '@codepawlhq/orglet-ui';
 import { ArrowUp, ChevronRight, ChevronUp, Combine, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Run, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
