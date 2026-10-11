@@ -744,6 +744,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    can change it in Settings without a rebuild (user, 2026-09-19). */
 .mention { font-weight:600; color:var(--accent-text); background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; padding:0 3px; }
 .composer-note { margin:10px 0 0; text-align:center; color:var(--muted); font-size:12px; }
+.composer-note-marked { display:flex; align-items:center; justify-content:center; gap:6px; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
 /* The Demo line under a message box (DemoNote, COD-293): the muted sentence and a small outline "Connect a model"
    centred on one line, wrapping under each other only when the column is too narrow for both. */

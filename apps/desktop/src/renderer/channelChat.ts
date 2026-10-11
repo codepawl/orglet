@@ -13,13 +13,12 @@ export type OpenEmptyChannel = { channelId: string; name: string; topic?: string
 
 type Roster = { workers: readonly { id: string }[]; teams: readonly { id: string; memberIds: readonly string[]; synthesizerId: string }[] };
 
-/** The empty channel on screen, or undefined once it is gone or nobody in it can answer. */
+/** The empty channel on screen, or undefined once it is gone. It may have no orglet; the window then asks for one. */
 export function openEmptyChannel(channelId: string | undefined, channels: readonly EmptyChannel[], roster: Roster): OpenEmptyChannel | undefined {
   if (!channelId) return undefined;
   const channel = channels.find(item => item.id === channelId);
   if (!channel) return undefined;
   const workerIds = channelOrgletIds(channel.members, roster);
-  if (!workerIds.length) return undefined;
   return { channelId: channel.id, name: channel.name, ...(channel.topic ? { topic: channel.topic } : {}), members: channel.members, workerIds };
 }
 

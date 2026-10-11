@@ -15,12 +15,10 @@ export type OrgletPlace = {
   kind: 'space' | 'channel';
   id: string;
   name: string;
-  /** False when kicking would leave the place with no orglet to answer, so the place always keeps this orglet. */
-  canKick: boolean;
 };
 
 export type PlaceSource = {
-  spaces: readonly Pick<Space, 'id' | 'name' | 'orgletIds' | 'categories'>[];
+  spaces: readonly Pick<Space, 'id' | 'name' | 'orgletIds'>[];
   tasks: readonly Pick<Task, 'channel' | 'deletedAt' | 'archivedAt'>[];
   emptyChannels: readonly Pick<EmptyChannel, 'id' | 'name' | 'members' | 'spaceId'>[];
 };
@@ -29,10 +27,6 @@ type ChannelRecord = Pick<Channel, 'id' | 'name' | 'members' | 'spaceId'>;
 
 function hasOrglet(channel: ChannelRecord, workerId: string): boolean {
   return channel.members.some(member => member.kind === 'orglet' && member.id === workerId);
-}
-
-function otherOrgletCount(channel: ChannelRecord, workerId: string): number {
-  return channel.members.filter(member => member.kind === 'orglet' && member.id !== workerId).length;
 }
 
 /** Every channel, written in or empty, that is still open. */
@@ -47,16 +41,13 @@ export function orgletPlaces(source: PlaceSource, workerId: string): OrgletPlace
   const places: OrgletPlace[] = [];
   for (const space of source.spaces) {
     if (!space.orgletIds.includes(workerId)) continue;
-    // A channel of the space where this orglet is the only one does not hold it back: when the orglet leaves, that
-    // channel takes the space's other orglets (Channels.inheritIfOnlyOrglet). A category with its own list does.
-    const leavesCategoriesStaffed = space.categories.every(category => !category.orgletIds?.includes(workerId) || category.orgletIds.length > 1);
-    places.push({ kind: 'space', id: space.id, name: space.name, canKick: space.orgletIds.length > 1 && leavesCategoriesStaffed });
+    places.push({ kind: 'space', id: space.id, name: space.name });
   }
   const spaceIds = new Set(source.spaces.map(space => space.id));
   for (const channel of channels) {
     if (channel.spaceId && spaceIds.has(channel.spaceId)) continue;
     if (!hasOrglet(channel, workerId)) continue;
-    places.push({ kind: 'channel', id: channel.id, name: channel.name, canKick: otherOrgletCount(channel, workerId) > 0 });
+    places.push({ kind: 'channel', id: channel.id, name: channel.name });
   }
   return places;
 }

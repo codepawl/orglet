@@ -10,7 +10,7 @@ import type { Store } from './database';
 /** The settings row that holds the channels nobody has written in yet (COD-361). */
 const EMPTY_CHANNELS = 'emptyChannels';
 
-const CHANNEL_HAS_NO_ORGLETS = 'Kênh chưa có Tí nào để trả lời. Thêm một Tí.';
+export const CHANNEL_HAS_NO_ORGLETS = 'Kênh chưa có Tí nào để trả lời. Thêm một Tí.';
 const LEAD_NOT_A_MEMBER = 'Tí trưởng phải là một thành viên của kênh.';
 const TOO_MANY_FOR_A_LEAD = 'Khi Tí trưởng chia việc, kênh có tối đa 8 Tí làm phần việc.';
 const LEAD_LEAVES_WITH_THE_SPACE = 'Một kênh trong không gian sẽ mất Tí trưởng. Đổi Tí trưởng của kênh đó trước.';
@@ -321,7 +321,8 @@ export class Channels {
     const crew = current.crewId ? this.store.get<Team>('teams', current.crewId) : undefined;
     if (!crew || crew.synthesizerId !== workerId) return;
     const next = orgletMembers(current.members, this.roster()).find(member => member.id !== workerId);
-    if (!next) throw new Error(CHANNEL_HAS_NO_ORGLETS);
+    // With nobody to hand it to, the channel is saved empty next and drops to taking turns.
+    if (!next) return;
     this.save(channelId, { ...this.unchanged(current), lead: { synthesizerId: next.id } }, true);
   }
 
@@ -362,8 +363,10 @@ export class Channels {
     const current = this.recordById(channelId);
     const place = this.placed(fields, current, prune);
     const members = place.members;
-    const orgletIds = answeringOrglets(this.store, members);
-    const mode = fields.mode ?? channelMode(current);
+    // A saved channel may have nobody in it: the person is still there, and an orglet can be added again.
+    const orgletIds = channelOrgletIds(members, this.roster());
+    // A crew record cannot exist without a lead, so a channel that lost its last orglet falls back to taking turns.
+    const mode = orgletIds.length ? fields.mode ?? channelMode(current) : 'turns';
     const existingCrew = current.crewId ? this.store.get<Team>('teams', current.crewId) : undefined;
     // A space's save never picks a new lead by itself: the person changes the lead in the channel first.
     if (prune && mode === 'lead' && existingCrew && !orgletIds.includes(existingCrew.synthesizerId)) throw new Error(LEAD_LEAVES_WITH_THE_SPACE);
@@ -547,5 +550,6 @@ export class Channels {
 function rowFor(task: Task, channel: Channel, orgletIds: string[], crew: Team | undefined): Task {
   const { teamId: _teamId, teamSnapshot: _teamSnapshot, assignees: _assignees, ...rest } = task;
   if (crew) return { ...rest, channel, workerId: crew.synthesizerId, teamId: crew.id, teamSnapshot: crew };
-  return { ...rest, channel, assignees: orgletIds, workerId: orgletIds[0] };
+  // A channel with nobody in it keeps its last workerId: the row still needs one, and no run reads it while `assignees` is empty.
+  return { ...rest, channel, assignees: orgletIds, workerId: orgletIds[0] ?? task.workerId };
 }

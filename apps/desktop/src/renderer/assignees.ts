@@ -12,7 +12,8 @@ export function taskWorkers(task: Pick<Task, 'teamId' | 'assignees' | 'workerId'
   const team = task.teamId ? workspace.teams.find(item => item.id === task.teamId) : undefined;
   if (team) return teamRoster(team, workspace.workers);
   if (task.assignees === 'all') return workspace.workers;
-  if (task.assignees?.length) return workspace.workers.filter(worker => task.assignees!.includes(worker.id));
+  // A channel with nobody in it has an empty list, which is not the single worker the row still names.
+  if (task.assignees) return workspace.workers.filter(worker => task.assignees!.includes(worker.id));
   return workspace.workers.filter(worker => worker.id === task.workerId);
 }
 

@@ -12,35 +12,34 @@ import {
 import { sendToOptions } from '../../apps/desktop/src/renderer/sendTo';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
 
-const space: OrgletPlace = { kind: 'space', id: 'space-1', name: 'Studio', canKick: true };
-const channel: OrgletPlace = { kind: 'channel', id: 'channel-1', name: 'research', canKick: true };
-const soleChannel: OrgletPlace = { kind: 'channel', id: 'channel-2', name: 'solo', canKick: false };
+const space: OrgletPlace = { kind: 'space', id: 'space-1', name: 'Studio' };
+const channel: OrgletPlace = { kind: 'channel', id: 'channel-1', name: 'research' };
+const soleChannel: OrgletPlace = { kind: 'channel', id: 'channel-2', name: 'solo' };
 
 describe('the unfriend choice', () => {
-  it('starts with every place that can be kicked checked, and never the one that cannot', () => {
+  it('starts with every place checked, including one the orglet is alone in', () => {
     const kicked = defaultKickedKeys([space, channel, soleChannel]);
-    expect([...kicked].sort()).toEqual([placeKey(channel), placeKey(space)].sort());
+    expect([...kicked].sort()).toEqual([placeKey(channel), placeKey(soleChannel), placeKey(space)].sort());
   });
 
-  it('keeps the places the person unchecked and the one that cannot be kicked', () => {
+  it('keeps only the places the person unchecked', () => {
     const places = [space, channel, soleChannel];
     const kicked = toggleKicked(defaultKickedKeys(places), channel);
-    expect(keptPlaces(places, kicked)).toEqual([
-      { kind: 'channel', id: 'channel-1' },
-      { kind: 'channel', id: 'channel-2' },
-    ]);
+    expect(keptPlaces(places, kicked)).toEqual([{ kind: 'channel', id: 'channel-1' }]);
   });
 
-  it('ignores a toggle on a place that cannot be kicked', () => {
-    const kicked = toggleKicked(defaultKickedKeys([soleChannel]), soleChannel);
-    expect(kicked.size).toBe(0);
-    expect(keptPlaces([soleChannel], kicked)).toEqual([{ kind: 'channel', id: 'channel-2' }]);
+  it('lets the person uncheck and check the place the orglet is alone in', () => {
+    const unchecked = toggleKicked(defaultKickedKeys([soleChannel]), soleChannel);
+    expect(unchecked.size).toBe(0);
+    expect(keptPlaces([soleChannel], unchecked)).toEqual([{ kind: 'channel', id: 'channel-2' }]);
+    expect(toggleKicked(unchecked, soleChannel).has(placeKey(soleChannel))).toBe(true);
   });
 
   it('says the orglet is removed only when nothing is kept', () => {
     expect(unfriendOutcomeLine([space, channel], defaultKickedKeys([space, channel]))).toEqual({ kind: 'removed' });
-    expect(unfriendOutcomeLine([space, soleChannel], defaultKickedKeys([space, soleChannel]))).toEqual({ kind: 'kept', keptCount: 1 });
+    expect(unfriendOutcomeLine([space, soleChannel], defaultKickedKeys([space, soleChannel]))).toEqual({ kind: 'removed' });
     expect(unfriendOutcomeLine([space, channel], new Set())).toEqual({ kind: 'kept', keptCount: 2 });
+    expect(unfriendOutcomeLine([space, soleChannel], toggleKicked(defaultKickedKeys([space, soleChannel]), soleChannel))).toEqual({ kind: 'kept', keptCount: 1 });
   });
 
   it('joins the place names for the line under an unfriended orglet', () => {

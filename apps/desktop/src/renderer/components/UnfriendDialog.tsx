@@ -22,7 +22,7 @@ function PlaceName({ place }: { place: OrgletPlace }) {
 
 /**
  * Unfriending an orglet that is still in spaces or channels: the person picks the places it must leave (all of them
- * to begin with). A place that would be left with no orglet always keeps this one. It only collects the choice;
+ * to begin with). A place left with no orglet stays, and an orglet can be added again. It only collects the choice;
  * the caller makes the call, so the dialog stays props and callbacks.
  */
 export function UnfriendDialog({ open, orgletName, places, busy, onConfirm, onClose }: {
@@ -45,9 +45,8 @@ export function UnfriendDialog({ open, orgletName, places, busy, onConfirm, onCl
       <ul className="unfriend-places">
         {places.map(place => <li key={placeKey(place)} className="unfriend-place">
           <Checkbox
-            checked={place.canKick && kickedKeys.has(placeKey(place))}
-            disabled={!place.canKick || busy}
-            description={place.canKick ? undefined : t('Nơi này sẽ không còn Tí nào, nên Tí được giữ lại.')}
+            checked={kickedKeys.has(placeKey(place))}
+            disabled={busy}
             onChange={() => setKickedKeys(current => toggleKicked(current, place))}>
             <PlaceName place={place} />
           </Checkbox>

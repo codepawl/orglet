@@ -104,9 +104,11 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
   const submit = () => {
     const trimmed = name.trim().replace(/^#+\s*/, '');
     if (!trimmed) return fail('general', t('Đặt tên cho kênh.'), 'name');
-    if (!orgletIds.length) return fail('members', t('Chọn ít nhất một Tí.'), 'members');
-    const leadSettings = mode === 'lead' ? lead.validate(orgletIds, fail) : undefined;
-    if (mode === 'lead' && !leadSettings) return;
+    // A new channel needs an orglet to answer; a saved one may have none and gets them again here.
+    if (!editing && !orgletIds.length) return fail('members', t('Chọn ít nhất một Tí.'), 'members');
+    const leadsTheWork = mode === 'lead' && orgletIds.length > 0;
+    const leadSettings = leadsTheWork ? lead.validate(orgletIds, fail) : undefined;
+    if (leadsTheWork && !leadSettings) return;
     const place = space
       ? { spaceId: space.id, categoryId: placeCategory?.id ?? null, access }
       : editing && draft.spaceId ? { spaceId: null } : {};

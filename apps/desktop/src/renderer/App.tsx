@@ -148,6 +148,15 @@ function writeSeenStorage(value: Record<string, SeenInfo>) {
   try { localStorage.setItem(seenStorageKey, JSON.stringify(value)); } catch { /* ignore quota */ }
 }
 
+/** The note by the prompt bar of a channel with no orglet: what is missing, and the way to the channel's editor. */
+function noOrgletInChannelNote(openEditor: () => void): ReadOnlyChat {
+  return {
+    kind: 'empty-channel',
+    icon: <UserRoundPlus size={16} aria-hidden="true" />,
+    note: t('Kênh này chưa có Tí nào. Thêm một Tí để có người trả lời.'),
+    action: { label: t('Thêm Tí'), onSelect: openEditor },
+  };
+}
 /** How a chat is named in the sidebar: its title, or the first line of what was asked. */
 function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string | undefined {
   const task = workspace.tasks.find(item => item.id === taskId);
@@ -1148,9 +1157,10 @@ export function App() {
   const team = workspace?.teams.find(item => item.id === teamId);
   // The channel the crew on screen stands for while it is empty (COD-369); once written in, its row carries the record.
   const crewChannel = team ? workspace?.emptyChannels.find(channel => channel.crewId === team.id) : undefined;
-  // The empty channel stands while it is listed and someone in it can answer; its orglets are its members expanded.
+  // The empty channel stands while it is listed; its orglets are its members expanded, and it may have none.
   const emptyChannel = workspace ? openEmptyChannel(emptyChannelId, workspace.emptyChannels, workspace) : undefined;
   const channelWorkers = emptyChannel ? emptyChannel.workerIds.map(id => workspace?.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item)) : [];
+  const nobodyInEmptyChannel = Boolean(emptyChannel && !emptyChannel.workerIds.length);
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : emptyChannel ? channelWorkers : worker ? [worker] : [];
   // Plan usage by the empty chat's bar (COD-326); an open chat's bar reads its own through FollowUpComposer.
   const emptyChatUsage = usePlanUsageBar({ workers: selected ? [] : executionWorkers, harnesses, running: false, action });
@@ -1271,7 +1281,7 @@ export function App() {
    * away (COD-284). Whatever was typed meanwhile, and the focus, move on to the chat's message bar.
    */
   const send = async () => {
-    if (!brief.trim() || busy || (!team && !worker && !emptyChannel)) return;
+    if (!brief.trim() || busy || nobodyInEmptyChannel || (!team && !worker && !emptyChannel)) return;
     // An orglet with no model does not answer: the way to connect one opens, and the text stays in the box.
     const unconnected = demoReplies() ? undefined : demoWorkerToConnect(executionWorkers, team);
     if (unconnected) {
@@ -2072,7 +2082,10 @@ export function App() {
   const openChatClosure = selected && detail ? chatClosure(detail, workspace) : undefined;
   const closedOwner = openChatClosure?.owner;
   const closedOwnerName = closedOwner ? closedOwner.name || (closedOwner.kind === 'team' ? t('Kênh này') : t('Tí này')) : undefined;
-  const readOnlyChat: ReadOnlyChat | undefined = !selected || !openChatClosure ? undefined
+  // A channel whose last orglet left keeps its messages, but nothing can answer a new one (docs/team-chat.md).
+  const writtenChannelHasNobody = Boolean(selected && detail?.task.channel && Array.isArray(detail.task.assignees) && !detail.task.assignees.length);
+  const readOnlyChat: ReadOnlyChat | undefined = !selected || (!openChatClosure && !writtenChannelHasNobody) ? undefined
+    : !openChatClosure ? noOrgletInChannelNote(() => editChannel('members'))
     : openChatClosure.archived ? { note: t('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.'), action: { label: t('Khôi phục'), onSelect: () => archiveTask(selected, false) } }
     : closedOwner?.state === 'archived' ? { note: t('{0} đã được lưu trữ. Khôi phục để nhắn tiếp.', [closedOwnerName]), action: { label: t('Khôi phục'), onSelect: () => archiveEntity(closedOwner.kind, closedOwner.id, false) } }
     : { note: t('{0} đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.', [closedOwnerName]) };
@@ -2178,7 +2191,7 @@ export function App() {
       appliesAtOnce={Boolean(taskDetail.task.teamId || taskDetail.task.assignees)} sideThread={Boolean(taskDetail.task.sideOf)}
       disabled={toolPolicyBusy || grant === undefined || Boolean(readOnlyChat)} onChange={change => applyModeChange({ taskId: taskDetail.task.id }, change)} />;
   };
-  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={t('Nhắn với {0}…', [(team ? channelLabel(crewChannel?.name ?? team.name) : undefined) ?? emptyChannelName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : emptyChannel ? { people: channelWorkers } : undefined}
+  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={t('Nhắn với {0}…', [(team ? channelLabel(crewChannel?.name ?? team.name) : undefined) ?? emptyChannelName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || nobodyInEmptyChannel || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : emptyChannel ? { people: channelWorkers } : undefined}
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />} mode={emptyChatModePicker}
     trailing={composerTrailing} usage={emptyChatUsage.ring}
     attachments={sources} onRemoveAttachment={id => setSources(sources.filter(source => source.id !== id))} />;
@@ -2847,6 +2860,7 @@ export function App() {
           {/* Nothing runs in an empty chat yet, so only a plan that ran out takes the island (user, 2026-10-06). */}
           <IslandDock dock="new-chat" fallback={emptyChatUsage.island} />
           {composerBar}
+          {nobodyInEmptyChannel && <p className="composer-note composer-note-marked" role="status" data-note="empty-channel"><UserRoundPlus size={16} aria-hidden="true" /><span>{t('Kênh này chưa có Tí nào. Thêm một Tí để có người trả lời.')}</span><Button variant="ghost" onClick={() => editChannel('members')}>{t('Thêm Tí')}</Button></p>}
           <ComposerFoot>{composerHint}</ComposerFoot>
           <SkippedFiles items={skippedSources} />
         </div>
@@ -2864,7 +2878,7 @@ export function App() {
         await orglet.call('updateChannel', { id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic ?? '', members, access: 'listed' });
         toast(t('Đã thêm {0} vào kênh', [member.name]), 'success', channelLabel(headerChannel.name));
       }, channelLabel(headerChannel.name))}
-      removable={member => member.id !== crewLeadId && headerChannel.workers.length > (headerChannel.crewId ? 2 : 1)}
+      removable={member => member.id !== crewLeadId && (!headerChannel.crewId || headerChannel.workers.length > 2)}
       onRemove={member => action(async () => {
         // The channel may have been made from a crew as one member: the orglets left are listed one by one.
         const staying = headerChannel.workers.filter(item => item.id !== member.id).map(item => ({ kind: 'orglet' as const, id: item.id }));

@@ -326,7 +326,7 @@ export type ComposerPrefill = { text?: string; intake?: FolderIntake; at: number
  * Why a chat takes no new message (COD-282): it was archived, or its orglet or crew was archived or deleted. The bar
  * stays where it was, turned off, with this sentence under it and the one step that opens it again, if there is one.
  */
-export type ReadOnlyChat = { note: string; action?: { label: string; onSelect: () => void } };
+export type ReadOnlyChat = { note: string; action?: { label: string; onSelect: () => void }; /** A mark that leads the note, for a state such as a channel with nobody in it. */ icon?: ReactNode; /** Names the state for tests and walk scripts. */ kind?: string };
 
 /** A link's text goes after a draft already in the bar, never over it. */
 export function withPrefill(current: string, prefill: string): string {
@@ -596,7 +596,7 @@ ${extra}` : extra;
       leading={<SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} mode={modePicker} />
     <SkippedFiles items={added.skipped} />
     <ComposerFoot>
-    {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
+    {readOnly && <p className={readOnly.icon ? 'composer-note composer-note-marked' : 'composer-note'} role="status" data-note={readOnly.kind}>{readOnly.icon}<span>{readOnly.note}</span>{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
     {!busy && !readOnly && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
     {!readOnly && !blocked && demoWorker && onConnectModel && <DemoNote someOnDemo={providers.length > 0 ? demoWorker.name : undefined} preflight={providers.length === 0 && Boolean(team?.preflight)} onConnect={() => onConnectModel(demoWorker)} />}
     {/* One line under the bar at most: a note above says what to do first. */}

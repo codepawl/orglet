@@ -48,7 +48,8 @@ export const Space = z.object({
   name: z.string().trim().min(1, 'Không gian cần một tên.').max(SPACE_NAME_LIMIT),
   /** The colour of the space's tile; none takes the app's default. */
   color: z.string().trim().max(32).optional(),
-  orgletIds: OrgletIds.min(1, 'Không gian cần ít nhất một Tí.'),
+  /** May be empty: a space with no orglet keeps its channels and history, and an orglet can be added again. */
+  orgletIds: OrgletIds,
   categories: z.array(SpaceCategory).max(MAX_SPACE_CATEGORIES)
     .refine(categories => new Set(categories.map(category => category.id)).size === categories.length, 'Mục bị trùng.'),
   /** What a new channel in the space starts with; none leaves a new channel the app's own defaults. */
@@ -66,6 +67,9 @@ export function spaceChatCapabilities(space: Pick<Space, 'defaults'> | undefined
   if (!space?.defaults) return undefined;
   return ['skill.read', 'app.propose', ...space.defaults.capabilities];
 }
+
+/** A new space needs an orglet; a saved one may have none. */
+export const NewSpaceOrgletIds = OrgletIds.min(1, 'Không gian cần ít nhất một Tí.');
 
 /** What the create and edit commands take. A category without an id is a new one. */
 export const SpaceFields = z.object({

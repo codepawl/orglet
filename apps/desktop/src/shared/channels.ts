@@ -28,8 +28,12 @@ export type ChannelMember = z.infer<typeof ChannelMember>;
 /** A name as typed: a leading `#` is the mark the app draws, not part of the name. */
 export const ChannelName = z.string().transform(name => name.trim().replace(/^#+\s*/, '')).pipe(z.string().min(1, 'Kênh cần một tên.').max(CHANNEL_NAME_LIMIT));
 
-export const ChannelMembers = z.array(ChannelMember).min(1, 'Kênh cần ít nhất một thành viên.').max(MAX_CHANNEL_MEMBERS)
+/** A saved channel may have no orglet: the person is in every place, and an orglet can be added again. */
+export const ChannelMembers = z.array(ChannelMember).max(MAX_CHANNEL_MEMBERS)
   .refine(members => new Set(members.map(memberKey)).size === members.length, 'Thành viên bị trùng.');
+
+/** What a new channel takes: a channel that is made needs an orglet to answer, one that is saved may have none. */
+export const NewChannelMembers = ChannelMembers.min(1, 'Kênh cần ít nhất một thành viên.');
 
 /**
  * How a channel answers a message (COD-369). `turns`: each orglet answers in turn and reads the answers before it, the

@@ -46,8 +46,8 @@ import { CODEX_DECISION_CONNECTION, DECISION_MODEL_MAX_ENTRIES } from './decisio
 import type { RunAttention } from './quiet-runs';
 import type { PermissionNeedsAnswer } from './permission-needs';
 import type { TurnRoute } from './turn-routing';
-import { ChannelFields, type Channel, type EmptyChannel } from './channels';
-import { SpaceFields, type Space } from './spaces';
+import { ChannelFields, NewChannelMembers, type Channel, type EmptyChannel } from './channels';
+import { NewSpaceOrgletIds, SpaceFields, type Space } from './spaces';
 
 export const Id = z.string().uuid();
 /** The providers Orglet ships with. A custom OpenAI-compatible connection is `custom:<id>` (shared/custom-connections.ts). */
@@ -487,12 +487,12 @@ export const commands = {
   // Channels (COD-361): a named chat of orglets and crews. Created empty; its first message makes its `tasks` row.
   // `updateChannel` takes the channel's own id, written in or not; `deleteChannel` removes one that has no message yet.
   // `lead` is how the lead splits the work, read only when the channel works that way (COD-369).
-  createChannel: ChannelFields.extend({ lead: ChannelLeadSettings.optional() }).strict(),
+  createChannel: ChannelFields.extend({ members: NewChannelMembers, lead: ChannelLeadSettings.optional() }).strict(),
   updateChannel: ChannelFields.extend({ id: Id, lead: ChannelLeadSettings.optional() }).strict(),
   deleteChannel: z.object({ id: Id }).strict(),
   // Spaces (docs/spaces-design.md). Saving a space resolves every channel in it again; deleting one leaves its
   // channels outside every space; `spaceFromCategory` turns a category of loose channels into a space.
-  createSpace: SpaceFields,
+  createSpace: SpaceFields.extend({ orgletIds: NewSpaceOrgletIds }).strict(),
   updateSpace: SpaceFields.extend({ id: Id }).strict(),
   deleteSpace: z.object({ id: Id }).strict(),
   spaceFromCategory: z.object({ category: z.string().trim().min(1).max(40) }).strict(),
