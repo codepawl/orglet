@@ -33,6 +33,7 @@ import { Attachment } from './Attachment';
 import { clockLabel, needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges, hasReactions } from './MessageActions';
 import { messageGrouping, personAuthorKey, workerAuthorKey } from '../messageGroups';
+import { channelOrgletIdsOf, isGhostMessage } from '../channelChat';
 import { MAIN_DOCK } from './islandDock';
 import { LiveRun, ProgressNotes, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, runEventMessage, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
@@ -318,6 +319,9 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
   const finishedAtOpen = useRef<Set<string>>(null);
   if (finishedAtOpen.current === null) finishedAtOpen.current = new Set(detail.runs.filter(run => run.status === 'completed').map(run => run.id));
   const landed = (run: Run) => run.status === 'completed' && !finishedAtOpen.current!.has(run.id);
+  // A message by an orglet that left this channel fades (owner, 2026-10-12); the current member list decides, on every render.
+  const channelOrglets = channelOrgletIdsOf(detail.task);
+  const isGhost = (author?: Run) => isGhostMessage(author?.snapshot.worker.id, channelOrglets);
   const bylineClass = (author?: Run, working = false) => working ? 'message-byline working' : author && landed(author) ? 'message-byline landed' : 'message-byline';
   /**
    * The head of an orglet's message (COD-365): its face in the gutter, carrying the state the face plays (thinking
@@ -328,7 +332,8 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
     face: <span className={bylineClass(author, working)}>{author
       ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} />
       : <span className="orglet-mark small">o</span>}</span>,
-    name: <><strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}</>,
+    name: <><strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}
+      {isGhost(author) && <span className="byline-role byline-left">{t('đã rời kênh')}</span>}</>,
   });
   const personHeader: MessageHeader = { face: <PersonFace />, name: <strong>{t('Bạn')}</strong> };
   /** A schedule's post: the orglet that ran it, and the schedule it came from beside the name (owner, 2026-10-07). */
@@ -601,10 +606,10 @@ export function TaskThread({ start, detail, onShowEarlier, workspace, recovery, 
             {!turn.missingInput && <MessageActions taskId={detail.task.id} messageId={personMessageId} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={reactions} action={action}
               onForward={forward ? () => forward({ taskId: detail.task.id, messageId: personMessageId, author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />}
           </Message>
-          {turn.replies.map((reply, replyIndex) => <Message key={reply.run.id} className="assistant-message" label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])} header={replyHeads[replyIndex]} at={reply.artifact.createdAt}>
+          {turn.replies.map((reply, replyIndex) => <Message key={reply.run.id} className={isGhost(reply.run) ? 'assistant-message ghost-message' : 'assistant-message'} label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])} header={replyHeads[replyIndex]} at={reply.artifact.createdAt}>
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest, false)}
           </Message>)}
-          {sectionShown && <Message className={latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'} label={t('Trả lời của {0}', [waitingAuthor?.snapshot.worker.name ?? 'Orglet'])} header={sectionHeader} at={sectionAt}>
+          {sectionShown && <Message className={`${latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'}${isGhost(sectionAuthor) ? ' ghost-message' : ''}`} label={t('Trả lời của {0}', [waitingAuthor?.snapshot.worker.name ?? 'Orglet'])} header={sectionHeader} at={sectionAt}>
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision} sideThread={Boolean(detail.task.sideOf)}
               workerName={detail.runs.find(run => run.id === pendingDecision.runId)?.snapshot.worker.name ?? 'Orglet'}

@@ -111,3 +111,22 @@ export function channelNameOf(task: { channel?: { name: string }; title?: string
 export function memberNames(names: readonly string[], most = 3): string | undefined {
   return names.length <= most ? names.join(', ') : undefined;
 }
+
+/**
+ * The orglets a chat's channel lists right now, or undefined when the chat is not a channel (a direct message, a side
+ * thread, a schedule's run). Derived on every call from the current member list; nothing is stored.
+ */
+export function channelOrgletIdsOf(task: { channel?: { members: readonly ChannelMember[] }; sideOf?: unknown }): string[] | undefined {
+  if (!task.channel || task.sideOf) return undefined;
+  return task.channel.members.flatMap(member => member.kind === 'orglet' ? [member.id] : []);
+}
+
+/**
+ * A ghost: a message written by an orglet that is no longer in the channel it was written in. Only a channel has
+ * ghosts (`currentOrgletIds` is undefined elsewhere), and an orglet that is deleted or archived but still listed is not
+ * one. Adding the orglet back makes its messages ordinary at once, because the list is read afresh every time.
+ */
+export function isGhostMessage(authorOrgletId: string | undefined, currentOrgletIds: readonly string[] | undefined): boolean {
+  if (!authorOrgletId || !currentOrgletIds) return false;
+  return !currentOrgletIds.includes(authorOrgletId);
+}

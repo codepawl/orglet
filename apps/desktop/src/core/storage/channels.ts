@@ -364,7 +364,9 @@ export class Channels {
     // A saved channel may have nobody in it: the person is still there, and an orglet can be added again.
     const orgletIds = channelOrgletIds(members, this.roster());
     // A crew record cannot exist without a lead, so a channel that lost its last orglet falls back to taking turns.
-    const mode = orgletIds.length ? fields.mode ?? channelMode(current) : 'turns';
+    // So does one the person's own removal left with a single orglet: a lead with nobody to split the work with is just
+    // that orglet. A save the space caused keeps the crew, so its refusal when the lead goes still applies.
+    const mode = orgletIds.length && (prune || !this.leftWithOneOrglet(current, orgletIds)) ? fields.mode ?? channelMode(current) : 'turns';
     const existingCrew = current.crewId ? this.store.get<Team>('teams', current.crewId) : undefined;
     // A space's save never picks a new lead by itself: the person changes the lead in the channel first.
     if (prune && mode === 'lead' && existingCrew && !orgletIds.includes(existingCrew.synthesizerId)) throw new Error(LEAD_LEAVES_WITH_THE_SPACE);
@@ -381,6 +383,11 @@ export class Channels {
     const updated = rowFor(this.rowOf(channelId), record, orgletIds, crew);
     this.store.update('tasks', updated);
     return updated;
+  }
+
+  /** True when this save took a channel's orglets down to exactly one. */
+  private leftWithOneOrglet(current: Channel, orgletIds: readonly string[]): boolean {
+    return orgletIds.length === 1 && channelOrgletIds(current.members, this.roster()).length > 1;
   }
 
   /** Removes a channel nobody has written in, with the crew record behind it; one with messages is deleted as a chat. */

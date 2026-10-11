@@ -2890,12 +2890,13 @@ export function App() {
     </main>
     {membersShown && headerChannel && <MemberColumn onYou={() => openSettings('account')} you={account?.name?.trim() || t('Bạn')} members={headerChannel.workers} working={workingIds} leadId={headerChannel.crewId ? crewLeadId : undefined}
       onMessage={member => { if (member.unfriendedAt) { toast(t('Kết bạn lại với {0} để nhắn riêng.', [member.name]), 'info', member.name, { action: { label: t('Kết bạn lại'), onSelect: () => befriendOrglet(member.id) } }); return; } clearSelection(); openWorker(member.id); }} onEdit={member => { setEditingWorker(member); setPanel('worker'); }}
-      removable={member => member.id !== crewLeadId && (!headerChannel.crewId || headerChannel.workers.length > 2)}
-      onRemove={member => action(async () => {
+      onRemove={(member, nextLeadId) => action(async () => {
         // The channel may have been made from a crew as one member: the orglets left are listed one by one.
         const staying = headerChannel.workers.filter(item => item.id !== member.id).map(item => ({ kind: 'orglet' as const, id: item.id }));
         // In a space the channel keeps its own list from now on, or the space would put the orglet straight back.
-        await orglet.call('updateChannel', { id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic ?? '', members: staying, ...(headerSpace ? { access: 'listed' as const } : {}) });
+        await orglet.call('updateChannel', { id: headerChannel.id, name: headerChannel.name, topic: headerChannel.topic ?? '', members: staying, ...(headerSpace ? { access: 'listed' as const } : {}),
+          // The old lead leaves and the chosen orglet leads from the next message on. Down to one orglet the core makes the channel take turns.
+          ...(nextLeadId ? { lead: { synthesizerId: nextLeadId } } : {}) });
         toast(t('Đã xóa {0} khỏi kênh', [member.name]), 'success', channelLabel(headerChannel.name));
       }, channelLabel(headerChannel.name))} />}
     {threadOpen && sideThread && sideThreadRow && <SideThreadPanel key={sideThread.taskId} taskId={sideThread.taskId} focusMessageId={sideThread.messageId}
