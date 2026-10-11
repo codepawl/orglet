@@ -9,7 +9,6 @@ export const TAVILY_URL = 'https://api.tavily.com/search';
 export const BRAVE_URL = 'https://api.search.brave.com/res/v1/web/search';
 
 const COVERAGE_SUFFIX = 'Target pages have not been read or verified; use web_read_url for evidence.';
-const OUT_OF_KEY_ADVICE = 'Kiểm tra key trong Cài đặt → Tìm kiếm web.';
 
 /** Runs one request and turns a network failure into the plain sentence for that provider. */
 async function ask(name: string, network: WebNetwork, signal: AbortSignal, request: Parameters<typeof requestSearchJson>[2]): Promise<SearchJsonAnswer> {
@@ -74,7 +73,7 @@ export function tavilySearch(network: WebNetwork, apiKey: string, endpoint = TAV
         headers: { Authorization: `Bearer ${apiKey}` },
         body: { query, max_results: MAX_RESULTS, search_depth: 'basic' },
       });
-      if (answer.status === 401) throw new Error(`Tavily từ chối API key đã lưu. ${OUT_OF_KEY_ADVICE}`);
+      if (answer.status === 401) throw new Error('Tavily từ chối API key đã lưu. Kiểm tra key trong Cài đặt → Tìm kiếm web.');
       if (answer.status === 429) throw rateLimited('Tavily', answer.retryAfter);
       if (answer.status === 432 || answer.status === 433) {
         throw new Error('Gói Tavily của key này đã dùng hết lượt (hạn mức gói hoặc hạn mức trả theo dùng). Chờ kỳ sau hoặc nâng gói ở app.tavily.com.');
@@ -101,7 +100,7 @@ export function braveSearch(network: WebNetwork, apiKey: string, endpoint = BRAV
       const answer = await ask('Brave Search', network, signal, {
         method: 'GET', url: url.href, secret: apiKey, headers: { 'X-Subscription-Token': apiKey },
       });
-      if (answer.status === 401 || answer.status === 403) throw new Error(`Brave Search từ chối API key đã lưu. ${OUT_OF_KEY_ADVICE}`);
+      if (answer.status === 401 || answer.status === 403) throw new Error('Brave Search từ chối API key đã lưu. Kiểm tra key trong Cài đặt → Tìm kiếm web.');
       if (answer.status === 429) throw rateLimited('Brave Search', answer.retryAfter);
       if (answer.status < 200 || answer.status >= 300) throw httpFailure('Brave Search', answer.status);
       const body = recordOf(answer.json);

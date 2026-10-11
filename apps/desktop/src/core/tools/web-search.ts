@@ -34,11 +34,11 @@ const END_SESSION_MS = 3000;
 const LINKS_COVERAGE = 'Up to ten search links. Target pages have not been read or verified; use web_read_url for evidence.';
 const EXA_COVERAGE = 'Up to ten search results from Exa, each with a short excerpt Exa picked. Target pages have not been read or verified; use web_read_url for evidence.';
 
-/** Says which providers cannot run without a key, with where to put it. */
-const KEY_NEEDED: Partial<Record<WebSearchProvider, string>> = {
+/** What a search says when its provider needs a key and none is saved. */
+const KEY_NEEDED = {
   tavily: 'Tavily cần API key. Thêm key trong Cài đặt → Tìm kiếm web, hoặc chọn nhà cung cấp khác.',
   brave: 'Brave Search cần API key. Thêm key trong Cài đặt → Tìm kiếm web, hoặc chọn nhà cung cấp khác.',
-};
+} as const;
 
 /**
  * The engine for the provider the person picked. A saved key is read now, right before the search goes out. A provider
@@ -52,7 +52,7 @@ export async function webSearchEngine(settings: WebSearchSettings, network: WebN
     case 'tavily':
     case 'brave': {
       const apiKey = await settings.readKey?.(settings.provider) ?? null;
-      if (!apiKey) throw new Error(KEY_NEEDED[settings.provider] ?? 'Thiếu API key.');
+      if (!apiKey) throw new Error(KEY_NEEDED[settings.provider]);
       return settings.provider === 'tavily' ? tavilySearch(network, apiKey) : braveSearch(network, apiKey);
     }
     case 'exa': return exaSearch(network, await settings.readKey?.('exa') ?? null);
