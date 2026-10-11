@@ -212,7 +212,7 @@ export class RouterConnection {
       if (!response.ok) return UNKNOWN_CODEPAWL_USAGE;
       const parsed = RouterUsageAnswer.safeParse(await response.json().catch(() => undefined));
       if (!parsed.success) return UNKNOWN_CODEPAWL_USAGE;
-      const { free, starter, payByUse } = parsed.data;
+      const { free, starter, payByUse, billing } = parsed.data;
       return {
         known: true,
         freeTokensLeft: free.tokensLeft,
@@ -220,6 +220,7 @@ export class RouterConnection {
         freeResetsAt: free.resetsAt,
         ...(starter ? { includedLeftMicros: starter.leftMicros, includedPeriodEnd: starter.periodEnd } : {}),
         ...(payByUse ? { payByUseActive: payByUse.active, payByUseCostMicros: payByUse.costThisMonthMicros } : {}),
+        ...(billing ? { plansOpen: billing !== 'off' } : {}),
       };
     } catch {
       return UNKNOWN_CODEPAWL_USAGE;

@@ -16,11 +16,69 @@ export class CodepawlAdapter implements ModelAdapter {
 
   async request(messages: RunMessage[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
     try {
-      return await this.inner.request(messages, tools, signal, progress, correlationId);
+      return await this.inner.request(messages, tools.map(withSimpleParameters), signal, progress, correlationId);
     } catch (error) {
       throw codepawlFailure(error);
     }
   }
+}
+
+type JsonSchema = Record<string, unknown>;
+
+/** Keywords whose value is data, not a schema to walk into. */
+const DATA_KEYWORDS = new Set(['enum', 'const', 'default', 'examples', 'required']);
+const PRIMITIVE_TYPES = ['string', 'number', 'integer', 'boolean'];
+
+function isSchema(value: unknown): value is JsonSchema {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** One branch for each primitive type: every enum of that type joined, or the bare type when a branch allows any value. */
+function mergeSameTypeBranches(branches: JsonSchema[]): JsonSchema[] {
+  const merged: JsonSchema[] = [];
+  for (const type of PRIMITIVE_TYPES) {
+    const ofType = branches.filter(branch => branch.type === type);
+    if (ofType.length === 0) continue;
+    if (ofType.length === 1) {
+      merged.push(ofType[0]);
+      continue;
+    }
+    const allListValues = ofType.every(branch => Array.isArray(branch.enum));
+    merged.push(allListValues ? { type, enum: [...new Set(ofType.flatMap(branch => branch.enum as unknown[]))] } : { type });
+  }
+  return [...merged, ...branches.filter(branch => !PRIMITIVE_TYPES.includes(branch.type as string))];
+}
+
+/**
+ * A tool's parameter schema in the shape the router's providers accept. The app's schemas say "one of these ids, or
+ * any other text" as a union of two string branches inside another union, and a strict provider refuses that as
+ * ambiguous (measured 2026-10-11: 400 on `propose_orglet`). Nested unions are flattened and branches of one primitive
+ * type are joined. The result only ever allows more, never less: the app checks a tool call against its own schema
+ * when the call comes back.
+ */
+export function simplifyToolSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(simplifyToolSchema);
+  if (!isSchema(schema)) return schema;
+  const walked: JsonSchema = {};
+  for (const [keyword, value] of Object.entries(schema)) walked[keyword] = DATA_KEYWORDS.has(keyword) ? value : simplifyToolSchema(value);
+  for (const union of ['anyOf', 'oneOf']) {
+    const branches = walked[union];
+    if (!Array.isArray(branches)) continue;
+    const flat = branches.flatMap(branch => (isSchema(branch) && Array.isArray(branch[union]) && Object.keys(branch).length === 1 ? (branch[union] as unknown[]) : [branch]));
+    const merged = mergeSameTypeBranches(flat.filter(isSchema));
+    if (merged.length !== 1) {
+      walked[union] = merged;
+      continue;
+    }
+    const { [union]: _dropped, ...rest } = walked;
+    return { ...merged[0], ...rest };
+  }
+  return walked;
+}
+
+function withSimpleParameters(tool: ChatCompletionTool): ChatCompletionTool {
+  if (tool.type !== 'function' || !tool.function.parameters) return tool;
+  return { ...tool, function: { ...tool.function, parameters: simplifyToolSchema(tool.function.parameters) as Record<string, unknown> } };
 }
 
 function routerDetail(error: APIError): string {
@@ -34,7 +92,8 @@ function statusMessage(error: APIError): string {
   const detail = routerDetail(error);
   if (status === 401) return 'CodePawl router từ chối key của máy này. Ngắt rồi kết nối lại CodePawl trong Cài đặt → Kết nối.';
   if (status === 402 || status === 429 || status === 403) return `CodePawl router: ${detail}`;
-  if (status === 404 || (status === 400 && /model/i.test(detail))) return `CodePawl router không nhận model này (${status}). ${detail}`;
+  // The router answers 404 for a model it does not have. A 400 is about the request, and may only mention the model.
+  if (status === 404 || (status === 400 && /\bmodel\b.*\b(does not exist|not found|unknown)\b/i.test(detail))) return `CodePawl router không nhận model này (${status}). ${detail}`;
   return `CodePawl router trả lỗi ${status}: ${detail}`;
 }
 

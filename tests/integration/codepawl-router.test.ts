@@ -11,7 +11,7 @@ import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import { emptyConnections } from '../../apps/desktop/src/shared/contracts';
 import { readiness } from '../../apps/desktop/src/renderer/components/providers';
 import { workerProviderOptions } from '../../apps/desktop/src/renderer/components/WorkerDialog';
-import { CodepawlAdapter } from '../../apps/desktop/src/core/adapters/codepawl';
+import { CodepawlAdapter, simplifyToolSchema } from '../../apps/desktop/src/core/adapters/codepawl';
 import { ProviderRequestError } from '../../apps/desktop/src/core/adapters/opencode';
 import { fetchProviderList, parseCodepawlModels } from '../../apps/desktop/src/core/models/fetch';
 import { resolveWorkerModel } from '../../apps/desktop/src/core/models/resolve';
@@ -180,13 +180,14 @@ function connection(overrides: { baseUrl?: string | undefined; account?: ReturnT
 }
 
 describe('where the router is', () => {
-  it('has no default: no address, off and a bad address all mean no router', () => {
-    expect(routerBaseUrl(undefined)).toBeUndefined();
-    expect(routerBaseUrl('')).toBeUndefined();
+  it('is CodePawl\'s router when none is named, and none at all for off or a bad address', () => {
+    expect(routerBaseUrl(undefined)).toBe('https://router.codepawl.com');
+    expect(routerBaseUrl('')).toBe('https://router.codepawl.com');
+    expect(routerApiUrl(undefined)).toBe('https://router.codepawl.com/v1');
     expect(routerBaseUrl('off')).toBeUndefined();
     expect(routerBaseUrl('not a url')).toBeUndefined();
     expect(routerBaseUrl('http://router.example.test')).toBeUndefined();
-    expect(routerApiUrl(undefined)).toBeUndefined();
+    expect(routerApiUrl('off')).toBeUndefined();
   });
 
   it('takes https, or http on this computer, as an origin', () => {
@@ -195,9 +196,11 @@ describe('where the router is', () => {
     expect(routerApiUrl('https://router.example.test')).toBe('https://router.example.test/v1');
   });
 
-  it('is not implied by an accounts address: a build that names only the accounts service has no router', async () => {
-    const withAccountsOnly = routerBaseUrl(process.env.ORGLET_ROUTER_URL);
+  it('is not implied by an accounts address: a build that names only another accounts service has no router', async () => {
+    const withAccountsOnly = routerBaseUrl(undefined, 'https://accounts.example.test');
     expect(withAccountsOnly).toBeUndefined();
+    expect(routerApiUrl('', 'https://accounts.example.test')).toBeUndefined();
+    expect(routerBaseUrl('https://router.example.test', 'https://accounts.example.test')).toBe('https://router.example.test');
     const { subject } = connection({ baseUrl: withAccountsOnly });
     expect(subject.configured).toBe(false);
     expect(await subject.state()).toEqual({ status: 'off' });
@@ -323,7 +326,7 @@ describe('no router address', () => {
   });
 
   it('has no list to fetch and builds no request', async () => {
-    delete process.env.ORGLET_ROUTER_URL;
+    process.env.ORGLET_ROUTER_URL = 'off';
     const request = vi.fn(fetch);
     const row = await fetchProviderList('codepawl', {
       readKey: async () => ROUTER_KEY, fetch: request, harnesses: async () => [], now: () => new Date('2026-10-10T00:00:00Z'),
@@ -500,6 +503,29 @@ describe('chatting through the router', () => {
   });
 });
 
+describe('tool schemas a strict provider accepts', () => {
+  it('joins a union of known ids and any other text into one string, and keeps what is beside it', () => {
+    const provider = { description: 'The connection.', anyOf: [{ anyOf: [{ type: 'string', enum: ['openai', 'codepawl'] }, { type: 'string', pattern: '^custom:' }] }, { type: 'null' }] };
+    expect(simplifyToolSchema(provider)).toEqual({ description: 'The connection.', anyOf: [{ type: 'string' }, { type: 'null' }] });
+    expect(simplifyToolSchema({ anyOf: [{ type: 'string', enum: ['a'] }, { type: 'string', enum: ['b', 'a'] }], description: 'x' })).toEqual({ type: 'string', enum: ['a', 'b'], description: 'x' });
+  });
+
+  it('walks into properties and items, and leaves a schema with nothing to join as it was', () => {
+    const plain = { type: 'object', properties: { enum: { type: 'string', enum: ['x'] }, list: { type: 'array', items: { anyOf: [{ type: 'number' }, { type: 'number', minimum: 1 }] } } }, required: ['enum'] };
+    expect(simplifyToolSchema(plain)).toEqual({ type: 'object', properties: { enum: { type: 'string', enum: ['x'] }, list: { type: 'array', items: { type: 'number' } } }, required: ['enum'] });
+    const untouched = { type: 'object', properties: { name: { type: 'string' }, mode: { anyOf: [{ type: 'string' }, { type: 'null' }] } } };
+    expect(simplifyToolSchema(untouched)).toEqual(untouched);
+  });
+
+  it('sends the router the joined schema', async () => {
+    const adapter = new CodepawlAdapter(ROUTER_KEY, router.apiUrl, 'codepawl/free-small');
+    const parameters = { type: 'object', properties: { provider: { anyOf: [{ type: 'string', enum: ['openai'] }, { type: 'string' }] } } };
+    await adapter.request([{ role: 'user', content: 'hi' }], [{ type: 'function', function: { name: 'reply', description: 'Reply.', parameters } }], new AbortController().signal, () => undefined);
+    const sent = router.received.at(-1)?.body as { tools: Array<{ function: { parameters: unknown } }> };
+    expect(sent.tools[0].function.parameters).toEqual({ type: 'object', properties: { provider: { type: 'string' } } });
+  });
+});
+
 describe('the model list and how a run is classed', () => {
   it('reads the router\'s list through the model-list machinery, one entry per ID, with no price or free mark', async () => {
     const row = await fetchProviderList('codepawl', {
@@ -588,6 +614,16 @@ describe('buying and managing a plan', () => {
       payByUse: { active: true, costThisMonthMicros: 420_000 },
     };
     expect(await connection().subject.usage()).toMatchObject({ known: true, payByUseActive: true, payByUseCostMicros: 420_000 });
+  });
+
+  it('knows whether the router sells plans, and takes a router that does not say as not selling', async () => {
+    const free = { tokensLeft: 10, tokensLimit: 50_000, resetsAt: '2026-10-11T00:00:00.000Z' };
+    router.behavior.usage = { free, starter: null, billing: 'off' };
+    expect((await connection().subject.usage()).plansOpen).toBe(false);
+    router.behavior.usage = { free, starter: null, billing: 'live' };
+    expect((await connection().subject.usage()).plansOpen).toBe(true);
+    router.behavior.usage = { free, starter: null };
+    expect((await connection().subject.usage()).plansOpen).toBeUndefined();
   });
 
   it('asks the router for a checkout page of the chosen plan with the account token and opens it in the browser', async () => {
