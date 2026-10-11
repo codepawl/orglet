@@ -20,6 +20,7 @@ import { emptyChannels, migrateCrews, migrateGroupChats } from './channels';
 import { storedSpaces } from './spaces';
 import { demoRepliesEnabled } from '../../shared/demo-replies';
 import { LocalSync } from './local-sync';
+import { deletedMessageIds } from './deleted-messages';
 
 /** The skill a new workspace starts with. */
 export function seedSkill(skillId: string): Skill {
@@ -264,6 +265,11 @@ export class Store {
           id TEXT PRIMARY KEY, task_id TEXT NOT NULL, local_revision INTEGER NOT NULL CHECK(local_revision>=0), data TEXT NOT NULL,
           UNIQUE(task_id,local_revision)
         );
+        -- Messages the person deleted on this computer. Local only: sync never reads or sends this table.
+        CREATE TABLE IF NOT EXISTS deleted_messages (
+          id TEXT PRIMARY KEY, task_id TEXT NOT NULL, deleted_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS deleted_messages_task ON deleted_messages(task_id);
         CREATE TABLE IF NOT EXISTS sync_records (record_key TEXT PRIMARY KEY, data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS sync_outbox (
           sequence INTEGER PRIMARY KEY, account_key TEXT NOT NULL, record_id TEXT NOT NULL UNIQUE, data TEXT NOT NULL
@@ -635,7 +641,7 @@ export class Store {
     const profiles = this.db.prepare('SELECT data FROM profiles WHERE task_id=? ORDER BY rowid').all(taskId).map(row => JSON.parse(String(row.data)) as ProfileRecord);
     const preflights = this.db.prepare('SELECT data FROM preflights WHERE task_id=? ORDER BY rowid').all(taskId).map(row => JSON.parse(String(row.data)) as PreflightRecord);
     return { task, savedTurns, runs, events, artifacts, profiles, preflights, sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, appProposals, usage: this.usage(taskId),
-      ...(earlierTurns > 0 ? { earlierTurns } : {}) };
+      ...(earlierTurns > 0 ? { earlierTurns } : {}), ...deletedMessageIds(this, taskId) };
   }
   recover() {
     // Only the unsettled rows are read, through the partial indexes made for them; every run and chat used to be.

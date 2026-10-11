@@ -6,7 +6,8 @@ import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { MessageInteractions } from '../../apps/desktop/src/core/orchestration/message-interactions';
 import { turnMessageId } from '../../apps/desktop/src/shared/message-interactions';
 import { TaskThread } from '../../apps/desktop/src/renderer/components/TaskThread';
-import { MessageActions } from '../../apps/desktop/src/renderer/components/MessageActions';
+import { MessageActions, messageMenuItems } from '../../apps/desktop/src/renderer/components/MessageActions';
+import { Reply } from 'lucide-react';
 import { ReactionPicker } from '../../apps/desktop/src/renderer/components/ReactionBar';
 import { pickReaction, reactionEmoji, reactionMeanings, reactionOrder, userReactionOn } from '../../apps/desktop/src/renderer/components/messageMarks';
 import type { Artifact, Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
@@ -109,6 +110,40 @@ describe('the react button and the picker', () => {
     expect(html).not.toContain('reaction-chip');
     expect(html).not.toContain('reaction-badge');
     expect(html).not.toContain('👍');
+  });
+
+  it('lists the right-click menu in the toolbar order: selection, reply, reactions with the current one checked, copy and download, forward, save, extras', () => {
+    const calls: string[] = [];
+    const items = messageMenuItems({
+      selected: 'a few words', current: 'funny', isSaved: false,
+      artifact: { onCopy: format => calls.push(`copy ${format}`), onDownload: format => calls.push(`download ${format}`) },
+      formatPreferences: { copy: 'ask', download: 'markdown' },
+      extraItems: [{ label: 'Bring in', icon: Reply, onSelect: () => calls.push('bring') }],
+      onCopySelection: () => calls.push('selection'), onCopyMessage: () => calls.push('whole'), onReply: () => calls.push('reply'), onForward: () => calls.push('forward'),
+      onPick: name => calls.push(`pick ${name}`), onToggleSaved: () => calls.push('save'),
+    });
+    expect(items.map(item => item.label)).toEqual([
+      'Copy selection', 'Reply to this', ...reactionOrder.map(name => reactionMeanings[name]),
+      'Copy as plain text', 'Copy as Markdown', 'Download Markdown (.md)', 'Forward this message', 'Save for later', 'Bring in',
+    ]);
+    const reactionItems = items.filter(item => item.checked !== undefined);
+    expect(reactionItems).toHaveLength(reactionOrder.length);
+    expect(reactionItems.filter(item => item.checked).map(item => item.label)).toEqual([reactionMeanings.funny]);
+    items.forEach(item => item.onSelect());
+    expect(calls).toContain('pick funny');
+    expect(calls).toHaveLength(items.length);
+  });
+
+  it('gives the person\'s own message a plain Copy, no download and no forward without a picker, and Remove from Saved once saved', () => {
+    const items = messageMenuItems({
+      selected: '', current: undefined, isSaved: true, formatPreferences: { copy: 'ask', download: 'ask' },
+      onCopySelection: () => {}, onCopyMessage: () => {}, onReply: () => {}, onPick: () => {}, onToggleSaved: () => {},
+    });
+    expect(items[0].label).toBe('Reply to this');
+    expect(items.map(item => item.label)).toContain('Copy');
+    expect(items.map(item => item.label)).not.toContain('Forward this message');
+    expect(items.at(-1)?.label).toBe('Remove from Saved');
+    expect(items.every(item => item.checked !== true)).toBe(true);
   });
 
   it('shows the current reaction pressed in the picker', () => {

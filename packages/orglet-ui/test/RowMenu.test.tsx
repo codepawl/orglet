@@ -73,7 +73,55 @@ describe('RowMenu', () => {
   });
 });
 
+describe('RowMenu with checked and disabled items', () => {
+  it('marks a checked item, describes a disabled one, and does nothing when a disabled item is chosen', async () => {
+    const user = userEvent.setup();
+    const pick = vi.fn();
+    const remove = vi.fn();
+    render(<RowMenu label="Message actions" icon={Dot} cancelLabel="No" items={[
+      { label: 'Agree', icon: Dot, onSelect: pick, checked: true },
+      { label: 'Laugh', icon: Dot, onSelect: pick, checked: false },
+      { label: 'Delete', icon: Dot, onSelect: remove, danger: true, disabled: true, hint: 'Wait for the answer', confirm: { question: 'Sure?', label: 'Delete' } },
+    ]} />);
+    await user.click(screen.getByRole('button', { name: 'Message actions' }));
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Agree' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Laugh' }).getAttribute('aria-checked')).toBe('false');
+    const deleteItem = screen.getByRole('menuitem', { name: /Delete/ });
+    expect(deleteItem.getAttribute('aria-disabled')).toBe('true');
+    expect(deleteItem.getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByText('Wait for the answer')).toBeTruthy();
+    await user.click(deleteItem);
+    expect(screen.queryByText('Sure?')).toBeNull();
+    expect(remove).not.toHaveBeenCalled();
+    screen.getByRole('menuitemcheckbox', { name: 'Agree' }).focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(document.activeElement).toBe(deleteItem);
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Laugh' }));
+    expect(pick).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('RowMenu with more items', () => {
+  it('draws inline items side by side as icon-only choices named by their labels', async () => {
+    const user = userEvent.setup();
+    const agree = vi.fn();
+    const reply = vi.fn();
+    render(<RowMenu label="Message actions" icon={Dot} cancelLabel="No" items={[
+      { label: 'Reply', icon: Dot, onSelect: reply },
+      { label: 'Agree', icon: Dot, onSelect: agree, checked: true, inline: true },
+      { label: 'Disagree', icon: Dot, onSelect: vi.fn(), checked: false, inline: true },
+      { label: 'Save', icon: Dot, onSelect: vi.fn() },
+    ]} />);
+    await user.click(screen.getByRole('button', { name: 'Message actions' }));
+    const row = screen.getByRole('group');
+    expect([...row.querySelectorAll('button')].map(button => button.getAttribute('aria-label'))).toEqual(['Agree', 'Disagree']);
+    expect(row.textContent).toBe('');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Agree' }).getAttribute('aria-checked')).toBe('true');
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Disagree' }));
+    expect(agree).not.toHaveBeenCalled();
+    expect(reply).not.toHaveBeenCalled();
+  });
+
   it('moves one item per arrow press, wrapping at the ends', async () => {
     const user = userEvent.setup();
     render(<RowMenu label="Options" icon={Dot} cancelLabel="No" items={['Edit', 'Rename', 'Archive', 'Delete'].map(label => ({ label, icon: Dot, onSelect: () => undefined }))} />);

@@ -48,9 +48,24 @@
   outline: 2px solid var(--org-focus, #576b99);
   outline-offset: -2px;
 }
-.org-row-menu-panel button:disabled {
+.org-row-menu-panel button:disabled,
+.org-row-menu-panel button[aria-disabled="true"] {
   opacity: .5;
   cursor: not-allowed;
+}
+/* A quiet line under a label, and the tick of an item that is on. */
+.org-row-menu-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--org-muted, #666);
+}
+/* A row of icon-only choices, such as reactions: each a square the height of an item, the chosen one tinted. */
+.org-row-menu-inline { display: flex; gap: 2px; padding: 2px 4px 4px; }
+.org-row-menu-panel .org-row-menu-inline-item { flex: none; justify-content: center; width: 34px; height: 34px; min-height: 34px; padding: 0; border-radius: 8px; }
+.org-row-menu-panel .org-row-menu-inline-item[aria-checked=true] { background: color-mix(in srgb, var(--org-focus, #576b99) 16%, transparent); }
+.org-row-menu-panel button .org-row-menu-check {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .org-row-menu-panel button.org-row-menu-danger,
 .org-row-menu-panel button.org-row-menu-danger svg { color: var(--org-error, #c62828); }

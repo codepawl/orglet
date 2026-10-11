@@ -1,3 +1,4 @@
+import { DeletedMessages } from '../storage/deleted-messages';
 import type { Run, Task } from '../../shared/contracts';
 import { MessageReaction, SetMessageReaction, SetUserReaction, type Reaction } from '../../shared/message-interactions';
 import { Store, now } from '../storage/database';
@@ -12,6 +13,7 @@ export class MessageInteractions {
   constructor(private store: Store) {}
 
   target(taskId: string, messageId: string, actorRun?: Run): MessageTarget {
+    if (new DeletedMessages(this.store).has(messageId)) throw new Error('Tin nhắn này đã bị xóa.');
     const detail = this.store.detail(taskId);
     const { task } = detail;
     for (const revision of chatTurnRevisions(detail)) {

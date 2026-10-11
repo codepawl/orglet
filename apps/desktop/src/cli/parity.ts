@@ -65,6 +65,7 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   startSideThread: reached('orglet side'),
   bringIntoMainChat: reached('orglet bring'),
   forwardMessage: reached('orglet forward'),
+  deleteMessage: held('erases a message from the chat on this computer; it stays in the window'),
   setMessageReaction: reached('orglet react'),
   answerDecision: reached('orglet answer'),
   saveWorker: reached('orglet create orglet'),
