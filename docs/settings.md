@@ -29,11 +29,12 @@ Turn a provider on, paste its key or pick a `.txt` file, save. Ollama is a switc
 
 Where an orglet's web searches go. Orglets send only the search query, never chat text or files.
 
-- **Provider**: **Exa** (the default) or **DuckDuckGo**. Exa is free without a key but rate-limited: when its free searches run out, a search fails with a message that says so, and they come back later (on 2026-09-26 the limit reset at midnight UTC). DuckDuckGo reads its plain results page, which often asks for human verification instead of answering.
-- **Exa API key** (Exa only, optional): paste a key from **Get a key** (dashboard.exa.ai) and choose **Save key**. Searches then count against your Exa account instead of the free limit. The key is encrypted on this computer like the API keys and never shown again; **Remove key** deletes it.
-- **Try a search**: **Test** sends one real query ("Wikipedia") to the provider and shows the first result's title, or the error an orglet would get.
+- **Provider**: **Automatic** (the default) tries Exa's free search and then DuckDuckGo, and needs no key or setup. The others are one provider each: **Exa** (free without a key, rate-limited), **Tavily** (needs a key; its free plan is 1,000 searches a month as read on 2026-10-12), **Brave Search** (needs a key from Brave's dashboard; Orglet does not state a free allowance because the sources disagree), **SearXNG** (a server you run or trust, no key) and **DuckDuckGo** (no key; it often asks for human verification instead of answering).
+- **API key** (Exa, Tavily or Brave): paste a key from **Get a key** (dashboard.exa.ai, app.tavily.com or api-dashboard.search.brave.com) and choose **Save key**. The key is encrypted on this computer like the API keys and never shown again; **Remove key** deletes it. Exa's key is optional and lifts its free limit. Tavily and Brave do nothing without one: with no key saved the page says so, **Test** is off, and a chat's search fails with the same plain message.
+- **SearXNG address**: an `https://` address with no port, account, `?` or `#`. The server needs JSON turned on (`json` in `search.formats`), and it has to be public: a SearXNG on this computer or a private network cannot be used yet. The address is a setting, not a secret.
+- **Try a search**: **Test** sends one real query ("Wikipedia") to the provider and shows the first result's title and the engine that answered, or the error an orglet would get.
 
-A failed search never switches to the other provider. The switch under **Read and search the web** in a chat's permissions names the provider in use. How it works: [agent tools → Web search](agent-tools.md#web-search).
+Only Automatic falls back, and only between Exa and DuckDuckGo; a provider you pick gets exactly that provider. The switch under **Read and search the web** in a chat's permissions names the provider in use. How it works: [agent tools → Web search](agent-tools.md#web-search).
 
 ## Local harnesses
 
