@@ -173,7 +173,7 @@ try {
 
   // Settings → API connections → Custom connections.
   await openSettings(page);
-  await page.getByRole('tab', { name: 'API connections', exact: true }).click();
+  await page.getByRole('tab', { name: 'API', exact: true }).click();
 
   // Plain http to a host on the internet is refused, and the form says why before anything is saved.
   await page.getByRole('button', { name: 'Add connection', exact: true }).click();

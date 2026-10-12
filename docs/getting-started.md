@@ -74,7 +74,7 @@ The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward thro
 
 The orglet cannot answer until it has a model. Its chat lists three ways to give it one: the plan you already pay for (Claude Code, Codex, Cursor Agent or Gemini CLI signed in on this computer), an API key, or a model on this computer with Ollama. A way that can already run says **Ready** with the connection's name. The line under the message box has a **Connect a model** button too:
 
-- If nothing is connected yet, it opens **Settings** → **API connections**. Add a key or a custom connection there, then close Settings. The orglet's settings open next, with that connection already chosen.
+- If nothing is connected yet, it opens **Settings** → **API**. Add a key or a custom connection there, then close Settings. The orglet's settings open next, with that connection already chosen.
 - If something is already connected (a signed-in harness, a saved key, a custom connection), it opens the orglet's settings straight away, with the first one that can run chosen.
 
 Check the **Model** and **Model ID** fields and choose **Save orglet**. The chat header shows the new connection at once.
@@ -90,7 +90,7 @@ When you want real answers, pick one path. Do not paste keys into chat.
 ### A. A plan you already pay for (Claude Code, Codex, Cursor Agent or Gemini CLI)
 
 1. Install that tool on this computer and sign in to it. Gemini CLI signs in when you run `gemini` and choose **Sign in with Google**.
-2. Open **Settings** → **Local harnesses**.
+2. Open **Settings** → **Harnesses**.
 3. Check the row: **not installed**, **found on disk**, **signed in (ready)**, or **sign-in error**. **Found on disk is not ready.**
 4. If it is not signed in, copy the login command from that row and run it, then choose **Rescan**. Orglet does not switch to another connection when sign-in fails.
 5. In Researcher's chat, choose **Connect a model** (or **⋯** → **Orglet settings**). Set **Model** to that harness if it is not the one already chosen. Choose **Save orglet**.
@@ -99,7 +99,7 @@ Cost follows that tool's plan, not an Orglet API bill.
 
 ### B. An API key (OpenAI, Anthropic, or Grok)
 
-1. Open **Settings** → **API connections**.
+1. Open **Settings** → **API**.
 2. Turn on the provider. Paste the key and choose **Save key**, or choose **From file**.
 3. Close Settings. If you started from **Connect a model**, the orglet's settings open with that provider chosen; otherwise open them from the chat's **⋯** → **Orglet settings** and set **Model** to that provider. Pick a model from the list or type an ID. Choose **Save orglet**.
 

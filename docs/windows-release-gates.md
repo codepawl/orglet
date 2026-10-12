@@ -91,7 +91,7 @@ This page is the procedure, not a completed tick. Do not treat the existence of 
 |---|---|
 | `pnpm audit --prod --audit-level=high`, `pnpm typecheck`, `pnpm test` | Fail-fast job (`typecheck and test`) |
 | `pnpm make` (ZIP + Squirrel Setup under `out/make`) | `packaged` job |
-| Packaged UI smokes, including Settings → Local harnesses with fixture CLIs (`pnpm test:harness`) | `packaged` job |
+| Packaged UI smokes, including Settings → Harnesses with fixture CLIs (`pnpm test:harness`) | `packaged` job |
 
 `pnpm test:harness` never starts a harness run and never calls a paid provider. It is not an installer test.
 
@@ -113,8 +113,8 @@ Copy this list into the release issue or tag notes and tick a step only after yo
 4. **First launch**  
    Open Orglet from the Start Menu. The window should open. New installs default to US English and include a **Researcher** orglet with no model connected.
 
-5. **Settings → Local harnesses**  
-   Open **Settings** → **Local harnesses**. The tab must open and list Claude Code, Codex, Cursor Agent and Gemini CLI. On a clean machine they are usually **Not installed**. That is enough here. Also open **Settings** → **Connections** and confirm OpenAI / Anthropic / Grok (xAI) / OpenRouter / OpenCode Zen / OpenCode Go show with no keys and Ollama is off. Fixture detected / signed-out / auth-error states are CI's job (`pnpm test:harness`).
+5. **Settings → Harnesses**  
+   Open **Settings** → **Harnesses**. The tab must open and list Claude Code, Codex, Cursor Agent and Gemini CLI. On a clean machine they are usually **Not installed**. That is enough here. Also open **Settings** → **Connections** and confirm OpenAI / Anthropic / Grok (xAI) / OpenRouter / OpenCode Zen / OpenCode Go show with no keys and Ollama is off. Fixture detected / signed-out / auth-error states are CI's job (`pnpm test:harness`).
 
 6. **Create an orglet**  
    Create an orglet from the sidebar and save it with no model connected, so the create path is exercised.

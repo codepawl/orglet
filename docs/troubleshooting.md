@@ -10,7 +10,7 @@ SmartScreen shows this for a signed build whose certificate has not built up a r
 
 **Found on disk** means the CLI is installed but not signed in. **Sign-in error** means Orglet could not read its sign-in state. In both cases:
 
-1. In **Settings → Local harnesses**, copy the login command the row shows. It uses the exact executable Orglet found, so it works even when the CLI is not on your `PATH`.
+1. In **Settings → Harnesses**, copy the login command the row shows. It uses the exact executable Orglet found, so it works even when the CLI is not on your `PATH`.
 2. Run it in your own terminal and finish the sign-in in the browser it opens.
 3. Choose **Rescan**.
 

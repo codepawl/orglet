@@ -15,15 +15,21 @@ Language (English (US), English (UK), Tiếng Việt), **Appearance** (light or 
 - **Copy format** and **Download format**: plain text or Markdown for answers and reports.
 - **Ask before opening a task**.
 
-## Archive
+## MCP
 
-Archived orglets, channels and chats, kept out of the sidebar. Each group lists its items, most recently archived first. A row shows the face or `#` of what it was, its name, whose chat it was for a chat, and, when auto-delete is on, the days it has left. **Restore** returns the item to its sidebar section. **⋯ → Delete permanently** asks first and cannot be undone.
+MCP servers you add by hand, run on this computer or remote: each row shows whether it is connected, its tools, a switch to turn it off, and **Test connection**, **Edit** and **Remove**. **Import from a file** reads a JSON file you pick; Orglet never reads another app's MCP settings on its own. Secret values are encrypted on this computer and never shown again. See [MCP servers](mcp.md).
 
-- **Delete archived items**: archived chats, orglets and channels can clear themselves after 7 or 30 days, or never.
+## Harnesses
 
-## API connections
+Claude Code, Codex, Cursor Agent and Gemini CLI: whether each is installed and signed in, its login command, its accounts with how much of each plan is used, and **Rescan**. See [Connections → Local harnesses](connections.md#local-harnesses-claude-code-codex-cursor-agent-gemini-cli).
+
+## API
 
 Turn a provider on, paste its key or pick a `.txt` file, save. Ollama is a switch with no key. **Custom connections** below the list add any OpenAI-compatible server by name, base URL and an optional key. See [Connections → API keys](connections.md#api-keys) and [Connections → Custom connections](connections.md#custom-connections).
+
+## Browser
+
+The browser Orglet found (Chrome, or Edge when Chrome is not installed), the **Clean** profile every chat starts with, and the profiles you made. **Add profile** makes one; **Open to sign in** opens it in a normal window so you can sign in to sites yourself; its menu has **Close window**, **Clear data** and **Delete profile**. Profiles stay on this computer and never go into a backup. See [Orglet's browser](browser.md#profiles).
 
 ## Web search
 
@@ -35,18 +41,6 @@ Where an orglet's web searches go. Orglets send only the search query, never cha
 - **Try a search**: **Test** sends one real query ("Wikipedia") to the provider and shows the first result's title and the engine that answered, or the error an orglet would get.
 
 Only Automatic falls back, and only between Exa and DuckDuckGo; a provider you pick gets exactly that provider. The switch under **Read and search the web** in a chat's permissions names the provider in use. How it works: [agent tools → Web search](agent-tools.md#web-search).
-
-## Local harnesses
-
-Claude Code, Codex, Cursor Agent and Gemini CLI: whether each is installed and signed in, its login command, its accounts with how much of each plan is used, and **Rescan**. See [Connections → Local harnesses](connections.md#local-harnesses-claude-code-codex-cursor-agent-gemini-cli).
-
-## MCP
-
-MCP servers you add by hand, run on this computer or remote: each row shows whether it is connected, its tools, a switch to turn it off, and **Test connection**, **Edit** and **Remove**. **Import from a file** reads a JSON file you pick; Orglet never reads another app's MCP settings on its own. Secret values are encrypted on this computer and never shown again. See [MCP servers](mcp.md).
-
-## Browser
-
-The browser Orglet found (Chrome, or Edge when Chrome is not installed), the **Clean** profile every chat starts with, and the profiles you made. **Add profile** makes one; **Open to sign in** opens it in a normal window so you can sign in to sites yourself; its menu has **Close window**, **Clear data** and **Delete profile**. Profiles stay on this computer and never go into a backup. See [Orglet's browser](browser.md#profiles).
 
 ## Costs
 
@@ -84,6 +78,12 @@ Each row refuses while a run, schedule or check is in progress, and reports what
 **Let a terminal act for me** (Data tab, on by default) lets the `orglet` command answer what a chat is waiting on, give a chat a folder or tools, and save an API key, after you type a code this window shows (the dialog says which). Off, every such command is refused. Each grant also leaves a notice in the notification list. Below the switch, **What the terminal did** lists what it did, newest first, with **Undo** on a grant that can be taken back (a folder given to a chat that had none, a chat's tools or folder level, an MCP server or permission). See [The orglet command](cli.md#unlocking-answering-what-is-waiting-from-the-terminal) and [grants and keys](cli.md#grants-and-keys-from-the-terminal).
 
 Where the data lives: `%APPDATA%\orglet\orglet.sqlite` on Windows, `~/Library/Application Support/Orglet/orglet.sqlite` on macOS. Opening the workspace with a newer build first saves a copy of the database; how to roll back is in [recovery.md](recovery.md).
+
+## Archive
+
+Archived orglets, channels and chats, kept out of the sidebar. Each group lists its items, most recently archived first. A row shows the face or `#` of what it was, its name, whose chat it was for a chat, and, when auto-delete is on, the days it has left. **Restore** returns the item to its sidebar section. **⋯ → Delete permanently** asks first and cannot be undone.
+
+- **Delete archived items**: archived chats, orglets and channels can clear themselves after 7 or 30 days, or never.
 
 ## CodePawl account
 

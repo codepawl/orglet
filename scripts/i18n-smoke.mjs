@@ -26,7 +26,7 @@ try {
 
   await openSettings(page);
   await page.getByRole('combobox', { name: 'Language', exact: true }).waitFor();
-  await page.getByRole('tab', { name: 'API connections', exact: true }).waitFor();
+  await page.getByRole('tab', { name: 'API', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
   await page.screenshot({ path: 'test-results/i18n-settings-en.png' });
   // Native dialogs follow the saved language straight away.
