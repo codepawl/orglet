@@ -3453,7 +3453,6 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 
 /* Curated friends and explicit template updates. */
 .marketplace-heading .org-panel-heading-text { gap: 0; }
-.marketplace-source { margin: 0; font-size: 12px; }
 .marketplace-discover { display: grid; gap: 12px; min-width: 0; }
 .marketplace-listing { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
 .marketplace-listing .friend-source-text { gap: 6px; }

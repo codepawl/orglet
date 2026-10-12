@@ -364,7 +364,9 @@ try {
   await appearances('catalog-long-text');
   await writeFile(publicCatalogState, JSON.stringify({ seed: catalog.listings, online: false }));
   await page.locator('.marketplace').getByRole('button', { name: label('Làm mới'), exact: true }).click();
-  await page.locator('.marketplace-source').getByText(label('Danh mục đã lưu trên máy'), { exact: false }).waitFor();
+  // The saved catalog says nothing about itself: wait for the refresh to settle and the listings to stay.
+  await page.locator('.marketplace').getByRole('button', { name: label('Làm mới'), exact: true }).and(page.locator(':enabled')).waitFor();
+  await page.locator('.market-listing-summary').first().waitFor();
   await appearances('catalog-offline');
   await app.evaluate(() => { global.__publishingFixture.ownerStates = true; global.__publishingFixture.holdOwn = true; });
   const ownTab = page.getByRole('tab', { name: label('Mục của tôi'), exact: true });

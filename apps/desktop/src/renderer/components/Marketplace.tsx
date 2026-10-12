@@ -114,8 +114,7 @@ export function Marketplace({ onAdded }: { onAdded: (result: MarketAdded) => voi
     </PanelHeading>
     <PageTabs tabs={[{ id: 'discover', label: t('Khám phá') }, { id: 'own', label: t('Mục của tôi') }]} current={tab} onSelect={setTab} label={t('Các phần của marketplace')} />
     {tab === 'discover' ? <div className="marketplace-discover">
-    {/* The live catalog says nothing about itself (owner, 2026-10-11); only a list that is not live says where it came from. */}
-    {catalog && catalog.source !== 'online' && <p className="muted marketplace-source" role="status">{catalog.source === 'cache' ? t('Danh mục đã lưu trên máy') : t('Danh mục CodePawl đi kèm app')}</p>}
+    {/* The catalog never says where it came from, live, saved or shipped (owner, 2026-10-12). */}
     {catalog?.error && <p className="muted" role="status">{tMessage(catalog.error)}</p>}
     {error && <FieldError className="error">{error}</FieldError>}
     {catalog?.source === 'cache' && !!catalog.cachedPages?.length && <Select label={t('Mở trang đã lưu')} value={catalog.pageCursor ?? ''} disabled={busy} options={[
