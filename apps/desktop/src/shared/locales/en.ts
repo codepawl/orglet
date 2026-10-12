@@ -1276,7 +1276,6 @@ export const en: Dictionary = {
   'Chạy ngay lịch {0}': 'Run schedule {0} now',
   'Chạy bằng {0} {1} trên máy này. Harness tự đọc bản sao nguồn; Orglet kiểm tra nguồn trích dẫn, checker và vị trí dòng nhưng không xác minh tệp nào đã thực sự được mở.': 'Ran with {0} {1} on this computer. The harness reads the source copies itself; Orglet checks cited sources, checkers and line locations but cannot verify which files were actually opened.',
   'Chạy bằng {0} {1} trên máy này. Nội dung nguồn văn bản được gửi trực tiếp trong prompt; Codex không có tool đọc tệp hay chạy lệnh.': 'Ran with {0} {1} on this computer. Text source content is sent directly in the prompt; Codex has no tools to read files or run commands.',
-  'Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.': 'Only runs while Orglet is open; a missed timed run catches up once.',
   'Chỉ chấp nhận báo cáo đã hoàn tất hoặc có kết quả một phần.': 'Only completed or partial reports can be accepted.',
   'Chỉ duyệt được đề xuất đang chờ.': 'Only pending proposals can be approved.',
   'Tệp đã đổi hoặc bị thu hồi sẽ chặn lần chạy; chọn lại rồi lưu lịch.': 'A changed or revoked file blocks the run; pick it again and save the schedule.',
