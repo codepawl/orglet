@@ -21,7 +21,7 @@ Part of the [user guide](user-guide.md). The full technical detail, including th
 A harness runs the orglet through the CLI's own account, so the cost lands on the plan you already pay for.
 
 1. Install the CLI.
-2. Open **Settings → Local harnesses**. Each row shows one of four states: **Not installed**, **Found on disk** (installed, not signed in), **Signed in** (ready to run) or **Sign-in error** (the status check failed). Found on disk is not ready.
+2. Open **Settings → Harnesses**. Each row shows one of four states: **Not installed**, **Found on disk** (installed, not signed in), **Signed in** (ready to run) or **Sign-in error** (the status check failed). Found on disk is not ready.
 3. If a Claude Code, Codex or Cursor Agent row is not signed in, choose **Sign in** and finish in your browser. The row says it is waiting, with **Cancel**; when the browser part is done, Orglet checks the CLI again by itself. Orglet never sees your password or the CLI's tokens.
 4. If you prefer a terminal, or for Gemini CLI, copy the login command the row shows and run it, then choose **Rescan**. On Windows, pick your terminal beside the command first (PowerShell, Command Prompt or Git Bash); each needs its own line, and Orglet remembers the one you pick. Gemini CLI has no login command: the line starts `gemini`, where you choose **Sign in with Google**, finish in the browser, then type `/quit`. Orglet never switches an orglet to Demo when sign-in fails.
 5. Open the orglet's settings and set **Model** to that harness. The model ID is optional; empty keeps the CLI's default.
@@ -46,7 +46,7 @@ Gemini CLI writes a transcript of every session under `.gemini/tmp` in its own f
 
 ## API keys
 
-1. Open **Settings → API connections** and turn on the provider.
+1. Open **Settings → API** and turn on the provider.
 2. Paste the key and choose **Save key**, or choose **From file** and pick a `.txt` file that holds it. Turn the switch off to disconnect.
 3. In the orglet's settings, set **Model** to that provider and pick a model ID.
 
@@ -54,7 +54,7 @@ Keys are encrypted with your system's secure storage (DPAPI on Windows, Keychain
 
 Ollama has no key: turn its switch on while Ollama is running locally.
 
-The CodePawl router has no key to paste either. **Settings → API connections** shows a **CodePawl router** row. Its free models need only a CodePawl account, which is free. Choose **Connect**, signing in to your CodePawl account first if you are not, and Orglet makes a key for this computer and keeps it encrypted like the others. The row then shows the free tokens left today and, if you have a plan, the usage left this period. While the router sells no paid plan, that is all the row shows. Once it does, the plan buttons are under the usage: **Get Starter** and **Turn on pay by use** for a plan you do not have, and **Manage plan** when you have one. Each opens a page of the router's payment provider in your browser. You pay there, so Orglet never sees a card, and it opens no address outside that provider. The row reads your plan again when you come back to the window. If the router is not open yet for your account, the row says so in one sentence and nothing is connected. A sign-in made before the router was in the build shows "Sign in again to use the CodePawl router", and **Sign in again** opens the account sign-in; after it, Connect works. **Disconnect**, or signing out of your account, removes the key from this computer and asks the router to revoke it.
+The CodePawl router has no key to paste either. **Settings → API** shows a **CodePawl router** row. Its free models need only a CodePawl account, which is free. Choose **Connect**, signing in to your CodePawl account first if you are not, and Orglet makes a key for this computer and keeps it encrypted like the others. The row then shows the free tokens left today and, if you have a plan, the usage left this period. While the router sells no paid plan, that is all the row shows. Once it does, the plan buttons are under the usage: **Get Starter** and **Turn on pay by use** for a plan you do not have, and **Manage plan** when you have one. Each opens a page of the router's payment provider in your browser. You pay there, so Orglet never sees a card, and it opens no address outside that provider. The row reads your plan again when you come back to the window. If the router is not open yet for your account, the row says so in one sentence and nothing is connected. A sign-in made before the router was in the build shows "Sign in again to use the CodePawl router", and **Sign in again** opens the account sign-in; after it, Connect works. **Disconnect**, or signing out of your account, removes the key from this computer and asks the router to revoke it.
 
 With an OpenCode Go key saved, its row shows how much of the plan's five-hour, weekly and monthly limits that key has used, and when each resets. The numbers come from OpenCode Go and are read again when you save a new key. A key without a Go subscription says so instead.
 
@@ -62,7 +62,7 @@ With an OpenCode Go key saved, its row shows how much of the plan's five-hour, w
 
 Any server that speaks the OpenAI chat/completions API can be a connection of its own: LM Studio at `http://localhost:1234/v1`, Groq, DeepSeek, Mistral, Together, Fireworks or a proxy at work. You can add up to 16, and each one is a model choice for an orglet.
 
-1. Open **Settings → API connections** and choose **Add connection** under **Custom connections**.
+1. Open **Settings → API** and choose **Add connection** under **Custom connections**.
 2. Give it a name you will recognise, and the base URL: the address that ends right before `/chat/completions` and `/models`, usually with `/v1`.
 3. Paste an API key if the server needs one. A local server such as LM Studio usually does not; leave the field empty and Orglet sends no key at all.
 4. If the server charges, enter its **Input price** and **Output price** per 1M tokens, in your display currency. Enter both or neither.

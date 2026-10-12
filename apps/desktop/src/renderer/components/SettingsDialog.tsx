@@ -67,17 +67,18 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'account', label: 'Tài khoản', icon: <CircleUserRound size={16} /> },
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
-  // Archived orglets, channels and chats live here, not in the sidebar (COD-375).
-  { id: 'archive', label: 'Lưu trữ', icon: <Archive size={16} /> },
-  { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
-  // Where web_search sends a query, and Exa's optional key (COD-266).
-  { id: 'search', label: 'Tìm kiếm web', icon: <Globe size={16} /> },
-  { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
-  // MCP servers the person added by hand (COD-241).
+  // What an orglet can reach, from the nearest to the furthest (owner, 2026-10-12): the servers a chat is given, the
+  // CLIs on this computer, the paid APIs, then the web. MCP servers are the ones the person added by hand (COD-241).
   { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
+  { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
+  { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
   // The browser orglets read pages in, and the profiles the person signs in to themselves (COD-261).
   { id: 'browser', label: 'Trình duyệt', icon: <AppWindow size={16} /> },
+  // Where web_search sends a query, and the engines' keys (COD-266).
+  { id: 'search', label: 'Tìm kiếm web', icon: <Globe size={16} /> },
+  // What is kept on this computer, then what was put away: archived orglets, channels and chats live here, not in the sidebar (COD-375).
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
+  { id: 'archive', label: 'Lưu trữ', icon: <Archive size={16} /> },
   { id: 'about', label: 'Giới thiệu', icon: <Info size={16} /> },
 ];
 // Section notes sit under the section title.
