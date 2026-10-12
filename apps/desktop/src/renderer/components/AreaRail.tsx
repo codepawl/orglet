@@ -87,9 +87,9 @@ function FolderTiles({ folder, onReorder }: { folder: AreaRailFolder; onReorder:
       <RowMenu label={t('Tùy chọn thư mục {0}', [folder.label])} className="area-tile-menu" align="start" contextMenuOf=".area-tile-slot" items={folder.menuItems} />
     </div>
     {folder.open && <ul className="area-rail-list" aria-label={folder.label}>{inside.order.flatMap(key => folder.entries.filter(entry => entry.key === key)).map(entry => {
-      const { ref, style, dragging, merging: _merging, onMoveKey, ...pointer } = inside.bind(entry.key);
+      const { ref, style, dragging, merging: _merging, dropSide, onMoveKey, ...pointer } = inside.bind(entry.key);
       // The folder's own list is dragged apart from the rail's: the press must not also lift the folder.
-      return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : undefined} {...pointer} onPointerDown={event => { event.stopPropagation(); pointer.onPointerDown(event); }}><Tile entry={entry} onMoveKey={onMoveKey} /></li>;
+      return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : undefined} data-drop={dropSide} {...pointer} onPointerDown={event => { event.stopPropagation(); pointer.onPointerDown(event); }}><Tile entry={entry} onMoveKey={onMoveKey} /></li>;
     })}</ul>}
   </div>;
 }
@@ -164,8 +164,8 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onGroupSpaces, onCr
     {spaces.length > 0 && <span className="area-rail-divider" aria-hidden="true" />}
     {spaces.length > 0 && <ul className="area-rail-list" aria-label={t('Không gian')}>
       {rail.order.flatMap(key => spaces.filter(entry => entry.key === key)).map(entry => {
-        const { ref, style, dragging, merging, onMoveKey, ...pointer } = rail.bind(entry.key);
-        return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : merging ? 'area-merge-target' : undefined} {...pointer}>
+        const { ref, style, dragging, merging, dropSide, onMoveKey, ...pointer } = rail.bind(entry.key);
+        return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : merging ? 'area-merge-target' : undefined} data-drop={dropSide} {...pointer}>
           {'kind' in entry ? <FolderTiles folder={entry} onReorder={keys => reorderInFolder(entry.key, keys)} /> : <Tile entry={entry} onMoveKey={onMoveKey} />}
         </li>;
       })}
