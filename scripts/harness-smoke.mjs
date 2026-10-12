@@ -59,8 +59,8 @@ try {
   }
 
   await openSettings(page);
-  await page.getByRole('tab', { name: label('Harness trên máy'), exact: true }).click();
-  const section = page.getByRole('region', { name: label('Harness trên máy') });
+  await page.getByRole('tab', { name: label('Harness'), exact: true }).click();
+  const section = page.getByRole('region', { name: label('Harness') });
   await section.waitFor();
   // The no-Demo note lives on the settings panel heading. Auth-fail rows also mention it, so do not search the whole panel.
   await page.locator('#settings-panel p.org-panel-heading-description').getByText(label('Đăng nhập lỗi thì Orglet dừng lại, không tự đổi sang kết nối khác.'), { exact: false }).waitFor();
@@ -128,8 +128,8 @@ try {
   const detectedHint = hint.detected(label('Claude Code trên máy này'));
   await page.getByRole('button', { name: detectedHint, exact: true }).waitFor();
   await page.getByRole('button', { name: detectedHint, exact: true }).click();
-  await page.getByRole('tab', { name: label('Harness trên máy'), exact: true }).waitFor();
-  await page.getByRole('region', { name: label('Harness trên máy') }).getByText('Claude Code', { exact: true }).waitFor();
+  await page.getByRole('tab', { name: label('Harness'), exact: true }).waitFor();
+  await page.getByRole('region', { name: label('Harness') }).getByText('Claude Code', { exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await expandSidebar(page);
 
@@ -145,8 +145,8 @@ try {
     const authFailHint = hint.auth_error(label('Codex trên máy này'));
     await page.getByRole('button', { name: authFailHint, exact: true }).waitFor();
     await page.getByRole('button', { name: authFailHint, exact: true }).click();
-    await page.getByRole('tab', { name: label('Harness trên máy'), exact: true }).waitFor();
-    await page.getByRole('region', { name: label('Harness trên máy') }).getByText('Codex', { exact: true }).waitFor();
+    await page.getByRole('tab', { name: label('Harness'), exact: true }).waitFor();
+    await page.getByRole('region', { name: label('Harness') }).getByText('Codex', { exact: true }).waitFor();
   } else {
     console.log(`Skipped the Codex login-probe failure path: a real Codex at ${codex.executable} outranks the fake.`);
   }

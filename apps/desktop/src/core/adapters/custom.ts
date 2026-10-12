@@ -50,7 +50,7 @@ function serverDetail(error: APIError): string {
 function statusMessage(connection: CustomConnection, model: string, error: APIError): string {
   const status = error.status ?? 0;
   if (status === 401 || status === 403) {
-    return `${connection.name} từ chối yêu cầu (${status}). Kiểm tra API key của kết nối này trong Cài đặt → Kết nối API.`;
+    return `${connection.name} từ chối yêu cầu (${status}). Kiểm tra API key của kết nối này trong Cài đặt → API.`;
   }
   if (status === 404) return `${connection.name} không nhận model ${model} (404). Kiểm tra ID model và địa chỉ kết nối.`;
   if (status === 429) return `${connection.name} đang từ chối vì quá nhiều yêu cầu hoặc hết hạn mức. Thử lại sau.`;

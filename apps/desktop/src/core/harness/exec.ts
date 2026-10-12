@@ -140,7 +140,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
 
 const authHint = (harness: HarnessId) => {
   const name = harnessNames[harness];
-  return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy, sao chép lệnh đăng nhập, rồi thử lại. Orglet không tự đổi sang kết nối khác.`;
+  return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness, sao chép lệnh đăng nhập, rồi thử lại. Orglet không tự đổi sang kết nối khác.`;
 };
 /**
  * A sign-in the CLI says is missing or refused. Claude Code 2.1 also prints "Authentication error · This may be a
@@ -566,5 +566,5 @@ export function stderrTail(errorOutput: string) {
  * minute ago can be gone by the time a run starts. Naming that beats a bare exit code (COD-165).
  */
 export function missingExecutableError(harness: HarnessId, executable: string) {
-  return new HarnessError(`Không còn thấy ${harnessNames[harness]} ở ${executable}; bản cài có thể vừa được thay. Bấm Dò lại trong Cài đặt → Harness trên máy rồi thử lại.`);
+  return new HarnessError(`Không còn thấy ${harnessNames[harness]} ở ${executable}; bản cài có thể vừa được thay. Bấm Dò lại trong Cài đặt → Harness rồi thử lại.`);
 }

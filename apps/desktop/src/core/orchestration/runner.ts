@@ -1154,7 +1154,7 @@ export class Runner {
       if (isHarness(run.snapshot.worker.provider)) {
         const provider = run.snapshot.worker.provider;
         const harness = (await this.harness.detect()).find(candidate => candidate.id === provider);
-        if (!harness?.executable || harness.status === 'not_installed') throw new Error(`Không tìm thấy ${harnessNames[provider]} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness trên máy.`);
+        if (!harness?.executable || harness.status === 'not_installed') throw new Error(`Không tìm thấy ${harnessNames[provider]} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness.`);
         if (harness.auth !== 'logged_in') throw new Error(harness.authDetail);
         harnessDirectory = await mkdtemp(join(tmpdir(), 'orglet-tool-harness-'));
 
@@ -2106,7 +2106,7 @@ export class Runner {
   private async runHarness(provider: HarnessId, task: Task, run: Run, messages: RunMessage[], scope: { manifest: Source[]; preflight?: PreflightRecord; preflightLimits: string[]; checkedSourceIds: string[] }, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[] }, control: { paused: boolean }, signal: AbortSignal) {
     this.checkpoints.save({ id: run.id, step: 0, phase: 'ready', messages: [], readIds: [] });
     const tool = (await this.harness.detect()).find(item => item.id === provider);
-    if (!tool || !tool.executable || tool.status === 'not_installed') throw new Error(`Không tìm thấy ${harnessNames[provider]} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness trên máy.`);
+    if (!tool || !tool.executable || tool.status === 'not_installed') throw new Error(`Không tìm thấy ${harnessNames[provider]} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness.`);
     if (tool.auth !== 'logged_in') throw new Error(tool.authDetail);
     if (this.slots.busy(provider)) this.event(run.id, `Đang chờ lượt chạy ${tool.name}.`);
     const release = await this.slots.acquire(provider, signal, { runId: run.id, taskId: task.id });
