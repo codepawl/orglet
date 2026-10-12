@@ -72,12 +72,13 @@ function Tile({ entry, onMoveKey }: { entry: AreaRailEntry; onMoveKey?: TileMove
   </div>;
 }
 
-function FolderTiles({ folder, onReorder }: { folder: AreaRailFolder; onReorder: (keys: string[]) => void }) {
+function FolderTiles({ folder, onReorder, onLeave }: { folder: AreaRailFolder; onReorder: (keys: string[]) => void; onLeave: (spaceKey: string, side: 'before' | 'after') => void }) {
   const tip = useContext(TipContext);
-  const inside = useReorder(folder.entries.map(entry => entry.key), onReorder, { startOnMove: true });
+  const inside = useReorder(folder.entries.map(entry => entry.key), onReorder, { startOnMove: true, onLeave });
   const waiting = folder.entries.reduce((total, entry) => total + (entry.count ?? 0), 0);
   const holdsOpenPage = folder.entries.some(entry => entry.active);
-  return <div className={`area-folder${folder.open ? ' open' : ''}`}>
+  // While a space is dragged out past an end of the folder, a bar outside that end shows where it will land.
+  return <div className={`area-folder${folder.open ? ' open' : ''}`} data-leave={inside.leaving}>
     <div className="area-tile-slot">
       <button type="button" className={`area-tile area-folder-tile${!folder.open && holdsOpenPage ? ' active' : ''}`} aria-expanded={folder.open} aria-label={folder.label} data-name={folder.label} onClick={() => { tip.hide(); folder.onToggle(); }}
         onPointerEnter={event => tip.show(folder.label, event.currentTarget)} onPointerLeave={tip.hide} onFocus={event => { if (event.currentTarget.matches(':focus-visible')) tip.show(folder.label, event.currentTarget); }} onBlur={tip.hide}>
@@ -102,7 +103,7 @@ function FolderTiles({ folder, onReorder }: { folder: AreaRailFolder; onReorder:
  * A tile's name shows beside it while the pointer is on it (user, 2026-10-05), the way Discord names a server.
  * Spaces can sit in folders (user, 2026-10-05): a folder is an outlined group with its own tile, which opens and closes it.
  */
-export function AreaRail({ entries, spaces, onReorderSpaces, onGroupSpaces, onCreateSpace, onHover, onOpenSidebar, trail }: {
+export function AreaRail({ entries, spaces, onReorderSpaces, onGroupSpaces, onLeaveFolder, onCreateSpace, onHover, onOpenSidebar, trail }: {
   /** The app's own places: Home, Activity, Library, Schedules. */
   entries: readonly AreaRailEntry[];
   /** The person's spaces and their folders, under a divider of their own (user, 2026-10-05), the way Discord parts its servers from Home. */
@@ -117,6 +118,8 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onGroupSpaces, onCr
    * two share a new folder; on a folder, the space goes into it. Both are the tiles' keys.
    */
   onGroupSpaces: (draggedKey: string, overKey: string) => void;
+  /** A space dragged out of its folder (owner, 2026-10-12): it leaves the folder and takes `spaceKeys`, the rail's new order. */
+  onLeaveFolder: (spaceKey: string, spaceKeys: string[]) => void;
   /** The **+** under the spaces makes a space and nothing else (user, 2026-10-05): the rail lists spaces, so that is what it adds. */
   onCreateSpace: () => void;
   /** Back and forward along the places the person has been (user, 2026-10-05), at the top of the rail the way Discord has them. */
@@ -141,6 +144,15 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onGroupSpaces, onCr
     onMerge: onGroupSpaces,
   });
   const reorderInFolder = (folderKey: string, keys: string[]) => onReorderSpaces(rail.order.flatMap(key => spaceKeysUnder(key, { key: folderKey, keys })));
+  /** The rail's order once `spaceKey` has left its folder, just above or below the folder. */
+  const leaveFolder = (folderKey: string, spaceKey: string, side: 'before' | 'after') => {
+    const keys = rail.order.flatMap(key => {
+      const under = spaceKeysUnder(key).filter(item => item !== spaceKey);
+      if (key !== folderKey) return under;
+      return side === 'before' ? [spaceKey, ...under] : [...under, spaceKey];
+    });
+    onLeaveFolder(spaceKey, keys);
+  };
   const control: TipControl = {
     show: (label, tile) => {
       const box = tile.getBoundingClientRect();
@@ -166,7 +178,7 @@ export function AreaRail({ entries, spaces, onReorderSpaces, onGroupSpaces, onCr
       {rail.order.flatMap(key => spaces.filter(entry => entry.key === key)).map(entry => {
         const { ref, style, dragging, merging, dropSide, onMoveKey, ...pointer } = rail.bind(entry.key);
         return <li key={entry.key} ref={ref} style={style} className={dragging ? 'area-dragging' : merging ? 'area-merge-target' : undefined} data-drop={dropSide} {...pointer}>
-          {'kind' in entry ? <FolderTiles folder={entry} onReorder={keys => reorderInFolder(entry.key, keys)} /> : <Tile entry={entry} onMoveKey={onMoveKey} />}
+          {'kind' in entry ? <FolderTiles folder={entry} onReorder={keys => reorderInFolder(entry.key, keys)} onLeave={(spaceKey, side) => leaveFolder(entry.key, spaceKey, side)} /> : <Tile entry={entry} onMoveKey={onMoveKey} />}
         </li>;
       })}
     </ul>}

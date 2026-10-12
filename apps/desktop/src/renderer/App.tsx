@@ -2649,6 +2649,15 @@ export function App() {
       setClosedFolders(closedFolders.filter(name => name !== folderKey(folder)));
     });
   };
+  /** A space dragged out of its folder: it leaves the folder and the rail takes the order it was dropped in. */
+  const leaveFolder = (spaceKey: string, spaceKeys: string[]) => {
+    const space = workspace.spaces.find(item => `space:${item.id}` === spaceKey);
+    if (!space) return;
+    action(async () => {
+      await orglet.call('updateSpace', { id: space.id, name: space.name, ...(space.color ? { color: space.color } : {}), orgletIds: space.orgletIds, categories: space.categories, folder: null });
+      await orglet.call('reorder', { kind: 'spaces', ids: spaceKeys.map(key => key.slice('space:'.length)) });
+    });
+  };
   const toggleFolder = (name: string) => {
     const key = folderKey(name);
     setClosedFolders(closedFolders.includes(key) ? closedFolders.filter(item => item !== key) : [...closedFolders, key]);
@@ -2799,7 +2808,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={railEntries} spaces={railSpaces} onGroupSpaces={groupSpaces} onReorderSpaces={keys => { void action(() => orglet.call('reorder', { kind: 'spaces', ids: keys.map(key => key.slice('space:'.length)) })); }} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
+    <AreaRail entries={railEntries} spaces={railSpaces} onGroupSpaces={groupSpaces} onLeaveFolder={leaveFolder} onReorderSpaces={keys => { void action(() => orglet.call('reorder', { kind: 'spaces', ids: keys.map(key => key.slice('space:'.length)) })); }} onCreateSpace={() => setSpaceDraft({})} trail={{ back: trailEnds.back, forward: trailEnds.forward, onTravel: travel }} onHover={sidebar ? undefined : peekSidebar} onOpenSidebar={sidebar ? undefined : openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)}
       items={[
         { label: account?.status === 'signed_in' ? t('Tài khoản') : t('Đăng nhập'), icon: account?.status === 'signed_in' ? CircleUserRound : LogIn, onSelect: () => openSettings('account') },
