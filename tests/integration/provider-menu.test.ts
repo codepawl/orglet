@@ -24,7 +24,7 @@ describe('the Model menu', () => {
       'demo', 'claude-code', 'codex',
       'openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'cursor', 'gemini',
     ]);
-    expect(options.slice(0, 3).map(option => option.group)).toEqual([t('Thử nghiệm'), t('Harness trên máy'), t('Harness trên máy')]);
+    expect(options.slice(0, 3).map(option => option.group)).toEqual([t('Thử nghiệm'), t('Harness'), t('Harness')]);
     expect(new Set(options.slice(3).map(option => option.group))).toEqual(new Set([t('Chưa sẵn sàng')]));
     expect(options.slice(3).every(option => option.dimmed)).toBe(true);
     expect(options.slice(0, 3).some(option => option.dimmed)).toBe(false);
@@ -35,7 +35,7 @@ describe('the Model menu', () => {
     const connections = { ...emptyConnections(), anthropic: true };
     const options = workerProviderOptions(readiness(connections, harnesses), harnesses, []);
     expect(options.slice(0, 3).map(option => [option.value, option.group])).toEqual([
-      ['demo', t('Thử nghiệm')], ['anthropic', t('API trả phí')], ['codex', t('Harness trên máy')],
+      ['demo', t('Thử nghiệm')], ['anthropic', t('API trả phí')], ['codex', t('Harness')],
     ]);
     expect(options.slice(3).map(option => option.value)).not.toContain('anthropic');
   });

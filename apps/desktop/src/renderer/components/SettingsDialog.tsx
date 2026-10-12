@@ -70,8 +70,8 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   // What an orglet can reach, from the nearest to the furthest (owner, 2026-10-12): the servers a chat is given, the
   // CLIs on this computer, the paid APIs, then the web. MCP servers are the ones the person added by hand (COD-241).
   { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
-  { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
-  { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
+  { id: 'harness', label: 'Harness', icon: <SquareTerminal size={16} /> },
+  { id: 'connections', label: 'API', icon: <Plug size={16} /> },
   // The browser orglets read pages in, and the profiles the person signs in to themselves (COD-261).
   { id: 'browser', label: 'Trình duyệt', icon: <AppWindow size={16} /> },
   // Where web_search sends a query, and the engines' keys (COD-266).
@@ -567,8 +567,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     // The core dropped the harness model lists with the detection; the session copies follow.
     modelLists.invalidate();
     return t('Đã dò lại harness');
-  }, t('Harness trên máy'));
-  /** How much of its allowances the saved OpenCode Go key has used; read only while Kết nối API is open and a key is saved. */
+  }, t('Harness'));
+  /** How much of its allowances the saved OpenCode Go key has used; read only while the API tab is open and a key is saved. */
   const [goUsage, setGoUsage] = useState<OpenCodeGoUsage>();
   const loadGoUsage = useCallback(async (refresh: boolean) => {
     try {
@@ -815,7 +815,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               onProvider={value => void save({ webSearchProvider: value })} onInstanceUrl={address => void save({ searxngUrl: address })} onConnections={onConnections} />}
 
             {tab === 'harness' && <>
-              <div role="region" aria-label={t('Harness trên máy')}>
+              <div role="region" aria-label={t('Harness')}>
                 {harnesses === undefined && <HarnessRowShapes />}
                 {(harnesses ?? []).map(item => {
                   const pill = statusPill(item);

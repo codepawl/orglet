@@ -706,7 +706,7 @@ const SCREENS = [
     await callCore(page, 'saveDecisionModelSetting', [{ connection: 'openai', model: 'gpt-6-luna' }, { connection: 'anthropic', model: 'claude-sonnet-5-5' }]);
     await openSettingsTab(page, 'Cuộc trò chuyện');
     await page.getByRole('button', { name: label('Chạy thử'), exact: true }).click();
-    await page.getByText(label('Chưa kết nối {0}. Thêm API key trong Kết nối API.', ['OpenAI'])).waitFor();
+    await page.getByText(label('Chưa kết nối {0}. Thêm API key trong Cài đặt → API.', ['OpenAI'])).waitFor();
     // Clicking Test scrolled the row into view; the screen is measured from the top like its family.
     await page.evaluate(() => document.querySelector('#settings-panel')?.scrollTo(0, 0));
   }, close: page => callCore(page, 'saveDecisionModelSetting', []) },
@@ -719,9 +719,9 @@ const SCREENS = [
   }, close: page => callCore(page, 'saveDecisionModelSetting', []) },
   // Archived orglets, channels and chats, with Restore and the auto-delete rule (COD-375).
   { name: 'settings-archive', family: 'settings', open: page => openSettingsTab(page, 'Lưu trữ') },
-  { name: 'settings-connections', family: 'settings', open: page => openSettingsTab(page, 'Kết nối API') },
+  { name: 'settings-connections', family: 'settings', open: page => openSettingsTab(page, 'API') },
   { name: 'settings-search', family: 'settings', open: page => openSettingsTab(page, 'Tìm kiếm web') },
-  { name: 'settings-harness', family: 'settings', open: page => openSettingsTab(page, 'Harness trên máy') },
+  { name: 'settings-harness', family: 'settings', open: page => openSettingsTab(page, 'Harness') },
   { name: 'settings-mcp', family: 'settings', open: page => openSettingsTab(page, 'MCP') },
   // An app that signs in through the browser, saved but not signed in yet: its row asks for the sign-in (stage 4).
   // Nothing goes over the network: a server with no sign-in is not even tried.

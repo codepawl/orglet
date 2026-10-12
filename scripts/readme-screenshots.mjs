@@ -28,7 +28,8 @@ function launchTarget() {
 
 async function launchApp() {
   const dataFolder = await mkdtemp(join(tmpdir(), 'orglet-readme-'));
-  const environment = { ...process.env, ORGLET_DATA_DIR: dataFolder, ORGLET_SKIP_ACCOUNT_CHOICE: '1' };
+  // Off the screen unless asked otherwise, so taking the pictures does not put a window on the person's desktop.
+  const environment = { ...process.env, ORGLET_DATA_DIR: dataFolder, ORGLET_SKIP_ACCOUNT_CHOICE: '1', ORGLET_TEST_OFFSCREEN: process.env.ORGLET_TEST_OFFSCREEN ?? '1' };
   delete environment.ELECTRON_RUN_AS_NODE;
   const target = launchTarget();
   return electron.launch({ executablePath: target.executablePath, args: [...target.args, `--user-data-dir=${dataFolder}`], env: environment });
@@ -40,7 +41,9 @@ async function callCore(page, command, args) {
 
 async function setTheme(page, theme) {
   const workspace = await callCore(page, 'workspace', {});
-  await callCore(page, 'settings', { language: workspace.language ?? 'en', theme, connectionLimitMicros: workspace.connectionLimitMicros });
+  // Show work is on for the pictures: a chat hides the lead's plan and the handoffs until asked, and the README is
+  // where a reader first sees a channel split a job.
+  await callCore(page, 'settings', { language: workspace.language ?? 'en', theme, showWork: true });
   await page.waitForTimeout(400);
 }
 

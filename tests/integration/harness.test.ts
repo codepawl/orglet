@@ -256,7 +256,7 @@ describe('command contract', () => {
     const narrated = "Looking for the attached invoice source ID so I can select the correct Orglet `read_source` call.The workspace looks sparse; checking for an attachment.{\"call\":{\"name\":\"read_source\",\"arguments\":{\"sourceId\":\"a\"}},\"notes\":\"Need the {amounts}.\"}";
     expect(parseCursorOutput(JSON.stringify({ result: narrated })).output).toEqual({ call: { name: "read_source", arguments: { sourceId: "a" } }, notes: "Need the {amounts}." });
     expect(() => parseCursorOutput(JSON.stringify({ result: "{\"call\":{}} and then more words" }))).toThrow("schema");
-    expect(() => parseCursorOutput(JSON.stringify({ error: 'Please run agent login' }))).toThrow('Harness trên máy');
+    expect(() => parseCursorOutput(JSON.stringify({ error: 'Please run agent login' }))).toThrow('Harness');
   });
 
   it.runIf(process.platform === 'win32')('passes the JSON schema and prompt intact through an npm-style .cmd shim', async () => {

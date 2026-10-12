@@ -109,7 +109,7 @@ try {
   const fakeKeyPath = join(data, 'fixture-key.txt'); const fakeKey = 'sk-orglet-fixture-not-a-real-api-key'; await writeFile(fakeKeyPath, fakeKey);
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, fakeKeyPath);
   await openSettings(page);
-  await page.getByRole('tab', { name: label('Kết nối API'), exact: true }).click();
+  await page.getByRole('tab', { name: label('API'), exact: true }).click();
   const openaiRegion = page.getByRole('region', { name: label('Kết nối {0}', ['OpenAI']), exact: true });
   await openaiRegion.getByRole('switch').click();
   await openaiRegion.getByRole('button', { name: label('Từ tệp'), exact: true }).click();

@@ -136,7 +136,7 @@ describe('detection', () => {
       id: 'gemini', name: 'Gemini CLI', executable, version: '0.61.0', auth: 'logged_out', status: 'detected', runnable: true,
       installCommand: 'npm install -g @google/gemini-cli',
     }));
-    expect(gemini.authDetail).toBe('Đã thấy Gemini CLI trên máy nhưng chưa đăng nhập. Lấy lệnh đăng nhập ở Cài đặt → Harness trên máy.');
+    expect(gemini.authDetail).toBe('Đã thấy Gemini CLI trên máy nhưng chưa đăng nhập. Lấy lệnh đăng nhập ở Cài đặt → Harness.');
     expect(harnessReady(gemini)).toBe(false);
     // Gemini CLI has no login subcommand: started bare it asks how to sign in.
     expect(gemini.loginCommands).toEqual(loginCommands('gemini', executable, process.platform));
@@ -236,7 +236,7 @@ describe('outcomes', () => {
   it('fails a signed-out run with the Settings hint and no Demo fallback', async () => {
     process.env.FAKE_GEMINI_MODE = 'signed-out';
     const failure = executeHarness(await request());
-    await expect(failure).rejects.toThrow('Gemini CLI chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy');
+    await expect(failure).rejects.toThrow('Gemini CLI chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness');
     await expect(failure).rejects.toThrow('Orglet không tự đổi sang kết nối khác.');
   });
 

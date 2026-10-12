@@ -1529,7 +1529,7 @@ export class CoreService {
   /** The Codex CLI the decision model runs: the selected account's, installed and signed in, or the reason it cannot be used. */
   private async locateCodexForDecisions(): Promise<{ executable: string; configDir?: string }> {
     const codex = (await this.harnesses(false)).find(item => item.id === 'codex');
-    if (!codex?.executable || codex.status === 'not_installed') throw new DecisionBackendUnavailable(`Không tìm thấy ${harnessNames.codex} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness trên máy.`);
+    if (!codex?.executable || codex.status === 'not_installed') throw new DecisionBackendUnavailable(`Không tìm thấy ${harnessNames.codex} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness.`);
     if (codex.auth !== 'logged_in') throw new DecisionBackendUnavailable(codex.authDetail);
     return { executable: codex.executable, ...(codex.configDir ? { configDir: codex.configDir } : {}) };
   }

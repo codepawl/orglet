@@ -91,7 +91,7 @@ export function workerProviderOptions(ready: Readiness, harnesses: HarnessInfo[]
         : found.runnable ? { word: t('sẵn sàng'), mark: { variant: 'filled', tone: 'success' } as const }
         : { word: t('đã đăng nhập'), mark: { variant: 'empty', tone: 'success' } as const };
       const detail = [found?.version, state.word].filter(Boolean).join(' · ');
-      const harnessChoice = choice(id, harnessNames[id], detail, t('Harness trên máy'), ready[id]);
+      const harnessChoice = choice(id, harnessNames[id], detail, t('Harness'), ready[id]);
       return { ...harnessChoice, option: { ...harnessChoice.option, badge: <StatusMark variant={state.mark.variant} tone={state.mark.tone} label={state.word} decorative /> } };
     }),
   ];

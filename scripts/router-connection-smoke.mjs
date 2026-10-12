@@ -198,7 +198,7 @@ try {
   console.log('usage:', JSON.stringify(usage));
 
   await openSettings(page);
-  await page.getByRole('tab', { name: label('Kết nối API'), exact: true }).click();
+  await page.getByRole('tab', { name: label('API'), exact: true }).click();
   await page.getByRole('dialog').evaluate(dialog => { for (const element of dialog.querySelectorAll('*')) if (element.scrollHeight > element.clientHeight + 20) element.scrollTop = element.scrollHeight; });
   await page.waitForTimeout(800);
   await page.screenshot({ path: 'test-results/router-settings.png' });
