@@ -3307,16 +3307,20 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-tile-slot .org-row-menu-panel { pointer-events:auto; }
 .area-tile-menu { width:18px; height:18px; min-height:18px; padding:0; border:0; border-radius:6px; background:var(--surface); color:var(--text); opacity:0; pointer-events:none; }
 .area-tile-menu:focus-visible, .area-tile-menu[aria-expanded="true"] { opacity:1; pointer-events:auto; }
-/* A folder of spaces: an outline around its tiles, never a ground of its own, so a tile's hover tint is not a
-   background inside a background. */
 /* A tile held and lifted to change the spaces' order: it rides above the others, which slide aside without easing. */
 .area-rail-list > li { position:relative; }
 .area-rail-list > li.area-dragging { z-index:3; }
+/* Where a dragged space will land (owner, 2026-10-12): a short bar in the gap on that side of the tile next to it. */
+.area-rail-list > li[data-drop]::after { content:""; position:absolute; left:50%; width:32px; height:3px; margin-left:-16px; border-radius:2px; background:var(--accent); pointer-events:none; }
+.area-rail-list > li[data-drop="before"]::after { top:-6px; }
+.area-rail-list > li[data-drop="after"]::after { bottom:-6px; }
 .area-rail-list > li.area-dragging .area-tile { box-shadow:0 8px 24px rgb(0 0 0 / .14); }
 /* The tile a dragged space is held over, about to share a folder with it: the folder's own outline, ahead of time. */
 .area-rail-list > li.area-merge-target { border-radius:18px; box-shadow:0 0 0 4px var(--window), 0 0 0 5px var(--border), inset 0 0 0 100px color-mix(in srgb, var(--text) 6%, transparent); }
 .area-folder { display:flex; flex-direction:column; align-items:center; gap:8px; }
-.area-folder.open { padding:4px; margin:-4px; border-radius:18px; box-shadow:inset 0 0 0 1px var(--border); }
+/* An open folder and a closed folder's tile sit on a ground a little darker than the rail (owner, 2026-10-12). */
+.area-folder.open { padding:4px; margin:-4px; border-radius:18px; background:color-mix(in srgb, var(--window) 90%, black); }
+.area-folder-tile { background:color-mix(in srgb, var(--window) 90%, black); }
 .area-folder-tile { color:var(--muted); }
 .area-create { color:var(--muted); }
 /* What waits in an area is a dot on the tile's corner (user, 2026-10-05), ringed in the window's ground so it reads
@@ -3453,7 +3457,6 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 
 /* Curated friends and explicit template updates. */
 .marketplace-heading .org-panel-heading-text { gap: 0; }
-.marketplace-source { margin: 0; font-size: 12px; }
 .marketplace-discover { display: grid; gap: 12px; min-width: 0; }
 .marketplace-listing { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; padding-block: 12px; gap: 16px; }
 .marketplace-listing .friend-source-text { gap: 6px; }

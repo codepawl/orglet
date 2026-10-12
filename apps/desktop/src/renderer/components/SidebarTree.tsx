@@ -22,7 +22,7 @@ export function statusMarkLabel(status: StatusMarkState): string {
 }
 
 const HOLD_MS = 350, SLOP_PX = 6;
-type RowBindings = { ref: (element: HTMLElement | null) => void; style?: CSSProperties; dragging: boolean; /** Another row is held over this one, about to be joined with it. */ merging: boolean; onPointerDown: (event: PointerEvent<HTMLElement>) => void; onPointerMove: (event: PointerEvent<HTMLElement>) => void; onPointerUp: (event: PointerEvent<HTMLElement>) => void; onPointerCancel: () => void; onClickCapture: (event: React.MouseEvent) => void; onMoveKey: (event: KeyboardEvent) => void };
+type RowBindings = { ref: (element: HTMLElement | null) => void; style?: CSSProperties; dragging: boolean; /** Another row is held over this one, about to be joined with it. */ merging: boolean; /** The dragged row will land on this side of this one: where the drop line shows. */ dropSide?: 'before' | 'after'; onPointerDown: (event: PointerEvent<HTMLElement>) => void; onPointerMove: (event: PointerEvent<HTMLElement>) => void; onPointerUp: (event: PointerEvent<HTMLElement>) => void; onPointerCancel: () => void; onClickCapture: (event: React.MouseEvent) => void; onMoveKey: (event: KeyboardEvent) => void };
 
 /**
  * Press-and-hold reordering for one sidebar list. Holding a row lifts it; moving the pointer slides the other rows
@@ -83,11 +83,14 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void, optio
       try { target.setPointerCapture(press.current.pointer); } catch { /* pointer already released */ }
       setDrag({ id, from, target: from, offset: 0, tops, heights, step: heights[from] + gap });
     };
+    // The row the dragged one will land next to, once it has left its own place and is not over a row it would join.
+    let dropSide: 'before' | 'after' | undefined;
+    if (drag && drag.over === undefined && drag.target !== drag.from && index === drag.target && id !== drag.id) dropSide = drag.target > drag.from ? 'after' : 'before';
     /** Half the height of the band around another row's middle that means "on it", or 0 when the two cannot join. */
     const band = (at: number, heights: number[]) => options.canMerge?.(id, order[at]) ? heights[at] * MERGE_BAND : 0;
     return {
       ref: element => { if (element) elements.current.set(id, element); else elements.current.delete(id); },
-      style, dragging: drag?.id === id, merging: drag?.over === id,
+      style, dragging: drag?.id === id, merging: drag?.over === id, dropSide,
       onPointerDown: event => {
         if (event.button !== 0 || (event.target as HTMLElement).closest('input,[data-no-drag]')) return;
         clearPress();
@@ -154,7 +157,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
   /** Rows listed under this one: an orglet's side threads (COD-247) and its schedules' runs (COD-258). */ children?: ReactNode;
   /** What the rows under this one are, for assistive technology. */ childrenLabel?: string }) {
   // `merging` is the rail's; a sidebar row never joins another, and it must not reach the DOM as an attribute.
-  const { ref, style, dragging, merging: _merging, onMoveKey, ...pointer } = reorder;
+  const { ref, style, dragging, merging: _merging, dropSide: _dropSide, onMoveKey, ...pointer } = reorder;
   const dwell = dwellHandlers(onDwell);
   const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
   const selected = selection?.selected ?? false;
