@@ -37,6 +37,11 @@ export type ReorderOptions = {
    */
   canMerge?: (draggedId: string, overId: string) => boolean;
   onMerge?: (draggedId: string, overId: string) => void;
+  /**
+   * Dragging a row past either end of the list, by half a row, takes it out of the list (a space out of its folder).
+   * `onLeave` is called on that drop with the end it left by; without it, the list keeps every row.
+   */
+  onLeave?: (draggedId: string, side: 'before' | 'after') => void;
 };
 
 /** How much of a row's height around its middle counts as "on it" rather than "past it". */
@@ -48,7 +53,7 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void, optio
   const elements = useRef(new Map<string, HTMLElement>());
   const press = useRef<{ id: string; x: number; y: number; timer: number; pointer: number; target: HTMLElement } | null>(null);
   const suppressClick = useRef(false);
-  const [drag, setDrag] = useState<{ id: string; from: number; target: number; offset: number; tops: number[]; heights: number[]; step: number; over?: string } | null>(null);
+  const [drag, setDrag] = useState<{ id: string; from: number; target: number; offset: number; tops: number[]; heights: number[]; step: number; over?: string; leaving?: 'before' | 'after' } | null>(null);
 
   // Once the saved order arrives from the core, drop the optimistic copy.
   useEffect(() => { if (override && override.join() === ids.join()) setOverride(null); }, [ids, override]);
@@ -112,12 +117,23 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void, optio
         while (target + 1 < order.length && centre > middle(target + 1) + band(target + 1, drag.heights)) target++;
         while (target > 0 && centre < middle(target - 1) - band(target - 1, drag.heights)) target--;
         const overIndex = order.findIndex((other, at) => other !== id && band(at, drag.heights) > 0 && Math.abs(centre - middle(at)) <= band(at, drag.heights));
-        setDrag({ ...drag, offset, target, over: overIndex >= 0 ? order[overIndex] : undefined });
+        const last = order.length - 1;
+        let leaving: 'before' | 'after' | undefined;
+        if (options.onLeave && centre < drag.tops[0] - drag.heights[0] / 2) leaving = 'before';
+        if (options.onLeave && centre > drag.tops[last] + drag.heights[last] * 1.5) leaving = 'after';
+        // A row on its way out leaves the others where they are.
+        setDrag({ ...drag, offset, target: leaving ? drag.from : target, over: leaving || overIndex < 0 ? undefined : order[overIndex], leaving });
       },
       onPointerUp: () => {
         clearPress();
         if (!drag || drag.id !== id) return;
         suppressClick.current = true;
+        if (drag.leaving) {
+          const side = drag.leaving;
+          setDrag(null);
+          options.onLeave?.(id, side);
+          return;
+        }
         if (drag.over !== undefined) {
           const over = drag.over;
           setDrag(null);
@@ -138,7 +154,7 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void, optio
       },
     };
   };
-  return { order, bind, dragging: drag !== null };
+  return { order, bind, dragging: drag !== null, leaving: drag?.leaving };
 }
 
 /**

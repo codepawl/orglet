@@ -3317,7 +3317,11 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .area-rail-list > li.area-dragging .area-tile { box-shadow:0 8px 24px rgb(0 0 0 / .14); }
 /* The tile a dragged space is held over, about to share a folder with it: the folder's own outline, ahead of time. */
 .area-rail-list > li.area-merge-target { border-radius:18px; box-shadow:0 0 0 4px var(--window), 0 0 0 5px var(--border), inset 0 0 0 100px color-mix(in srgb, var(--text) 6%, transparent); }
-.area-folder { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.area-folder { position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; }
+/* A space dragged out past an end of its folder: the same bar as a drop between tiles, just outside that end. */
+.area-folder[data-leave]::after { content:""; position:absolute; left:50%; width:32px; height:3px; margin-left:-16px; border-radius:2px; background:var(--accent); pointer-events:none; }
+.area-folder[data-leave="before"]::after { top:-10px; }
+.area-folder[data-leave="after"]::after { bottom:-10px; }
 /* An open folder and a closed folder's tile sit on a ground a little darker than the rail (owner, 2026-10-12). */
 .area-folder.open { padding:4px; margin:-4px; border-radius:18px; background:color-mix(in srgb, var(--window) 90%, black); }
 .area-folder-tile { background:color-mix(in srgb, var(--window) 90%, black); }
