@@ -82,6 +82,7 @@ import { deleteCustomConnection, readCustomConnections, requireCustomConnection,
 import { McpServers, type McpRuntime } from './tools/mcp';
 import { grantsAfterApproval, McpApprovalChoice, McpGrant } from '../shared/mcp';
 import { GOOGLE_APPS } from '../shared/mcp-catalog';
+import { isGoogleLegacyUrl } from '../shared/google-tools';
 import type { WebSearchRuntime, WebSearchSettings } from './tools/web-search';
 import { WebTools } from './tools/web-tools';
 import { webNetwork } from './tools/web-network';
@@ -337,6 +338,31 @@ export class CoreService {
       const transport = server.transport;
       return transport.kind === 'http' && transport.oauth && googleUrls.has(transport.url) ? [{ id: server.id, url: transport.url }] : [];
     });
+  }
+  /** The six preview servers an earlier build saved for Google, still waiting to be replaced by the built-in one. Only main calls this. */
+  mcpGoogleLegacyServers(): { id: string; url: string }[] {
+    return this.mcp.list().flatMap(server => {
+      const transport = server.transport;
+      return transport.kind === 'http' && isGoogleLegacyUrl(transport.url) ? [{ id: server.id, url: transport.url }] : [];
+    });
+  }
+  /**
+   * Swaps the six preview servers for the built-in one: an orglet that could use any of them may use the new one, each is a
+   * new revision like any edit, and the six are removed. Only main calls this, after it has moved the sign-in across.
+   */
+  async replaceGoogleServers(raw: unknown) {
+    const { builtInId, legacyIds } = z.object({ builtInId: Id, legacyIds: z.array(Id).max(20) }).strict().parse(raw);
+    if (!this.mcp.find(builtInId)) throw new Error('Không tìm thấy máy chủ MCP.');
+    const legacy = new Set(legacyIds);
+    this.store.transaction(() => {
+      for (const worker of this.store.all<Worker>('workers')) {
+        const current = worker.mcpServerIds ?? [];
+        if (!current.some(serverId => legacy.has(serverId))) continue;
+        const replaced = [...new Set([...current.filter(serverId => !legacy.has(serverId)), builtInId])];
+        this.store.version('workers', { ...worker, mcpServerIds: replaced, revision: this.store.nextRevision(worker.id) });
+      }
+    });
+    for (const legacyId of legacyIds) await this.mcp.remove(legacyId);
   }
   /**
    * Lets the chosen orglets use the chosen MCP servers, on top of what each already may use. Each call still asks in

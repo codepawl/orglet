@@ -4,6 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { CallToolResultSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Store, now } from '../storage/database';
@@ -11,6 +12,9 @@ import { killTree } from '../harness/exec';
 import { StartTimeReader, type ProcessIdentity, type StartTimeLookup } from './process-identity';
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
 import { McpSignInNeeded, SavedSignIn } from './mcp-oauth';
+import { GoogleApi, GoogleSession, GOOGLE_SIGN_IN_NEEDED, type GoogleFetch } from './google-api';
+import { buildGoogleToolServer } from './google-tools';
+import { isGoogleToolsUrl } from '../../shared/google-tools';
 import {
   emptyMcpSecrets, McpSecrets, McpServer, McpServerConfig, mcpToolNames,
   MCP_CALL_TIMEOUT_MS, MCP_CONNECT_TIMEOUT_MS, MCP_RESULT_CHARACTERS, MCP_SERVER_LIMIT, MCP_TOOLS_PER_SERVER,
@@ -31,6 +35,8 @@ export type McpRuntime = {
   startTimes?: StartTimeLookup;
   connectTimeoutMs?: number;
   callTimeoutMs?: number;
+  /** The network the built-in Google tools and their token refresh use; a test hands in its own. */
+  googleFetch?: GoogleFetch;
 };
 
 /** A tool as the server listed it, with the schema a run will offer the model. */
@@ -295,7 +301,7 @@ export class McpServers {
   private async connect(server: McpServer, connection: Connection, signal?: AbortSignal): Promise<Connection> {
     try {
       const secrets = await this.readSecrets(server.id);
-      const { client, transport } = await this.open(server, secrets, signal);
+      const { client, transport } = await this.open(server, secrets, signal, connection);
       connection.client = client;
       connection.transport = transport;
       if (transport instanceof StdioClientTransport) connection.pid = transport.pid ?? undefined;
@@ -320,8 +326,9 @@ export class McpServers {
   }
 
   /** Opens the transport and runs the handshake. A remote server gets Streamable HTTP first, then the older SSE. */
-  private async open(server: McpServer, secrets: McpSecrets, signal?: AbortSignal): Promise<{ client: Client; transport: Transport }> {
+  private async open(server: McpServer, secrets: McpSecrets, signal?: AbortSignal, connection?: Connection): Promise<{ client: Client; transport: Transport }> {
     const options = { timeout: this.connectTimeoutMs, ...(signal ? { signal } : {}) };
+    if (server.transport.kind === 'http' && isGoogleToolsUrl(server.transport.url)) return this.openGoogleTools(server, secrets, options, connection);
     if (server.transport.kind === 'stdio') {
       const env: Record<string, string> = {};
       for (const name of server.transport.envNames) {
@@ -374,6 +381,30 @@ export class McpServers {
         throw streamableError;
       }
     }
+  }
+
+  /**
+   * Orglet's own Google tools: a server inside this process, reached over a linked pair of in-memory transports, so it is
+   * listed, granted, approved and called like any other server. It needs the saved Google sign-in, like the remote ones did.
+   */
+  private async openGoogleTools(server: McpServer, secrets: McpSecrets, options: { timeout: number; signal?: AbortSignal }, connection?: Connection): Promise<{ client: Client; transport: Transport }> {
+    const state = secrets.oauth;
+    if (!state || state.serverUrl !== (server.transport.kind === 'http' ? server.transport.url : '') || !state.tokens) throw new McpSignInNeeded();
+    const fetchFn: GoogleFetch = this.runtime.googleFetch ?? ((input, init) => fetch(input, init));
+    const session = new GoogleSession(state, next => this.runtime.saveSignIn?.(server.id, next), fetchFn, { onSignInLost: () => this.signInLost(connection) });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildGoogleToolServer(new GoogleApi(session, fetchFn)).connect(serverSide);
+    const client = this.newClient();
+    await client.connect(clientSide, options);
+    return { client, transport: clientSide };
+  }
+
+  /** Google no longer accepts the saved sign-in: the row asks the person to sign in again. */
+  private signInLost(connection?: Connection) {
+    if (!connection || connection.closing) return;
+    connection.status = 'signIn';
+    connection.error = GOOGLE_SIGN_IN_NEEDED;
+    this.notify();
   }
 
   /**

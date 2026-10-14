@@ -1,26 +1,25 @@
 import { mcpRedirectUri, type McpServerDraft } from './mcp';
+import { GOOGLE_SCOPES, GOOGLE_TOOLS_NAME, GOOGLE_TOOLS_URL } from './google-tools';
 
 /**
  * Apps Orglet offers to connect with one click (stage 4, 2026-10-07), each the service's own remote MCP server. The
  * MCP Registry is still a preview with no sign-in fields, so this list is kept by hand. An app signs in through the
  * browser when its service lets Orglet register itself (Linear, Notion and Atlassian, checked 2026-10-07); GitHub
- * registers only apps made with it in advance, so it takes a token until CodePawl has one. Google's Workspace servers
- * (developer preview, 2026-10) sign in through the browser too, but only with an OAuth client the person made in
- * Google Cloud (`signIn: 'google'`): there is no dynamic registration. Settings → Connectors lists all of them.
+ * registers only apps made with it in advance, so it takes a token until CodePawl has one. Google signs in through the
+ * browser with a client registered in advance (`signIn: 'google'`), and its tools are Orglet's own, built in over
+ * Google's generally available APIs (`shared/google-tools.ts`), not Google's preview MCP servers. Settings →
+ * Connectors lists all of them.
  */
 export type McpCatalogApp = {
-  id: 'googlesheets' | 'googledrive' | 'gmail' | 'googlecalendar' | 'googledocs' | 'googleslides' | 'linear' | 'notion' | 'atlassian' | 'github';
+  id: 'google' | 'linear' | 'notion' | 'atlassian' | 'github';
   name: string;
   url: string;
   signIn: 'browser' | 'token' | 'google';
   /** Where to make the token, for an app that takes one. */
   tokenPage?: string;
-  /** The OAuth scopes a Google server asks for, from https://developers.google.com/workspace/guides/configure-mcp-servers. */
+  /** The OAuth scopes a Google sign-in asks for. */
   scopes?: readonly string[];
 };
-
-const GOOGLE_SCOPE_PREFIX = 'https://www.googleapis.com/auth/';
-const googleScopes = (...names: string[]) => names.map(name => GOOGLE_SCOPE_PREFIX + name);
 
 export const GOOGLE_AUTHORIZATION_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 export const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
@@ -55,12 +54,7 @@ export function connectBaseUrl(override: string | undefined): string | undefined
 const GOOGLE_AUTHORIZATION_PARAMETERS = { access_type: 'offline', prompt: 'consent' };
 
 export const MCP_CATALOG: readonly McpCatalogApp[] = [
-  { id: 'googlesheets', name: 'Google Sheets', url: 'https://sheetsmcp.googleapis.com/mcp/v1', signIn: 'google', scopes: googleScopes('drive.readonly', 'drive.file', 'spreadsheets.readonly', 'spreadsheets') },
-  { id: 'googledrive', name: 'Google Drive', url: 'https://drivemcp.googleapis.com/mcp/v1', signIn: 'google', scopes: googleScopes('drive.readonly', 'drive.file') },
-  { id: 'gmail', name: 'Gmail', url: 'https://gmailmcp.googleapis.com/mcp/v1', signIn: 'google', scopes: googleScopes('gmail.readonly', 'gmail.compose') },
-  { id: 'googlecalendar', name: 'Google Calendar', url: 'https://calendarmcp.googleapis.com/mcp/v1', signIn: 'google', scopes: googleScopes('calendar.calendarlist.readonly', 'calendar.events.freebusy', 'calendar.events.readonly') },
-  { id: 'googledocs', name: 'Google Docs', url: 'https://docsmcp.googleapis.com/mcp/v1', signIn: 'google', scopes: googleScopes('drive.readonly', 'drive.file', 'documents.readonly', 'documents') },
-  { id: 'googleslides', name: 'Google Slides', url: 'https://slidesmcp.googleapis.com/mcp/v1', signIn: 'google', scopes: googleScopes('drive.readonly', 'drive.file', 'presentations.readonly', 'presentations') },
+  { id: 'google', name: GOOGLE_TOOLS_NAME, url: GOOGLE_TOOLS_URL, signIn: 'google', scopes: GOOGLE_SCOPES },
   { id: 'linear', name: 'Linear', url: 'https://mcp.linear.app/mcp', signIn: 'browser' },
   { id: 'notion', name: 'Notion', url: 'https://mcp.notion.com/mcp', signIn: 'browser' },
   { id: 'atlassian', name: 'Atlassian', url: 'https://mcp.atlassian.com/v1/mcp', signIn: 'browser' },
@@ -79,7 +73,7 @@ export function catalogAppOf(address: string): McpCatalogApp['id'] | undefined {
     return undefined;
   }
   const within = (domain: string) => host === domain || host.endsWith(`.${domain}`);
-  if (within('googleapis.com')) return MCP_CATALOG.find(app => app.signIn === 'google' && new URL(app.url).hostname === host)?.id;
+  if (host === new URL(GOOGLE_TOOLS_URL).hostname || within('googleapis.com')) return 'google';
   if (within('linear.app')) return 'linear';
   if (within('notion.com') || within('notion.so')) return 'notion';
   if (within('atlassian.com') || within('atlassian.net')) return 'atlassian';
@@ -87,10 +81,10 @@ export function catalogAppOf(address: string): McpCatalogApp['id'] | undefined {
   return undefined;
 }
 
-/** The six Google services, in the order the Connectors page names them. */
+/** The Google connector: one built-in server for all the services. */
 export const GOOGLE_APPS = MCP_CATALOG.filter(app => app.signIn === 'google');
 
-/** One consent for all six services asks for every scope any of them needs, each scope once. */
+/** One consent asks for every scope the tools need, each scope once. */
 export const GOOGLE_UNION_SCOPES: readonly string[] = [...new Set(GOOGLE_APPS.flatMap(app => app.scopes ?? []))];
 
 /**
