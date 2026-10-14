@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orglet-connect",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-03",
+  "workers_dev": false,
+  "vars": {
+    "GOOGLE_CLIENT_ID": "160397178746-e5uisr4gnrj6ns7fgpnulibqtq6usilq.apps.googleusercontent.com",
+    "GOOGLE_REDIRECT_URI": "http://127.0.0.1:53127/callback"
+  },
+  "routes": [{ "pattern": "connect.orglet.codepawl.com", "custom_domain": true }],
+  "observability": { "enabled": true, "redact_query_string": true,
+    "logs": { "enabled": true, "head_sampling_rate": 0.1, "invocation_logs": false },
+    "traces": { "enabled": false } }
+}

@@ -735,15 +735,16 @@ const SCREENS = [
   }, close: page => page.evaluate(async () => {
     for (const server of (await window.orglet.call('workspace', {})).mcpServers ?? []) await window.orglet.removeMcpServer(server.id);
   }) },
-  // The services signed in to in the browser: Google needs its own OAuth client first, shown here as not entered.
+  // The services signed in to in the browser: one Google row with Connect Google, then the others.
   { name: 'settings-connectors', family: 'settings', open: async page => {
     await openSettingsTab(page, 'Dịch vụ');
-    await page.getByText(label('OAuth client của Google'), { exact: true }).first().waitFor();
+    await page.getByRole('button', { name: label('Kết nối Google'), exact: true }).waitFor();
   } },
-  // The form behind Connect on a Google service when no client is saved: the steps, the redirect address and the two values.
+  // The person's own Google client, from the Google row's menu: the steps, the redirect address and the two values.
   { name: 'connectors-google-client-form', family: 'settings', open: async page => {
     await openSettingsTab(page, 'Dịch vụ');
-    await page.getByRole('button', { name: label('Nhập client'), exact: true }).click();
+    await page.getByRole('button', { name: label('Tùy chọn Google'), exact: true }).click();
+    await page.getByRole('menuitem', { name: label('Dùng OAuth client Google của bạn'), exact: true }).click();
     await page.getByRole('dialog').getByRole('textbox', { name: label('Redirect URI') }).waitFor();
   } },
   // GitHub takes a token: the form opens filled in, with where to make one.

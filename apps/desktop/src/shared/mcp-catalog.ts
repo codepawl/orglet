@@ -30,6 +30,27 @@ export const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
  */
 export const GOOGLE_CONNECTOR_PORT = 53127;
 export const GOOGLE_REDIRECT_URI = mcpRedirectUri(GOOGLE_CONNECTOR_PORT);
+/**
+ * CodePawl's own Google OAuth client (Web application, marked for an AI agent), so a person never makes one in Google
+ * Cloud. The client ID is public. The secret that goes with it lives only in the token broker (services/connect), which
+ * adds it to the two token requests; the app sends its token requests there and holds no secret.
+ */
+export const GOOGLE_CLIENT_ID = '160397178746-e5uisr4gnrj6ns7fgpnulibqtq6usilq.apps.googleusercontent.com';
+export const CONNECT_BASE_URL = 'https://connect.orglet.codepawl.com';
+export const GOOGLE_BROKER_TOKEN_ENDPOINT = `${CONNECT_BASE_URL}/google/token`;
+
+/** `ORGLET_CONNECT_URL` (development builds only) names another broker; only https, or a broker on this computer. */
+export function connectBaseUrl(override: string | undefined): string | undefined {
+  if (!override) return undefined;
+  try {
+    const url = new URL(override);
+    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+    if (url.protocol === 'https:' || (url.protocol === 'http:' && local)) return url.origin;
+  } catch {
+    // Not an address: the real broker is used.
+  }
+  return undefined;
+}
 /** Without these Google hands back no refresh token, and the sign-in would end within the hour. */
 const GOOGLE_AUTHORIZATION_PARAMETERS = { access_type: 'offline', prompt: 'consent' };
 
@@ -66,21 +87,30 @@ export function catalogAppOf(address: string): McpCatalogApp['id'] | undefined {
   return undefined;
 }
 
-/** The server a catalog app becomes: browser sign-in, or a token the person pastes. */
-export function catalogDraft(app: McpCatalogApp, token?: string): McpServerDraft {
-  if (app.signIn === 'google') return { name: app.name, enabled: true, transport: { kind: 'http', url: app.url, headers: [], oauth: true, oauthClient: googleClientOf(app) } };
+/** The six Google services, in the order the Connectors page names them. */
+export const GOOGLE_APPS = MCP_CATALOG.filter(app => app.signIn === 'google');
+
+/** One consent for all six services asks for every scope any of them needs, each scope once. */
+export const GOOGLE_UNION_SCOPES: readonly string[] = [...new Set(GOOGLE_APPS.flatMap(app => app.scopes ?? []))];
+
+/**
+ * The server a catalog app becomes: browser sign-in, or a token the person pastes. A Google server signs in with
+ * CodePawl's client through the broker, or, with `ownClient`, with the client the person saved themselves.
+ */
+export function catalogDraft(app: McpCatalogApp, token?: string, options: { ownClient?: boolean } = {}): McpServerDraft {
+  if (app.signIn === 'google') return { name: app.name, enabled: true, transport: { kind: 'http', url: app.url, headers: [], oauth: true, oauthClient: googleClientOf(app, options.ownClient === true) } };
   if (app.signIn === 'browser') return { name: app.name, enabled: true, transport: { kind: 'http', url: app.url, headers: [], oauth: true } };
   return { name: app.name, enabled: true, transport: { kind: 'http', url: app.url, headers: [], bearer: token ?? null } };
 }
 
-/** The pre-registered client a Google server signs in with: the one Google client saved once, these scopes, the fixed port. */
-function googleClientOf(app: McpCatalogApp) {
-  return {
-    shared: 'google' as const,
+/** The pre-registered client a Google server signs in with: CodePawl's (token requests go via the broker) or the person's own. */
+function googleClientOf(app: McpCatalogApp, ownClient: boolean) {
+  const common = {
     scopes: [...(app.scopes ?? [])],
     port: GOOGLE_CONNECTOR_PORT,
     authorizationEndpoint: GOOGLE_AUTHORIZATION_ENDPOINT,
-    tokenEndpoint: GOOGLE_TOKEN_ENDPOINT,
     authorizationParameters: GOOGLE_AUTHORIZATION_PARAMETERS,
   };
+  if (ownClient) return { ...common, shared: 'google' as const, tokenEndpoint: GOOGLE_TOKEN_ENDPOINT };
+  return { ...common, clientId: GOOGLE_CLIENT_ID, tokenEndpoint: GOOGLE_BROKER_TOKEN_ENDPOINT };
 }

@@ -81,6 +81,7 @@ import { customProviderId, findCustomConnection, isCustomProvider } from '../sha
 import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
 import { McpServers, type McpRuntime } from './tools/mcp';
 import { grantsAfterApproval, McpApprovalChoice, McpGrant } from '../shared/mcp';
+import { GOOGLE_APPS } from '../shared/mcp-catalog';
 import type { WebSearchRuntime, WebSearchSettings } from './tools/web-search';
 import { WebTools } from './tools/web-tools';
 import { webNetwork } from './tools/web-network';
@@ -329,6 +330,31 @@ export class CoreService {
     if (server.transport.kind !== 'http' || !server.transport.oauth) throw new Error('Máy chủ này không đăng nhập bằng trình duyệt.');
     return server.transport.url;
   }
+  /** The Google servers saved here, which share one Google sign-in. Only main calls this. */
+  mcpGoogleServers(): { id: string; url: string }[] {
+    const googleUrls = new Set(GOOGLE_APPS.map(app => app.url));
+    return this.mcp.list().flatMap(server => {
+      const transport = server.transport;
+      return transport.kind === 'http' && transport.oauth && googleUrls.has(transport.url) ? [{ id: server.id, url: transport.url }] : [];
+    });
+  }
+  /**
+   * Lets the chosen orglets use the chosen MCP servers, on top of what each already may use. Each call still asks in
+   * the chat. A server removed since is skipped, and the change is a new revision of each orglet like any edit.
+   */
+  private grantMcpServers(workerIds: readonly string[], serverIds: readonly string[]) {
+    const knownServers = new Set(this.mcp.list().map(server => server.id));
+    const wanted = serverIds.filter(serverId => knownServers.has(serverId));
+    this.store.transaction(() => {
+      for (const workerId of workerIds) {
+        const worker = this.store.get<Worker>('workers', workerId);
+        const merged = [...new Set([...(worker.mcpServerIds ?? []), ...wanted])];
+        if (merged.length === (worker.mcpServerIds?.length ?? 0)) continue;
+        if (merged.length > 20) throw new Error('Một Tí đã dùng quá nhiều máy chủ MCP.');
+        this.store.version('workers', { ...worker, mcpServerIds: merged, revision: this.store.nextRevision(workerId) });
+      }
+    });
+  }
   /** Path of a task's source for the main process to open in the default app; the renderer only ever sends ids. */
   sourcePath(raw: unknown): string {
     const input = commands.sourceBytes.parse(raw);
@@ -565,6 +591,11 @@ export class CoreService {
       case 'setMcpServerEnabled': {
         const input = commands.setMcpServerEnabled.parse(args);
         await this.mcp.setEnabled(input.id, input.enabled);
+        return;
+      }
+      case 'grantMcpServers': {
+        const input = commands.grantMcpServers.parse(args);
+        this.grantMcpServers(input.workerIds, input.serverIds);
         return;
       }
       case 'setMcpGrant': {

@@ -171,6 +171,7 @@ export const COMMAND_PARITY: Record<Command, Parity> = {
   testMcpServer: elevated('orglet test mcp', 'decisions'),
   testWebSearch: elevated('orglet test web-search', 'decisions'),
   setMcpServerEnabled: elevated('orglet grant mcp-enable', 'setup'),
+  grantMcpServers: windowOnly('the Connectors page asks which orglets may use Google right after the person signs in'),
   setMcpGrant: elevated('orglet grant mcp', 'setup'),
   setBrowser: elevated('orglet grant browser', 'setup'),
   browserActions: reached('orglet show browser'),

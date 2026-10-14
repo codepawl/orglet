@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { auth, type OAuthDiscoveryState } from '@modelcontextprotocol/sdk/client/auth.js';
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { SavedSignIn } from '../core/tools/mcp-oauth';
+import { CONNECT_BASE_URL, GOOGLE_UNION_SCOPES } from '../shared/mcp-catalog';
 import { mcpRedirectUri, type McpOAuthState, type McpPreregisteredClient, type McpSecrets, type McpSharedClientProvider } from '../shared/mcp';
 
 /** How long a sign-in waits for the browser to come back before it gives up. */
@@ -32,9 +33,14 @@ export type McpSignInDependencies = {
   readSharedClient?: (provider: McpSharedClientProvider) => Promise<{ clientId: string; clientSecret?: string } | undefined>;
   /** The app's language for the page the browser shows on the way back; Vietnamese when absent. */
   translate?: (key: string) => string;
+  /** Replaces the token broker's address (CodePawl's, `ORGLET_CONNECT_URL` in a development build); the path stays. */
+  connectBaseUrl?: string;
   timeoutMs?: number;
   fetchFn?: FetchLike;
 };
+
+/** A server the Google sign-in covers: its id in main's store and the address it was saved with. */
+export type GoogleServerTarget = { id: string; url: string };
 
 type Callback = { code: string } | { error: string };
 
@@ -103,8 +109,25 @@ export class McpSignIns {
     this.active.get(serverId)?.cancel();
   }
 
+  /**
+   * One sign-in for all of Google's servers: a single consent for every scope any of them needs, run for the primary
+   * server, then the same sign-in (tokens, client, redirect) is saved for the others with their own address. Google
+   * does not rotate refresh tokens, so each server refreshing on its own never invalidates the rest.
+   */
+  async signInGoogle(primaryId: string, servers: readonly GoogleServerTarget[]): Promise<void> {
+    const primary = servers.find(server => server.id === primaryId);
+    if (!primary) throw new Error(MCP_SIGN_IN_REFUSED);
+    await this.signIn(primary.id, primary.url, { scopes: GOOGLE_UNION_SCOPES });
+    const signedIn = (await this.dependencies.readSecrets(primary.id)).oauth;
+    if (!signedIn) throw new Error(MCP_SIGN_IN_REFUSED);
+    for (const sibling of servers.filter(server => server.id !== primary.id)) {
+      const latest = await this.dependencies.readSecrets(sibling.id);
+      await this.dependencies.saveSecrets(sibling.id, { ...latest, oauth: { ...signedIn, serverUrl: sibling.url } });
+    }
+  }
+
   /** Runs one sign-in to the end; a second one for the same server replaces the first. */
-  async signIn(serverId: string, serverUrl: string): Promise<void> {
+  async signIn(serverId: string, serverUrl: string, signInOptions: { scopes?: readonly string[] } = {}): Promise<void> {
     this.cancel(serverId);
     const saved = await this.dependencies.readSecrets(serverId);
     const previous = saved.oauth?.serverUrl === serverUrl ? saved.oauth : undefined;
@@ -124,14 +147,15 @@ export class McpSignIns {
       // A client registered for another port cannot come back here, so it registers again.
       const keepClient = previous?.redirectUri === redirectUri;
       const initial: McpOAuthState = preregistered
-        ? preregisteredState(serverUrl, redirectUri, preregistered)
+        ? preregisteredState(serverUrl, redirectUri, preregistered, this.dependencies.connectBaseUrl)
         : {
           serverUrl, redirectUri,
           ...(keepClient && previous?.client ? { client: previous.client } : {}),
           ...(previous?.discovery ? { discovery: previous.discovery } : {}),
         };
       const provider = new BrowserSignIn(initial, this.dependencies.openExternal, preregistered?.authorizationParameters);
-      const scope = preregistered?.scopes.length ? preregistered.scopes.join(' ') : undefined;
+      const requested = signInOptions.scopes?.length ? signInOptions.scopes : preregistered?.scopes;
+      const scope = requested?.length ? requested.join(' ') : undefined;
       const options = { serverUrl, ...(scope ? { scope } : {}), ...(this.dependencies.fetchFn ? { fetchFn: this.dependencies.fetchFn } : {}) };
       // Listening starts before the browser opens, so a service that answers at once is not missed.
       const returned = callback(provider.expectedState, () => provider.issuer());
@@ -222,7 +246,7 @@ export class McpSignIns {
 }
 
 /** The sign-in a pre-registered client starts from: its own client information, and the endpoints it names in place of discovery. */
-function preregisteredState(serverUrl: string, redirectUri: string, client: ResolvedClient): McpOAuthState {
+function preregisteredState(serverUrl: string, redirectUri: string, client: ResolvedClient, connectBaseUrl?: string): McpOAuthState {
   const information = {
     client_id: client.clientId,
     redirect_uris: [redirectUri],
@@ -230,8 +254,14 @@ function preregisteredState(serverUrl: string, redirectUri: string, client: Reso
   };
   return {
     serverUrl, redirectUri, client: information, withoutResource: true,
-    ...(client.authorizationEndpoint && client.tokenEndpoint ? { discovery: discoveryFromEndpoints(client.authorizationEndpoint, client.tokenEndpoint) } : {}),
+    ...(client.authorizationEndpoint && client.tokenEndpoint ? { discovery: discoveryFromEndpoints(client.authorizationEndpoint, onConnectBase(client.tokenEndpoint, connectBaseUrl)) } : {}),
   };
+}
+
+/** A token address on CodePawl's broker moves to the development base when one is set; any other address is kept. */
+function onConnectBase(tokenEndpoint: string, connectBaseUrl?: string): string {
+  if (!connectBaseUrl || !tokenEndpoint.startsWith(`${CONNECT_BASE_URL}/`)) return tokenEndpoint;
+  return connectBaseUrl + tokenEndpoint.slice(CONNECT_BASE_URL.length);
 }
 
 /** What discovery would have found, built from the two addresses the person or the preset gave. */
