@@ -19,7 +19,7 @@ import { signIn, statusOf, SignInWaiting, useSignIn, type Act } from './McpSetti
 /** Stands in for a saved value the window never reads back. */
 const SAVED_MASK = '••••••••';
 
-/** The six services behind the one Google row; product names, so they read the same in every language. */
+/** The services behind the one Google row; product names, so they read the same in every language. */
 const GOOGLE_SERVICES = 'Sheets · Drive · Docs · Slides · Calendar · Gmail';
 
 /** What each service lets an orglet do, in the person's language. */
@@ -48,8 +48,8 @@ function googleSummary(servers: readonly McpServerView[]) {
 /**
  * Settings → Connectors: the services an orglet can reach by signing in to them in the browser, each one an MCP server
  * made from a preset. Connect saves the server and signs in; a connected service is an ordinary row in Settings → MCP,
- * with the same per-orglet choice and approval for every call. Google is one row for six servers: one consent, one
- * question about which orglets may use it, one Disconnect. It signs in with CodePawl's Google client; a person's own
+ * with the same per-orglet choice and approval for every call. Google is one row for one built-in server of Orglet's own
+ * Google tools: one consent, one question about which orglets may use it, one Disconnect. It signs in with CodePawl's Google client; a person's own
  * client is an option in the row's menu.
  */
 export function ConnectorsSettings({ workspace, busy, act, onToken }: { workspace: Workspace; busy: boolean; act: Act; onToken: (app: McpCatalogApp) => void }) {
@@ -86,7 +86,7 @@ export function ConnectorsSettings({ workspace, busy, act, onToken }: { workspac
     await orglet.removeMcpServer(server.id);
     return t('Đã ngắt kết nối {0}', [app.name]);
   }, app.name);
-  // Makes the servers the person does not have yet, so one sign-in covers all six, then signs in once for them all.
+  // Makes the built-in Google server when the person does not have it yet, then signs in.
   const connectGoogle = () => void act(async () => {
     const ready: McpServerView[] = [];
     for (const app of GOOGLE_APPS) {
@@ -105,7 +105,7 @@ export function ConnectorsSettings({ workspace, busy, act, onToken }: { workspac
   const disconnectGoogle = (googleServers: readonly McpServerView[]) => void act(async () => {
     const confirmed = await confirmAction({
       title: t('Ngắt kết nối {0}?', ['Google']),
-      description: t('Tí đang dùng Google sẽ không gọi được nữa. Đăng nhập lưu trên máy này bị xóa, cho cả sáu dịch vụ.'),
+      description: t('Tí đang dùng Google sẽ không gọi được nữa. Đăng nhập lưu trên máy này bị xóa.'),
       confirmLabel: t('Ngắt kết nối'),
       tone: 'danger',
     });
@@ -266,9 +266,9 @@ function GoogleClientForm({ saved, onClose, onSaved }: { saved: ConnectorClientV
     <form className="form mcp-form" noValidate onSubmit={event => void submit(event)}>
       <ol className="connector-steps">
         <li>{t('Trong Google Cloud Console, tạo hoặc chọn một project.')}</li>
-        <li>{t('Tham gia Google Workspace Developer Preview Program bằng tài khoản Google của bạn.')}</li>
+        <li>{t('Trong APIs & Services, bật Google Sheets, Drive, Docs, Slides, Calendar và Gmail API.')}</li>
         <li>{t('Trong Google Auth Platform, mục Audience, thêm email của bạn vào Test users.')}</li>
-        <li>{t('Tạo OAuth client loại Web application và tick "Use this client for an AI-powered agent".')}</li>
+        <li>{t('Tạo OAuth client loại Web application.')}</li>
         <li>{t('Thêm địa chỉ này vào Authorized redirect URIs, đúng từng ký tự:')}</li>
       </ol>
       <span className="mcp-secret">

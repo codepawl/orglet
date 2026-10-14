@@ -43,9 +43,10 @@ import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
 import { WebSearchKeys } from './web-search-keys';
 import { WebSearchKeyProvider } from '../shared/web-tools';
 import type { ProcessIdentity } from '../core/tools/process-identity';
-import { ConnectorClient, McpOAuthState, McpServerDraft, McpSharedClientProvider, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
+import { ConnectorClient, McpOAuthState, McpServerDraft, McpSharedClientProvider, parseMcpImport, splitMcpDraft, type McpSecrets, type McpServerView } from '../shared/mcp';
 import { McpSignIns, type GoogleServerTarget } from './mcp-sign-in';
-import { connectBaseUrl } from '../shared/mcp-catalog';
+import { catalogDraft, connectBaseUrl, GOOGLE_APPS } from '../shared/mcp-catalog';
+import { GOOGLE_TOOLS_URL } from '../shared/google-tools';
 import { openableUrl } from '../shared/links';
 import type { Incoming, SendToState } from '../shared/incoming';
 import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
@@ -330,6 +331,7 @@ async function saveMcpDraft(draft: McpServerDraft): Promise<McpServerView> {
  * signs in to all that are saved, with a single consent, and the others are checked again so their rows turn connected.
  */
 async function signInMcpServer(serverId: string) {
+  await migrateGoogleServers().catch(() => undefined);
   const serverUrl = await request('mcpSignInTarget', serverId) as string;
   const googleServers = await request('mcpGoogleServers', undefined) as GoogleServerTarget[];
   if (!googleServers.some(server => server.id === serverId)) {
@@ -339,6 +341,27 @@ async function signInMcpServer(serverId: string) {
   await mcpSignIns.signInGoogle(serverId, googleServers);
   const others = googleServers.filter(server => server.id !== serverId);
   await Promise.allSettled(others.map(server => request('testMcpServer', { id: server.id })));
+}
+/**
+ * An earlier build saved six preview servers for Google. They become the one built-in Google server: the first sign-in
+ * that still has tokens moves across (its scopes already cover the new tools), orglets that used any of the six keep their
+ * grant on the new one, and the six and their secrets go. Runs at start and again before a sign-in; harmless when nothing is left.
+ */
+async function migrateGoogleServers() {
+  const legacy = await request('mcpGoogleLegacyServers', undefined) as GoogleServerTarget[];
+  if (!legacy.length) return;
+  let source: McpSecrets | undefined;
+  for (const server of legacy) {
+    const candidate = await mcpSecrets.read(server.id);
+    if (candidate.oauth?.tokens) { source = candidate; break; }
+  }
+  const existing = (await request('mcpGoogleServers', undefined) as GoogleServerTarget[])[0];
+  const builtInId = existing?.id ?? (await saveMcpDraft(McpServerDraft.parse(catalogDraft(GOOGLE_APPS[0], undefined, { ownClient: source?.client?.shared === 'google' })))).id;
+  const created = await mcpSecrets.read(builtInId);
+  if (source?.oauth && !created.oauth?.tokens) await mcpSecrets.save(builtInId, { ...created, oauth: { ...source.oauth, serverUrl: GOOGLE_TOOLS_URL } });
+  await request('replaceGoogleServers', { builtInId, legacyIds: legacy.map(server => server.id) });
+  for (const server of legacy) await mcpSecrets.remove(server.id);
+  announceChange();
 }
 /** The window's own functions for stages C and D, handed to the terminal's operations (docs/cli-held-actions-design.md). */
 function terminalSetupApp(): CliSetupApp {
@@ -890,6 +913,7 @@ async function start() {
   const startupSettings = await request('workspace', {}).then(workspace => workspace as { language?: Language; autoUpdate?: boolean }).catch(() => ({} as { language?: Language; autoUpdate?: boolean }));
   language = startupSettings.language ?? DEFAULT_LANGUAGE;
   savedSettings = settingsSnapshot(startupSettings);
+  void migrateGoogleServers().catch(() => undefined);
   void analytics.appStarted({ version: app.getVersion(), platform: process.platform, arch: process.arch, locale: language, installKind: installKind(updateEnvironment) });
   useSpellCheckerLanguage(language);
   updater = new Updater({

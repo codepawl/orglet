@@ -11,10 +11,12 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { Store, id } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { McpServers } from '../../apps/desktop/src/core/tools/mcp';
+import { GOOGLE_SIGN_IN_NEEDED, type GoogleFetch } from '../../apps/desktop/src/core/tools/google-api';
+import { GOOGLE_LEGACY_SERVER_URLS, GOOGLE_SCOPES, GOOGLE_TOOLS_URL } from '../../apps/desktop/src/shared/google-tools';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import { ConnectorClientStore } from '../../apps/desktop/src/main/connector-clients';
 import { McpSignIns, MCP_SIGN_IN_NEEDS_CLIENT, MCP_SIGN_IN_PORT_BUSY, type GoogleServerTarget } from '../../apps/desktop/src/main/mcp-sign-in';
-import { emptyMcpSecrets, McpOAuthState, McpSecrets, McpServer, McpServerDraft, splitMcpDraft, type McpPreregisteredClient } from '../../apps/desktop/src/shared/mcp';
+import { mcpCallGranted, emptyMcpSecrets, McpOAuthState, McpSecrets, McpServer, McpServerDraft, splitMcpDraft, type McpPreregisteredClient } from '../../apps/desktop/src/shared/mcp';
 import {
   catalogAppOf, catalogDraft, connectBaseUrl, GOOGLE_APPS, GOOGLE_BROKER_TOKEN_ENDPOINT, GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, GOOGLE_UNION_SCOPES, MCP_CATALOG,
 } from '../../apps/desktop/src/shared/mcp-catalog';
@@ -186,8 +188,9 @@ function signIns() {
   });
 }
 
-function core() {
+function core(googleFetch?: GoogleFetch) {
   return new McpServers(store, () => {}, {
+    ...(googleFetch ? { googleFetch } : {}),
     readSecrets: async serverId => secrets.get(serverId) ?? emptyMcpSecrets(),
     saveSignIn: (serverId, state) => {
       secrets.set(serverId, { ...(secrets.get(serverId) ?? emptyMcpSecrets()), oauth: state });
@@ -313,16 +316,15 @@ it('saves the shared client encrypted, keeps its secret when only the ID is re-e
   expect(await clients.read('google')).toBeUndefined();
 });
 
-it('builds each Google preset with its address, scopes, fixed redirect and offline access', () => {
+it('builds the one Google preset with its built-in address, scopes, fixed redirect and offline access', () => {
   const google = MCP_CATALOG.filter(app => app.signIn === 'google');
-  expect(google.map(app => new URL(app.url).hostname)).toEqual([
-    'sheetsmcp.googleapis.com', 'drivemcp.googleapis.com', 'gmailmcp.googleapis.com', 'calendarmcp.googleapis.com', 'docsmcp.googleapis.com', 'slidesmcp.googleapis.com',
-  ]);
+  expect(google.map(app => app.url)).toEqual([GOOGLE_TOOLS_URL]);
+  expect(MCP_CATALOG.some(app => app.url.endsWith('googleapis.com/mcp/v1'))).toBe(false);
   expect(GOOGLE_REDIRECT_URI).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/callback$/);
-  const sheets = MCP_CATALOG.find(app => app.id === 'googlesheets')!;
-  const draft = McpServerDraft.parse(catalogDraft(sheets));
+  const draft = McpServerDraft.parse(catalogDraft(google[0]));
+  expect(draft.name).toBe('Google');
   expect(draft.transport).toMatchObject({
-    kind: 'http', url: 'https://sheetsmcp.googleapis.com/mcp/v1', oauth: true,
+    kind: 'http', url: GOOGLE_TOOLS_URL, oauth: true,
     oauthClient: {
       clientId: GOOGLE_CLIENT_ID, port: Number(new URL(GOOGLE_REDIRECT_URI).port),
       authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth', tokenEndpoint: 'https://connect.orglet.codepawl.com/google/token',
@@ -334,21 +336,21 @@ it('builds each Google preset with its address, scopes, fixed redirect and offli
   expect(JSON.stringify(MCP_CATALOG)).not.toMatch(/client_?secret/i);
   expect(draft.transport).not.toHaveProperty('oauthClient.shared');
   expect(draft.transport).not.toHaveProperty('oauthClient.clientSecret');
-  const own = McpServerDraft.parse(catalogDraft(sheets, undefined, { ownClient: true }));
-  expect(own.transport).toMatchObject({ oauthClient: { shared: 'google', tokenEndpoint: 'https://oauth2.googleapis.com/token' } });
+  const own = McpServerDraft.parse(catalogDraft(google[0], undefined, { ownClient: true }));
+  expect(own.transport).toMatchObject({ url: GOOGLE_TOOLS_URL, oauthClient: { shared: 'google', tokenEndpoint: 'https://oauth2.googleapis.com/token' } });
   expect(own.transport).not.toHaveProperty('oauthClient.clientId');
-  const scopes = (draft.transport.kind === 'http' ? draft.transport.oauthClient?.scopes : []) ?? [];
-  expect(scopes.map(scope => scope.replace('https://www.googleapis.com/auth/', ''))).toEqual(['drive.readonly', 'drive.file', 'spreadsheets.readonly', 'spreadsheets']);
-  expect(MCP_CATALOG.find(app => app.id === 'gmail')!.scopes).toEqual(['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.compose']);
-  for (const app of google) expect(catalogAppOf(app.url)).toBe(app.id);
+  expect(GOOGLE_SCOPES.map(scope => scope.replace('https://www.googleapis.com/auth/', ''))).toEqual([
+    'spreadsheets', 'documents.readonly', 'presentations.readonly', 'drive.readonly',
+    'calendar.calendarlist.readonly', 'calendar.events.readonly', 'gmail.readonly', 'gmail.compose',
+  ]);
+  expect(catalogAppOf(GOOGLE_TOOLS_URL)).toBe('google');
+  for (const legacy of GOOGLE_LEGACY_SERVER_URLS) expect(catalogAppOf(legacy)).toBe('google');
   expect(catalogAppOf('https://api.githubcopilot.com/mcp/')).toBe('github');
 });
 
-it('asks for the union of the six services scopes once, and only trusts an https or local broker override', () => {
-  const each = GOOGLE_APPS.flatMap(app => app.scopes ?? []);
-  expect(GOOGLE_UNION_SCOPES.length).toBeLessThan(each.length);
+it('asks for the scopes the tools need once, and only trusts an https or local broker override', () => {
+  expect(GOOGLE_UNION_SCOPES).toEqual(GOOGLE_SCOPES);
   expect(new Set(GOOGLE_UNION_SCOPES).size).toBe(GOOGLE_UNION_SCOPES.length);
-  for (const scope of each) expect(GOOGLE_UNION_SCOPES).toContain(scope);
   expect(connectBaseUrl('http://127.0.0.1:8787')).toBe('http://127.0.0.1:8787');
   expect(connectBaseUrl('https://connect.example.test/')).toBe('https://connect.example.test');
   expect(connectBaseUrl('http://connect.example.test')).toBeUndefined();
@@ -356,20 +358,26 @@ it('asks for the union of the six services scopes once, and only trusts an https
   expect(connectBaseUrl(undefined)).toBeUndefined();
 });
 
-/** The six Google servers as the Connectors page makes them, pointed at the fake service (same path, one query each). */
-async function addGoogleServers(target: McpServers, authorizationEndpoint: string, port: number) {
-  const targets: GoogleServerTarget[] = [];
-  for (const app of GOOGLE_APPS) {
-    const url = `${service.base}/mcp?app=${app.id}`;
-    const draft = McpServerDraft.parse(catalogDraft(app));
-    if (draft.transport.kind !== 'http' || !draft.transport.oauthClient) throw new Error('A Google preset has an OAuth client.');
-    const pointed = { ...draft, transport: { ...draft.transport, url, oauthClient: { ...draft.transport.oauthClient, port, authorizationEndpoint } } };
-    const serverId = id();
-    const { config, secrets: values } = splitMcpDraft(McpServerDraft.parse(pointed), serverId, emptyMcpSecrets());
-    secrets.set(serverId, values);
-    await target.save(config);
-    targets.push({ id: serverId, url });
-  }
+/** Google's REST APIs as the fake service guards them: a valid bearer token gets an answer, any other gets a 401. Other addresses (the broker) go through. */
+function fakeGoogle(): GoogleFetch {
+  return async (input, init) => {
+    if (!new URL(input).hostname.endsWith('googleapis.com')) return fetch(input, init);
+    const token = /^Bearer (.+)$/.exec(new Headers(init?.headers).get('authorization') ?? '')?.[1];
+    if (!token || !service.validAccess.has(token)) return new Response('{}', { status: 401 });
+    return new Response(JSON.stringify({ properties: { title: 'Budget' }, sheets: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+}
+
+/** The built-in Google server as the Connectors page makes it, pointed at the fake service's sign-in page. */
+async function addGoogleServer(target: McpServers, authorizationEndpoint: string, port: number) {
+  const draft = McpServerDraft.parse(catalogDraft(GOOGLE_APPS[0]));
+  if (draft.transport.kind !== 'http' || !draft.transport.oauthClient) throw new Error('The Google preset has an OAuth client.');
+  const pointed = { ...draft, transport: { ...draft.transport, oauthClient: { ...draft.transport.oauthClient, port, authorizationEndpoint } } };
+  const serverId = id();
+  const { config, secrets: values } = splitMcpDraft(McpServerDraft.parse(pointed), serverId, emptyMcpSecrets());
+  secrets.set(serverId, values);
+  await target.save(config);
+  const targets: GoogleServerTarget[] = [{ id: serverId, url: GOOGLE_TOOLS_URL }];
   return targets;
 }
 
@@ -382,11 +390,11 @@ function brokerSignIns(brokerBase: string) {
   });
 }
 
-it('one Google sign-in asks for every scope once and signs in six servers through the broker, with no secret in the app', async () => {
-  servers = core();
+it('one Google sign-in asks for every scope once through the broker, with no secret in the app, and the built-in server lists its tools', async () => {
+  servers = core(fakeGoogle());
   const broker = await startBroker(service.base);
   try {
-    const targets = await addGoogleServers(servers, `${service.base}/auth`, await freePort());
+    const targets = await addGoogleServer(servers, `${service.base}/auth`, await freePort());
     await brokerSignIns(broker.base).signInGoogle(targets[0].id, targets);
     expect(service.authorizeRequests).toHaveLength(1);
     expect(service.authorizeRequests[0].get('scope')).toBe(GOOGLE_UNION_SCOPES.join(' '));
@@ -395,76 +403,139 @@ it('one Google sign-in asks for every scope once and signs in six servers throug
     expect(broker.fromApp[0].get('grant_type')).toBe('authorization_code');
     expect(broker.fromApp[0].has('client_secret')).toBe(false);
     expect(service.tokenRequests[0].form.get('client_secret')).toBe(FAKE_SECRET);
-    expect(targets).toHaveLength(6);
-    for (const target of targets) {
-      const saved = secrets.get(target.id)!.oauth!;
-      expect(saved.serverUrl).toBe(target.url);
-      expect(saved.tokens).toMatchObject({ refresh_token: 'refresh-1' });
-      const metadata = (saved.discovery as { authorizationServerMetadata: { token_endpoint: string } }).authorizationServerMetadata;
-      expect(metadata.token_endpoint).toBe(`${broker.base}/google/token`);
-      expect((await servers.test(target.id)).status).toBe('connected');
-    }
+    const saved = secrets.get(targets[0].id)!.oauth!;
+    expect(saved.serverUrl).toBe(GOOGLE_TOOLS_URL);
+    expect(saved.tokens).toMatchObject({ refresh_token: 'refresh-1' });
+    const metadata = (saved.discovery as { authorizationServerMetadata: { token_endpoint: string } }).authorizationServerMetadata;
+    expect(metadata.token_endpoint).toBe(`${broker.base}/google/token`);
+    const view = await servers.test(targets[0].id);
+    expect(view.status).toBe('connected');
+    expect(view.tools).toHaveLength(14);
     expect(JSON.stringify([...secrets.values()])).not.toContain(FAKE_SECRET);
   } finally {
     await broker.close();
   }
 });
 
-it('refreshes Google servers on their own through the broker without breaking each other', async () => {
-  servers = core();
+it('refreshes the built-in server through the broker on a 401, once, and keeps the refresh token', async () => {
+  servers = core(fakeGoogle());
   const broker = await startBroker(service.base);
   try {
-    const targets = await addGoogleServers(servers, `${service.base}/auth`, await freePort());
+    const targets = await addGoogleServer(servers, `${service.base}/auth`, await freePort());
     await brokerSignIns(broker.base).signInGoogle(targets[0].id, targets);
+    expect((await servers.test(targets[0].id)).status).toBe('connected');
+    const before = (secrets.get(targets[0].id)!.oauth!.tokens as { access_token: string }).access_token;
     broker.fromApp.length = 0;
     service.validAccess.clear();
-    expect((await servers.test(targets[0].id)).status).toBe('connected');
-    expect((await servers.test(targets[1].id)).status).toBe('connected');
-    expect(broker.fromApp.map(form => form.get('grant_type'))).toEqual(['refresh_token', 'refresh_token']);
-    expect(broker.fromApp.every(form => form.get('refresh_token') === 'refresh-1' && !form.has('client_secret') && !form.has('resource'))).toBe(true);
-    expect(secrets.get(targets[0].id)!.oauth!.tokens).toMatchObject({ refresh_token: 'refresh-1' });
-    expect(secrets.get(targets[1].id)!.oauth!.tokens).toMatchObject({ refresh_token: 'refresh-1' });
-    // A third server, which never refreshed on its own before, still refreshes with what it was given.
-    service.validAccess.clear();
-    expect((await servers.test(targets[2].id)).status).toBe('connected');
+    const result = await servers.call(targets[0].id, 'sheets_get_spreadsheet', { spreadsheet: 'https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp/edit' }, new AbortController().signal);
+    expect(result.isError).toBe(false);
+    expect(result.content).toContain('Budget');
+    expect(broker.fromApp.map(form => form.get('grant_type'))).toEqual(['refresh_token']);
+    expect(broker.fromApp[0].has('client_secret')).toBe(false);
+    const after = secrets.get(targets[0].id)!.oauth!.tokens as { access_token: string; refresh_token: string };
+    expect(after.access_token).not.toBe(before);
+    expect(after.refresh_token).toBe('refresh-1');
   } finally {
     await broker.close();
   }
 });
 
-it('lets the chosen orglets use the six Google servers on top of what they already use, and drops nothing', async () => {
+it('asks for a new sign-in when Google refuses the refresh token, and forgets the dead tokens', async () => {
+  servers = core(fakeGoogle());
+  const broker = await startBroker(service.base);
+  try {
+    const targets = await addGoogleServer(servers, `${service.base}/auth`, await freePort());
+    await brokerSignIns(broker.base).signInGoogle(targets[0].id, targets);
+    const state = secrets.get(targets[0].id)!;
+    secrets.set(targets[0].id, { ...state, oauth: { ...state.oauth!, tokens: { ...state.oauth!.tokens, refresh_token: 'revoked' } } });
+    expect((await servers.test(targets[0].id)).status).toBe('connected');
+    service.validAccess.clear();
+    const result = await servers.call(targets[0].id, 'sheets_get_spreadsheet', { spreadsheet: '1AbCdEfGhIjKlMnOp' }, new AbortController().signal);
+    expect(result.isError).toBe(true);
+    expect(result.content).toBe(GOOGLE_SIGN_IN_NEEDED);
+    expect(servers.views()[0]).toMatchObject({ status: 'signIn', error: GOOGLE_SIGN_IN_NEEDED });
+    expect(secrets.get(targets[0].id)!.oauth!.tokens).toBeUndefined();
+    expect((await servers.test(targets[0].id)).status).toBe('signIn');
+  } finally {
+    await broker.close();
+  }
+});
+
+it('lists the Google tools for a run under the server name, read-only ones marked, and a call still needs a grant', async () => {
+  servers = core(fakeGoogle());
+  const broker = await startBroker(service.base);
+  try {
+    const targets = await addGoogleServer(servers, `${service.base}/auth`, await freePort());
+    await brokerSignIns(broker.base).signInGoogle(targets[0].id, targets);
+    const { tools, problems } = await servers.toolsForRun([targets[0].id], new AbortController().signal);
+    expect(problems).toEqual([]);
+    expect(tools.every(tool => tool.name.startsWith('mcp__google__') && tool.serverName === 'Google')).toBe(true);
+    const writing = tools.filter(tool => !tool.readOnly).map(tool => tool.tool).sort();
+    expect(writing).toEqual(['gmail_create_draft', 'sheets_append_rows', 'sheets_update_values']);
+    expect(tools.find(tool => tool.tool === 'drive_search_files')!.readOnly).toBe(true);
+    expect(mcpCallGranted(undefined, targets[0].id, 'gmail_create_draft')).toBe(false);
+  } finally {
+    await broker.close();
+  }
+});
+
+it('lets the chosen orglets use the Google server on top of what they already use, and drops nothing', async () => {
   const readSecrets = async (serverId: string) => secrets.get(serverId) ?? emptyMcpSecrets();
   const coreService = new CoreService(store, () => {}, async () => { throw new Error('no model'); }, undefined, undefined, undefined, undefined, undefined, undefined, { readSecrets });
   try {
-    const targets: string[] = [];
-    for (const app of GOOGLE_APPS) {
-      const saved = await coreService.saveMcpServer(splitMcpDraft(McpServerDraft.parse(catalogDraft(app)), id(), emptyMcpSecrets()).config);
-      targets.push(saved.id);
-    }
-    expect(coreService.mcpGoogleServers().map(server => server.id).sort()).toEqual([...targets].sort());
+    const saved = await coreService.saveMcpServer(splitMcpDraft(McpServerDraft.parse(catalogDraft(GOOGLE_APPS[0])), id(), emptyMcpSecrets()).config);
+    expect(coreService.mcpGoogleServers().map(server => server.id)).toEqual([saved.id]);
     const notes = await coreService.saveMcpServer(splitMcpDraft(McpServerDraft.parse({ name: 'Notes', enabled: true, transport: { kind: 'http', url: 'https://notes.example.test/mcp', headers: [] } }), id(), emptyMcpSecrets()).config);
     const first = store.all<Worker>('workers')[0];
     const { id: _ignored, revision: _revision, ...firstFields } = first;
     const second = await coreService.command('saveWorker', { ...firstFields, name: 'Second' }) as Worker;
     await coreService.command('saveWorker', { ...first, mcpServerIds: [notes.id] });
-    await coreService.command('grantMcpServers', { workerIds: [first.id], serverIds: targets });
-    expect(store.get<Worker>('workers', first.id).mcpServerIds).toEqual([notes.id, ...targets]);
+    await coreService.command('grantMcpServers', { workerIds: [first.id], serverIds: [saved.id] });
+    expect(store.get<Worker>('workers', first.id).mcpServerIds).toEqual([notes.id, saved.id]);
     expect(store.get<Worker>('workers', second.id).mcpServerIds).toBeUndefined();
-    await coreService.command('grantMcpServers', { workerIds: [first.id, second.id], serverIds: targets });
-    expect(store.get<Worker>('workers', first.id).mcpServerIds).toEqual([notes.id, ...targets]);
-    expect(store.get<Worker>('workers', second.id).mcpServerIds).toEqual(targets);
+    await coreService.command('grantMcpServers', { workerIds: [first.id, second.id], serverIds: [saved.id] });
+    expect(store.get<Worker>('workers', first.id).mcpServerIds).toEqual([notes.id, saved.id]);
+    expect(store.get<Worker>('workers', second.id).mcpServerIds).toEqual([saved.id]);
   } finally {
     await coreService.mcp.shutdown();
   }
 });
 
-it('removes all six Google servers and their secrets, one by one', async () => {
-  servers = core();
-  const targets = await addGoogleServers(servers, `${service.base}/auth`, await freePort());
-  for (const target of targets) {
-    await servers.remove(target.id);
-    secrets.delete(target.id);
+it('replaces the six preview servers with the built-in one, keeping every orglet grant, and removes the six', async () => {
+  const readSecrets = async (serverId: string) => secrets.get(serverId) ?? emptyMcpSecrets();
+  const coreService = new CoreService(store, () => {}, async () => { throw new Error('no model'); }, undefined, undefined, undefined, undefined, undefined, undefined, { readSecrets });
+  try {
+    const legacyIds: string[] = [];
+    for (const [index, url] of GOOGLE_LEGACY_SERVER_URLS.entries()) {
+      const draft = { name: `Preview ${index}`, enabled: true, transport: { kind: 'http', url, headers: [], oauth: true } };
+      legacyIds.push((await coreService.saveMcpServer(splitMcpDraft(McpServerDraft.parse(draft), id(), emptyMcpSecrets()).config)).id);
+    }
+    expect(coreService.mcpGoogleLegacyServers().map(server => server.id).sort()).toEqual([...legacyIds].sort());
+    const builtIn = await coreService.saveMcpServer(splitMcpDraft(McpServerDraft.parse(catalogDraft(GOOGLE_APPS[0])), id(), emptyMcpSecrets()).config);
+    const notes = await coreService.saveMcpServer(splitMcpDraft(McpServerDraft.parse({ name: 'Notes', enabled: true, transport: { kind: 'http', url: 'https://notes.example.test/mcp', headers: [] } }), id(), emptyMcpSecrets()).config);
+    const first = store.all<Worker>('workers')[0];
+    const { id: _ignored, revision: _revision, ...firstFields } = first;
+    const second = await coreService.command('saveWorker', { ...firstFields, name: 'Second' }) as Worker;
+    const third = await coreService.command('saveWorker', { ...firstFields, name: 'Third' }) as Worker;
+    await coreService.command('saveWorker', { ...store.get<Worker>('workers', first.id), mcpServerIds: [legacyIds[0], notes.id] });
+    await coreService.command('saveWorker', { ...store.get<Worker>('workers', second.id), mcpServerIds: [legacyIds[3], legacyIds[5]] });
+    await coreService.replaceGoogleServers({ builtInId: builtIn.id, legacyIds });
+    expect(store.get<Worker>('workers', first.id).mcpServerIds).toEqual([notes.id, builtIn.id]);
+    expect(store.get<Worker>('workers', second.id).mcpServerIds).toEqual([builtIn.id]);
+    expect(store.get<Worker>('workers', third.id).mcpServerIds).toBeUndefined();
+    expect(coreService.mcpGoogleLegacyServers()).toEqual([]);
+    expect(coreService.mcp.list().map(server => server.name).sort()).toEqual(['Google', 'Notes']);
+    await expect(coreService.replaceGoogleServers({ builtInId: id(), legacyIds: [] })).rejects.toThrow();
+  } finally {
+    await coreService.mcp.shutdown();
   }
+});
+
+it('removes the Google server and its secrets', async () => {
+  servers = core();
+  const targets = await addGoogleServer(servers, `${service.base}/auth`, await freePort());
+  await servers.remove(targets[0].id);
+  secrets.delete(targets[0].id);
   expect(servers.list()).toHaveLength(0);
   expect(secrets.size).toBe(0);
 });
@@ -480,7 +551,7 @@ it('reads what v0.13.0 saved, and adds nothing to the server record that v0.13.0
   expect(McpOAuthState.safeParse(oldSecrets.oauth).success).toBe(true);
   expect(McpServerDraft.safeParse({ name: 'Linear', enabled: true, transport: { kind: 'http', url: 'https://mcp.linear.app/mcp', headers: [], oauth: true } }).success).toBe(true);
   // A server made from a Google preset is stored in the core exactly like any browser sign-in server.
-  const { config } = splitMcpDraft(McpServerDraft.parse(catalogDraft(MCP_CATALOG.find(app => app.id === 'googledrive')!)), serverId, emptyMcpSecrets());
+  const { config } = splitMcpDraft(McpServerDraft.parse(catalogDraft(GOOGLE_APPS[0])), serverId, emptyMcpSecrets());
   expect(Object.keys(config.transport).sort()).toEqual(['bearer', 'headerNames', 'kind', 'oauth', 'url']);
   expect(Object.keys(config).sort()).toEqual(['enabled', 'id', 'name', 'transport']);
 });
