@@ -1,6 +1,6 @@
 import { TabbedDialog, Tooltip } from '@codepawlhq/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Archive, Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut, CircleUserRound } from 'lucide-react';
+import { Archive, Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut, CircleUserRound, Link2 } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
@@ -28,6 +28,7 @@ import { TerminalJournal } from './TerminalAccess';
 import { CodeFontPreview, InterfaceFontSample } from './FontPreview';
 import { AboutSettings } from './AboutSettings';
 import { McpHeadingActions, McpSettings, type McpEditing } from './McpSettings';
+import { ConnectorsSettings } from './ConnectorsSettings';
 import { WebSearchSettings } from './WebSearchSettings';
 import type { WebSearchProvider } from '../../shared/web-tools';
 import type { ToastTone } from '@codepawlhq/orglet-ui';
@@ -60,7 +61,7 @@ const SAVED_KEY_MASK = '••••••••••••••••';
 /** The value of the Add account row in a harness's account list; never an account, since that row is an action. */
 const ADD_ACCOUNT_ROW = '\u0000add';
 
-export type SettingsTab = 'general' | 'chat' | 'archive' | 'connections' | 'search' | 'harness' | 'mcp' | 'browser' | 'data' | 'account' | 'about';
+export type SettingsTab = 'general' | 'chat' | 'archive' | 'connections' | 'search' | 'harness' | 'connectors' | 'mcp' | 'browser' | 'data' | 'account' | 'about';
 // Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   // The optional CodePawl account (COD-337); nothing syncs yet. First, as Account (owner, 2026-09-30).
@@ -69,6 +70,8 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
   // What an orglet can reach, from the nearest to the furthest (owner, 2026-10-12): the servers a chat is given, the
   // CLIs on this computer, the paid APIs, then the web. MCP servers are the ones the person added by hand (COD-241).
+  // Services signed in to in the browser come first; each becomes an MCP server below it.
+  { id: 'connectors', label: 'Dịch vụ', icon: <Link2 size={16} /> },
   { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
   { id: 'harness', label: 'Harness', icon: <SquareTerminal size={16} /> },
   { id: 'connections', label: 'API', icon: <Plug size={16} /> },
@@ -96,6 +99,7 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Key được mã hóa trên máy này và không vào bản sao lưu.',
   search: 'Tí chỉ gửi câu tìm kiếm đi, không gửi nội dung chat hay tệp.',
   harness: 'Đăng nhập lỗi thì Orglet dừng lại, không tự đổi sang kết nối khác.',
+  connectors: 'Đăng nhập trong trình duyệt. Bạn chọn Tí nào được dùng dịch vụ.',
   mcp: 'Tí hỏi bạn trước mỗi lần gọi công cụ.',
   browser: 'Tí đọc trang trong cửa sổ riêng, không dùng hồ sơ của bạn.',
 };
@@ -889,6 +893,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               </div>
             </>}
 
+            {tab === 'connectors' && <ConnectorsSettings workspace={workspace} busy={busy} act={act} onToken={app => { setMcpEditing({ app }); onTab('mcp'); }} />}
             {tab === 'mcp' && <McpSettings workspace={workspace} busy={busy} act={act} editing={mcpEditing} onEdit={setMcpEditing} />}
             {tab === 'browser' && <BrowserProfilesSettings busy={busy} act={act} creating={creatingProfile} onCreating={setCreatingProfile} />}
 

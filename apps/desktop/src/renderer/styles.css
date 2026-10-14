@@ -3012,6 +3012,8 @@ button.crew-node:hover { background:var(--row-hover); }
 .mcp-row>.mcp-mark { display:inline-flex; align-items:center; justify-content:center; width:var(--setting-mark); height:26px; flex-shrink:0; color:var(--muted); }
 .mcp-row .setting-control { align-self:flex-start; min-height:26px; }
 .mcp-row .setting-path { font-family:var(--font-mono); font-size:11.5px; }
+.connector-steps { margin:0; padding-left:18px; display:flex; flex-direction:column; gap:6px; font-size:13px; line-height:1.45; color:var(--muted); }
+.connectors-group+.connectors-group { margin-top:8px; }
 .mcp-tools { margin-left:-4px; }
 .mcp-tools > summary { list-style:none; cursor:pointer; width:fit-content; min-height:24px; font-size:12px; }
 .mcp-tools > summary::-webkit-details-marker { display:none; }

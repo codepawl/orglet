@@ -735,9 +735,20 @@ const SCREENS = [
   }, close: page => page.evaluate(async () => {
     for (const server of (await window.orglet.call('workspace', {})).mcpServers ?? []) await window.orglet.removeMcpServer(server.id);
   }) },
+  // The services signed in to in the browser: Google needs its own OAuth client first, shown here as not entered.
+  { name: 'settings-connectors', family: 'settings', open: async page => {
+    await openSettingsTab(page, 'Dịch vụ');
+    await page.getByText(label('OAuth client của Google'), { exact: true }).first().waitFor();
+  } },
+  // The form behind Connect on a Google service when no client is saved: the steps, the redirect address and the two values.
+  { name: 'connectors-google-client-form', family: 'settings', open: async page => {
+    await openSettingsTab(page, 'Dịch vụ');
+    await page.getByRole('button', { name: label('Nhập client'), exact: true }).click();
+    await page.getByRole('dialog').getByRole('textbox', { name: label('Redirect URI') }).waitFor();
+  } },
   // GitHub takes a token: the form opens filled in, with where to make one.
   { name: 'mcp-token-form', family: 'settings', open: async page => {
-    await openSettingsTab(page, 'MCP');
+    await openSettingsTab(page, 'Dịch vụ');
     await page.getByRole('button', { name: label('Thêm token'), exact: true }).click();
     await page.getByRole('dialog').getByText(label('Tạo token tại {0}', ['https://github.com/settings/personal-access-tokens/new']), { exact: true }).waitFor();
   } },

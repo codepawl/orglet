@@ -38,11 +38,12 @@ import { RunActivity } from '../shared/run-activity';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
 import type { InstallCopy } from './install-copy';
 import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
+import { ConnectorClientStore } from './connector-clients';
 import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
 import { WebSearchKeys } from './web-search-keys';
 import { WebSearchKeyProvider } from '../shared/web-tools';
 import type { ProcessIdentity } from '../core/tools/process-identity';
-import { McpOAuthState, McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
+import { ConnectorClient, McpOAuthState, McpServerDraft, McpSharedClientProvider, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
 import { McpSignIns } from './mcp-sign-in';
 import { openableUrl } from '../shared/links';
 import type { Incoming, SendToState } from '../shared/incoming';
@@ -102,6 +103,7 @@ const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
+let connectorClients: ConnectorClientStore;
 let mcpSignIns: McpSignIns;
 /** The optional CodePawl account (COD-337): its tokens stay here, the window hears only `AccountState`. */
 let account: AccountService;
@@ -695,7 +697,9 @@ async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
   mcpSecrets = new McpSecretStore(directory, safeStorage);
+  connectorClients = new ConnectorClientStore(directory, safeStorage);
   mcpSignIns = new McpSignIns({
+    readSharedClient: provider => connectorClients.read(provider),
     readSecrets: serverId => mcpSecrets.read(serverId),
     saveSecrets: (serverId, secrets) => mcpSecrets.save(serverId, secrets),
     openExternal: url => shell.openExternal(url),
@@ -1146,6 +1150,15 @@ async function start() {
     const serverUrl = await request('mcpSignInTarget', serverId) as string;
     await mcpSignIns.signIn(serverId, serverUrl);
     return await request('testMcpServer', { id: serverId }) as McpServerView;
+  });
+  handle('orglet:connector-client', async raw => {
+    const saved = await connectorClients.read(McpSharedClientProvider.parse(raw));
+    return saved ? { clientId: saved.clientId, hasSecret: Boolean(saved.clientSecret) } : null;
+  });
+  handle('orglet:connector-client-save', async raw => {
+    const body = z.object({ provider: McpSharedClientProvider, client: ConnectorClient.nullable() }).strict().parse(raw);
+    if (body.client) await connectorClients.save(body.provider, body.client);
+    else await connectorClients.remove(body.provider);
   });
   handle('orglet:mcp-sign-in-cancel', async raw => {
     mcpSignIns.cancel(Id.parse(raw));

@@ -35,7 +35,12 @@ export function signInClientMetadata(redirectUri: string): OAuthClientMetadata {
  * Main's interactive sign-in extends it.
  */
 export class SavedSignIn implements OAuthClientProvider {
-  constructor(protected current: McpOAuthState, private persist: (state: McpOAuthState) => void | Promise<void>) {}
+  /** Present only for a pre-registered client: answering undefined makes the SDK leave `resource` out of its requests. */
+  validateResourceURL?: (serverUrl: string | URL, resource?: string) => Promise<URL | undefined>;
+
+  constructor(protected current: McpOAuthState, private persist: (state: McpOAuthState) => void | Promise<void>) {
+    if (current.withoutResource) this.validateResourceURL = async () => undefined;
+  }
 
   get saved(): McpOAuthState {
     return this.current;

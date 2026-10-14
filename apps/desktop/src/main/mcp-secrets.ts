@@ -35,7 +35,7 @@ export class McpSecretStore {
 
   async save(serverId: string, secrets: McpSecrets) {
     const values = McpSecrets.parse(secrets);
-    const empty = !Object.keys(values.env).length && !Object.keys(values.headers).length && !values.bearer && !values.oauth;
+    const empty = !Object.keys(values.env).length && !Object.keys(values.headers).length && !values.bearer && !values.oauth && !values.client;
     if (empty) {
       await this.remove(serverId);
       return;

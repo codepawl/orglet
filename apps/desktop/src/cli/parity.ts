@@ -259,6 +259,8 @@ export const BRIDGE_PARITY: Record<keyof Bridge, Parity> = {
   removeMcpServer: elevated('orglet grant mcp-remove', 'setup'),
   signInMcpServer: elevated('orglet grant mcp-sign-in', 'setup'),
   cancelMcpSignIn: elevated('orglet grant mcp-sign-in --cancel', 'setup'),
+  connectorClient: windowOnly('the Connectors page shows which OAuth client is saved; the secret is never read back'),
+  saveConnectorClient: held('an OAuth client secret, so the person types it in the window'),
   importMcpServers: elevated('orglet grant mcp-import', 'setup'),
   saveWebSearchKey: elevated('orglet connect search', 'setup'),
   removeWebSearchKey: elevated('orglet disconnect search', 'setup'),

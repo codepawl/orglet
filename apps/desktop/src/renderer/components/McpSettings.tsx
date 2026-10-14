@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { ChevronRight, FileInput, Globe, KeyRound, ListTree, LogIn, Pencil, Plus, RefreshCw, Server, ShieldCheck, SquareTerminal, Tag, Trash2, Variable, X } from 'lucide-react';
 import type { Workspace } from '../../shared/contracts';
 import type { McpServerDraft, McpServerStatus, McpServerView } from '../../shared/mcp';
-import { catalogAppOf, catalogDraft, MCP_CATALOG, type McpCatalogApp } from '../../shared/mcp-catalog';
+import { catalogAppOf, type McpCatalogApp } from '../../shared/mcp-catalog';
 import { BrandMark } from './brandMarks';
 import { Button, Drawer, FieldLabel } from './ui';
 import { Select } from './Select';
@@ -19,7 +19,7 @@ import { isBlank, useFieldErrors } from '../fieldErrors';
 const SAVED_MASK = '••••••••';
 
 /** One server state as the circle the rest of the app uses and one short word. */
-function statusOf(status: McpServerStatus): { label: string; className: string; mark: StatusMarkState } {
+export function statusOf(status: McpServerStatus): { label: string; className: string; mark: StatusMarkState } {
   if (status === 'connected') return { label: t('Đã kết nối'), className: 'logged_in', mark: { variant: 'filled', tone: 'success' } };
   if (status === 'connecting') return { label: t('Đang khởi động'), className: '', mark: { variant: 'dashed', tone: 'muted' } };
   if (status === 'error') return { label: t('Lỗi kết nối'), className: 'auth_error', mark: { variant: 'dashed', tone: 'error' } };
@@ -46,7 +46,7 @@ function transportLine(server: McpServerView) {
  * remove it. Nothing here reads another app's MCP settings; Import reads only the file the person picks.
  */
 export type McpEditing = McpServerView | 'new' | { app: McpCatalogApp } | undefined;
-type Act = (action: () => Promise<string | void>, about?: string) => Promise<void>;
+export type Act = (action: () => Promise<string | void>, about?: string) => Promise<void>;
 
 /**
  * The tab's actions in the section heading: one primary button to add a server by hand, and a menu beside it for the
@@ -68,20 +68,14 @@ export function McpHeadingActions({ busy, act, onAdd }: { busy: boolean; act: Ac
 
 export function McpSettings({ workspace, busy, act, editing, onEdit }: { workspace: Workspace; busy: boolean; act: Act; editing: McpEditing; onEdit: (next: McpEditing) => void }) {
   const servers = workspace.mcpServers ?? [];
-  const added = (app: McpCatalogApp) => servers.some(server => server.transport.kind === 'http' && server.transport.url === app.url);
-  const available = MCP_CATALOG.filter(app => !added(app));
   return <>
     <div role="region" aria-label={t('Máy chủ MCP')}>
       {!servers.length && <div className="setting-row"><div className="setting-text">
         <span className="setting-title">{t('Chưa có máy chủ MCP nào.')}</span>
-        <span className="setting-description">{t('Kết nối một app bên dưới, thêm bằng tay, hoặc nhập từ một tệp JSON bạn chọn. Orglet không tự đọc cấu hình MCP của app khác.')}</span>
+        <span className="setting-description">{t('Kết nối một dịch vụ ở mục Dịch vụ, thêm bằng tay, hoặc nhập từ một tệp JSON bạn chọn. Orglet không tự đọc cấu hình MCP của app khác.')}</span>
       </div></div>}
       {servers.map(server => <McpServerRow key={server.id} server={server} busy={busy} act={act} onEdit={() => onEdit(server)} />)}
     </div>
-    {available.length > 0 && <div role="region" aria-label={t('Kết nối app')} className="mcp-catalog">
-      <h3 className="settings-subheading">{t('Kết nối app')}</h3>
-      {available.map(app => <McpCatalogRow key={app.id} app={app} busy={busy} act={act} onToken={() => onEdit({ app })} />)}
-    </div>}
     {editing && <McpServerEditor {...editorTarget(editing)} onClose={() => onEdit(undefined)} />}
   </>;
 }
@@ -96,25 +90,17 @@ function editorTarget(editing: Exclude<McpEditing, undefined>): { server?: McpSe
  * Signs in to a server in the browser and says how it went. Main waits for the browser to come back, so this resolves
  * only once the person has finished (or gave up) there.
  */
-async function signIn(server: Pick<McpServerView, 'id' | 'name'>) {
+export async function signIn(server: Pick<McpServerView, 'id' | 'name'>) {
   const view = await orglet.signInMcpServer(server.id);
   if (view.status === 'error' || view.status === 'signIn') throw new Error(view.error ? tMessage(view.error) : t('Không kết nối được.'));
   return t('Đã kết nối {0}', [server.name]);
-}
-
-/** What each catalog app lets an orglet do, in the person's language. */
-function appDescription(app: McpCatalogApp) {
-  if (app.id === 'linear') return t('Đọc và tạo issue, dự án, bình luận.');
-  if (app.id === 'notion') return t('Tìm, đọc và viết trang, cơ sở dữ liệu.');
-  if (app.id === 'atlassian') return t('Jira và Confluence: issue, trang, tìm kiếm.');
-  return t('Repo, issue, pull request, thông báo.');
 }
 
 /**
  * A sign-in waits for the browser, which can take a while: the row says so and offers to give up, instead of the
  * whole tab sitting disabled until the five-minute limit.
  */
-function useSignIn(act: Act) {
+export function useSignIn(act: Act) {
   const [waitingFor, setWaitingFor] = useState<string>();
   const start = (name: string, serverOf: () => Promise<Pick<McpServerView, 'id' | 'name'>>) => void act(async () => {
     const server = await serverOf();
@@ -130,36 +116,11 @@ function useSignIn(act: Act) {
 }
 
 /** Shown in place of the row's controls while the browser is open for a sign-in. */
-function SignInWaiting({ onCancel }: { onCancel: () => void }) {
+export function SignInWaiting({ onCancel }: { onCancel: () => void }) {
   return <>
     <span className="setting-description">{t('Đang chờ trình duyệt…')}</span>
     <Button variant="ghost" onClick={onCancel}>{t('Hủy')}</Button>
   </>;
-}
-
-/** An app from the catalog that is not connected yet: one click signs in, or opens the form for its token. */
-function McpCatalogRow({ app, busy, act, onToken }: { app: McpCatalogApp; busy: boolean; act: Act; onToken: () => void }) {
-  const titleId = `mcp-app-${app.id}-title`;
-  const { start, cancel } = useSignIn(act);
-  const connect = () => {
-    if (app.signIn === 'token') {
-      onToken();
-      return;
-    }
-    start(app.name, () => orglet.saveMcpServer(catalogDraft(app)));
-  };
-  return <div className="setting-row harness-row mcp-row">
-    <span className="mcp-mark" aria-hidden="true"><BrandMark brand={app.id} size={18} /></span>
-    <div className="setting-text">
-      <span className="harness-head"><span id={titleId} className="setting-title">{app.name}</span></span>
-      <span className="setting-description">{appDescription(app)}</span>
-    </div>
-    <div className="setting-control">
-      {cancel ? <SignInWaiting onCancel={cancel} /> : <Button variant="outline" disabled={busy} aria-describedby={titleId} onClick={connect}>
-        {app.signIn === 'browser' ? <LogIn size={15} /> : <KeyRound size={15} />}{app.signIn === 'browser' ? t('Đăng nhập') : t('Thêm token')}
-      </Button>}
-    </div>
-  </div>;
 }
 
 function McpServerRow({ server, busy, act, onEdit }: { server: McpServerView; busy: boolean; act: Act; onEdit: () => void }) {

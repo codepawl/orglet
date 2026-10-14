@@ -45,6 +45,7 @@ What the app does today. Use the words on screen.
 | [team-chat.md](team-chat.md) | Click a worker or team → that chat; `@` tags; how a team turn runs |
 | [agent-tools.md](agent-tools.md) | Workspace and web permissions, tool execution, team handoffs and interrupted attempts |
 | [mcp.md](mcp.md) | MCP servers you add: stdio or remote, which orglet may use them, approving each call, secrets, limits |
+| [connectors.md](connectors.md) | Settings → Connectors: sign in to Google Workspace, Linear, Notion, Atlassian and GitHub; making the Google OAuth client |
 | [import-from-claude-code.md](import-from-claude-code.md) | Import Claude Code skills, commands, subagents and MCP servers: what is read, what each becomes, what is left behind |
 | [browser.md](browser.md) | Orglet's browser: reading pages in a Chrome or Edge window with its own profile, site lists, what it never does |
 | [desktop.md](desktop.md) | Desktop apps on Windows: the apps a chat grants, reading and using their windows through UI Automation, when it asks, borrowing your mouse after asking, what it never does |
