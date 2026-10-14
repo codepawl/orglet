@@ -674,6 +674,10 @@ export interface Bridge {
   /** Signs in to a remote server in the system browser; resolves once it is back, with the server's new state. */
   signInMcpServer(id: string): Promise<McpServerView>;
   cancelMcpSignIn(id: string): Promise<void>;
+  /** The OAuth client saved once for a provider's connectors (Google Cloud); the secret stays in main. Null when none is saved. */
+  connectorClient(provider: import('./mcp').McpSharedClientProvider): Promise<import('./mcp').ConnectorClientView | null>;
+  /** Saves that client, or removes it with null; an empty secret keeps the saved one for the same client ID. */
+  saveConnectorClient(provider: import('./mcp').McpSharedClientProvider, client: import('./mcp').ConnectorClient | null): Promise<void>;
   /** Imports servers from a file the person picks in a native dialog; nothing is read without that pick. */
   importMcpServers(): Promise<{ imported: string[]; skipped: { name: string; reason: string }[] } | null>;
   /** Saves a web search key (COD-266), encrypted in main like the API keys; the window never reads it back. */
