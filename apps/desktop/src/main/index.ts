@@ -44,7 +44,8 @@ import { WebSearchKeys } from './web-search-keys';
 import { WebSearchKeyProvider } from '../shared/web-tools';
 import type { ProcessIdentity } from '../core/tools/process-identity';
 import { ConnectorClient, McpOAuthState, McpServerDraft, McpSharedClientProvider, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
-import { McpSignIns } from './mcp-sign-in';
+import { McpSignIns, type GoogleServerTarget } from './mcp-sign-in';
+import { connectBaseUrl } from '../shared/mcp-catalog';
 import { openableUrl } from '../shared/links';
 import type { Incoming, SendToState } from '../shared/incoming';
 import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
@@ -324,6 +325,21 @@ async function saveMcpDraft(draft: McpServerDraft): Promise<McpServerView> {
     throw error;
   }
 }
+/**
+ * Signs in to a remote server in the system browser. Google's servers share one sign-in: signing in to any of them
+ * signs in to all that are saved, with a single consent, and the others are checked again so their rows turn connected.
+ */
+async function signInMcpServer(serverId: string) {
+  const serverUrl = await request('mcpSignInTarget', serverId) as string;
+  const googleServers = await request('mcpGoogleServers', undefined) as GoogleServerTarget[];
+  if (!googleServers.some(server => server.id === serverId)) {
+    await mcpSignIns.signIn(serverId, serverUrl);
+    return;
+  }
+  await mcpSignIns.signInGoogle(serverId, googleServers);
+  const others = googleServers.filter(server => server.id !== serverId);
+  await Promise.allSettled(others.map(server => request('testMcpServer', { id: server.id })));
+}
 /** The window's own functions for stages C and D, handed to the terminal's operations (docs/cli-held-actions-design.md). */
 function terminalSetupApp(): CliSetupApp {
   return {
@@ -344,8 +360,7 @@ function terminalSetupApp(): CliSetupApp {
       await mcpSecrets.remove(serverId);
     },
     signInMcpServer: async serverId => {
-      const serverUrl = await request('mcpSignInTarget', serverId) as string;
-      await mcpSignIns.signIn(serverId, serverUrl);
+      await signInMcpServer(serverId);
       await request('testMcpServer', { id: serverId });
     },
     cancelMcpSignIn: serverId => mcpSignIns.cancel(serverId),
@@ -704,6 +719,7 @@ async function start() {
     saveSecrets: (serverId, secrets) => mcpSecrets.save(serverId, secrets),
     openExternal: url => shell.openExternal(url),
     translate: key => tr(key),
+    connectBaseUrl: app.isPackaged ? undefined : connectBaseUrl(process.env.ORGLET_CONNECT_URL),
   });
   webSearchKeys = new WebSearchKeys(directory, safeStorage);
   account = new AccountService({
@@ -1147,8 +1163,7 @@ async function start() {
    */
   handle('orglet:mcp-sign-in', async raw => {
     const serverId = Id.parse(raw);
-    const serverUrl = await request('mcpSignInTarget', serverId) as string;
-    await mcpSignIns.signIn(serverId, serverUrl);
+    await signInMcpServer(serverId);
     return await request('testMcpServer', { id: serverId }) as McpServerView;
   });
   handle('orglet:connector-client', async raw => {

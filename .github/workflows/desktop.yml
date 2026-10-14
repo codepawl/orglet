@@ -47,6 +47,10 @@ jobs:
       - run: pnpm --config.verify-deps-before-run=false --dir services/sync typecheck
       - run: pnpm --config.verify-deps-before-run=false --dir services/sync test
       - run: pnpm --config.verify-deps-before-run=false --dir services/sync check:deploy
+      - run: pnpm --config.verify-deps-before-run=false --dir services/connect install --frozen-lockfile
+      - run: pnpm --config.verify-deps-before-run=false --dir services/connect typecheck
+      - run: pnpm --config.verify-deps-before-run=false --dir services/connect test
+      - run: pnpm --config.verify-deps-before-run=false --dir services/connect check:deploy
       # The UI kit as someone installing it would get it: publint reads its package.json, attw its types (COD-273).
       - run: pnpm --filter @codepawlhq/orglet-ui build
       - run: pnpm --filter @codepawlhq/orglet-ui check:package
