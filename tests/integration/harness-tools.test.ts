@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { harnessToolAdapter, harnessToolSchema, STEP_NOTES_CHARACTERS, toolResponseOf } from '../../apps/desktop/src/core/harness/tool-adapter';
+import { harnessToolAdapter, harnessToolSchema, INLINE_TOOL_SCHEMA_CHARACTERS, STEP_NOTES_CHARACTERS, toolResponseOf } from '../../apps/desktop/src/core/harness/tool-adapter';
 import { toolCallProblem, toolDefinitions } from '../../apps/desktop/src/core/tools/catalog';
 import type { Run, Task } from '../../apps/desktop/src/shared/contracts';
 import { prepareHarnessToolPolicy, trailingJsonObject } from '../../apps/desktop/src/core/harness/exec';
@@ -146,4 +146,21 @@ it('keeps a step\'s update for the person apart from its notes', () => {
   const call = { name: 'read_source', arguments: { sourceId: 'a' } };
   expect(toolResponseOf({ call, notes: 'Q2 42%', update: 'Đọc xong rồi, để mình tính tiếp.' }, 'claude-code')).toEqual({ call, notes: 'Q2 42%', update: 'Đọc xong rồi, để mình tính tiếp.' });
   expect(JSON.stringify(harnessToolSchema([toolDefinitions.read_source.model], 'codex'))).toContain('"required":["call","notes","update"]');
+});
+
+it('keeps the command-line schema short when many tools are offered, with each schema left to the prompt', () => {
+  // Fifty tools with a long argument schema each, about the size of the six Google services together.
+  const tools = Array.from({ length: 50 }, (_, index) => ({ type: 'function' as const, function: {
+    name: `google_tool_${index}`, description: `Tool ${index}`,
+    parameters: { type: 'object', properties: Object.fromEntries(Array.from({ length: 12 }, (_, field) => [`field_${field}`, { type: 'string', description: 'A long description of what this field holds and how the service reads it.' }])) },
+  } }));
+  const schema = harnessToolSchema(tools, 'claude-code') as { properties: { call: { properties: { name: { enum: string[] }; arguments: { type: string } } } } };
+  expect(JSON.stringify(schema).length).toBeLessThanOrEqual(INLINE_TOOL_SCHEMA_CHARACTERS);
+  expect(schema.properties.call.properties.name.enum).toHaveLength(50);
+  expect(schema.properties.call.properties.arguments.type).toBe('object');
+  expect(toolResponseOf({ call: { name: 'google_tool_3', arguments: { field_1: 'x' } } }, 'claude-code').call).toEqual({ name: 'google_tool_3', arguments: { field_1: 'x' } });
+});
+it('keeps the full schema for a few tools', () => {
+  const tools = [{ type: 'function' as const, function: { name: 'reply', description: 'Reply', parameters: { type: 'object', properties: { text: { type: 'string' } } } } }];
+  expect(JSON.stringify(harnessToolSchema(tools, 'claude-code'))).toContain('"anyOf"');
 });

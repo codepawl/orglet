@@ -37,6 +37,14 @@ export function toolResponseOf(output: unknown, harness: HarnessRequest['harness
   throw new HarnessError(`${harnessNames[harness]} trả về một bước không đúng dạng Orglet cần: ${JSON.stringify(output ?? null).slice(0, 300)}`);
 }
 
+/**
+ * The longest schema a CLI gets inline on its command line. Claude Code takes `--json-schema` only as text, and Windows
+ * refuses a command line over 32,767 characters (`spawn ENAMETOOLONG`): six Google services offer 52 tools, whose
+ * argument schemas alone passed that (measured 2026-10-15). Over this size the CLI gets the tool names only, and each
+ * tool's own schema stays in the prompt, which goes through stdin.
+ */
+export const INLINE_TOOL_SCHEMA_CHARACTERS = 8000;
+
 export function harnessToolSchema(tools: ChatCompletionTool[], harness?: HarnessRequest['harness']): object {
   const calls = tools.flatMap(tool => tool.type === 'function' ? [{
     type: 'object', additionalProperties: false, required: ['name', 'arguments'],
@@ -56,7 +64,19 @@ export function harnessToolSchema(tools: ChatCompletionTool[], harness?: Harness
       update: { type: 'string' },
     },
   };
-  return { type: 'object', additionalProperties: false, required: ['call'], properties: { call: { anyOf: calls }, notes: { type: 'string' }, update: { type: 'string' } } };
+  const full = { type: 'object', additionalProperties: false, required: ['call'], properties: { call: { anyOf: calls }, notes: { type: 'string' }, update: { type: 'string' } } };
+  if (JSON.stringify(full).length <= INLINE_TOOL_SCHEMA_CHARACTERS) return full;
+  // The runner checks the arguments against the tool's own schema before anything runs (`toolCallProblem`).
+  return {
+    type: 'object', additionalProperties: false, required: ['call'], properties: {
+      call: { type: 'object', additionalProperties: false, required: ['name', 'arguments'], properties: {
+        name: { type: 'string', enum: calls.map(call => call.properties.name.const) },
+        arguments: { type: 'object' },
+      } },
+      notes: { type: 'string' },
+      update: { type: 'string' },
+    },
+  };
 }
 
 export function harnessToolAdapter(options: {
