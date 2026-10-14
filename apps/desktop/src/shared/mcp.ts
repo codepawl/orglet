@@ -92,8 +92,50 @@ export const McpOAuthState = z.object({
   client: z.record(z.string(), z.unknown()).optional(),
   tokens: z.record(z.string(), z.unknown()).optional(),
   discovery: z.record(z.string(), z.unknown()).optional(),
+  /** Set for a pre-registered client: the token requests leave out the RFC 8707 `resource` parameter, which Google refuses. */
+  withoutResource: z.boolean().optional(),
 }).strict();
 export type McpOAuthState = z.infer<typeof McpOAuthState>;
+
+/** The providers whose OAuth client the person enters once and every server of that provider shares. */
+export const McpSharedClientProvider = z.enum(['google']);
+export type McpSharedClientProvider = z.infer<typeof McpSharedClientProvider>;
+
+/**
+ * An OAuth client registered with the service in advance, for a server that has no dynamic client registration
+ * (Google Workspace's servers, GitHub, Slack). Either `clientId` (with its optional secret) or `shared`, which names the
+ * client saved once for a provider. It lives only in main's secret file: it never enters the core's stored server, so
+ * it never reaches the database, a backup, a template or sync, and the window never reads the secret back.
+ */
+export const McpPreregisteredClient = z.object({
+  clientId: z.string().trim().min(1).max(512).optional(),
+  clientSecret: SecretValue.optional(),
+  shared: McpSharedClientProvider.optional(),
+  scopes: z.array(z.string().trim().min(1).max(256)).max(32),
+  /** A client of the "Web application" type needs the exact redirect address, so its port is fixed. */
+  port: z.number().int().min(1024).max(65535).optional(),
+  /** For a service whose metadata does not name them. Both are needed together. */
+  authorizationEndpoint: McpUrl.optional(),
+  tokenEndpoint: McpUrl.optional(),
+  /** Extra query parameters of the authorization request, such as Google's `access_type=offline`. */
+  authorizationParameters: z.record(z.string().min(1).max(64), z.string().max(256)).optional(),
+}).strict().superRefine((client, context) => {
+  if (Boolean(client.clientId) === Boolean(client.shared)) context.addIssue({ code: 'custom', message: 'Nhập client ID hoặc dùng client dùng chung, không dùng cả hai.' });
+  if (client.shared && client.clientSecret) context.addIssue({ code: 'custom', message: 'Client dùng chung đã có mã bí mật riêng.' });
+  if (Boolean(client.authorizationEndpoint) !== Boolean(client.tokenEndpoint)) context.addIssue({ code: 'custom', message: 'Cần cả địa chỉ cấp quyền và địa chỉ token.' });
+});
+export type McpPreregisteredClient = z.infer<typeof McpPreregisteredClient>;
+
+/** The client the person saved once for a provider: its ID, and a secret that only main ever reads. */
+export const ConnectorClient = z.object({ clientId: z.string().trim().min(1).max(512), clientSecret: SecretValue.optional() }).strict();
+export type ConnectorClient = z.infer<typeof ConnectorClient>;
+/** What the window may know about the saved client: the ID and whether a secret is kept, never the secret. */
+export type ConnectorClientView = { clientId: string; hasSecret: boolean };
+
+/** The loopback address a sign-in comes back to; a pre-registered client has to be told this exact text. */
+export function mcpRedirectUri(port: number) {
+  return `http://127.0.0.1:${port}/callback`;
+}
 
 /** The secret values of one server. Only main and the core ever hold these. */
 export const McpSecrets = z.object({
@@ -101,6 +143,7 @@ export const McpSecrets = z.object({
   headers: z.record(z.string(), SecretValue),
   bearer: SecretValue.optional(),
   oauth: McpOAuthState.optional(),
+  client: McpPreregisteredClient.optional(),
 }).strict();
 export type McpSecrets = z.infer<typeof McpSecrets>;
 export const emptyMcpSecrets = (): McpSecrets => ({ env: {}, headers: {} });
@@ -119,7 +162,9 @@ export const McpServerDraft = z.object({
   transport: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('stdio'), command: Command, args: Arguments, env: z.array(DraftEntry(McpVariableName)).max(32) }).strict(),
     // bearer: a string sets the token, null removes it, absent keeps the saved one.
-    z.object({ kind: z.literal('http'), url: McpUrl, headers: z.array(DraftEntry(McpHeaderName)).max(16), bearer: SecretValue.nullable().optional(), oauth: z.boolean().optional() }).strict(),
+    z.object({ kind: z.literal('http'), url: McpUrl, headers: z.array(DraftEntry(McpHeaderName)).max(16), bearer: SecretValue.nullable().optional(), oauth: z.boolean().optional(),
+      // A pre-registered client for the browser sign-in: absent keeps the saved one, null removes it.
+      oauthClient: McpPreregisteredClient.nullable().optional() }).strict(),
   ]),
 }).strict().superRefine((draft, context) => {
   const names = draft.transport.kind === 'stdio' ? draft.transport.env.map(entry => entry.name) : draft.transport.headers.map(entry => entry.name.toLowerCase());
@@ -155,13 +200,23 @@ export function splitMcpDraft(draft: McpServerDraft, id: string, saved: McpSecre
     if (draft.transport.bearer || authorizationHeader) throw new Error('Máy chủ đăng nhập bằng trình duyệt không dùng thêm token hay header Authorization.');
     // A sign-in belongs to the address it was made for; a new address needs a new one.
     const oauth = saved.oauth?.serverUrl === draft.transport.url ? saved.oauth : undefined;
+    const client = preregisteredClientOf(draft.transport.oauthClient, saved.client);
     const transport = { kind: 'http' as const, url: draft.transport.url, headerNames, bearer: false, oauth: true };
-    return { config: McpServerConfig.parse({ ...base, transport }), secrets: { env: {}, headers, ...(oauth ? { oauth } : {}) } };
+    return { config: McpServerConfig.parse({ ...base, transport }), secrets: { env: {}, headers, ...(oauth ? { oauth } : {}), ...(client ? { client } : {}) } };
   }
   const bearer = draft.transport.bearer === undefined ? saved.bearer : draft.transport.bearer ?? undefined;
   if (bearer && authorizationHeader) throw new Error('Dùng bearer token hoặc header Authorization, không dùng cả hai.');
   const transport = { kind: 'http' as const, url: draft.transport.url, headerNames, bearer: Boolean(bearer) };
   return { config: McpServerConfig.parse({ ...base, transport }), secrets: { env: {}, headers, ...(bearer ? { bearer } : {}) } };
+}
+
+/** The pre-registered client a draft leaves behind: the new one, the saved one when the draft says nothing, or none. */
+function preregisteredClientOf(sent: McpPreregisteredClient | null | undefined, saved: McpPreregisteredClient | undefined) {
+  if (sent === null) return undefined;
+  if (!sent) return saved;
+  // An edit that leaves the secret empty keeps the one saved for the same client.
+  const keepsSecret = !sent.clientSecret && sent.clientId !== undefined && saved?.clientId === sent.clientId && saved.clientSecret;
+  return keepsSecret ? { ...sent, clientSecret: saved.clientSecret } : sent;
 }
 
 /**
